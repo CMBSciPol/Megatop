@@ -1,0 +1,95 @@
+
+data_dirs:
+  root: "../data"
+  map_directory: "maps"
+  beam_directory: "beams"
+  bandpasses_directory: "bandpasses"
+
+output_dirs: 
+  root: "../outputs"
+  mask_directory: "masks"
+  pre_process_directory: "pre_processing"
+  sims_directory: "sims"
+  cell_transfer_directory: "cells_transfer"
+  cell_data_directory: "cells_data"
+  cell_sims_directory: "cells_sims"
+  coupling_directory: "couplings"
+  covmat_directory: "covariances"  
+
+general_pars:
+    frequencies: [27, 39, 93, 145, 225, 280]
+    nside: 256
+    lmin: 30
+    lmax: 200
+    nlb: 10
+    custom_bins: True
+    noise_option: '1/f_noise'
+    include_stat_res: False
+
+    no_inh: False
+    Nspec: 0
+    sensitivity_mode: 2
+    knee_mode: 1
+    ny_lf: 1.0
+    bmodes_template: ''
+    instrument: 'SO'
+    bandpass: False
+    Nsims_bias:  500
+    common_beam_correction: 100.0
+    effective_beam_correction: True
+    Nico_noise_combination: True
+    external_noise_sims: '/global/cfs/cdirs/sobs/users/krach/BBSims/NOISE_20201207/'
+
+## pre-processing
+pre_proc_pars:
+    common_beam_correction: 100.0 # In arcmin. If 0 the common beam step will be skipped
+    fwhm: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
+
+
+map_sim_pars:
+    cmb_model: 'c1'
+    dust_model: 'd0'
+    sync_model: 's0'
+    tag: 'SO_sims'
+    cmb_sim_no_pysm: True
+    external_sky_sims: '/global/cfs/cdirs/sobs/users/krach/BBSims/'
+    combined_directory: '/global/cfs/cdirs/sobs/users/krach/BBSims/'
+    external_binary_mask: ''
+    external_noise_cov: ''
+    pixel_based_noise_cov: False
+    isim:  0
+    noise_cov_beam_correction: False
+    bypass_noise_cov: True
+    r_input: 0.0
+    A_lens:  1.0
+
+BBMapParamCompSep:
+    nside_patch: 0
+    smart_multipatch: False
+    fixed_delta_beta_slicing: False
+    North_South_split: False
+    kmeans: False
+    path_to_dust_template: '~/SIMONS_OBS/BBPipe/test_mapbased_param/dust_beta.fits'
+    highpass_filtering: False
+    harmonic_comp_sep: False
+    cut_on_hits: 0.9
+
+BBClEstimation:
+    aposize:  8.0
+    apotype:  'C2'
+    purify_b: True
+    Cls_fiducial: './test_mapbased_param/Cls_Planck2018_lensed_scalar.fits'
+    extra_apodization: True
+    mask_apo: '/global/u2/j/jost/BBPipe/bbpipe/test_mapbased_param/apo_mask_11132021.fits'
+    external_noise_sims_for_noise_bias: True
+    isim:  0
+    exact_noise_bias: False
+    Nsims_bias_Nl: 500
+
+BBREstimation:
+    dust_marginalization: False
+    sync_marginalization: False
+    AL_marginalization: True
+    ndim: 2
+    nwalkers: 500
+    
