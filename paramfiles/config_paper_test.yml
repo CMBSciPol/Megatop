@@ -16,6 +16,10 @@ output_dirs:
   coupling_directory: "couplings"
   covmat_directory: "covariances"  
 
+masks:
+    mask_directory: "../data/masks"
+    binary_mask: "norm_nHits_SA_35FOV_G_nside512_binary.fits"
+
 general_pars:
     frequencies: [27, 39, 93, 145, 225, 280]
     nside: 256
@@ -35,7 +39,7 @@ general_pars:
     instrument: 'SO'
     bandpass: False
     Nsims_bias:  500
-    common_beam_correction: 100.0
+    # common_beam_correction: 100.0
     effective_beam_correction: True
     Nico_noise_combination: True
     external_noise_sims: '/global/cfs/cdirs/sobs/users/krach/BBSims/NOISE_20201207/'

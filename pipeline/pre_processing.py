@@ -9,7 +9,7 @@ import glob
 import os
 import sys
 sys.path.append('/global/cfs/cdirs/sobs/users/krach/BBSims/NOISE_20201207/')
-from combine_noise import *
+# from combine_noise import *
 
 def get_combined_map_sims(args):
     meta = BBmeta(args.globals)
@@ -212,28 +212,126 @@ def get_sims(args):
 def get_maps(args):
     meta = BBmeta(args.globals)
     # get path from maps and import them
+    print('DUMMY FUNCTION RETURN MAPS FULL OF ONES FOR TESTING NSIDE_INPUT = 512')
+    print('SHAPE = (NFREQ, NSTOKES, NPIX)')
+    freq_maps = np.ones((6,3,hp.nside2npix(512)))
+    # freq_maps = np.ones((6,3,hp.nside2npix(meta.general_pars['nside'])))
+    return freq_maps
 
-def pre_processing(args):
+def CommonBeamConvAndNsideModification(args, freq_maps, old_code = False):
     meta = BBmeta(args.globals)
-    IPython.embed()
+    map_dimensions = len(freq_maps.shape)
 
-    if meta.pre_proc_pars['common_beam_correction']!=0.0:
+    import time
+
+    freq_maps_out = []
+
+    # if meta.pre_proc_pars['common_beam_correction']!=0.0 and meta.general_pars['nside'] == hp.npix2nside(freq_maps.shape[-1]):
+    if old_code:
+        start1 = time.time()
         print('  -> common beam correction: correcting for frequency-dependent beams and convolving with a common beam')
         Bl_gauss_common = hp.gauss_beam( np.radians(meta.pre_proc_pars['common_beam_correction']/60), lmax=2*meta.general_pars['nside'])        
         for f in range(len(meta.general_pars['frequencies'])):
             Bl_gauss_fwhm = hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=2*meta.general_pars['nside'])
-            alms = hp.map2alm(freq_maps[3*f:3*(f+1),:], lmax=3*meta.general_pars['nside'])
+            
+            if map_dimensions == 2: # if maps are stored in (nstokes*nfreq, npix)
+                alms = hp.map2alm(freq_maps[3*f:3*(f+1),:], lmax=3*meta.general_pars['nside']) 
+            elif map_dimensions == 3: # if maps are stored in (nfreq, nstokes, npix)
+                alms = hp.map2alm(freq_maps[f], lmax=3*meta.general_pars['nside'])
+            else:
+                print('freq_maps doesn\'t have the right number of dimensions, either 2 (nstokes*nfreq, npix), or 3 (nfreq, nstokes, npix)') 
+                print('returning original freq_maps ...')
+                return freq_maps
+            
             for alm_ in alms:
                 hp.almxfl(alm_, Bl_gauss_common/Bl_gauss_fwhm, inplace=True)             
-            freq_maps[3*f:3*(f+1),:] = hp.alm2map(alms, meta.general_pars['nside'])   
+            # freq_maps[3*f:3*(f+1),:] = hp.alm2map(alms, meta.general_pars['nside'])   
+            freq_maps_out.append(hp.alm2map(alms, meta.general_pars['nside']) )
+        print('time = ', time.time() - start1)
+        
+    # elif meta.pre_proc_pars['common_beam_correction']!=0.0 and meta.general_pars['nside'] != hp.npix2nside(freq_maps.shape[-1]):
+    else:
+    
+        print('  -> common beam correction and NSIDE change: correcting for frequency-dependent beams, convolving with a common beam, modifying NSIDE and include effect of pixel window function')
+        start2 = time.time()
 
-            print('f=', f, ' freq_maps = ', freq_maps[3*f:3*(f+1),:])
+        lmax_convolution = 3*meta.general_pars['nside']
+        wpix_in = hp.pixwin( hp.npix2nside(freq_maps.shape[-1]),pol=True,lmax=lmax_convolution) # Pixel window function of input maps
+        wpix_out = hp.pixwin(meta.general_pars['nside'],pol=True,lmax=lmax_convolution) # Pixel window function of output maps
+        wpix_in[1][0:2] = 1. #in order not to divide by 0
+        Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), lmax=lmax_convolution, pol=True)
+        
+        for f in range(len(meta.general_pars['frequencies'])):
+            #beam corrections
+            Bl_gauss_fwhm = hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=lmax_convolution, pol=True)
+
+            bl_correction =  Bl_gauss_common / Bl_gauss_fwhm
+
+            sm_corr_T = bl_correction[:,0] * wpix_out[0]/wpix_in[0]
+            sm_corr_P = bl_correction[:,1] * wpix_out[1]/wpix_in[1]
+
+            #map-->alm
+            if map_dimensions == 2: # if maps are stored in (nstokes*nfreq, npix)
+                cmb_in_T,cmb_in_Q,cmb_in_U = freq_maps[3*f:3*(f+1),:]
+            elif map_dimensions == 3:
+                cmb_in_T,cmb_in_Q,cmb_in_U = freq_maps[f]
+            else:
+                print('freq_maps doesn\'t have the right number of dimensions, either 2 (nstokes*nfreq, npix), or 3 (nfreq, nstokes, npix)') 
+                print('returning original freq_maps ...')
+                return freq_maps
+            
+            alm_in_T,alm_in_E,alm_in_B = hp.map2alm([cmb_in_T,cmb_in_Q,cmb_in_U],lmax=lmax_convolution,pol=True)
+            # here lmax seems to play an important role            
+            
+
+            #change beam and wpix
+            alm_out_T = hp.almxfl(alm_in_T,sm_corr_T)
+            alm_out_E = hp.almxfl(alm_in_E,sm_corr_P)
+            alm_out_B = hp.almxfl(alm_in_B,sm_corr_P)
+
+            #alm-->map
+            cmb_out_T,cmb_out_Q,cmb_out_U = hp.alm2map([alm_out_T,alm_out_E,alm_out_B],meta.general_pars['nside'],
+                                                       lmax=lmax_convolution,pixwin=False,fwhm=0.0,pol=True,verbose=False) 
+            # a priori all the options are set to there default, even lmax which is computed wrt input alms
+            marco_out_map = np.array([cmb_out_T,cmb_out_Q,cmb_out_U])
+            freq_maps_out.append(marco_out_map)
+        print('time = ', time.time() - start2)
+        
+            
+    # else:
+    #     print('case not handled yet, if you want to change nside only without common beam or something else it is not yet implemented')
+    #     freq_maps_out = freq_maps
+    #   TODO: 2 dim
+    return np.array(freq_maps_out)
+    # freq_maps[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
+    # freq_maps_unbeamed[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
+    # noise_maps[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
+    # CMB_template_150GHz[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
+
+def ApplyBinaryMask(args, freq_maps, use_UNSEEN = False):
+    meta = BBmeta(args.globals)
+    binary_mask_path = meta.get_fname_mask('binary')
+
+    binary_mask = hp.read_map(
+        binary_mask_path,
+        dtype=float)
+    
+    if meta.general_pars['nside'] != hp.npix2nside(binary_mask.shape[-1]):
+        print('downgrading binary mask from nisde = ', hp.npix2nside(binary_mask.shape[-1]), 
+              ' to nside = ',meta.general_pars['nside'])
+        binary_mask = hp.ud_grade(binary_mask, nside_out=meta.general_pars['nside'])
+        binary_mask[(binary_mask != 0) * (binary_mask != 1)] = 0
+
+    # binary_mask[np.where(nhits<1e-6)[0]] = 0.0
 
 
-    freq_maps[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
-    freq_maps_unbeamed[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
-    noise_maps[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
-    CMB_template_150GHz[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
+    if use_UNSEEN:
+        freq_maps[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
+
+    else:
+        freq_maps *= binary_mask
+
+    return freq_maps
 
 
 
@@ -255,8 +353,15 @@ if __name__ == "__main__":
         args.plots = False
 
     if args.sims:
+        print('Simulating maps ...')
         freq_maps = get_sims(args)
     else:
+        print('Importing maps ...')
         freq_maps = get_maps(args)
+    
+    IPython.embed()
 
-    pre_processing(args, freq_maps)
+    freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps)
+
+    freq_maps_common_beamed_masked = ApplyBinaryMask(args, freq_maps_common_beamed)
+    freq_maps_unbeamed_masked = ApplyBinaryMask(args, freq_maps)
