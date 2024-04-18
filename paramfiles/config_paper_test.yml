@@ -20,6 +20,12 @@ masks:
     mask_directory: "../data/masks"
     binary_mask: "norm_nHits_SA_35FOV_G_nside512_binary.fits"
 
+fiducial_cmb: 
+    cls_cmb_directory: "../fiducial_cmb_spectra"
+    lensed: "Cls_Planck2018_lensed_scalar.fits"
+    unlensed_scalar_tensor_r1: "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
+
+
 general_pars:
     frequencies: [27, 39, 93, 145, 225, 280]
     nside: 256
@@ -27,12 +33,12 @@ general_pars:
     lmax: 200
     nlb: 10
     custom_bins: True
-    noise_option: '1/f_noise'
+    noise_option: 'white_noise'
     include_stat_res: False
-
     no_inh: False
     Nspec: 0
     sensitivity_mode: 2
+    SAC_yrs_LF: 1
     knee_mode: 1
     ny_lf: 1.0
     bmodes_template: ''

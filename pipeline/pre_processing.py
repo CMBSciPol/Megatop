@@ -8,6 +8,8 @@ from fgbuster.observation_helpers import get_instrument, get_sky, get_observatio
 import glob
 import os
 import sys
+import matplotlib.pyplot as plt
+
 sys.path.append('/global/cfs/cdirs/sobs/users/krach/BBSims/NOISE_20201207/')
 # from combine_noise import *
 
@@ -92,6 +94,128 @@ def get_combined_map_sims(args):
                 if not os.path.exists(os.path.join(meta.map_sim_pars['combined_directory'], str(i_sim).zfill(4))): os.mkdir(os.path.join(meta.map_sim_pars['combined_directory'], str(i_sim).zfill(4)))
                 hp.write_map(os.path.join(meta.map_sim_pars['combined_directory'], str(i_sim).zfill(4)+'/SO_SAT_'+str(f)+'_comb_'+str(i_sim).zfill(4)+'.fits'), comb)
 
+def MakeSims(args):
+    meta = BBmeta(args.globals)
+    d_config = meta.map_sim_pars['dust_model']
+    s_config = meta.map_sim_pars['sync_model']
+    # c_config = meta.map_sim_pars['cmb_model']
+
+    # performing the CMB simulation with synfast
+    if meta.map_sim_pars['cmb_sim_no_pysm']:
+        print('Creating CMB map...')
+
+        path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb('lensed')
+        path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
+
+        Cl_BB_prim = meta.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
+        Cl_lens = hp.read_cl(path_Cl_BB_lens)
+
+        if args.plots:
+            print('Plotting Fiducial CMB spectra...')
+            ell_range = np.arange(Cl_lens.shape[-1])
+            Cl_prim = hp.read_cl(path_Cl_BB_prim_r1)[...,:Cl_lens.shape[-1]]
+
+            plt.plot(ell_range, ell_range*(ell_range+1)/2/np.pi* Cl_prim[0], label='prim TT', color='C0')
+            plt.plot(ell_range, ell_range*(ell_range+1)/2/np.pi* Cl_lens[0], label='lens TT', color='C0', ls='--')
+
+            plt.plot(ell_range, ell_range*(ell_range+1)/2/np.pi* Cl_prim[1], label='prim EE', color='C1')
+            plt.plot(ell_range, ell_range*(ell_range+1)/2/np.pi* Cl_lens[1], label='lens EE', color='C1', ls='--')
+
+            plt.plot(ell_range, ell_range*(ell_range+1)/2/np.pi* Cl_prim[2], label='prim BB', color='C2')
+            plt.plot(ell_range, ell_range*(ell_range+1)/2/np.pi* Cl_lens[2], label='lens BB', color='C2', ls='--')
+
+            plt.plot(ell_range, ell_range*(ell_range+1)/2/np.pi* Cl_prim[3], label='prim TE', color='C3')
+            plt.plot(ell_range, ell_range*(ell_range+1)/2/np.pi* Cl_lens[3], label='lens TE', color='C3', ls='--')
+
+            plt.loglog()
+            plt.xlabel(r'$\ell$')
+            plt.ylabel(r'$D_\ell$')
+            plt.legend()
+            plt.savefig('fiducial_CMB_spectra.png', bbox_inches='tight')
+            plt.close()
+
+
+        l_max_lens = len(Cl_lens[0])
+        Cl_BB_lens = meta.map_sim_pars['A_lens']*Cl_lens[2]
+        Cl_TT = Cl_lens[0]
+        Cl_EE = Cl_lens[1]
+        Cl_TE = Cl_lens[3]
+
+        Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
+        cmb_sky = hp.synfast([Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE*0.0, Cl_EE*0.0], 
+                             nside=meta.general_pars['nside'], new=True)
+    else:
+        print('ERROR: CMB sims only handled using synfast on fiducial Cls')
+        return 
+
+    print('Initializing Instrument ...')
+    import V3calc as V3
+
+    #TODO: Optimize! Importing binary mask to compute fsky is a bit overkill... 
+    binary_mask_path = meta.get_fname_mask('binary')
+
+    binary_mask = hp.read_map(
+        binary_mask_path,
+        dtype=float)
+    
+    if meta.general_pars['nside'] != hp.npix2nside(binary_mask.shape[-1]):
+        print('downgrading binary mask from nisde = ', hp.npix2nside(binary_mask.shape[-1]), 
+              ' to nside = ',meta.general_pars['nside'])
+        binary_mask = hp.ud_grade(binary_mask, nside_out=meta.general_pars['nside'])
+        binary_mask[(binary_mask != 0) * (binary_mask != 1)] = 0
+    
+    fsky_binary = sum(binary_mask) / len(binary_mask)
+
+    ell, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
+        sensitivity_mode = meta.general_pars['sensitivity_mode'],
+        one_over_f_mode = 2, # fixed to None since we only use white noise here
+        SAC_yrs_LF = meta.general_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
+        ell_max = meta.general_pars['lmax'], delta_ell=1,
+        beam_corrected=False, remove_kluge=False, CMBS4=''
+    )
+
+    instrument_config = {
+        'frequency' : meta.general_pars['frequencies'],
+        'depth_i' : Map_white_noise_levels/np.sqrt(2),
+        'depth_p' : Map_white_noise_levels
+        }
+
+    instrument = standardize_instrument(instrument_config)
+
+    print('Creating Pysm Fg maps...')
+    sky = get_sky(meta.general_pars['nside'], d_config+s_config)
+
+    fg_freq_maps = get_observation(instrument, sky, noise=False) 
+    CMB_fg_freq_maps = fg_freq_maps + cmb_sky
+
+    print('Beaming sky maps...')
+    CMB_fg_freq_maps_beamed = []
+    for f in range(len(meta.general_pars['frequencies'])):
+        print('Beaming frequency channel:', meta.general_pars['frequencies'][f])
+        CMB_fg_alms = hp.map2alm(CMB_fg_freq_maps[f], lmax=3*meta.general_pars['nside'])
+
+        Bl_gauss_fwhm = hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=3*meta.general_pars['nside'])
+                
+        for alm_ in CMB_fg_alms:
+            hp.almxfl(alm_, Bl_gauss_fwhm, inplace=True)             
+
+        CMB_fg_freq_maps_beamed.append(hp.alm2map(CMB_fg_alms, meta.general_pars['nside']) )        
+    CMB_fg_freq_maps_beamed = np.array(CMB_fg_freq_maps_beamed)
+
+    print('Creating noise maps...')
+    if meta.general_pars['noise_option']=='white_noise':
+        nlev_map = fg_freq_maps*0.0
+        for i in range(len(instrument.frequency)):
+            nlev_map[3*i:3*i+3,:] = np.array([instrument.depth_i[i], instrument.depth_p[i], instrument.depth_p[i]])[:,np.newaxis]*np.ones((3,fg_freq_maps.shape[-1]))
+        nlev_map /= hp.nside2resol(meta.general_pars['nside'], arcmin=True)
+        noise_maps = np.random.normal(fg_freq_maps*0.0, nlev_map, fg_freq_maps.shape)
+    else:
+        print('ERROR: Other noise cases not handled yet...')
+        return
+    
+    CMB_fg_noise_freq_maps = CMB_fg_freq_maps_beamed + noise_maps
+    return CMB_fg_noise_freq_maps
+        
 
 def get_sims(args):
     meta = BBmeta(args.globals)
@@ -346,22 +470,36 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    if args.sims and args.plots:
-        warnings.warn("Both --sims and --plot are set to True. "
-                      "Too many plots will be generated. "
-                      "Set --plot to False")
-        args.plots = False
+    # if args.sims and args.plots:
+    #     warnings.warn("Both --sims and --plot are set to True. "
+    #                   "Too many plots will be generated. "
+    #                   "Set --plot to False")
+    #     args.plots = False
 
     if args.sims:
         print('Simulating maps ...')
-        freq_maps = get_sims(args)
+        freq_maps = MakeSims(args)
     else:
         print('Importing maps ...')
         freq_maps = get_maps(args)
     
-    IPython.embed()
 
     freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps)
 
     freq_maps_common_beamed_masked = ApplyBinaryMask(args, freq_maps_common_beamed)
-    freq_maps_unbeamed_masked = ApplyBinaryMask(args, freq_maps)
+    # freq_maps_unbeamed_masked = ApplyBinaryMask(args, freq_maps)
+
+    meta = BBmeta(args.globals)
+
+    print('saving maps ...')
+    #  saving the sims 
+    if args.sims:
+        np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['sims_directory'], 'freq_maps.npy' ),
+                freq_maps )
+
+    np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_common_beamed_masked.npy' ),
+            freq_maps_common_beamed_masked )
+    # np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_unbeamed_masked.npy' ),
+    #         freq_maps_unbeamed_masked )    
+
+    IPython.embed()

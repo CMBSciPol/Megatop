@@ -365,6 +365,27 @@ class BBmeta(object):
                              "Choose between 'analysis', 'binary', "
                              "'point_source'.")
         return fname
+    
+    def get_fname_cls_fiducial_cmb(self, cl_type='lensed'):
+        """
+        Get the full filepath to a fiducial CMB power spectra of predefined type.
+
+        Parameters
+        ----------
+        cl_type : str
+            Choose between 'lensed', 'unlensed_scalar_tensor_r1'.
+            Defaults to 'lensed'.
+        """
+        base_dir = self.fiducial_cmb['cls_cmb_directory']
+        if cl_type == 'lensed':
+            fname = os.path.join(base_dir, self.fiducial_cmb['lensed'])
+        elif cl_type == 'unlensed_scalar_tensor_r1':
+            fname = os.path.join(base_dir, self.fiducial_cmb['unlensed_scalar_tensor_r1'])
+        else:
+            raise ValueError("The cl_type chosen does not exits. "
+                             "Choose between 'lensed', 'unlensed_scalar_tensor_r1'."
+                             )
+        return fname    
 
     def get_map_filename(self, map_set, id_split, id_sim=None):
         """
