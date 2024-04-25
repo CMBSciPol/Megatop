@@ -129,6 +129,7 @@ def grabargs():
     parser.add_argument("--qos", type=str, help = "type of queue at NERSC, shared, regular, debug, etc.", default="shared")
     parser.add_argument("--force_cosmo_analysis", action='store_true', help = "even if previous cosmo analysis has been performed, this forces the submission of extra cosmo analysis", default=False)
     parser.add_argument("--custom_bins", action='store_true', help = "Custom multipole bins", default=True)
+    parser.add_argument("--cluster_name", type=str, help = "Name of machine Perlmutter_CPU, Jean Zay etc.", default="Perlmutter_CPU")
 
     args = parser.parse_args()
 
@@ -375,30 +376,39 @@ def main():
 
                     if os.path.isfile(os.path.join(args.combined_directory, str(i_sim).zfill(4)+'/SO_SAT_'+str(f)+'_comb_'+str(i_sim).zfill(4)+'.fits')): continue
 
-                    if args.sky_type == 'Gaussian':
+                    # Getting dust:
+                    if args.dust_model == 'Gaussian':
                         dust = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/gaussian/foregrounds/dust/'+str(i_sim).zfill(4)+'/SO_SAT_'+str(f)+'_dust_'+str(i_sim).zfill(4)+'*.fits'))[0], field=None)
-                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/gaussian/foregrounds/synch/'+str(i_sim).zfill(4)+'/SO_SAT_'+str(f)+'_synch_'+str(i_sim).zfill(4)+'*.fits'))[0], field=None)
-                    elif args.sky_type == 'd0s0':
+                    elif args.dust_model == 'd0':
                         dust = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/d0s0/foregrounds/dust/SO_SAT_'+str(f)+'_dust_d0s0*.fits'))[0], field=None)
-                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/d0s0/foregrounds/synch/SO_SAT_'+str(f)+'_synch_d0s0*.fits'))[0], field=None)
-                    elif args.sky_type == 'd1s1':
+                    elif args.dust_model == 'd1':
                         dust = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/d1s1/foregrounds/dust/SO_SAT_'+str(f)+'_dust_d1s1*.fits'))[0], field=None)                    
-                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/d1s1/foregrounds/synch/SO_SAT_'+str(f)+'_synch_d1s1*.fits'))[0], field=None)
-                    elif args.sky_type == 'dmsm':
+                    elif args.dust_model == 'dm':
                         dust = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/dmsm/foregrounds/dust/SO_SAT_'+str(f)+'_dust_dmsm*.fits'))[0], field=None)                    
-                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/dmsm/foregrounds/synch/SO_SAT_'+str(f)+'_synch_dmsm*.fits'))[0], field=None)
-                    elif args.sky_type == 'd9s1':
+                    elif args.dust_model == 'd9':
                         dust = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20220516/d9/foregrounds/dust/SO_SAT_'+str(f)+'_dust_d9*.fits'))[0], field=None)                    
-                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/d1s1/foregrounds/synch/SO_SAT_'+str(f)+'_synch_d1s1*.fits'))[0], field=None)
-                    elif args.sky_type == 'dhs1':
+                    elif args.dust_model == 'dh':
                         dust = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20220516/dh/foregrounds/dust/SO_SAT_'+str(f)+'_dust_dh*.fits'))[0], field=None)                    
-                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/d1s1/foregrounds/synch/SO_SAT_'+str(f)+'_synch_d1s1*.fits'))[0], field=None)
-                    elif args.sky_type == 'd10s5':
+                    elif args.dust_model == 'd10':
                         dust = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20220516/d10s5/foregrounds/dust/SO_SAT_'+str(f)+'_dust_d10s5*.fits'))[0], field=None)                    
+                    else:
+                        print('WARNING: Dust model ', args.dust_model,' not recognized')
+
+                    # Getting synch
+                    if args.sync_model == 'Gaussian':
+                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/gaussian/foregrounds/synch/'+str(i_sim).zfill(4)+'/SO_SAT_'+str(f)+'_synch_'+str(i_sim).zfill(4)+'*.fits'))[0], field=None)
+                    elif args.sync_model == 's0':
+                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/d0s0/foregrounds/synch/SO_SAT_'+str(f)+'_synch_d0s0*.fits'))[0], field=None)
+                    elif args.sync_model == 's1':
+                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/d1s1/foregrounds/synch/SO_SAT_'+str(f)+'_synch_d1s1*.fits'))[0], field=None)
+                    elif args.sync_model == 'sm':
+                        synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/dmsm/foregrounds/synch/SO_SAT_'+str(f)+'_synch_dmsm*.fits'))[0], field=None)
+                    elif args.sync_model == 's5':
                         synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims,'FG_20220516/d10s5/foregrounds/synch/SO_SAT_'+str(f)+'_synch_d10s5*.fits'))[0], field=None)
-                    elif args.sky_type == 'd1s7':
-                        dust = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20201207/realistic/d1s1/foregrounds/dust/SO_SAT_'+str(f)+'_dust_d1s1*.fits'))[0], field=None)                    
+                    elif args.sync_model == 's7':
                         synch = hp.read_map( glob.glob(os.path.join(args.external_sky_sims, 'FG_20220516/s7/foregrounds/synch/SO_SAT_'+str(f)+'_synch_s7*.fits'))[0], field=None)                    
+                    else:
+                        print('WARNING: Synchrotron model ', args.sync_model,' not recognized')
 
                     if args.r_input == 0.0:
                         if args.AL_input == 1.0:
@@ -488,17 +498,10 @@ def main():
         fin = open("log_"+id_tag+".txt", "rt")
         fout = open("batch_"+id_tag+".sh", "wt")
 
-#         fout.write("#!/bin/bash\n\
-# #SBATCH -N 1\n\
-# #SBATCH -C haswell\n\
-# #SBATCH -q regular\n\
-# #SBATCH -J test_BBpipe\n\
-# #SBATCH -t "+args.time+"\n\
-# \n")
-
-        fout.write("#!/bin/bash\n\
+        if args.cluster_name == 'Perlmutter_CPU':
+            fout.write("#!/bin/bash\n\
 #SBATCH --qos="+args.qos+"\n\
-#SBATCH --constraint=haswell\n\
+#SBATCH -C cpu\n\
 #SBATCH --time="+args.time+"\n\
 #SBATCH --nodes=1\n\
 #SBATCH --ntasks=1\n\
