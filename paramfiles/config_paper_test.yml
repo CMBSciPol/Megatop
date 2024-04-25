@@ -56,23 +56,6 @@ pre_proc_pars:
     fwhm: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
 
 
-map_sim_pars:
-    cmb_model: 'c1'
-    dust_model: 'd0'
-    sync_model: 's0'
-    tag: 'SO_sims'
-    cmb_sim_no_pysm: True
-    external_sky_sims: '/global/cfs/cdirs/sobs/users/krach/BBSims/'
-    combined_directory: '/global/cfs/cdirs/sobs/users/krach/BBSims/'
-    external_binary_mask: ''
-    external_noise_cov: ''
-    pixel_based_noise_cov: False
-    isim:  0
-    noise_cov_beam_correction: False
-    bypass_noise_cov: True
-    r_input: 0.0
-    A_lens:  1.0
-
 BBMapParamCompSep:
     nside_patch: 0
     smart_multipatch: False

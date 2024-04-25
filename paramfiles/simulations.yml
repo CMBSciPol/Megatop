@@ -1,0 +1,37 @@
+data_dirs:
+  root: "../data"
+  map_directory: "maps"
+  beam_directory: "beams"
+  bandpasses_directory: "bandpasses"
+
+
+output_dirs: 
+  root: "../outputs"
+  sims_directory: "sims"
+
+general_pars:
+    lmax: -1
+    nside: 0
+
+
+fiducial_cmb: 
+    cls_cmb_directory: "../fiducial_cmb_spectra"
+    lensed: "Cls_Planck2018_lensed_scalar.fits"
+    unlensed_scalar_tensor_r1: "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
+
+map_sim_pars:
+    nside_sim: 512
+    dust_model: 'd0'
+    sync_model: 's0'
+    tag: 'SO_sims'
+    cmb_sim_no_pysm: True
+    isim:  0
+    r_input: 0.0
+    A_lens:  1.0
+
+noise_sim_pars:
+    noise_option: 'white_noise'
+    sensitivity_mode: 2
+    SAC_yrs_LF: 1
+    knee_mode: 1
+
