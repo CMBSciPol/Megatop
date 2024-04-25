@@ -1,0 +1,86 @@
+data_dirs:
+  bandpasses_directory: bandpasses
+  beam_directory: beams
+  map_directory: maps
+  mock_directory: mock_data
+  root: /Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/Megatop/data
+fiducial_cmb:
+  cls_cmb_directory: /Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/Megatop/fiducial_cmb_spectra
+  lensed: Cls_Planck2018_lensed_scalar.fits
+  unlensed_scalar_tensor_r1: Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits
+general_pars:
+  Nspec: 0
+  SAC_yrs_LF: 1
+  frequencies:
+  - 93
+  - 145
+  - 225
+  - 280
+  include_stat_res: false
+  knee_mode: 1
+  lmax: 100
+  lmin: 10
+  no_inh: false
+  noise_option: white_noise
+  nside: 64
+  ny_lf: 1.0
+  sensitivity_mode: 2
+map_sets:
+  SAT1_f093:
+    exp_tag: SAT1
+    file_root: cmb_sat1_f093
+    freq_tag: 93
+  SAT1_f145:
+    exp_tag: SAT1
+    file_root: cmb_sat1_f145
+    freq_tag: 145
+  SAT2_f220:
+    exp_tag: SAT2
+    file_root: cmb_sat2_f220
+    freq_tag: 220
+  SAT2_f280:
+    exp_tag: SAT2
+    file_root: cmb_sat2_f280
+    freq_tag: 280
+map_sim_pars:
+  A_lens: 1.0
+  bypass_noise_cov: true
+  cmb_model: c1
+  cmb_sim_no_pysm: true
+  combined_directory: /global/cfs/cdirs/sobs/users/krach/BBSims/
+  dust_model: d0
+  external_binary_mask: ''
+  external_noise_cov: ''
+  external_sky_sims: /global/cfs/cdirs/sobs/users/krach/BBSims/
+  isim: 0
+  noise_cov_beam_correction: false
+  pixel_based_noise_cov: false
+  r_input: 0.0
+  sync_model: s0
+  tag: SO_sims
+masks:
+  analysis_mask: analysis_mask.fits
+  apod_radius: 10.0
+  apod_radius_point_source: 4.0
+  apod_type: C1
+  binary_mask: binary_mask.fits
+  gal_mask_mode: gal070
+  galactic_mask_root: planck_galactic_mask
+  include_in_mask: []
+  input_nhits_path: null
+  nhits_map: nhits_map.fits
+  point_source_mask: point_source_mask.fits
+output_dirs:
+  mask_directory: masks
+  pre_process_directory: pre_processing
+  root: /Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/Megatop/outputs
+  sims_directory: sims
+pre_proc_pars:
+  common_beam_correction: 100.0
+  fwhm:
+  - 91.0
+  - 63.0
+  - 30.0
+  - 17.0
+  - 11.0
+  - 9.0

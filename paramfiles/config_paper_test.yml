@@ -28,9 +28,9 @@ fiducial_cmb:
 
 general_pars:
     frequencies: [27, 39, 93, 145, 225, 280]
-    nside: 256
-    lmin: 30
-    lmax: 200
+    nside: 64 #256
+    lmin: 10 #30
+    lmax: 100 #200
     nlb: 10
     custom_bins: True
     noise_option: 'white_noise'
