@@ -174,6 +174,9 @@ def MakeSims(args):
         beam_corrected=False, remove_kluge=False, CMBS4=''
     )
 
+    print('Map_white_noise_levels = ', Map_white_noise_levels)
+
+
     instrument_config = {
         'frequency' : meta.general_pars['frequencies'],
         'depth_i' : Map_white_noise_levels/np.sqrt(2),
@@ -205,8 +208,8 @@ def MakeSims(args):
     print('Creating noise maps...')
     if meta_sim.noise_sim_pars['noise_option']=='white_noise':
         nlev_map = fg_freq_maps*0.0
-        for i in range(len(instrument.frequency)):
-            nlev_map[3*i:3*i+3,:] = np.array([instrument.depth_i[i], instrument.depth_p[i], instrument.depth_p[i]])[:,np.newaxis]*np.ones((3,fg_freq_maps.shape[-1]))
+        for f in range(len(instrument.frequency)):
+            nlev_map[f] = np.array([instrument.depth_i[f], instrument.depth_p[f], instrument.depth_p[f]])[:,np.newaxis]*np.ones((3,fg_freq_maps.shape[-1]))
         nlev_map /= hp.nside2resol(meta_sim.map_sim_pars['nside_sim'], arcmin=True)
         noise_maps = np.random.normal(fg_freq_maps*0.0, nlev_map, fg_freq_maps.shape)
     elif meta_sim.noise_sim_pars['noise_option']=='':
@@ -487,27 +490,54 @@ def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, fsky_binary):
             ell_max = meta.general_pars['lmax'], delta_ell=1,
             beam_corrected=False, remove_kluge=False, CMBS4='' )
         
+        print('Map_white_noise_levels = ', Map_white_noise_levels)
 
-        N_ell_white_f = []
+        N_ell_white_f_arcmin = []
         for f in range(len(meta.general_pars['frequencies'])):
-            N_ell_white_f.append(np.ones(cl_fg_freq_maps.shape[-1]) *
+            N_ell_white_f_arcmin.append(np.ones(cl_fg_freq_maps.shape[-1]) *
                                    Map_white_noise_levels[f]**2)
-        N_ell_white_f = np.array(N_ell_white_f)  * (np.pi/60/180)**2 #/ hp.nside2resol(meta_sim.map_sim_pars['nside_sim'], arcmin=False)**2
+        N_ell_white_f = np.array(N_ell_white_f_arcmin)  * (np.pi/60/180)**2 
+        N_ell_white_f_temp = np.array(N_ell_white_f_arcmin)  * (np.pi/60/180)**2 /2
             
-        fig, ax = plt.subplots(1,2)
+        fig, ax = plt.subplots(2,3, sharex=True, sharey='row')
         for f in range(len(meta.general_pars['frequencies'])):
-            ax[0].plot(ell, norm*cl_noise_f[f,1], label=r'Noise EE $\nu=$'+str(meta.general_pars['frequencies'][f]),color='C'+str(f),ls='-', alpha=0.4)
-            ax[1].plot(ell, norm*cl_noise_f[f,2], label=r'Noise BB $\nu=$'+str(meta.general_pars['frequencies'][f]),color='C'+str(f),ls='--', alpha=0.4)
-            ax[0].plot(ell, norm*N_ell_white_f[f], label=r'Input white noise lvl $\nu=$'+str(meta.general_pars['frequencies'][f]),color='C'+str(f),ls=':')
-            ax[1].plot(ell, norm*N_ell_white_f[f], label=r'Input white noise lvl $\nu=$'+str(meta.general_pars['frequencies'][f]),color='C'+str(f),ls=':')
-        ax[0].set_title('EE')
-        ax[1].set_title('BB')
-        ax[0].set_xlabel('$\ell$')
-        ax[1].set_xlabel('$\ell$')
-        plt.legend()
-        ax[0].loglog()
-        ax[1].loglog()
-        plt.savefig('Noise_lvl_check.png')
+            ax[0][0].plot(ell, norm*cl_noise_f[f,0], #label=r'Noise TT $\nu=$'+str(meta.general_pars['frequencies'][f]),
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[0][1].plot(ell, norm*cl_noise_f[f,1], #label=r'Noise EE $\nu=$'+str(meta.general_pars['frequencies'][f]),
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[0][2].plot(ell, norm*cl_noise_f[f,2], label=r'Noise $C_\ell$ from map $\nu=$'+str(meta.general_pars['frequencies'][f]),
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[0][0].plot(ell, norm*N_ell_white_f_temp[f],# label=r'Input white noise lvl $\nu=$'+str(meta.general_pars['frequencies'][f]),
+                       color='C'+str(f),ls=':')
+            ax[0][1].plot(ell, norm*N_ell_white_f[f], #label=r'Input white noise lvl $\nu=$'+str(meta.general_pars['frequencies'][f]),
+                       color='C'+str(f),ls=':')
+            ax[0][2].plot(ell, norm*N_ell_white_f[f], label=r'Input white noise lvl $\nu=$'+str(meta.general_pars['frequencies'][f]),
+                       color='C'+str(f),ls=':')
+
+            ax[1][0].plot(ell, ((cl_noise_f[f,0] - N_ell_white_f_temp[f])/N_ell_white_f_temp[f]), #label=r'Noise TT $\nu=$'+str(meta.general_pars['frequencies'][f]),
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[1][1].plot(ell[2:], ((cl_noise_f[f,1] - N_ell_white_f[f])/N_ell_white_f[f])[2:], #label=r'Noise EE $\nu=$'+str(meta.general_pars['frequencies'][f]),
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[1][2].plot(ell[2:], ((cl_noise_f[f,2] - N_ell_white_f[f])/N_ell_white_f[f])[2:], label=r'Noise $C_\ell$ from map $\nu=$'+str(meta.general_pars['frequencies'][f]),
+                       color='C'+str(f),ls='-', alpha=0.4)                       
+        ax[0][0].set_title('TT')
+        ax[0][1].set_title('EE')
+        ax[0][2].set_title('BB')
+        ax[1][0].set_xlabel('$\ell$')
+        ax[1][1].set_xlabel('$\ell$')
+        ax[1][2].set_xlabel('$\ell$')
+        ax[0][0].set_ylabel('$D_\ell \, [\mu K \, rad]^2$')
+        ax[1][0].set_ylabel('$\Delta_{\ell} / Input_\ell$')
+        ax[0][2].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
+        ax[0][0].loglog()
+        ax[0][1].loglog()
+        ax[0][2].loglog()
+        ax[1][0].set_xscale('log')
+        ax[1][1].set_xscale('log')
+        ax[1][2].set_xscale('log')
+        plt.subplots_adjust(wspace=0, hspace=0)
+        plt.savefig('Noise_lvl_check.png', bbox_inches='tight')
+        # TODO: save in output file
         plt.close()
 
 
@@ -525,7 +555,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     meta = BBmeta(args.globals)
 
-    IPython.embed()
 
     # if args.sims and args.plots:
     #     warnings.warn("Both --sims and --plot are set to True. "
