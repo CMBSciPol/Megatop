@@ -9,7 +9,6 @@ output_dirs:
   root: "../outputs"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
-  sims_directory: "sims"
   cell_transfer_directory: "cells_transfer"
   cell_data_directory: "cells_data"
   cell_sims_directory: "cells_sims"
@@ -28,9 +27,9 @@ fiducial_cmb:
 
 general_pars:
     frequencies: [27, 39, 93, 145, 225, 280]
-    nside: 256
+    nside: 32
     lmin: 30
-    lmax: 200
+    lmax: 95 #200
     nlb: 10
     custom_bins: True
     noise_option: 'white_noise'

@@ -6,10 +6,16 @@ data_dirs:
 
 
 output_dirs: 
-  root: "../outputs"
-  sims_directory: "sims"
+  root: "../OnTheFlySims"
+  cmb_directory: "CMB"
+  cmb_beamed_directory: "CMB_beamed"
+  fg_directory: "fg"
+  noise_directory: "noise"
+  comb_directory: "comb"
+  plots_directory: "plots"
 
 general_pars:
+    nsims: 2
     lmax: -1
     nside: 0
 
@@ -20,7 +26,7 @@ fiducial_cmb:
     unlensed_scalar_tensor_r1: "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
 
 map_sim_pars:
-    nside_sim: 512
+    nside_sim: 64
     dust_model: 'd0'
     sync_model: 's0'
     tag: 'SO_sims'
