@@ -1,6 +1,6 @@
 import argparse
+from megatop.metadata_manager import BBmeta
 import IPython
-from metadata_manager import BBmeta
 import warnings
 import healpy as hp
 import numpy as np
@@ -96,6 +96,7 @@ def get_combined_map_sims(args):
                 hp.write_map(os.path.join(meta.map_sim_pars['combined_directory'], str(i_sim).zfill(4)+'/SO_SAT_'+str(f)+'_comb_'+str(i_sim).zfill(4)+'.fits'), comb)
 
 def MakeSims(args):
+    """This routines creates mock data from the map sets."""
     meta = BBmeta(args.globals)
     meta_sim = BBmeta(args.sims)
     d_config = meta_sim.map_sim_pars['dust_model']
@@ -150,10 +151,10 @@ def MakeSims(args):
         return 
 
     print('Initializing Instrument ...')
+    import megatop.V3calc as V3
 
     #TODO: Optimize! Importing binary mask to compute fsky is a bit overkill... 
     binary_mask_path = meta.get_fname_mask('binary')
-
     binary_mask = hp.read_map(
         binary_mask_path,
         dtype=float)
