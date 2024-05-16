@@ -1,15 +1,17 @@
 import argparse
-from megatop import BBmeta, utils
+# from megatop import BBmeta, utils
+from metadata_manager import BBmeta
+
 import numpy as np
 import os
 import healpy as hp
 import matplotlib.pyplot as plt
 import glob
+import IPython
 
-
-import sys
-sys.path.append('/global/cfs/cdirs/sobs/users/krach/BBSims/NOISE_20201207/')
-from combine_noise import compute_noise_factors, combine_noise_maps
+# import sys
+# sys.path.append('/global/cfs/cdirs/sobs/users/krach/BBSims/NOISE_20201207/')
+# from combine_noise import compute_noise_factors, combine_noise_maps
 
 def noise_covariance_estimation(meta, map_shape, instrument, nhits):
     """
@@ -129,21 +131,71 @@ def get_cov_matrix_pixel(args):
     noise_cov_beamed[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
 
 
+def GetNoiseCov(args):
+    # MPI VARIABLES
+    try:
+        from mpi4py import MPI
+        comm=MPI.COMM_WORLD
+        size=comm.Get_size()
+        rank=comm.rank
+        barrier=comm.barrier
+        root=0
+        mpi = True
+    except (ModuleNotFoundError, ImportError) as e:
+        # Error handling
+        print('ERROR IN MPI:', e)
+        print('Proceeding without MPI\n')
+        mpi = False
+        rank=0
+        pass
+    from pre_processing import CommonBeamConvAndNsideModification
+    meta = BBmeta(args.globals)
+
+
+    if args.sims:
+        print('sims=True: Computing noise covariance from OnTheFlySims')
+        meta_sims = BBmeta(args.sims)
+        nsims = meta_sims.general_pars['nsims']
+
+        noise_cov = np.zeros( [ len(meta.general_pars['frequencies']), 3,hp.nside2npix(meta_sims.map_sim_pars['nside_sim'])])
+        noise_cov_preprocessed = np.zeros([ len(meta.general_pars['frequencies']), 3,hp.nside2npix(meta.general_pars['nside'])])
+
+        # TODO: mask and nhits? 
+        for sim_num in range(nsims):
+            print('NOISE COV ESTIMATION LOADING EXTERNAL NOISE-ONLY MAPS, SIM#',sim_num+1,'/',nsims)
+            freq_noise_maps = np.load(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['noise_directory'], 'noise_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ) )
+            freq_noise_maps_pre_processed = CommonBeamConvAndNsideModification(args, freq_noise_maps)
+            noise_cov += freq_noise_maps**2
+            noise_cov_preprocessed += freq_noise_maps_pre_processed**2
+        return noise_cov/nsims, noise_cov_preprocessed/nsims
+  
+    else:
+        print('sims=False: Comuputing noise covariance from external noise maps.')
+        print('ERROR: Not yet implemented sorry...')
+        exit()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='simplistic simulator')
     parser.add_argument("--globals", type=str,
                         help="Path to yaml with global parameters")
-    parser.add_argument("--sims", action="store_true",
-                        help="Generate a set of sims if True.")
+    parser.add_argument("--sims", default=None,
+                        help="Generate a set of sims if True.")    
     parser.add_argument("--plots", action="store_true",
                         help="Plot the generated maps if True.")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    if args.sims and args.plots:
-        warnings.warn("Both --sims and --plot are set to True. "
-                      "Too many plots will be generated. "
-                      "Set --plot to False")
-        args.plots = False
-    get_cov_matrix_pixel(args)    
+    # if args.sims and args.plots:
+    #     warnings.warn("Both --sims and --plot are set to True. "
+    #                   "Too many plots will be generated. "
+    #                   "Set --plot to False")
+    #     args.plots = False
+    # get_cov_matrix_pixel(args)    
+    noise_cov, noise_cov_preprocessed = GetNoiseCov(args)
+    meta = BBmeta(args.globals)
+
+    np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['covmat_directory'], 'pixel_noise_cov.npy' ),
+                noise_cov )
+    np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['covmat_directory'], 'pixel_noise_cov_preprocessed.npy' ),
+                noise_cov_preprocessed )    
+    IPython.embed()
