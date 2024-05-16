@@ -9,8 +9,9 @@ import glob
 import os
 import sys
 import matplotlib.pyplot as plt
+import V3calc as V3
 
-sys.path.append('/global/cfs/cdirs/sobs/users/krach/BBSims/NOISE_20201207/')
+# sys.path.append('/global/cfs/cdirs/sobs/users/krach/BBSims/NOISE_20201207/')
 # from combine_noise import *
 
 def get_combined_map_sims(args):
@@ -97,18 +98,18 @@ def get_combined_map_sims(args):
 def MakeSims(args):
     """This routines creates mock data from the map sets."""
     meta = BBmeta(args.globals)
-    d_config = meta.map_sim_pars['dust_model']
-    s_config = meta.map_sim_pars['sync_model']
-    # c_config = meta.map_sim_pars['cmb_model']
+    meta_sim = BBmeta(args.sims)
+    d_config = meta_sim.map_sim_pars['dust_model']
+    s_config = meta_sim.map_sim_pars['sync_model']
 
     # performing the CMB simulation with synfast
-    if meta.map_sim_pars['cmb_sim_no_pysm']:
+    if meta_sim.map_sim_pars['cmb_sim_no_pysm']:
         print('Creating CMB map...')
 
-        path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb('lensed')
-        path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
+        path_Cl_BB_lens = meta_sim.get_fname_cls_fiducial_cmb('lensed')
+        path_Cl_BB_prim_r1 = meta_sim.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
 
-        Cl_BB_prim = meta.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
+        Cl_BB_prim = meta_sim.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
         Cl_lens = hp.read_cl(path_Cl_BB_lens)
 
         if args.plots:
@@ -137,14 +138,14 @@ def MakeSims(args):
 
 
         l_max_lens = len(Cl_lens[0])
-        Cl_BB_lens = meta.map_sim_pars['A_lens']*Cl_lens[2]
+        Cl_BB_lens = meta_sim.map_sim_pars['A_lens']*Cl_lens[2]
         Cl_TT = Cl_lens[0]
         Cl_EE = Cl_lens[1]
         Cl_TE = Cl_lens[3]
 
         Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
         cmb_sky = hp.synfast([Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE*0.0, Cl_EE*0.0], 
-                             nside=meta.general_pars['nside'], new=True)
+                             nside=meta_sim.map_sim_pars['nside_sim'], new=True)
     else:
         print('ERROR: CMB sims only handled using synfast on fiducial Cls')
         return 
@@ -167,12 +168,15 @@ def MakeSims(args):
     fsky_binary = sum(binary_mask) / len(binary_mask)
 
     ell, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
-        sensitivity_mode = meta.general_pars['sensitivity_mode'],
+        sensitivity_mode = meta_sim.noise_sim_pars['sensitivity_mode'],
         one_over_f_mode = 2, # fixed to None since we only use white noise here
-        SAC_yrs_LF = meta.general_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
+        SAC_yrs_LF = meta_sim.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
         ell_max = meta.general_pars['lmax'], delta_ell=1,
         beam_corrected=False, remove_kluge=False, CMBS4=''
     )
+
+    print('Map_white_noise_levels = ', Map_white_noise_levels)
+
 
     instrument_config = {
         'frequency' : meta.general_pars['frequencies'],
@@ -183,7 +187,7 @@ def MakeSims(args):
     instrument = standardize_instrument(instrument_config)
 
     print('Creating Pysm Fg maps...')
-    sky = get_sky(meta.general_pars['nside'], d_config+s_config)
+    sky = get_sky(meta_sim.map_sim_pars['nside_sim'], d_config+s_config)
 
     fg_freq_maps = get_observation(instrument, sky, noise=False) 
     CMB_fg_freq_maps = fg_freq_maps + cmb_sky
@@ -192,29 +196,32 @@ def MakeSims(args):
     CMB_fg_freq_maps_beamed = []
     for f in range(len(meta.general_pars['frequencies'])):
         print('Beaming frequency channel:', meta.general_pars['frequencies'][f])
-        CMB_fg_alms = hp.map2alm(CMB_fg_freq_maps[f], lmax=3*meta.general_pars['nside'])
+        CMB_fg_alms = hp.map2alm(CMB_fg_freq_maps[f], lmax=3*meta_sim.map_sim_pars['nside_sim'])
 
-        Bl_gauss_fwhm = hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=3*meta.general_pars['nside'])
+        Bl_gauss_fwhm = hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=3*meta_sim.map_sim_pars['nside_sim'])
                 
         for alm_ in CMB_fg_alms:
             hp.almxfl(alm_, Bl_gauss_fwhm, inplace=True)             
 
-        CMB_fg_freq_maps_beamed.append(hp.alm2map(CMB_fg_alms, meta.general_pars['nside']) )        
+        CMB_fg_freq_maps_beamed.append(hp.alm2map(CMB_fg_alms, meta_sim.map_sim_pars['nside_sim']) )        
     CMB_fg_freq_maps_beamed = np.array(CMB_fg_freq_maps_beamed)
 
     print('Creating noise maps...')
-    if meta.general_pars['noise_option']=='white_noise':
+    if meta_sim.noise_sim_pars['noise_option']=='white_noise':
         nlev_map = fg_freq_maps*0.0
-        for i in range(len(instrument.frequency)):
-            nlev_map[3*i:3*i+3,:] = np.array([instrument.depth_i[i], instrument.depth_p[i], instrument.depth_p[i]])[:,np.newaxis]*np.ones((3,fg_freq_maps.shape[-1]))
-        nlev_map /= hp.nside2resol(meta.general_pars['nside'], arcmin=True)
+        for f in range(len(instrument.frequency)):
+            nlev_map[f] = np.array([instrument.depth_i[f], instrument.depth_p[f], instrument.depth_p[f]])[:,np.newaxis]*np.ones((3,fg_freq_maps.shape[-1]))
+        nlev_map /= hp.nside2resol(meta_sim.map_sim_pars['nside_sim'], arcmin=True)
         noise_maps = np.random.normal(fg_freq_maps*0.0, nlev_map, fg_freq_maps.shape)
+    elif meta_sim.noise_sim_pars['noise_option']=='':
+        print('No noise case')
+        noise_maps = 0 * fg_freq_maps
     else:
         print('ERROR: Other noise cases not handled yet...')
         return
     
     CMB_fg_noise_freq_maps = CMB_fg_freq_maps_beamed + noise_maps
-    return CMB_fg_noise_freq_maps
+    return CMB_fg_noise_freq_maps, noise_maps, fg_freq_maps, cmb_sky, CMB_fg_freq_maps_beamed, fsky_binary
         
 
 def get_sims(args):
@@ -457,49 +464,199 @@ def ApplyBinaryMask(args, freq_maps, use_UNSEEN = False):
 
     return freq_maps
 
+def plotTTEEBB_diff(meta, meta_sims, Cl_data, Cl_model, save_name, legend_labels=[r'label data $C_\ell$ $\nu=$', r'label model $C_\ell$ $\nu=$'], axis_labels=['y_axis_row0', 'y_axis_row1']):
+        ell = np.arange(0,Cl_data.shape[-1])
+        norm = ell*(ell+1)/2/np.pi
+
+        fig, ax = plt.subplots(2,3, sharex=True, sharey='row')
+        for f in range(Cl_data.shape[0]):
+            ax[0][0].plot(ell, norm*Cl_data[f,0], 
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[0][1].plot(ell, norm*Cl_data[f,1], 
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[0][2].plot(ell, norm*Cl_data[f,2], label=legend_labels[0]+str(meta.general_pars['frequencies'][f]) * (Cl_data.shape[0]!=1), #
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[0][0].plot(ell, norm*Cl_model[f,0],
+                       color='C'+str(f),ls=':')
+            ax[0][1].plot(ell, norm*Cl_model[f,1], 
+                       color='C'+str(f),ls=':')
+            ax[0][2].plot(ell, norm*Cl_model[f,2], label=legend_labels[1]+str(meta.general_pars['frequencies'][f]) * (Cl_data.shape[0]!=1),  #
+                       color='C'+str(f),ls=':')
+
+            ax[1][0].plot(ell, ((Cl_data[f,0] - Cl_model[f,0])/Cl_model[f,0]), 
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[1][1].plot(ell[2:], ((Cl_data[f,1] - Cl_model[f,1])/Cl_model[f,1])[2:], 
+                       color='C'+str(f),ls='-', alpha=0.4)
+            ax[1][2].plot(ell[2:], ((Cl_data[f,2] - Cl_model[f,2])/Cl_model[f,2])[2:],
+                       color='C'+str(f),ls='-', alpha=0.4)                       
+        ax[0][0].set_title('TT')
+        ax[0][1].set_title('EE')
+        ax[0][2].set_title('BB')
+        ax[1][0].set_xlabel('$\ell$')
+        ax[1][1].set_xlabel('$\ell$')
+        ax[1][2].set_xlabel('$\ell$')
+        ax[0][0].set_ylabel(axis_labels[0]) #  
+        ax[1][0].set_ylabel(axis_labels[1]) #  )
+        ax[0][2].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
+        ax[0][0].loglog()
+        ax[0][1].loglog()
+        ax[0][2].loglog()
+        ax[1][0].set_xscale('log')
+        ax[1][1].set_xscale('log')
+        ax[1][2].set_xscale('log')
+        plt.subplots_adjust(wspace=0, hspace=0)
+        plt.savefig(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['plots_directory'], save_name), bbox_inches='tight') 
+        plt.close()
+
+def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, fsky_binary):
+        meta_sims = BBmeta(args.sims)
+        meta = BBmeta(args.globals)
+        cl_cmb_sky_maps = hp.anafast(cmb_sky)
+
+        cl_noise_f = []
+        cl_freq_maps_f = []
+        cl_fg_freq_maps = []
+
+        for f in range(len(meta.general_pars['frequencies'])):
+            cl_noise_f.append( hp.anafast(noise_maps[f]))
+            cl_freq_maps_f.append( hp.anafast(freq_maps[f]))
+            cl_fg_freq_maps.append(hp.anafast(fg_freq_maps[f]))
+        cl_noise_f = np.array(cl_noise_f)
+        cl_freq_maps_f = np.array(cl_freq_maps_f)
+        cl_fg_freq_maps = np.array(cl_fg_freq_maps)
+       
+
+
+        ell_V3, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
+            sensitivity_mode = meta_sims.noise_sim_pars['sensitivity_mode'],
+            one_over_f_mode = 2, # fixed to None since we only use white noise here
+            SAC_yrs_LF = meta_sims.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
+            ell_max = meta.general_pars['lmax'], delta_ell=1,
+            beam_corrected=False, remove_kluge=False, CMBS4='' )
+        
+        print('Map_white_noise_levels = ', Map_white_noise_levels)
+
+        N_ell_white_f_arcmin = []
+        for f in range(len(meta.general_pars['frequencies'])):
+            N_ell_white_f_arcmin.append(np.ones(cl_fg_freq_maps.shape[-1]) *
+                                   Map_white_noise_levels[f]**2)
+        N_ell_white_f = np.array(N_ell_white_f_arcmin)  * (np.pi/60/180)**2 
+        N_ell_white_f_temp = np.array(N_ell_white_f_arcmin)  * (np.pi/60/180)**2 /2
+
+        model_noise = np.empty([len(meta.general_pars['frequencies']), 3, cl_fg_freq_maps.shape[-1]])
+        model_noise[:,0] = N_ell_white_f_temp
+        model_noise[:,1] = N_ell_white_f
+        model_noise[:,2] = N_ell_white_f
+        
+        plotTTEEBB_diff(meta, meta_sims, cl_noise_f, model_noise, 'Noise_lvl_check.png', 
+                        legend_labels=[r'Noise $C_\ell$ from map $\nu=$', r'Input white noise lvl $\nu=$'], 
+                        axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\Delta_{\ell} / Input_\ell$'])
+
+        path_Cl_BB_lens = meta_sims.get_fname_cls_fiducial_cmb('lensed')
+        path_Cl_BB_prim_r1 = meta_sims.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
+
+        Cl_BB_prim = meta_sims.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
+        Cl_lens = hp.read_cl(path_Cl_BB_lens)
+
+        l_max_lens = len(Cl_lens[0])
+        Cl_BB_lens = meta_sims.map_sim_pars['A_lens']*Cl_lens[2]
+        Cl_TT = Cl_lens[0]
+        Cl_EE = Cl_lens[1]
+        Cl_TE = Cl_lens[3]
+
+        Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
+        Cl_cmb_model = np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE*0.0, Cl_EE*0.0]])
+
+        plotTTEEBB_diff(meta, meta_sims, np.array([cl_cmb_sky_maps]), Cl_cmb_model[...,:cl_cmb_sky_maps.shape[-1]], 'CMB_check.png', 
+                        legend_labels=[r'$C_{\ell}^{\rm CMB}$ from map', r'Input $C_{\ell}^{\rm CMB}$'], 
+                        axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\Delta_{\ell} / Input_\ell$'])        
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='simplistic simulator')
     parser.add_argument("--globals", type=str,
                         help="Path to yaml with global parameters")
-    parser.add_argument("--sims", action="store_true",
-                        help="Generate a set of sims if True.")
+    # parser.add_argument("--sims", action="store_true",
+    #                     help="Generate a set of sims if True.")
+    parser.add_argument("--sims", default=None,
+                        help="Generate a set of sims if True.")    
     parser.add_argument("--plots", action="store_true",
                         help="Plot the generated maps if True.")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
+    meta = BBmeta(args.globals)
 
-    # if args.sims and args.plots:
-    #     warnings.warn("Both --sims and --plot are set to True. "
-    #                   "Too many plots will be generated. "
-    #                   "Set --plot to False")
-    #     args.plots = False
+
+    # MPI VARIABLES
+    try:
+        from mpi4py import MPI
+        comm=MPI.COMM_WORLD
+        size=comm.Get_size()
+        rank=comm.rank
+        barrier=comm.barrier
+        root=0
+        mpi = True
+    except (ModuleNotFoundError, ImportError) as e:
+        # Error handling
+        print('ERROR IN MPI:', e)
+        print('Proceeding without MPI\n')
+        mpi = False
+        rank=0
+        pass
+
 
     if args.sims:
         print('Simulating maps ...')
-        freq_maps = MakeSims(args)
+        meta_sims = BBmeta(args.sims)
+
+        if not mpi:
+            freq_maps_sim_list = []
+            for sim_num in range(meta_sims.general_pars['nsims']):
+
+                print('simulating maps sim number: ', sim_num, '/', meta_sims.general_pars['nsims'])
+                freq_maps, noise_maps, fg_freq_maps, cmb_sky, CMB_fg_freq_maps_beamed, fsky_binary = MakeSims(args)
+                freq_maps_sim_list.append(freq_maps)
+                print('saving map sims ...')
+                np.save(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['comb_directory'], 'comb_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), freq_maps )
+                np.save(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['cmb_directory'], 'cmb_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), cmb_sky )
+                np.save(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['cmb_beamed_directory'], 'cmb_beamed_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), CMB_fg_freq_maps_beamed )
+                np.save(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['fg_directory'], 'fg_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), fg_freq_maps )
+                np.save(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['noise_directory'], 'noise_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), noise_maps )
+        if mpi:
+            print('TODO!!')
+        
     else:
         print('Importing maps ...')
+        # TODO: MPI
+        # TODO: formating for importing real maps
         freq_maps = get_maps(args)
+
     
+    if args.sims and args.plots:
+        print('checking sims...')
+        # This only checks the last simulations
+        # TODO: in MPI do all cases or just one? 
+        check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, fsky_binary)
 
-    freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps)
+    if not mpi:
+        for sim_num in range(meta_sims.general_pars['nsims']):
+            freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps_sim_list[sim_num])
+            freq_maps_common_beamed_masked = ApplyBinaryMask(args, freq_maps_common_beamed)
+            print('saving pre-processed maps ...')
+            np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_common_beamed_masked'+str(sim_num).zfill(5)+'.npy' ),
+                    freq_maps_common_beamed_masked )
+            np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_common_beamed'+str(sim_num).zfill(5)+'.npy' ),
+                    freq_maps_common_beamed )
 
-    freq_maps_common_beamed_masked = ApplyBinaryMask(args, freq_maps_common_beamed)
-    # freq_maps_unbeamed_masked = ApplyBinaryMask(args, freq_maps)
 
-    meta = BBmeta(args.globals)
+    if mpi:
+        # TODO: check mpi version
+        freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps)
+        freq_maps_common_beamed_masked = ApplyBinaryMask(args, freq_maps_common_beamed)
 
-    print('saving maps ...')
-    #  saving the sims 
-    if args.sims:
-        np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['sims_directory'], 'freq_maps.npy' ),
-                freq_maps )
-
-    np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_common_beamed_masked.npy' ),
-            freq_maps_common_beamed_masked )
-    # np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_unbeamed_masked.npy' ),
-    #         freq_maps_unbeamed_masked )    
-
-    # IPython.embed()
+        print('saving pre-processed maps ...')
+        np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_common_beamed_masked'+str(rank).zfill(5)+'.npy' ),
+                freq_maps_common_beamed_masked )
+        np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_common_beamed'+str(rank).zfill(5)+'.npy' ),
+                freq_maps_common_beamed )
+    IPython.embed()
