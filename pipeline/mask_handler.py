@@ -18,7 +18,8 @@ def mask_handler(args):
     timeout_seconds = 300  # Set the timeout [sec] for the socket
 
     if args.plots:
-        cmap = cm.YlOrRd
+        # cmap = cm.YlOrRd
+        cmap = cm.RdBu
         cmap.set_under("w")
         plot_dir = meta.plot_dir_from_output_dir(meta.mask_directory_rel)
 
@@ -58,7 +59,7 @@ def mask_handler(args):
 
     if args.plots:
         plt.figure(figsize=(16, 9))
-        hp.mollview(nhits, cmap=cmap, cbar=False)
+        hp.mollview(nhits, cmap=cmap, cbar=True)
         hp.graticule()
         nhits_save_path = os.path.join(plot_dir,
                                        meta.masks["nhits_map"])
@@ -73,7 +74,7 @@ def mask_handler(args):
 
     if args.plots:
         plt.figure(figsize=(16, 9))
-        hp.mollview(binary_mask, cmap=cmap, cbar=False)
+        hp.mollview(binary_mask, cmap=cmap, cbar=True)
         hp.graticule()
         plt.savefig(os.path.join(plot_dir,
                                  meta.masks["binary_mask"]).replace('.fits',
@@ -138,7 +139,7 @@ def mask_handler(args):
 
                 if args.plots:
                     plt.figure(figsize=(16, 9))
-                    hp.mollview(gal_mask_p15, cmap=cmap, cbar=False)
+                    hp.mollview(gal_mask_p15, cmap=cmap, cbar=True)
                     hp.graticule()
                     plt.savefig(
                         os.path.join(plot_dir,
@@ -168,7 +169,7 @@ def mask_handler(args):
 
             if args.plots:
                 plt.figure(figsize=(16, 9))
-                hp.mollview(ps_mask, cmap=cmap, cbar=False)
+                hp.mollview(ps_mask, cmap=cmap, cbar=True)
                 hp.graticule()
                 plt.savefig(
                     os.path.join(plot_dir,
@@ -228,7 +229,7 @@ def mask_handler(args):
     if args.plots:
         # Plot analysis mask
         plt.figure(figsize=(16, 9))
-        hp.mollview(final_mask, cmap=cmap, cbar=False)
+        hp.mollview(final_mask, cmap=cmap, cbar=True)
         hp.graticule()
         plt.savefig(
             os.path.join(plot_dir,
