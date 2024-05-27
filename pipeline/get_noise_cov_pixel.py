@@ -11,6 +11,7 @@ import glob
 import IPython
 from matplotlib import cm
 import math
+import megatop.V3calc as V3
 
 
 # import sys
@@ -241,6 +242,28 @@ def GetNoiseCov(args, apply_pixwin=False):
         print('sims=False: Computing noise covariance from external noise maps.')
         print('ERROR: Not yet implemented sorry...')
         exit()
+
+
+def CheckNoiselvl(args, noise_cov, mask):
+    meta = BBmeta(args.globals)
+
+    fsky_binary = sum(mask) / len(mask) # only works if binary mask... 
+
+    ell, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
+    sensitivity_mode = meta.general_pars['sensitivity_mode'],
+    one_over_f_mode = 2, # fixed to None since we only use white noise here
+    SAC_yrs_LF = meta.general_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
+    ell_max = meta.general_pars['lmax'], delta_ell=1,
+    beam_corrected=False, remove_kluge=False, CMBS4='')
+
+    std_map = np.std(noise_cov, axis = -1)
+    std_uK_arcmin = std_map * hp.nside2resol(hp.npix2nside(noise_cov.shape[-1]))
+
+    print('std_uK_arcmin = ', std_uK_arcmin)
+    print('std_uK_arcmin / Map_white_noise_levels = ', std_uK_arcmin[:,1] / Map_white_noise_levels)
+    return std_uK_arcmin
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='simplistic simulator')
