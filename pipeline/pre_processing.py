@@ -15,7 +15,27 @@ import time
 
 
 def MakeSims(args):
-    """This routines creates mock data from the map sets."""
+    """This routine creates mock data from the map sets.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file and simulation file
+              to set up metadata managers.
+
+    Returns:
+        CMB_fg_noise_freq_maps (ndarray): The frequency maps of the CMB, foregrounds, and noise, with shape (num_freq, num_stokes, num_pixels).
+        
+        noise_maps (ndarray): The noise maps, with shape (num_freq, num_stokes, num_pixels).
+        
+        fg_freq_maps (ndarray): The foreground frequency maps, with shape (num_freq, num_stokes, num_pixels).
+        
+        cmb_sky (ndarray): The CMB sky map, with shape (num_stokes, num_pixels).
+        
+        CMB_fg_freq_maps_beamed (ndarray): The frequency maps of the CMB and foregrounds after beam convolution, with shape (num_freq, num_stokes, num_pixels).
+        
+        fsky_binary (float): The fraction of sky covered by the binary mask.
+
+    """
+
     meta = BBmeta(args.globals)
     meta_sim = BBmeta(args.sims)
     d_config = meta_sim.map_sim_pars['dust_model']
@@ -163,7 +183,21 @@ def get_maps(args):
     # freq_maps = np.ones((6,3,hp.nside2npix(meta.general_pars['nside'])))
     return freq_maps
 
-def CommonBeamConvAndNsideModification(args, freq_maps, old_code = False):
+def CommonBeamConvAndNsideModification(args, freq_maps):
+    '''
+    This function takes the frequency maps and applies the common beam correction,
+    changes the NSIDE of the maps and includes the effect of the pixel window function.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        freq_maps (ndarray): The frequency maps, with shape (num_freq, num_stokes, num_pixels).
+
+    Returns:
+        freq_maps_out (ndarray): The frequency maps after the common beam correction, 
+                                 NSIDE change, and pixel window function effect, 
+                                 with shape (num_freq, num_stokes, num_pixels).
+    '''
+
     meta = BBmeta(args.globals)
     map_dimensions = len(freq_maps.shape)
 
@@ -216,6 +250,17 @@ def CommonBeamConvAndNsideModification(args, freq_maps, old_code = False):
     return np.array(freq_maps_out)
 
 def ApplyBinaryMask(args, freq_maps, use_UNSEEN = False):
+    '''
+    This function applies the binary mask to the frequency maps.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        freq_maps (ndarray): The frequency maps, with shape (num_freq, num_stokes, num_pixels).
+        use_UNSEEN (bool): If True, the UNSEEN value is used for the masked pixels, otherwise the masked pixels are set to zero.
+
+    Returns:
+        freq_maps_masked (ndarray): The frequency maps after applying the binary mask, with shape (num_freq, num_stokes, num_pixels).
+    '''
     meta = BBmeta(args.globals)
     binary_mask_path = meta.get_fname_mask('binary')
 
@@ -241,7 +286,23 @@ def ApplyBinaryMask(args, freq_maps, use_UNSEEN = False):
 
     return freq_maps_masked
 
-def plotTTEEBB_diff(args, Cl_data, Cl_model, save_name, legend_labels=[r'label data $C_\ell$ $\nu=$', r'label model $C_\ell$ $\nu=$'], axis_labels=['y_axis_row0', 'y_axis_row1']):
+def plotTTEEBB_diff(args, Cl_data, Cl_model, save_name, 
+                    legend_labels=[r'label data $C_\ell$ $\nu=$', r'label model $C_\ell$ $\nu=$'], 
+                    axis_labels=['y_axis_row0', 'y_axis_row1']):
+        '''
+        This function plots the difference between the data and the model Cls.
+
+        Args:
+            args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+            Cl_data (ndarray): The data Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
+            Cl_model (ndarray): The model Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
+            save_name (str): The name of the file to save the plot.
+            legend_labels (list): The labels for the legend of the plot.
+            axis_labels (list): The labels for the x and y axes of the plot.
+
+        Returns:
+            None
+        '''
         meta_sims = BBmeta(args.sims)
         meta = BBmeta(args.globals)
         
@@ -289,6 +350,16 @@ def plotTTEEBB_diff(args, Cl_data, Cl_model, save_name, legend_labels=[r'label d
         plt.close()
 
 def get_Cl_CMB_model_from_meta(args):
+    '''
+    This function reads the fiducial CMB Cls from the metadata manager and combines scalar, lensing and tensor 
+    contributions to return the model Cls according to A_lens and r in the simulation parameter file.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        
+    Returns:
+        Cl_cmb_model (ndarray): The model CMB Cls, with shape (num_freq, num_spectra [TT,EE,BB,TE,EB,TB], num_ell).
+    '''
     meta_sims = BBmeta(args.sims)
     path_Cl_BB_lens = meta_sims.get_fname_cls_fiducial_cmb('lensed')
     path_Cl_BB_prim_r1 = meta_sims.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
@@ -307,35 +378,64 @@ def get_Cl_CMB_model_from_meta(args):
     return Cl_cmb_model
 
 def get_Nl_white_noise(args, fsky_binary):
-        meta_sims = BBmeta(args.sims)
-        meta = BBmeta(args.globals)
+    '''
+    
+    This function computes the white noise level from V3calc using parameters from the metadata manager 
+    and returns the noise Cls.
 
-        ell_V3, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
-                sensitivity_mode = meta_sims.noise_sim_pars['sensitivity_mode'],
-                one_over_f_mode = 2, # fixed to None since we only use white noise here
-                SAC_yrs_LF = meta_sims.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
-                ell_max = meta.general_pars['lmax'], delta_ell=1,
-                beam_corrected=False, remove_kluge=False, CMBS4='' )
-                
-        print('Map_white_noise_levels = ', Map_white_noise_levels)
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        fsky_binary (float): The fraction of sky covered by the binary mask.
+        
+    Returns:
+        model_noise (ndarray): The model noise Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
+    '''
+    meta_sims = BBmeta(args.sims)
+    meta = BBmeta(args.globals)
 
-        lmax_convolution = 3*meta_sims.general_pars['nside']
+    ell_V3, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
+            sensitivity_mode = meta_sims.noise_sim_pars['sensitivity_mode'],
+            one_over_f_mode = 2, # fixed to None since we only use white noise here
+            SAC_yrs_LF = meta_sims.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
+            ell_max = meta.general_pars['lmax'], delta_ell=1,
+            beam_corrected=False, remove_kluge=False, CMBS4='' )
+            
+    print('Map_white_noise_levels = ', Map_white_noise_levels)
 
-        N_ell_white_f_arcmin = []
-        for f in range(len(meta.general_pars['frequencies'])):
-            N_ell_white_f_arcmin.append(np.ones(lmax_convolution) *
-                                   Map_white_noise_levels[f]**2)
-        N_ell_white_f = np.array(N_ell_white_f_arcmin)  * (np.pi/60/180)**2 
-        N_ell_white_f_temp = np.array(N_ell_white_f_arcmin)  * (np.pi/60/180)**2 /2
+    lmax_convolution = 3*meta_sims.general_pars['nside']
 
-        model_noise = np.empty([len(meta.general_pars['frequencies']), 3, lmax_convolution])
-        model_noise[:,0] = N_ell_white_f_temp
-        model_noise[:,1] = N_ell_white_f
-        model_noise[:,2] = N_ell_white_f  
+    N_ell_white_f_arcmin = []
+    for f in range(len(meta.general_pars['frequencies'])):
+        N_ell_white_f_arcmin.append(np.ones(lmax_convolution) *
+                                Map_white_noise_levels[f]**2)
+    N_ell_white_f = np.array(N_ell_white_f_arcmin)  * (np.pi/60/180)**2 
+    N_ell_white_f_temp = np.array(N_ell_white_f_arcmin)  * (np.pi/60/180)**2 /2
 
-        return model_noise
+    model_noise = np.empty([len(meta.general_pars['frequencies']), 3, lmax_convolution])
+    model_noise[:,0] = N_ell_white_f_temp
+    model_noise[:,1] = N_ell_white_f
+    model_noise[:,2] = N_ell_white_f  
+
+    return model_noise
 
 def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_maps_beamed,fsky_binary):
+        '''	    
+        This function checks the simulated maps by comparing their Cls with the input CMB spectra beamed, the foreground Cls computed by their input map beamed
+        and the white noise Cl. It saves the different plots in the plots directory of the simulation output directory.
+        
+        Args:
+            args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+            cmb_sky (ndarray): The CMB sky map, with shape (num_stokes, num_pixels).
+            noise_maps (ndarray): The noise maps, with shape (num_freq, num_stokes, num_pixels).
+            freq_maps (ndarray): The frequency maps, with shape (num_freq, num_stokes, num_pixels).
+            fg_freq_maps (ndarray): The foreground frequency maps, with shape (num_freq, num_stokes, num_pixels).
+            CMB_fg_freq_maps_beamed (ndarray): The frequency maps of the CMB and foregrounds after beam convolution, with shape (num_freq, num_stokes, num_pixels).
+            fsky_binary (float): The fraction of sky covered by the binary mask.
+        
+        Returns:
+            None
+        '''
+
         meta_sim = BBmeta(args.sims)
         meta = BBmeta(args.globals)
         cl_cmb_sky_maps = hp.anafast(cmb_sky)
@@ -357,13 +457,15 @@ def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_m
 
         model_noise = get_Nl_white_noise(args, fsky_binary)
         
-        plotTTEEBB_diff(args, cl_noise_f, model_noise, os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['plots_directory'], 'Noise_lvl_check.png'), 
+        plotTTEEBB_diff(args, cl_noise_f, model_noise, 
+                        os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['plots_directory'], 'Noise_lvl_check.png'), 
                         legend_labels=[r'Noise $C_\ell$ from map $\nu=$', r'Input white noise lvl $\nu=$'], 
                         axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'])
 
         Cl_cmb_model = get_Cl_CMB_model_from_meta(args)
 
-        plotTTEEBB_diff(args, np.array([cl_cmb_sky_maps]), Cl_cmb_model[...,:cl_cmb_sky_maps.shape[-1]], os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['plots_directory'], 'CMB_check.png'), 
+        plotTTEEBB_diff(args, np.array([cl_cmb_sky_maps]), Cl_cmb_model[...,:cl_cmb_sky_maps.shape[-1]], 
+                        os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['plots_directory'], 'CMB_check.png'), 
                         legend_labels=[r'$C_{\ell}^{\rm CMB}$ from map', r'Input $C_{\ell}^{\rm CMB}$'], 
                         axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'])  
 
@@ -380,11 +482,28 @@ def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_m
 
         beamed_sky_model = np.array([ beamed_sky_TT, beamed_sky_EE, beamed_sky_BB ]).swapaxes(0,1)
 
-        plotTTEEBB_diff(args, cl_CMB_fg_freq_maps_beamed, beamed_sky_model, os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['plots_directory'], 'sky_beamed_check.png') , 
+        plotTTEEBB_diff(args, cl_CMB_fg_freq_maps_beamed, beamed_sky_model, 
+                        os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['plots_directory'], 'sky_beamed_check.png') , 
                         legend_labels=[r'$C_{\ell}^{\rm CMB+fg beamed}$ from map', r'Input $C_{\ell}^{\rm CMB+fg beamed}$'], 
                         axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'])
 
 def check_preproc(args, preproc_freq_maps, fg_freq_maps, fsky_binary, sim_num=0):
+    '''
+    
+    This function checks the pre-processed maps by comparing their Cls with the model Cls after pre-processing.
+    It saves the different plots in the pre-processing subdirectory of the output plot directory.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        preproc_freq_maps (ndarray): The pre-processed frequency maps, with shape (num_freq, num_stokes, num_pixels).
+        fg_freq_maps (ndarray): The foreground frequency maps, with shape (num_freq, num_stokes, num_pixels).
+        fsky_binary (float): The fraction of sky covered by the binary mask.
+        sim_num (int): The simulation number, used for the output file name.
+
+    Returns:
+        cl_preproc_freq_maps (ndarray): The pre-processed frequency maps Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
+        model_beamed_total (ndarray): The model beamed total Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
+    '''
     meta_sims = BBmeta(args.sims)
     meta = BBmeta(args.globals)
 
