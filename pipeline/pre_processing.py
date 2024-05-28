@@ -185,7 +185,7 @@ def get_maps(args):
 
 def CommonBeamConvAndNsideModification(args, freq_maps):
     '''
-    This function takes the frequency maps and applies the common beam correction,
+    This function takes the frequency maps and applies the common beam correction, deconvolves the frequency beams,
     changes the NSIDE of the maps and includes the effect of the pixel window function.
 
     Args:
@@ -194,7 +194,8 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
 
     Returns:
         freq_maps_out (ndarray): The frequency maps after the common beam correction, 
-                                 NSIDE change, and pixel window function effect, 
+                                 frequency beams decovolution, NSIDE change, 
+                                 and pixel window function effect, 
                                  with shape (num_freq, num_stokes, num_pixels).
     '''
 
@@ -255,7 +256,7 @@ def ApplyBinaryMask(args, freq_maps, use_UNSEEN = False):
 
     Args:
         args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
-        freq_maps (ndarray): The frequency maps, with shape (num_freq, num_stokes, num_pixels).
+        freq_maps (ndarray): The frequency maps to mask, with shape (num_freq, num_stokes, num_pixels).
         use_UNSEEN (bool): If True, the UNSEEN value is used for the masked pixels, otherwise the masked pixels are set to zero.
 
     Returns:
@@ -290,13 +291,14 @@ def plotTTEEBB_diff(args, Cl_data, Cl_model, save_name,
                     legend_labels=[r'label data $C_\ell$ $\nu=$', r'label model $C_\ell$ $\nu=$'], 
                     axis_labels=['y_axis_row0', 'y_axis_row1']):
         '''
-        This function plots the difference between the data and the model Cls.
+        This function plots the difference between the data and the model Cls. It directly saves the plot directly.
 
         Args:
             args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
             Cl_data (ndarray): The data Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
             Cl_model (ndarray): The model Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
-            save_name (str): The name of the file to save the plot.
+            save_name (str): The name of the file to save the plot. It will save the plot in the plots directory of the simulation output directory.
+                             OR complete save path if you want to save it elsewhere.
             legend_labels (list): The labels for the legend of the plot.
             axis_labels (list): The labels for the x and y axes of the plot.
 
