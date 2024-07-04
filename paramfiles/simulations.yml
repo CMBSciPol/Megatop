@@ -6,18 +6,19 @@ data_dirs:
 
 
 output_dirs: 
-  root: "../OnTheFlySims"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/250SimsNside64to32WithNhits/OnTheFlySims"
   cmb_directory: "CMB"
   cmb_beamed_directory: "CMB_beamed"
   fg_directory: "fg"
   noise_directory: "noise"
   comb_directory: "comb"
+  comb_spectra_directory: "comb_spectra"
   plots_directory: "plots"
   mask_directory: "masks" #not useful for sims but metadata error
 
 
 general_pars:
-    nsims: 2
+    nsims: 250
     lmax: -1
     nside: 64
 

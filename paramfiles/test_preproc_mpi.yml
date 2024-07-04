@@ -12,7 +12,7 @@ data_dirs:
   mock_directory: "mock_data"
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/testMPI24052024/outputs"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/250SimsNside64to32WithNhits/outputs"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  
@@ -111,8 +111,9 @@ pre_proc_pars:
     fwhm: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
 
 noise_cov_pars:
-    include_nhits: False
-    mask_to_apply: False #"binary_mask.fits"
+    include_nhits: True
+    nsims_plot: 1 # number of simulations that will be used for ploting
+    # mask_to_apply: False #"binary_mask.fits"
 
 # ## Simulation related
 map_sim_pars:

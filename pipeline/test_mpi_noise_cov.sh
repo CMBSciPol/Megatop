@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH -N 1
+#SBATCH -N 2
 #SBATCH -C cpu
 #SBATCH -q debug
-#SBATCH -J MPI_PreProc_test
+#SBATCH -J 256NoiseCov
 #SBATCH --mail-user=baptiste.jost@ipmu.jp
 #SBATCH --mail-type=ALL
 #SBATCH -t 00:30:00
@@ -40,10 +40,10 @@ python mask_handler.py --globals ${simparamfile} --plots --verbose
 echo "------------------------------------------------------------"
 echo "|                       PRE-PROCESSING                     |"
 echo "------------------------------------------------------------"
-srun -n 100 -c 2 --mpi=pmi2 --cpu_bind=cores python pre_processing.py --globals ${paramfile} --sims ${simparamfile} --plots --use_mpi
+srun -n 250 -c 2 --mpi=pmi2 --cpu_bind=cores python pre_processing.py --globals ${paramfile} --sims ${simparamfile} --plots --use_mpi
 
 
 echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"
 echo "------------------------------------------------------------"
-srun -n 100 -c 2 --mpi=pmi2 --cpu_bind=cores python get_noise_cov_pixel.py --globals ${paramfile} --sims ${simparamfile} --plots --use_mpi
+srun -n 250 -c 2 --mpi=pmi2 --cpu_bind=cores python get_noise_cov_pixel.py --globals ${paramfile} --sims ${simparamfile} --plots --use_mpi
