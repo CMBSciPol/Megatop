@@ -68,7 +68,7 @@ def mask_handler(args):
     # Generate binary survey mask from the hits map
     meta.timer.start("binary")
     binary_mask = get_binary_mask_from_nhits(nhits, meta.nside,
-                                             zero_threshold=1e-3)
+                                             zero_threshold=meta.masks['mask_handler_binary_zero_threshold'])
     meta.save_mask("binary", binary_mask, overwrite=True)
     meta.timer.stop("binary", "Computing binary mask", args.verbose)
 
@@ -86,7 +86,7 @@ def mask_handler(args):
         nhits_nominal, meta.nside,
         galactic_mask=None,
         point_source_mask=None,
-        zero_threshold=1e-3, apod_radius=10.0,
+        zero_threshold=meta.masks['mask_handler_binary_zero_threshold'], apod_radius=10.0,
         apod_radius_point_source=4.0,
         apod_type="C1"
     )
@@ -191,7 +191,7 @@ def mask_handler(args):
             nhits, meta.nside,
             galactic_mask=galactic_mask,
             point_source_mask=point_source_mask,
-            zero_threshold=1e-3, apod_radius=meta.masks["apod_radius"],
+            zero_threshold=meta.masks['mask_handler_binary_zero_threshold'], apod_radius=meta.masks["apod_radius"],
             apod_radius_point_source=meta.masks["apod_radius_point_source"],
             apod_type=meta.masks["apod_type"]
         )

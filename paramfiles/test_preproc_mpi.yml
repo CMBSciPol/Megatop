@@ -12,7 +12,7 @@ data_dirs:
   mock_directory: "mock_data"
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/250SimsNside64to32WithNhits/outputs"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/100SimsNside64to32WithNhitsCorrected/outputs"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  
@@ -68,6 +68,8 @@ masks:
   binary_mask: "binary_mask.fits"
   galactic_mask_root: "planck_galactic_mask"
   point_source_mask: "point_source_mask.fits"
+  mask_handler_binary_zero_threshold: 1.0e-2 #default 1.0e-3
+
 
   include_in_mask: []
   gal_mask_mode: "gal070"
