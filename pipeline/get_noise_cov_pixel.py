@@ -155,7 +155,7 @@ def GetNoiseCov(args, apply_pixwin=False):
         else:
             nsims_iter = 1 #TODO: implement version with nsims_iter = nsims//size so size doesn't have to be equal to nsims.
             if nsims != size:
-                raise('ERROR: nsims must be equal to size in MPI mode')
+                raise('ERROR: nsims must be equal to size in MPI mode. nsims = ', nsims,'  size = ', size)
 
         for sim_num in range(nsims_iter):
             if mpi:
@@ -182,21 +182,23 @@ def GetNoiseCov(args, apply_pixwin=False):
                                                     nside= meta_sims.map_sim_pars['nside_sim'],lmax=3*meta_sims.map_sim_pars['nside_sim'],
                                                     pixwin=False,fwhm=0.0,pol=True)  
 
-            if meta.noise_cov_pars['include_nhits']:
+            if meta.noise_cov_pars['include_nhits'] or meta_sims.noise_cov_pars['include_nhits']:
                 # Applying 1/sqrt(rescaled nhits) to freq_noise_maps to account for inhomogeneous scanning.
                 # Binary mask derived from nhits map is applied to freq_noise_maps.
                 # We also build a smaller binary mask for the centre of the patch for checking purposes.
                 print('')
-                print('Applying nhits to both freq noise maps')
-                nhits_map = meta_sims.read_hitmap() 
-                nhits_map_rescaled = nhits_map / max(nhits_map)
+                # print('Applying nhits to both freq noise maps')
+                # nhits_map = meta_sims.read_hitmap() 
+                # nhits_map_rescaled = nhits_map / max(nhits_map)
                 binary_mask_from_nhits_nside_sims = meta_sims.read_mask('binary').astype(bool)
 
-                freq_noise_maps /= np.sqrt(nhits_map_rescaled)
+                # freq_noise_maps /= np.sqrt(nhits_map_rescaled)
 
                 freq_noise_maps[...,np.where(binary_mask_from_nhits_nside_sims==0)[0]] = 0 # hp.UNSEEN
                 
                 threshold_centre_patch = 0.8
+                nhits_map = meta_sims.read_hitmap() 
+                nhits_map_rescaled = nhits_map / max(nhits_map)
                 binary_mask_centre_nhits_sims = np.zeros(nhits_map_rescaled.shape, dtype=bool)
                 binary_mask_centre_nhits_sims[np.where(nhits_map_rescaled >= threshold_centre_patch)[0]] = True
 

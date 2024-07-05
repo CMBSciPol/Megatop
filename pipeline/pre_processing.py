@@ -35,7 +35,6 @@ def MakeSims(args):
         fsky_binary (float): The fraction of sky covered by the binary mask.
 
     """
-
     meta = BBmeta(args.globals)
     meta_sim = BBmeta(args.sims)
     d_config = meta_sim.map_sim_pars['dust_model']
@@ -44,7 +43,6 @@ def MakeSims(args):
     # performing the CMB simulation with synfast
     if meta_sim.map_sim_pars['cmb_sim_no_pysm']:
         print('Creating CMB map...')
-
 
         if args.plots:
             
@@ -77,7 +75,6 @@ def MakeSims(args):
             plt.close()
 
 
-
         Cl_cmb_model = get_Cl_CMB_model_from_meta(args)
 
         cmb_sky = hp.synfast(Cl_cmb_model[0], #[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE*0.0, Cl_EE*0.0], 
@@ -90,17 +87,9 @@ def MakeSims(args):
     import megatop.V3calc as V3
 
     #TODO: Optimize! Importing binary mask to compute fsky is a bit overkill... 
-    binary_mask_path = meta.get_fname_mask('binary')
-    binary_mask = hp.read_map(
-        binary_mask_path,
-        dtype=float)
-    
-    if meta.general_pars['nside'] != hp.npix2nside(binary_mask.shape[-1]):
-        print('downgrading binary mask from nisde = ', hp.npix2nside(binary_mask.shape[-1]), 
-              ' to nside = ',meta.general_pars['nside'])
-        binary_mask = hp.ud_grade(binary_mask, nside_out=meta.general_pars['nside'])
-        binary_mask[(binary_mask != 0) * (binary_mask != 1)] = 0
-    
+    binary_mask = meta.read_mask('binary')
+        
+
     fsky_binary = sum(binary_mask) / len(binary_mask)
 
     ell, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
@@ -130,6 +119,8 @@ def MakeSims(args):
 
     print('Beaming sky maps...')
     CMB_fg_freq_maps_beamed = []
+
+
     for f in range(len(meta.general_pars['frequencies'])):
         print('Beaming frequency channel:', meta.general_pars['frequencies'][f])
         lmax_convolution = 3* max(meta.general_pars['nside'], meta_sims.general_pars['nside'])
@@ -156,6 +147,8 @@ def MakeSims(args):
         CMB_fg_freq_maps_beamed.append([CMB_fg_alms_out_T, CMB_fg_alms_out_Q, CMB_fg_alms_out_U])        
     CMB_fg_freq_maps_beamed = np.array(CMB_fg_freq_maps_beamed)
 
+
+    
     print('Creating noise maps...')
     if meta_sim.noise_sim_pars['noise_option']=='white_noise':
         nlev_map = fg_freq_maps*0.0
@@ -169,8 +162,25 @@ def MakeSims(args):
     else:
         print('ERROR: Other noise cases not handled yet...')
         return
+ 
+ 
+    if meta_sim.noise_sim_pars['noise_option'] != '' and meta_sim.noise_sim_pars['include_nhits']:
+        print('Including nhits in noise maps...')
+        nhits_map = meta_sim.read_hitmap() 
+        nhits_map_rescaled = nhits_map / max(nhits_map)
+        noise_maps /= np.sqrt(nhits_map_rescaled)
+
+
     
     CMB_fg_noise_freq_maps = CMB_fg_freq_maps_beamed + noise_maps
+
+    if meta_sim.noise_sim_pars['include_nhits']:
+        # Importing mask from the simulations nside to apply to simulated maps
+        # Necessary to do it here when applying 1/sqrt(nhits) to the noise maps as it will create inf in the noise maps
+        binary_mask_sim = meta_sim.read_mask('binary')
+        CMB_fg_noise_freq_maps[...,np.where(binary_mask_sim==0)[0]] = 0 # hp.UNSEEN
+
+
     return CMB_fg_noise_freq_maps, noise_maps, fg_freq_maps, cmb_sky, CMB_fg_freq_maps_beamed, fsky_binary
         
 
@@ -202,7 +212,6 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
     meta = BBmeta(args.globals)
     map_dimensions = len(freq_maps.shape)
 
-
     freq_maps_out = []
 
     print('  -> common beam correction and NSIDE change: correcting for frequency-dependent beams, convolving with a common beam, modifying NSIDE and include effect of pixel window function')
@@ -212,7 +221,7 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
     wpix_out = hp.pixwin(meta.general_pars['nside'],pol=True,lmax=lmax_convolution) # Pixel window function of output maps
     wpix_in[1][0:2] = 1. #in order not to divide by 0
     Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), lmax=lmax_convolution, pol=True)
-    
+ 
     for f in range(len(meta.general_pars['frequencies'])):
         #beam corrections
         Bl_gauss_fwhm = hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=lmax_convolution, pol=True)
@@ -234,7 +243,6 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
         
         alm_in_T,alm_in_E,alm_in_B = hp.map2alm([cmb_in_T,cmb_in_Q,cmb_in_U],lmax=lmax_convolution,pol=True, iter=10)
         # here lmax seems to play an important role            
-        
 
         #change beam and wpix
         alm_out_T = hp.almxfl(alm_in_T,sm_corr_T)
@@ -606,7 +614,7 @@ if __name__ == "__main__":
     if args.sims:
         print('Simulating maps ...')
         meta_sims = BBmeta(args.sims)
-
+  
         if not mpi:
             freq_maps_sim_list = []
             for sim_num in range(meta_sims.general_pars['nsims']):
@@ -628,9 +636,8 @@ if __name__ == "__main__":
         
         if mpi:
             if meta_sims.general_pars['nsims'] != size:
-                print('ERROR: nsims and size of MPI are different, case not handled yet.')
-                print('Exiting...')
-                exit()
+                raise('ERROR: nsims must be equal to size in MPI mode. nsims = ', meta_sims.general_pars['nsims'],'  size = ', size)
+            
             print('simulating maps sim number: ', rank + 1, '/', meta_sims.general_pars['nsims'], ' (MPI)')
             freq_maps, noise_maps, fg_freq_maps, cmb_sky, CMB_fg_freq_maps_beamed, fsky_binary = MakeSims(args)
             np.save(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['comb_directory'], 'comb_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
@@ -643,7 +650,7 @@ if __name__ == "__main__":
                     fg_freq_maps )
             np.save(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['noise_directory'], 'noise_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
                     noise_maps )
-        
+
         
     else:
         print('Importing maps ...')
@@ -682,6 +689,7 @@ if __name__ == "__main__":
 
     if mpi:
         # TODO: check mpi version
+     
         print('Pre-precessing freq-maps #', rank + 1, ' out of ', meta_sims.general_pars['nsims'], ' (MPI)')
 
         freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps)
@@ -690,8 +698,12 @@ if __name__ == "__main__":
         print('saving pre-processed maps ...\n')
         np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_common_beamed_masked'+str(rank).zfill(5)+'.npy' ),
                 freq_maps_common_beamed_masked )
-        np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_common_beamed'+str(rank).zfill(5)+'.npy' ),
-                freq_maps_common_beamed )
+        
+        if not meta_sims.noise_sim_pars['include_nhits']:
+            # If nhits is used for the noise, all maps should be masked. 
+            np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['pre_process_directory'], 'freq_maps_common_beamed'+str(rank).zfill(5)+'.npy' ),
+                    freq_maps_common_beamed )
+            
         if args.sims and args.plots:
             print('checking pre-processed maps...\n')
             cl_preproc_freq_maps, model_beamed_total = check_preproc( args, freq_maps_common_beamed, fg_freq_maps, fsky_binary, sim_num=rank)        
