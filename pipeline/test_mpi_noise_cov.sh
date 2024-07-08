@@ -2,7 +2,7 @@
 #SBATCH -N 2
 #SBATCH -C cpu
 #SBATCH -q debug
-#SBATCH -J 256NoiseCov
+#SBATCH -J 250NoiseCov
 #SBATCH --mail-user=baptiste.jost@ipmu.jp
 #SBATCH --mail-type=ALL
 #SBATCH -t 00:30:00
@@ -13,8 +13,8 @@ export OMP_PLACES=threads
 export OMP_PROC_BIND=spread
 
 
-paramfile='/global/homes/j/jost/Megatop/paramfiles/test_preproc_mpi.yml'
-simparamfile='/global/homes/j/jost/Megatop/paramfiles/simulations.yml'
+paramfile='/global/homes/j/jost/Megatop/paramfiles/test_preproc_mpi250.yml'
+simparamfile='/global/homes/j/jost/Megatop/paramfiles/simulations250.yml'
 
 echo "Running pipeline with paramfile: ${paramfile}"
 

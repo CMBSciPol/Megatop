@@ -306,9 +306,9 @@ def GetNoiseCov(args, apply_pixwin=False):
             # Saving noise_cov and noise_cov_preprocessed to disk
             print('SAVING NOISE COV AND NOISE COV PREPROCESSED TO DISK')
             np.save(os.path.join(meta.covmat_directory, 'pixel_noise_cov.npy' ),
-                    noise_cov )
+                    noise_cov_mean )
             np.save(os.path.join(meta.covmat_directory, 'pixel_noise_cov_preprocessed.npy' ),
-                    noise_cov_preprocessed )  
+                    noise_cov_preprocessed_mean )  
 
             
             current, peak = tracemalloc.get_traced_memory()
