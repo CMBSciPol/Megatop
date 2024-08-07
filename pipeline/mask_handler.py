@@ -18,7 +18,8 @@ def mask_handler(args):
     timeout_seconds = 300  # Set the timeout [sec] for the socket
 
     if args.plots:
-        cmap = cm.YlOrRd
+        # cmap = cm.YlOrRd
+        cmap = cm.RdBu
         cmap.set_under("w")
         plot_dir = meta.plot_dir_from_output_dir(meta.mask_directory_rel)
 
@@ -58,7 +59,7 @@ def mask_handler(args):
 
     if args.plots:
         plt.figure(figsize=(16, 9))
-        hp.mollview(nhits, cmap=cmap, cbar=False)
+        hp.mollview(nhits, cmap=cmap, cbar=True)
         hp.graticule()
         nhits_save_path = os.path.join(plot_dir,
                                        meta.masks["nhits_map"])
@@ -67,13 +68,13 @@ def mask_handler(args):
     # Generate binary survey mask from the hits map
     meta.timer.start("binary")
     binary_mask = get_binary_mask_from_nhits(nhits, meta.nside,
-                                             zero_threshold=1e-3)
+                                             zero_threshold=meta.masks['mask_handler_binary_zero_threshold'])
     meta.save_mask("binary", binary_mask, overwrite=True)
     meta.timer.stop("binary", "Computing binary mask", args.verbose)
 
     if args.plots:
         plt.figure(figsize=(16, 9))
-        hp.mollview(binary_mask, cmap=cmap, cbar=False)
+        hp.mollview(binary_mask, cmap=cmap, cbar=True)
         hp.graticule()
         plt.savefig(os.path.join(plot_dir,
                                  meta.masks["binary_mask"]).replace('.fits',
@@ -85,7 +86,7 @@ def mask_handler(args):
         nhits_nominal, meta.nside,
         galactic_mask=None,
         point_source_mask=None,
-        zero_threshold=1e-3, apod_radius=10.0,
+        zero_threshold=meta.masks['mask_handler_binary_zero_threshold'], apod_radius=10.0,
         apod_radius_point_source=4.0,
         apod_type="C1"
     )
@@ -138,7 +139,7 @@ def mask_handler(args):
 
                 if args.plots:
                     plt.figure(figsize=(16, 9))
-                    hp.mollview(gal_mask_p15, cmap=cmap, cbar=False)
+                    hp.mollview(gal_mask_p15, cmap=cmap, cbar=True)
                     hp.graticule()
                     plt.savefig(
                         os.path.join(plot_dir,
@@ -168,7 +169,7 @@ def mask_handler(args):
 
             if args.plots:
                 plt.figure(figsize=(16, 9))
-                hp.mollview(ps_mask, cmap=cmap, cbar=False)
+                hp.mollview(ps_mask, cmap=cmap, cbar=True)
                 hp.graticule()
                 plt.savefig(
                     os.path.join(plot_dir,
@@ -190,7 +191,7 @@ def mask_handler(args):
             nhits, meta.nside,
             galactic_mask=galactic_mask,
             point_source_mask=point_source_mask,
-            zero_threshold=1e-3, apod_radius=meta.masks["apod_radius"],
+            zero_threshold=meta.masks['mask_handler_binary_zero_threshold'], apod_radius=meta.masks["apod_radius"],
             apod_radius_point_source=meta.masks["apod_radius_point_source"],
             apod_type=meta.masks["apod_type"]
         )
@@ -228,7 +229,7 @@ def mask_handler(args):
     if args.plots:
         # Plot analysis mask
         plt.figure(figsize=(16, 9))
-        hp.mollview(final_mask, cmap=cmap, cbar=False)
+        hp.mollview(final_mask, cmap=cmap, cbar=True)
         hp.graticule()
         plt.savefig(
             os.path.join(plot_dir,

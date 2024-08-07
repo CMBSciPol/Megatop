@@ -1,201 +1,851 @@
 import argparse
-# from megatop import BBmeta, utils
-from metadata_manager import BBmeta
-
+from megatop import BBmeta
 import numpy as np
 import os
 import healpy as hp
 import matplotlib.pyplot as plt
 import glob
 import IPython
+from matplotlib import cm
+import math
+import megatop.V3calc as V3
+from pre_processing import CommonBeamConvAndNsideModification, plotTTEEBB_diff, get_Nl_white_noise
+from tqdm import tqdm
+import time
+import tracemalloc
 
-# import sys
-# sys.path.append('/global/cfs/cdirs/sobs/users/krach/BBSims/NOISE_20201207/')
-# from combine_noise import compute_noise_factors, combine_noise_maps
+def plot_cov_matrix(args, noise_cov_mean, file_name, mask_unseen=None, norm=None):
+    '''
+    Plots the noise covariance matrix for each frequency map. Saves it directly to the output plot directory.
 
-def noise_covariance_estimation(meta, map_shape, instrument, nhits):
-    """
-    Estimation of the noise covariance matrix
-    """
-    noise_cov = np.zeros(map_shape)
-    noise_cov_beamed = np.zeros(map_shape)
-    nhits_nz = np.where(nhits!=0)[0]
+    Parameters
+    ----------
+    args : argparse.Namespace       
+        The arguments from the command line.
+    noise_cov_mean : np.ndarray
+        The noise covariance matrix.
+    file_name : str 
+        The name of the file to save the plot.
+    mask_unseen : np.ndarray, optional
+        The mask to apply to the plot. The default is None.
+    norm : str, optional
+        The normalization of the plot. The default is None.
 
-    for i_sim in range(meta.config['Nsims_bias']):
+    Returns
+    -------
+    None.
+    '''
 
-        if meta.config['external_noise_sims']!='' or meta.config['Nico_noise_combination']:
-            noise_maps = np.zeros(map_shape)
-            print('NOISE COV ESTIMATION LOADING EXTERNAL NOISE-ONLY MAPS, SIM#',i_sim,'/',meta.config['Nsims_bias'])
-
-            if meta.config['Nico_noise_combination']:
-                if meta.config['knee_mode'] == 2 : knee_mode_loc = None
-                else: knee_mode_loc = meta.config['knee_mode']
-                factors = compute_noise_factors(meta.config['sensitivity_mode'], knee_mode_loc)
-
-            for f in range(len(instrument.frequency)):
-                print('loading noise map for frequency ', str(int(instrument.frequency[f])))
-
-                if meta.config['Nico_noise_combination']:
-                    noise_loc = combine_noise_maps(i_sim, instrument.frequency[f], factors)
-                else:
-                    noise_loc = hp.read_map(glob.glob(os.path.join(meta.config['external_noise_sims'],'SO_SAT_'+str(int(instrument.frequency[f]))+'_noise_FULL_*_white_20201207.fits'))[0], field=None)
-
-                alms = hp.map2alm(noise_loc, lmax=3*meta.config['nside'])
-                Bl_gauss_pix = hp.gauss_beam( hp.nside2resol(meta.config['nside']), lmax=2*meta.config['nside'])        
-                for alm_ in alms: hp.almxfl(alm_, Bl_gauss_pix, inplace=True)             
-                noise_maps[3*f:3*(f+1),:] = hp.alm2map(alms, meta.config['nside'])  
-
-                if ((not meta.config['no_inh']) and (meta.config['Nico_noise_combination'])):
-                    # renormalize the noise map to take into account the effect of inhomogeneous noise
-                    noise_maps[3*f:3*(f+1),nhits_nz] /= np.sqrt(nhits[nhits_nz]/np.max(nhits[nhits_nz]))
-
-        elif meta.config['noise_option']=='white_noise':
-            np.random.seed(i_sim)
-            nlev_map = np.zeros(map_shape)
-            for f in range(len(instrument.frequency)):
-                nlev_map[3*f:3*f+3,:] = np.array([instrument.depth_i[f], instrument.depth_p[f], instrument.depth_p[f]])[:,np.newaxis]*np.ones((3,map_shape[-1]))
-            nlev_map /= hp.nside2resol(meta.config['nside'], arcmin=True)
-            noise_maps = np.random.normal(freq_maps*0.0, nlev_map, map_shape)
-
-        elif meta.config['noise_option']=='no_noise': 
-            pass
-
-        noise_maps_beamed = noise_maps*1.0
-
-        if meta.config['common_beam_correction']!=0.0:
-
-            Bl_gauss_common = hp.gauss_beam( np.radians(meta.config['common_beam_correction']/60), lmax=2*meta.config['nside'])        
-            for f in range(len(instrument.frequency)):
-                Bl_gauss_fwhm = hp.gauss_beam( np.radians(instrument.fwhm[f]/60), lmax=2*meta.config['nside'])
-
-                alms_n = hp.map2alm(noise_maps_beamed[3*f:3*(f+1),:], lmax=3*meta.config['nside'])
-                for alms_ in alms_n:
-                    hp.almxfl(alms_, Bl_gauss_common/Bl_gauss_fwhm, inplace=True)             
-                noise_maps_beamed[3*f:3*(f+1),:] = hp.alm2map(alms_n, meta.config['nside'])   
-
-        noise_cov += noise_maps**2
-        noise_cov_beamed += noise_maps_beamed**2
-
-    return noise_cov/meta.config['Nsims_bias'], noise_cov_beamed/meta.config['Nsims_bias']
-
-
-
-
-def get_cov_matrix_pixel(args):
-    """
-    """
     meta = BBmeta(args.globals)
 
+    plot_dir = meta.plot_dir_from_output_dir(meta.covmat_directory_rel)
+    cmap = cm.RdBu
+    cmap.set_under("w")
 
-    if meta.config['external_noise_cov']:
-        print('/// EXT NOISE COV')
-        noise_cov = hp.read_map(meta.config['external_noise_cov'], field=None)
-        noise_cov_beamed = noise_cov*1.0
-    elif meta.config['bypass_noise_cov']:
-        print('/// BYPASS NOISE COV')
-        tag = ''
-        for f in meta.frequency: tag += str(f)+'_'
-        for key in ['common_beam_correction', 'no_inh', 'Nico_noise_combination', 'Nsims_bias', 'nside', 'sensitivity_mode', 'knee_mode']:
-            tag += key+'_'+str(meta.config[key])
-        path_to_noise_cov = os.path.join('/global/cscratch1/sd/josquin/bypass_noise_cov_'+tag)
-        if not os.path.exists(path_to_noise_cov+'.npy'):
-            print('noise covariance is not on disk yet. Computing it now.')
-            noise_cov, noise_cov_beamed = noise_covariance_estimation(meta, freq_maps.shape, instrument, nhits)
-            np.save(path_to_noise_cov, (noise_cov, noise_cov_beamed), allow_pickle=True)
-        else: 
-            noise_cov, noise_cov_beamed = np.load(path_to_noise_cov+'.npy')
-    else:
-        print('/// WHITE NOISE COV')
-        noise_cov = freq_maps*0.0
-        # nlev /= hp.nside2resol(meta.config['nside'], arcmin=True)
-        noise_cov[::3,:] = nlev[:,np.newaxis]/np.sqrt(2.0)
-        noise_cov[1::3,:] = nlev[:,np.newaxis]
-        noise_cov[2::3,:] = nlev[:,np.newaxis]
-        noise_cov *= binary_mask
-        # divind by the pixel size in arcmin
-        noise_cov /=  hp.nside2resol(meta.config['nside'], arcmin=True)
-        if meta.config['noise_option']!='white_noise' and meta.config['noise_option']!='no_noise':
-            noise_cov /= np.sqrt(nhits/np.amax(nhits))
-        # we put it to square !
-        noise_cov *= noise_cov
-        noise_cov_beamed = noise_cov*1.0
+    cols = math.ceil(math.sqrt(noise_cov_mean.shape[0])) # making a grid to display all the frequency maps
+    rows = math.ceil(noise_cov_mean.shape[0] / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(16, 9))
 
-    if ((meta.config['common_beam_correction']!=0.0) and (not meta.config['bypass_noise_cov'])):
-        print('/////////// noise_cov_beam_correction after beam convolution ///////////////')
-        noise_cov_beamed = noise_covariance_correction(cov_in=noise_cov, instrument=instrument_config, 
-                        common_beam=meta.config['common_beam_correction'], nside_in=NSIDE_INPUT_MAP, 
-                            nside_out=meta.config['nside'], Nsims=meta.config['Nsims_bias'])
+    for ax, f in zip(axes.flatten(), range(noise_cov_mean.shape[0])):
+        plt.sca(ax) #setting current axe
+        noise_cov_mean_ = noise_cov_mean[f].copy()
+        if mask_unseen is not None:
+            noise_cov_mean_[np.where(mask_unseen==0)[0]] = hp.UNSEEN
+        hp.mollview(noise_cov_mean_, cmap=cmap, cbar=True, hold=True, 
+                    title=r'Noise cov map $\nu={}$ GHz'.format(meta.frequencies[f]),
+                    norm=norm) 
+        hp.graticule()
+
+    map_noise_cov_save_path = os.path.join(plot_dir, file_name)
+    plt.savefig(map_noise_cov_save_path)
+    plt.close()
+
+def plot_hist_freqmaps(args,freq_maps, save_name, plot_gauss=False, bins=100, binary_mask=None):
+    """
+    Plots histograms of frequency maps. Saves it directly to the output plot directory.
+
+    Args:
+        args (object): The arguments object.
+        freq_maps (ndarray): The frequency maps.
+        save_name (str): The name of the file to save the plot.
+        plot_gauss (bool, optional): Whether to plot Gaussian curves. Defaults to False.
+        bins (int, optional): The number of bins in the histograms. Defaults to 100.
+        binary_mask (ndarray, optional): The binary mask. Defaults to None.
+
+    Returns:
+        None
+    """
+    
+    meta = BBmeta(args.globals)
+
+    if binary_mask is None:
+        binary_mask = np.ones(freq_maps.shape[-1], dtype=bool)
+
+    fig, ax = plt.subplots(1,3,figsize=(16,9))
+    for f in range(len(meta.frequencies)):
+        ax[0].hist(freq_maps[f,0,binary_mask], bins=bins, histtype='step', density=True)
+        ax[1].hist(freq_maps[f,1,binary_mask], bins=bins, histtype='step', density=True)
+        ax[2].hist(freq_maps[f,2,binary_mask], bins=bins, histtype='step', label=r'$\nu = $'+str(meta.frequencies[f])+' GHz', density=True)
+    if plot_gauss:
+        x = np.linspace(-5,5,1000)
+    
+        ax[0].plot(x, 1/np.sqrt(2*np.pi)*np.exp(-x**2/2))
+        ax[1].plot(x, 1/np.sqrt(2*np.pi)*np.exp(-x**2/2))
+        ax[2].plot(x, 1/np.sqrt(2*np.pi)*np.exp(-x**2/2), label=r'$\mathcal{N}(0,1) $')
+
+    plt.legend()
+
+    ax[0].set_title('T')
+    ax[1].set_title('Q')
+    ax[2].set_title('U')
+
+    plot_dir = meta.plot_dir_from_output_dir(meta.covmat_directory_rel)
+    plt.savefig( os.path.join(plot_dir, save_name))
+    plt.close()
 
 
-    noise_cov[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
-    noise_cov_beamed[:,np.where(binary_mask==0)[0]] = hp.UNSEEN
 
-
-def GetNoiseCov(args):
+def GetNoiseCov(args, apply_pixwin=False):
     # MPI VARIABLES
-    try:
-        from mpi4py import MPI
-        comm=MPI.COMM_WORLD
-        size=comm.Get_size()
-        rank=comm.rank
-        barrier=comm.barrier
-        root=0
-        mpi = True
-    except (ModuleNotFoundError, ImportError) as e:
-        # Error handling
-        print('ERROR IN MPI:', e)
-        print('Proceeding without MPI\n')
-        mpi = False
+    mpi = args.use_mpi
+    tracemalloc.start()
+
+    
+    if mpi:
+        try:
+            from mpi4py import MPI
+            comm=MPI.COMM_WORLD
+            size=comm.Get_size()
+            rank=comm.rank
+            barrier=comm.barrier
+            root=0
+            mpi = True
+        except (ModuleNotFoundError, ImportError) as e:
+            # Error handling
+            print('ERROR IN MPI:', e)
+            print('Proceeding without MPI\n')
+            mpi = False
+            rank=0
+            pass
+    else:
         rank=0
-        pass
-    from pre_processing import CommonBeamConvAndNsideModification
+        root=0
     meta = BBmeta(args.globals)
 
+    if args.verbose:
+        current, peak = tracemalloc.get_traced_memory()
+        print('rank = ', rank,
+            f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")    
 
     if args.sims:
-        print('sims=True: Computing noise covariance from OnTheFlySims')
+        if args.verbose: print('sims=True: Computing noise covariance from OnTheFlySims')
+        # Initializing lists
         meta_sims = BBmeta(args.sims)
         nsims = meta_sims.general_pars['nsims']
 
         noise_cov = np.zeros( [ len(meta.general_pars['frequencies']), 3,hp.nside2npix(meta_sims.map_sim_pars['nside_sim'])])
+
         noise_cov_preprocessed = np.zeros([ len(meta.general_pars['frequencies']), 3,hp.nside2npix(meta.general_pars['nside'])])
 
-        # TODO: mask and nhits? 
-        for sim_num in range(nsims):
-            print('NOISE COV ESTIMATION LOADING EXTERNAL NOISE-ONLY MAPS, SIM#',sim_num+1,'/',nsims)
-            freq_noise_maps = np.load(os.path.join(meta_sims.output_dirs['root'], meta_sims.output_dirs['noise_directory'], 'noise_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ) )
-            freq_noise_maps_pre_processed = CommonBeamConvAndNsideModification(args, freq_noise_maps)
+        if args.plots:
+            freq_noise_maps_pre_processed_array = []
+            freq_noise_maps_array = []
+
+        if not mpi:
+            nsims_iter = nsims
+        else:
+            nsims_iter = 1 #TODO: implement version with nsims_iter = nsims//size so size doesn't have to be equal to nsims.
+            if meta_sims.general_pars['nsims'] != size:
+                exit('ERROR: nsims must be equal to size in MPI mode. nsims = '+ str(meta_sims.general_pars['nsims'])+'  size = '+ str(size))
+
+
+        for sim_num in range(nsims_iter):
+            if mpi:
+                sim_num = rank
+            if args.verbose: print('NOISE COV ESTIMATION LOADING EXTERNAL NOISE-ONLY MAPS, SIM#',sim_num+1,'/',nsims)
+            freq_noise_maps = np.load(os.path.join(meta_sims.noise_directory, 'noise_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ) )
+
+            if args.verbose:
+                current, peak = tracemalloc.get_traced_memory()
+                print('rank = ', rank,
+                                f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")    
+
+            if apply_pixwin:
+                # Applying pixel window function to freq_noise_maps, some noise simulation might not have the pixel window function applied
+                # this should be case by case basis. By default it is ignored. 
+                # Might be deprecated in the future.
+                for f in range(freq_noise_maps.shape[0]):
+                    alms_T, alms_E, alms_B = hp.map2alm(freq_noise_maps[f], lmax=3*meta_sims.map_sim_pars['nside_sim'])
+                    Bl_gauss_pix = hp.gauss_beam( hp.nside2resol(meta_sims.map_sim_pars['nside_sim']), lmax=3*meta_sims.map_sim_pars['nside_sim'], pol=True)     
+
+                    alms_T_pixwin = hp.almxfl(alms_T, Bl_gauss_pix[0], inplace=False)             
+                    alms_E_pixwin = hp.almxfl(alms_E, Bl_gauss_pix[1], inplace=False)             
+                    alms_B_pixwin = hp.almxfl(alms_B, Bl_gauss_pix[1], inplace=False)             
+                    freq_noise_maps[f] = hp.alm2map([alms_T_pixwin, alms_E_pixwin, alms_B_pixwin],
+                                                    nside= meta_sims.map_sim_pars['nside_sim'],lmax=3*meta_sims.map_sim_pars['nside_sim'],
+                                                    pixwin=False,fwhm=0.0,pol=True)  
+
+            if meta.noise_cov_pars['include_nhits']: # or meta_sims.noise_cov_pars['include_nhits']:
+                # Applying 1/sqrt(rescaled nhits) to freq_noise_maps to account for inhomogeneous scanning.
+                # Binary mask derived from nhits map is applied to freq_noise_maps.
+                # We also build a smaller binary mask for the centre of the patch for checking purposes.
+                # print('Applying nhits to both freq noise maps')
+                # nhits_map = meta_sims.read_hitmap() 
+                # nhits_map_rescaled = nhits_map / max(nhits_map)
+                binary_mask_from_nhits_nside_sims = meta_sims.read_mask('binary').astype(bool)
+
+                # freq_noise_maps /= np.sqrt(nhits_map_rescaled)
+
+                freq_noise_maps[...,np.where(binary_mask_from_nhits_nside_sims==0)[0]] = 0 # hp.UNSEEN
+                
+                threshold_centre_patch = 0.8
+                nhits_map = meta_sims.read_hitmap() 
+                nhits_map_rescaled = nhits_map / max(nhits_map)
+                binary_mask_centre_nhits_sims = np.zeros(nhits_map_rescaled.shape, dtype=bool)
+                binary_mask_centre_nhits_sims[np.where(nhits_map_rescaled >= threshold_centre_patch)[0]] = True
+
+                fsky_from_binary_mask_from_nhits_nside_sims = sum(binary_mask_from_nhits_nside_sims) / len(binary_mask_from_nhits_nside_sims)
+
+            else:
+                binary_mask_from_nhits_nside_sims = meta_sims.read_mask('binary').astype(bool)
+                freq_noise_maps[...,np.where(binary_mask_from_nhits_nside_sims==0)[0]] = 0 # hp.UNSEEN
+
+                binary_mask_centre_nhits_sims = binary_mask_from_nhits_nside_sims
+                fsky_from_binary_mask_from_nhits_nside_sims = np.sum(binary_mask_from_nhits_nside_sims) / len(binary_mask_from_nhits_nside_sims)
+
+            # Computing noise covariance from freq_noise_maps BEFORE pre-processing
             noise_cov += freq_noise_maps**2
+            
+            if args.verbose:
+                current, peak = tracemalloc.get_traced_memory()
+                print('rank = ', rank,
+                                f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")   
+
+            # Pre-processing freq_noise_maps
+            freq_noise_maps_pre_processed = CommonBeamConvAndNsideModification(args, freq_noise_maps)
+            if args.verbose: print('CommonBeamConvAndNsideModification DONE Sim#',sim_num+1,'/',nsims)
+
+            if args.plots:
+                freq_noise_maps_pre_processed_array.append(freq_noise_maps_pre_processed)
+                freq_noise_maps_array.append(freq_noise_maps)
+
+            # Computing noise covariance from freq_noise_maps AFTER pre-processing
             noise_cov_preprocessed += freq_noise_maps_pre_processed**2
-        return noise_cov/nsims, noise_cov_preprocessed/nsims
+        
+        if mpi:
+            # Reducing noise_cov and noise_cov_preprocessed to root when using MPI
+
+            if args.verbose:
+                current, peak = tracemalloc.get_traced_memory()
+                print('rank = ', rank,
+                                f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")   
+
+
+
+            if rank==root:
+                noise_cov_recvbuf = np.zeros_like(noise_cov)
+                noise_cov_preprocessed_recvbuf = np.zeros_like(noise_cov_preprocessed)
+            else:
+                noise_cov_recvbuf = None
+                noise_cov_preprocessed_recvbuf = None
+            
+            noise_cov = np.ascontiguousarray(noise_cov) 
+            noise_cov_preprocessed = np.ascontiguousarray(noise_cov_preprocessed) 
+
+            comm.Reduce(noise_cov, noise_cov_recvbuf, op=MPI.SUM, root=root)
+            comm.Reduce(noise_cov_preprocessed, noise_cov_preprocessed_recvbuf, op=MPI.SUM, root=root)
+
+            if rank==root:
+                # Average noise_cov and noise_cov_preprocessed over nsims
+                noise_cov_mean = noise_cov_recvbuf/nsims
+                noise_cov_preprocessed_mean = noise_cov_preprocessed_recvbuf/nsims
+            else:
+                noise_cov_mean = None
+                noise_cov_preprocessed_mean = None
+        else:
+            # Average noise_cov and noise_cov_preprocessed over nsims
+            noise_cov_mean = noise_cov/nsims
+            noise_cov_preprocessed_mean = noise_cov_preprocessed/nsims
+
+
+        # Gatheting freq_noise_maps_pre_processed_array and freq_noise_maps_array to root, 
+        # WARNING: might use a lot of memory for large nsims and nside
+        if mpi:
+            if args.verbose: print('MPI Gathering freq_noise_maps_pre_processed_array and freq_noise_maps_array to root, rank=',rank)
+
+            if args.verbose:
+                current, peak = tracemalloc.get_traced_memory()
+                print('rank = ', rank,
+                                f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")   
+
+
+
+            freq_noise_maps_pre_processed_array = np.ascontiguousarray(freq_noise_maps_pre_processed_array[0]) 
+            freq_noise_maps_array = np.ascontiguousarray(freq_noise_maps_array[0]) 
+
+            recvbuf_freq_noise_maps_pre_processed_array = None
+            recvbuf_freq_noise_maps_array = None
+            if rank == 0:
+                shape_recvbuf_freq_noise_maps_pre_processed_array = (size,) + freq_noise_maps_pre_processed_array.shape
+                shape_recvbuf_freq_noise_maps_array = (size,) + freq_noise_maps_array.shape
+                if args.verbose: print('shape_recvbuf_freq_noise_maps_pre_processed_array = ', shape_recvbuf_freq_noise_maps_pre_processed_array)
+                if args.verbose: print('shape_recvbuf_freq_noise_maps_array = ', shape_recvbuf_freq_noise_maps_array)
+                recvbuf_freq_noise_maps_pre_processed_array = np.empty(shape_recvbuf_freq_noise_maps_pre_processed_array)
+                recvbuf_freq_noise_maps_array = np.empty(shape_recvbuf_freq_noise_maps_array)
+
+                # Ensure recvbuf is contiguous
+                # to make sure the comm.Gather() works correctly
+                recvbuf_freq_noise_maps_pre_processed_array = np.ascontiguousarray(recvbuf_freq_noise_maps_pre_processed_array)
+                recvbuf_freq_noise_maps_array = np.ascontiguousarray(recvbuf_freq_noise_maps_array)
+
+            comm.Gather(freq_noise_maps_pre_processed_array, recvbuf_freq_noise_maps_pre_processed_array, root=0)
+            comm.Gather(freq_noise_maps_array, recvbuf_freq_noise_maps_array, root=0)
+
+            # redefining the name of the arrays:
+            freq_noise_maps_pre_processed_array = recvbuf_freq_noise_maps_pre_processed_array
+            freq_noise_maps_array = recvbuf_freq_noise_maps_array
+            if args.verbose: print('MPI Gathering freq_noise_maps_pre_processed_array and freq_noise_maps_array to root DONE, rank=',rank)
+
+
+        if rank==root:
+            # Saving noise_cov and noise_cov_preprocessed to disk
+            print('SAVING NOISE COV AND NOISE COV PREPROCESSED TO DISK')
+            np.save(os.path.join(meta.covmat_directory, 'pixel_noise_cov.npy' ),
+                    noise_cov_mean )
+            np.save(os.path.join(meta.covmat_directory, 'pixel_noise_cov_preprocessed.npy' ),
+                    noise_cov_preprocessed_mean )  
+
+            if args.verbose:
+                current, peak = tracemalloc.get_traced_memory()
+                print('rank = ', rank,
+                                f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")   
+
+
+
+        if args.plots and rank==root:
+
+            print('\nPLOTTING...\n')
+
+            if args.verbose:
+                current, peak = tracemalloc.get_traced_memory()
+                print('rank = ', rank,
+                                f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")   
+
+
+            freq_noise_maps_pre_processed_array = np.array(freq_noise_maps_pre_processed_array)
+            freq_noise_maps_array = np.array(freq_noise_maps_array)
+
+            mask = meta.read_mask('binary').astype(bool)
+            fsky_mask = sum(mask) / len(mask) 
+
+            # ===========================================================================================
+            # = CHECKING AND PLOTTING NOISE COVARIANCE MATRIX AGAINST THEORY AND NOISE SIM MADE FROM IT =
+            # ===========================================================================================
+
+            # Checking average white noise level on noise covariance BEFORE preprocessing
+            print('CHECK WHITE NOISE LVL CENTRE PATCH')
+            std_uK_arcmin_noise_cov_mean_CENTREPATCH = CheckWhiteNoiselvl(args, noise_cov_mean, fsky_mask, mask=binary_mask_centre_nhits_sims)            
+            np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_uK_arcmin_noise_cov_mean_CENTREPATCH.png'), std_uK_arcmin_noise_cov_mean_CENTREPATCH)
+            print('=======================================')
+            print('CHECK WHITE NOISE LVL FULL NHITS PATCH')
+            std_uK_arcmin_noise_cov_mean_FULLPATCH = CheckWhiteNoiselvl(args, noise_cov_mean, fsky_mask, mask=binary_mask_from_nhits_nside_sims)            
+            np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_uK_arcmin_noise_cov_mean_FULLPATCH.png'), std_uK_arcmin_noise_cov_mean_FULLPATCH)
+
+
+            # Creating noise sim from noise_cov_mean directly for sanity check
+            noise_sim_from_cov = np.random.normal(0*noise_cov_mean, np.sqrt(noise_cov_mean), noise_cov_mean.shape)
+            ratio_noisecov_sim_from_cov, cl_ratio_noisecov_sim_from_cov = CheckNoiseSpectra(
+                args, noise_cov_mean, noise_sim_from_cov, mask=binary_mask_from_nhits_nside_sims)
+
+            std_ratio_noisecov_sim_from_cov_CENTREPATCH = np.std(ratio_noisecov_sim_from_cov[...,binary_mask_centre_nhits_sims] 
+                         if binary_mask_centre_nhits_sims is not None else ratio_noisecov_sim_from_cov, axis=-1)
+            np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_ratio_noisecov_sim_from_cov_CENTREPATCH.png'), std_ratio_noisecov_sim_from_cov_CENTREPATCH)
+            print('std of ratio, should be close to 1 CENTRE PATCH = \n', 
+                  std_ratio_noisecov_sim_from_cov_CENTREPATCH)
+
+            std_ratio_noisecov_sim_from_cov_FULLPATCH = np.std(ratio_noisecov_sim_from_cov[...,binary_mask_from_nhits_nside_sims] 
+                         if binary_mask_from_nhits_nside_sims is not None else ratio_noisecov_sim_from_cov, axis=-1) 
+            np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_ratio_noisecov_sim_from_cov_FULLPATCH.png'), std_ratio_noisecov_sim_from_cov_FULLPATCH)                       
+            print('std of ratio, should be close to 1 FULL NHITS PATCH = \n', 
+                  std_ratio_noisecov_sim_from_cov_FULLPATCH)
+
+
+            # Plotting spectra of noise sim from cov / sqrt(noise cov) spectra BEFORE pre-processing, including corrective factor
+            plot_allspectra(args, cl_ratio_noisecov_sim_from_cov/hp.nside2resol(meta_sims.nside)**2 / fsky_from_binary_mask_from_nhits_nside_sims, 
+                            'ratio_noisecov_map_SIM_FROM_COV.png', 
+                            legend_labels=[r'data $C_\ell$ $\nu=$', r'model $C_\ell$ $\nu=$'], 
+                            axis_labels=[r'$C_\ell \, [\mu K \, rad]^2$', r'$C_\ell \, [\mu K \, rad]^2$'])
+
+            # plotting histograms of noise sim from cov / sqrt(noise cov) spectra BEFORE pre-processing for both centre patch and full patch (full pathc means nhits mask)
+            # TODO: is the [...,binary_mask_centre_nhits_sims]  necesary? Isn't the mask argument enough?
+            plot_hist_freqmaps(args, ratio_noisecov_sim_from_cov, #[...,binary_mask_centre_nhits_sims] if binary_mask_centre_nhits_sims is not None else ratio_noisecov_sim_from_cov , 
+                               'hist_ratio_noisecov_map_SIM_FROM_COV_CENTRE_PATCH.png', plot_gauss=True, 
+                               binary_mask=binary_mask_centre_nhits_sims)
+            plot_hist_freqmaps(args, ratio_noisecov_sim_from_cov, #[...,binary_mask_from_nhits_nside_sims] if binary_mask_from_nhits_nside_sims is not None else ratio_noisecov_sim_from_cov, 
+                               'hist_ratio_noisecov_map_SIM_FROM_COV.png', plot_gauss=True, 
+                               binary_mask=binary_mask_from_nhits_nside_sims)      
+
+            Noise_ell = get_Nl_white_noise(args, fsky_binary=fsky_mask)
+
+
+            # Computing frequency spectra of noise_cov_mean, noise_sim_from_cov 
+            cl_noise_cov_FREQ_mean = []
+            cl_noise_sim_from_cov_FREQ = []
+            for f in range(len(meta.general_pars['frequencies'])):
+                cl_noise_cov_FREQ_mean.append( hp.anafast(noise_cov_mean[f], lmax = 3*meta.general_pars['nside'],
+                                                           pol=True))
+                cl_noise_sim_from_cov_FREQ.append( hp.anafast(noise_sim_from_cov[f], lmax = 3*meta.general_pars['nside'],
+                                                             pol=True))
+            cl_noise_cov_FREQ_mean = np.array(cl_noise_cov_FREQ_mean)
+            cl_noise_sim_from_cov_FREQ = np.array(cl_noise_sim_from_cov_FREQ)
+
+
+            min_ell_max = min(Noise_ell.shape[-1],cl_noise_sim_from_cov_FREQ.shape[-1])
+            # Plotting the difference between spectra of the noise simulation generated from noise_cov_mean and the theoretical power spectra from V3calc
+            plotTTEEBB_diff(args,
+                            cl_noise_sim_from_cov_FREQ[...,:min_ell_max],
+                            Noise_ell[...,:min_ell_max],
+                            os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                                         'noise_SIMFromCov_vs_model_cl.png'), 
+                            legend_labels=[r'$C_\ell$ $\nu=$', r'Noise model $C_\ell$ $\nu=$'], 
+                            axis_labels=[r'$C_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'],
+                            use_D_ell=False)
+
+            # Plotting the difference between spectra of the noise_cov_mean and the theoretical power spectra from V3calc
+            plotTTEEBB_diff(args,
+                            cl_noise_cov_FREQ_mean[...,:min_ell_max],# * (fsky_mask*4*np.pi)**2,
+                            Noise_ell[...,:min_ell_max],   
+                            os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                                         'noise_cov_mean_vs_model_cl.png'), 
+                            legend_labels=[r'$D_\ell$ $\nu=$', r'cov $D_\ell$ $\nu=$'], 
+                            axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'],
+                            use_D_ell=False)
+
+
+            # ==================================================================================================
+            # =     CHECKING AND PLOTTING NOISE COVARIANCE MATRIX AGAINST INPUT SIMS BEFORE PREPROCESSING      =
+            # ==================================================================================================
+            if args.verbose:
+                current, peak = tracemalloc.get_traced_memory()
+                print('rank = ', rank,
+                                f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")   
+
+
+            
+            # Plotting noise sim / sqrt(noise cov) spectra BEFORE pre-processing
+            nsims_plot = meta.noise_cov_pars['nsims_plot'] # number of sims to plot 
+            if nsims_plot>nsims:
+                nsims_plot = nsims
+            for i in range(nsims_plot):
+                ratio_noisecov_sim, cl_ratio_noisecov_sim = CheckNoiseSpectra(args, noise_cov_mean, freq_noise_maps_array[i], mask=binary_mask_from_nhits_nside_sims)
+
+                # Checking the std of the ratio of noise sim / sqrt(noise cov) spectra BEFORE pre-processing on full patch 
+                std_ratio_NoiseSim_vs_noise_cov_mean_FULLPATCH = np.std(ratio_noisecov_sim[...,binary_mask_from_nhits_nside_sims] 
+                             if binary_mask_from_nhits_nside_sims is not None else ratio_noisecov_sim, axis=-1)
+                np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_ratio_NoiseSim_vs_noise_cov_mean_FULLPATCH_SIM#'+str(i)+'.png'), std_ratio_NoiseSim_vs_noise_cov_mean_FULLPATCH)   
+                print('Std of ratio before pre-processing SIM#'+str(i)+', should be close to 1 = \n', 
+                      std_ratio_NoiseSim_vs_noise_cov_mean_FULLPATCH)
+
+                # Checking the std of the ratio of noise sim / sqrt(noise cov) spectra BEFORE pre-processing on centre patch 
+                std_ratio_NoiseSim_vs_noise_cov_mean_CENTREPATCH = np.std(ratio_noisecov_sim[...,binary_mask_centre_nhits_sims] 
+                              if binary_mask_centre_nhits_sims is not None else ratio_noisecov_sim, axis=-1)
+                np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_ratio_NoiseSim_vs_noise_cov_mean_CENTREPATCH_SIM#'+str(i)+'.png'), std_ratio_NoiseSim_vs_noise_cov_mean_CENTREPATCH)  
+                print('Std of ratio before pre-processing SIM#'+str(i)+', should be close to 1 CENTRE PATCH= \n',
+                       std_ratio_NoiseSim_vs_noise_cov_mean_CENTREPATCH)
+
+                # Plotting histograms of noise sim / sqrt(noise cov) spectra BEFORE pre-processing on full patch and centre patch
+                plot_hist_freqmaps(args, ratio_noisecov_sim, 'hist_ratio_noisecov_map_SIM'+str(i)+'.png', 
+                                   plot_gauss=True, binary_mask=binary_mask_from_nhits_nside_sims)
+                plot_hist_freqmaps(args, ratio_noisecov_sim, 'hist_ratio_noisecov_map_SIM'+str(i)+'_CENTRE_PATCH.png', 
+                                   plot_gauss=True, binary_mask=binary_mask_centre_nhits_sims)
+
+                # Plotting noise sim / sqrt(noise cov) spectra BEFORE pre-processing (full patch)
+                plot_allspectra(args, cl_ratio_noisecov_sim/hp.nside2resol(meta_sims.nside)**2 / fsky_from_binary_mask_from_nhits_nside_sims, 
+                                'ratio_noisecov_map_SIM'+str(i)+'.png', 
+                                legend_labels=[r'label data $C_\ell$ $\nu=$', r'label model $C_\ell$ $\nu=$'], 
+                                axis_labels=[r'$C_\ell \, [\mu K \, rad]^2$', r'$C_\ell \, [\mu K \, rad]^2$'])
+            
+            # ==================================================================================================
+            # =      CHECKING AND PLOTTING NOISE COVARIANCE MATRIX AGAINST INPUT SIMS AFTER PREPROCESSING      =
+            # ==================================================================================================
+
+            # Plotting noise sim / sqrt(noise cov) spectra AFTER pre-processing
+            
+            
+            # Computing effective beam and pixel window function for each frequency
+            # TODO: Import from a saved effective beam generated as output from pre_processing
+            lmax_convolution = 3*meta.general_pars['nside']
+            wpix_in = hp.pixwin( meta_sims.nside ,pol=True, lmax=lmax_convolution) # Pixel window function of input maps
+            wpix_out = hp.pixwin(meta.nside, pol=True, lmax=lmax_convolution) # Pixel window function of output maps
+            wpix_in[1][0:2] = 1. #in order not to divide by 0
+            Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), 
+                                            lmax=lmax_convolution, pol=True)
+            
+            effective_beam_freq = []
+            for f in range(len(meta.frequencies)):
+                Bl_gauss_fwhm = hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=lmax_convolution, pol=True)
+
+                bl_correction =  Bl_gauss_common / Bl_gauss_fwhm
+
+                sm_corr_T = bl_correction[:,0] * wpix_out[0]/wpix_in[0]
+                sm_corr_P = bl_correction[:,1] * wpix_out[1]/wpix_in[1]
+                effective_beam_freq.append([sm_corr_T, sm_corr_P, sm_corr_P, 
+                                            np.sqrt(sm_corr_T*sm_corr_P), np.sqrt(sm_corr_P*sm_corr_P) ,np.sqrt(sm_corr_T*sm_corr_P)])
+            effective_beam_freq = np.array(effective_beam_freq)
+
+            
+            # ============ This is for testing but is seems useless, to be removed =================
+            # Importing mask from nhits map and applying it to noise_cov_preprocessed_mean, 
+            # generating mask of centre patch ( binary_mask_centre_nhits_preproc ) as well to get closer to white noise 
+            if meta.noise_cov_pars['include_nhits'] and rank==root:
+                print('')
+                print('Converting nhits (version with nisde from analysis) to binary mask and apply to noise_cov_preprocessed_mean')
+
+                nhits_map_after_preproc = meta.read_hitmap() # hp.read_map(meta._get_nhits_map_name())
+                nhits_map_after_preproc_rescaled = nhits_map_after_preproc / max(nhits_map_after_preproc)
+                
+                binary_mask_centre_nhits_preproc = np.zeros(nhits_map_after_preproc_rescaled.shape, dtype=bool)
+                binary_mask_centre_nhits_preproc[np.where(nhits_map_after_preproc_rescaled >= threshold_centre_patch)[0]] = True
+            else:
+                binary_mask_centre_nhits_preproc = None
+                
+            binary_mask_from_nhits_preproc = meta.read_mask('binary').astype(bool)
+            noise_cov_preprocessed_mean *= binary_mask_from_nhits_preproc
+
+            fsky_from_binary_mask_from_nhits_preproc = sum(binary_mask_from_nhits_preproc) / len(binary_mask_from_nhits_preproc)
+            # print('WARNING: is this really usefull?')
+            # TODO: Check if second mask application really useful
+            # else:
+            #     binary_mask_from_nhits_preproc = None
+            #     binary_mask_centre_nhits_preproc = None
+            #     fsky_from_binary_mask_from_nhits_preproc = 1
+
+
+            print('CHECK WHITE NOISE AFTER PRE-PROCESSING LVL CENTRE PATCH')
+            std_uK_arcmin_noise_cov_mean_AFTERPREPOC_CENTREPATCH = CheckWhiteNoiselvl(args, noise_cov_preprocessed_mean, fsky_mask, mask=binary_mask_centre_nhits_preproc)
+            np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_uK_arcmin_noise_cov_mean_AFTERPREPOC_CENTREPATCH.png'), std_uK_arcmin_noise_cov_mean_AFTERPREPOC_CENTREPATCH)
+            
+            print('=======================================')
+            print('CHECK WHITE NOISE AFTER PRE-PROCESSING LVL FULL NHITS PATCH')
+            std_uK_arcmin_noise_cov_mean_AFTERPREPOC_FULLPATCH = CheckWhiteNoiselvl(args, noise_cov_preprocessed_mean, fsky_mask, mask=binary_mask_from_nhits_preproc)   
+            np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_uK_arcmin_noise_cov_mean_AFTERPREPOC_FULLPATCH.png'), std_uK_arcmin_noise_cov_mean_AFTERPREPOC_FULLPATCH)            
+
+            if args.verbose:
+                current, peak = tracemalloc.get_traced_memory()
+                print('rank = ', rank,
+                                f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")   
+
+
+            #  ========================================================================================
+            for i in range(nsims_plot):
+                ratio_noisecov_sim_preprocessed, cl_ratio_noisecov_preprocessed_sim = CheckNoiseSpectra(args, noise_cov_preprocessed_mean, freq_noise_maps_pre_processed_array[i], mask=binary_mask_from_nhits_preproc)
+
+                # Checking the std of the ratio of noise sim / sqrt(noise cov) spectra AFTER pre-processing on full patch 
+                std_ratio_NoiseSim_vs_noise_cov_mean_PREPROCESSED_FULLPATCH = np.std(ratio_noisecov_sim_preprocessed[...,binary_mask_from_nhits_preproc] 
+                                                                                        if binary_mask_from_nhits_preproc is not None else ratio_noisecov_sim_preprocessed, axis=-1)
+                print('Std of ratio after pre-processing SIM#'+str(i)+', should be close to 1 = \n', 
+                      std_ratio_NoiseSim_vs_noise_cov_mean_PREPROCESSED_FULLPATCH)
+                np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_ratio_NoiseSim_vs_noise_cov_mean_PREPROCESSED_FULLPATCH_SIM#'+str(i)+'.png'), std_ratio_NoiseSim_vs_noise_cov_mean_PREPROCESSED_FULLPATCH)  
+
+                # Checking the std of the ratio of noise sim / sqrt(noise cov) spectra AFTER pre-processing on CENTRE PATCH
+                std_ratio_NoiseSim_vs_noise_cov_mean_PREPROCESSED_CENTREPATCH = np.std(ratio_noisecov_sim_preprocessed[...,binary_mask_centre_nhits_preproc] 
+                                                                                       if binary_mask_centre_nhits_preproc is not None else ratio_noisecov_sim_preprocessed, axis=-1)
+                np.save(os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+                    'std_ratio_NoiseSim_vs_noise_cov_mean_PREPROCESSED_CENTREPATCH_SIM#'+str(i)+'.png'), std_ratio_NoiseSim_vs_noise_cov_mean_PREPROCESSED_CENTREPATCH)  
+                print('Std of ratio after pre-processing SIM#'+str(i)+', should be close to 1 CENTRE PATCH = \n', 
+                      std_ratio_NoiseSim_vs_noise_cov_mean_PREPROCESSED_CENTREPATCH)
+                
+                # Plotting histograms of noise sim / sqrt(noise cov) spectra AFTER pre-processing on full patch and centre patch
+                plot_hist_freqmaps(args, ratio_noisecov_sim_preprocessed, 'hist_ratio_noisecov_preprocessed_map_SIM'+str(i)+'.png', plot_gauss=True, 
+                                   binary_mask=binary_mask_from_nhits_preproc)
+                plot_hist_freqmaps(args, ratio_noisecov_sim_preprocessed, 'hist_ratio_noisecov_preprocessed_map_SIM'+str(i)+'_CENTRE_PATCH.png', plot_gauss=True, 
+                                   binary_mask=binary_mask_centre_nhits_preproc)
+
+                # Plotting noise sim / sqrt(noise cov) spectra AFTER pre-processing (full patch) with corrective factors taking into account the effective beam and pixel window function and fsky
+
+                ratio_noisecov_preprocessed_map_SIM = cl_ratio_noisecov_preprocessed_sim/hp.nside2resol(meta.nside)**2/ fsky_from_binary_mask_from_nhits_preproc
+                ratio_noisecov_preprocessed_map_SIM[...,2:] /= effective_beam_freq[...,2:]**2 
+                ratio_noisecov_preprocessed_map_SIM[...,:2] = 0
+                plot_allspectra(args, ratio_noisecov_preprocessed_map_SIM, #* mean_beam_offset_ell**4,
+                                 'ratio_noisecov_preprocessed_map_SIM2'+str(i)+'.png', 
+                                legend_labels=[r'label data $C_\ell$ $\nu=$', r'label model $C_\ell$ $\nu=$'], 
+                                axis_labels=[r'$C_\ell \, [\mu K \, rad]^2$', r'$C_\ell \, [\mu K \, rad]^2$'])
+
+
+        if args.plots and rank==root:
+            if args.verbose:
+                current, peak = tracemalloc.get_traced_memory()
+                print('rank = ', rank,
+                                f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")   
+
+
+            # ==================================================================================================
+            # =                             PLOTTING RESULTING NOISE COVARIANCE MAPS                           =
+            # ==================================================================================================
+
+            add_test_param_in_save_name = ''
+            if apply_pixwin:
+                add_test_param_in_save_name +='_pixwinTrue'
+           
+            if not meta.noise_cov_pars['include_nhits']:
+                add_test_param_in_save_name+='_nonhits'
+                norm_maps = None
+            else:
+                norm_maps = None # 'hist'
+                # TODO add norm_maps as a parameter in the noise_cov_pars? Or just remove this.
+
+                
+            plot_cov_matrix(args, noise_cov_mean[:,0], 'map_noise_cov_T'+add_test_param_in_save_name+'.png', norm=norm_maps,
+                            mask_unseen=binary_mask_from_nhits_nside_sims)
+            plot_cov_matrix(args, noise_cov_mean[:,1], 'map_noise_cov_Q'+add_test_param_in_save_name+'.png', norm=norm_maps,
+                            mask_unseen=binary_mask_from_nhits_nside_sims)
+            plot_cov_matrix(args, noise_cov_mean[:,2], 'map_noise_cov_U'+add_test_param_in_save_name+'.png', norm=norm_maps,
+                            mask_unseen=binary_mask_from_nhits_nside_sims)
+
+            plot_cov_matrix(args, noise_cov_preprocessed_mean[:,0], 'map_noise_cov_preprocessed_T'+add_test_param_in_save_name+'.png', 
+                            norm=norm_maps, mask_unseen=binary_mask_from_nhits_preproc)
+            plot_cov_matrix(args, noise_cov_preprocessed_mean[:,1], 'map_noise_cov_preprocessed_Q'+add_test_param_in_save_name+'.png', 
+                            norm=norm_maps, mask_unseen=binary_mask_from_nhits_preproc)
+            plot_cov_matrix(args, noise_cov_preprocessed_mean[:,2], 'map_noise_cov_preprocessed_U'+add_test_param_in_save_name+'.png', 
+                            norm=norm_maps, mask_unseen=binary_mask_from_nhits_preproc)
+
+        
+        if args.plots and rank==root:
+
+            noise_cov_mean_downgraded = np.array([hp.ud_grade(m, nside_out=meta.nside) for m in noise_cov_mean])
+
+            ratio_noisecov_before_after_preproc = noise_cov_preprocessed_mean.copy()
+            ratio_noisecov_before_after_preproc[..., binary_mask_from_nhits_preproc] /= noise_cov_mean_downgraded[...,binary_mask_from_nhits_preproc]
+            ratio_noisecov_before_after_preproc[...,np.where( binary_mask_from_nhits_preproc == False)] = 0
+
+            for s in range(3):
+                stokes_letter = ['T', 'Q', 'U']
+                plot_cov_matrix(args, ratio_noisecov_before_after_preproc[:,s], 'ratio_map_noise_cov_AfterOverBeforePreprocessed_'+stokes_letter[s]+add_test_param_in_save_name+'_histNorm.png', 
+                                norm=norm_maps, mask_unseen=binary_mask_from_nhits_preproc)
+                plot_cov_matrix(args, ratio_noisecov_before_after_preproc[:,s], 'ratio_map_noise_cov_AfterOverBeforePreprocessed_'+stokes_letter[s]+add_test_param_in_save_name+'_linearNorm.png', 
+                                norm=None, mask_unseen=binary_mask_from_nhits_preproc)                
+            
+            cmap = cm.RdBu
+            cmap.set_under("w")
+            plot_dir = meta.plot_dir_from_output_dir(meta.covmat_directory_rel)
+
+            hp.mollview(binary_mask_centre_nhits_sims, cmap=cmap, cbar=True, hold=True, 
+                title=r'Noise cov map $\nu={}$ GHz'.format(meta.frequencies[f]),
+                norm=None) 
+            hp.graticule()
+            plt.savefig(os.path.join(plot_dir, 'binary_mask_centre_nhits_sims.png'))
+            plt.close()
+
+            hp.mollview(binary_mask_from_nhits_nside_sims, cmap=cmap, cbar=True, hold=True, 
+                title=r'Noise cov map $\nu={}$ GHz'.format(meta.frequencies[f]),
+                norm=None) 
+            hp.graticule()
+            plt.savefig(os.path.join(plot_dir, 'binary_mask_from_nhits_nside_sims.png'))
+            plt.close()        
+
+            hp.mollview(binary_mask_centre_nhits_preproc, cmap=cmap, cbar=True, hold=True, 
+                title=r'Noise cov map $\nu={}$ GHz'.format(meta.frequencies[f]),
+                norm=None) 
+            hp.graticule()
+            plt.savefig(os.path.join(plot_dir, 'binary_mask_centre_nhits_preproc.png'))
+            plt.close()      
+
+
+            hp.mollview(binary_mask_from_nhits_preproc, cmap=cmap, cbar=True, hold=True, 
+                title=r'Noise cov map $\nu={}$ GHz'.format(meta.frequencies[f]),
+                norm=None) 
+            hp.graticule()
+            plt.savefig(os.path.join(plot_dir, 'binary_mask_from_nhits_preproc.png'))
+            plt.close()          
+
   
     else:
-        print('sims=False: Comuputing noise covariance from external noise maps.')
+        print('sims=False: Computing noise covariance from external noise maps.')
         print('ERROR: Not yet implemented sorry...')
         exit()
+
+    if rank == 0:
+        print('\n\nNoise covariance matrix computation step completed successfully.\n\n')
+
+def CheckWhiteNoiselvl(args, noise_cov, fsky, mask=None):
+    """
+    Calculate the white noise level of noise_cov and compare it to the theoretical white noise level.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        noise_cov (ndarray): The noise covariance matrix, of shape (num_freq, num_stokes [T,Q,U], num_pix).
+        fsky (float): The fraction of the sky not covered by the mask.
+        mask (ndarray): The mask to apply on the noise covariance matrix, of shape (num_pix).
+
+    Returns:
+        std_uK_arcmin: The standard deviation of the noise map inside the mask, in uK arcmin.
+
+    """
+
+    meta = BBmeta(args.globals)
+
+    ell, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
+        sensitivity_mode = meta.general_pars['sensitivity_mode'],
+        one_over_f_mode = 2, # fixed to None since we only use white noise here
+        SAC_yrs_LF = meta.general_pars['SAC_yrs_LF'], f_sky = fsky, 
+        ell_max = meta.general_pars['lmax'], delta_ell=1,
+        beam_corrected=False, remove_kluge=False, CMBS4='')
+
+    # putting masked pixels to nan to use nanmean
+    if mask is not None:
+        if len(mask) != noise_cov.shape[-1]:
+            exit('ERROR: Mask and noise_cov must have the same length')
+        noise_cov_nan = noise_cov.copy()
+        noise_cov_nan[...,np.where(mask==0)[0]] = np.nan
+    else:
+        noise_cov_nan = noise_cov
+
+    var_noise = np.nanmean(noise_cov_nan, axis = -1) 
+    std_uK_arcmin = np.sqrt(var_noise) * hp.nside2resol(hp.npix2nside(noise_cov_nan.shape[-1]), arcmin=True)
+
+    print('std_uK_arcmin = \n', std_uK_arcmin)
+    print('Map_white_noise_levels = ', Map_white_noise_levels)
+    print('std_uK_arcmin / Map_white_noise_levels = ', std_uK_arcmin[:,1] / Map_white_noise_levels)
+    print('(std_uK_arcmin - Map_white_noise_levels) / Map_white_noise_levels * 100 = ', (std_uK_arcmin[:,1] - Map_white_noise_levels)/ Map_white_noise_levels * 100, '\n')
+    return std_uK_arcmin
+
+def CheckNoiseSpectra(args, noise_cov, noise_map, mask=None): #, remove_mean=False):
+    """
+    Calculate the noise spectra and ratio of noise map to sqrt(noise covariance).
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        noise_cov (ndarray): The noise covariance matrix, of shape (num_freq, num_stokes [T,Q,U], num_pix).
+        noise_map (ndarray): The noise map, of shape (num_freq, num_stokes [T,Q,U], num_pix).
+        mask (ndarray): The mask to apply on the ratio_noisecov_sim of shape (num_pix).
+
+    Returns:
+        ratio_noisecov_sim: The ratio of noise map to noise covariance, of shape (num_freq, num_stokes [T,Q,U], num_pix).
+        cl_ratio_noisecov_sim: The spectra of ratio_noisecov_sim, of shape (num_freq, num_spectra [TT, EE, BB, TE, EB, TB], num_ell).
+
+    """
+
+    meta = BBmeta(args.globals)
+
+    ratio_noisecov_sim = np.empty(noise_map.shape)
+    cl_ratio_noisecov_sim = []
+
+    for f in range(6):
+        for s in range(3):
+            ratio = noise_map[f,s].copy()
+            ratio[np.where(noise_cov[f,s] != 0)] /= np.sqrt(noise_cov[f,s][np.where(noise_cov[f,s] != 0)])
+            ratio[np.where(noise_cov[f,s] == 0)] = 0
+
+            ratio_noisecov_sim[f,s]  = ratio  
+        if mask is not None:
+            ratio_noisecov_sim[...,np.invert(mask)] = 0 # Maks must be binary (boolean actually)!! simply doing *= doesn't work because some value will be np.inf and np.inf*0 = np.nan which leads to problems down the line
+
+        cl_ratio_noisecov_sim.append( hp.anafast(ratio_noisecov_sim[f], lmax = 3*meta.general_pars['nside']) )
+    cl_ratio_noisecov_sim = np.array(cl_ratio_noisecov_sim)
+
+    return ratio_noisecov_sim, cl_ratio_noisecov_sim
+
+
+def plot_allspectra(args, Cl_data, save_name, 
+                legend_labels=[r'label data $C_\ell$ $\nu=$', r'label model $C_\ell$ $\nu=$'], 
+                axis_labels=['y_axis_row0', 'y_axis_row1'],
+                plot_hline_one=True, title=None, use_D_ell=False):
+    '''
+    This function plots the difference between the data and the model Cls. It saves the plot directly in the plots directory of the covariance step.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        Cl_data (ndarray): The data Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
+        Cl_model (ndarray): The model Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
+        save_name (str): The name of the file to save the plot. It will save the plot in the plots directory of the simulation output directory.
+                            OR complete save path if you want to save it elsewhere.
+        legend_labels (list): The labels for the legend of the plot.
+        axis_labels (list): The labels for the x and y axes of the plot.
+        plot_hline_one (bool): If True, a horizontal line at y=1 will be plotted. Default is True.
+        title (str): The main title of the plot. Default is None.
+
+    Returns:
+        None
+    '''
+    
+    meta = BBmeta(args.globals)
+    
+    ell = np.arange(0,Cl_data.shape[-1])
+    if use_D_ell:
+        norm = ell*(ell+1)/2/np.pi
+    else:
+        norm = 1
+
+    fig, ax = plt.subplots(2,3, sharex=True, sharey='row', figsize=(15, 15))
+    for f in range(Cl_data.shape[0]):
+        ax[0][0].plot(ell, norm*Cl_data[f,0], 
+                    color='C'+str(f),ls='-', alpha=1)
+        ax[0][1].plot(ell, norm*Cl_data[f,1], 
+                    color='C'+str(f),ls='-', alpha=1)
+        ax[0][2].plot(ell, norm*Cl_data[f,2], label=legend_labels[0]+str(meta.general_pars['frequencies'][f]) * (Cl_data.shape[0]!=1), #
+                    color='C'+str(f),ls='-', alpha=1)
+        ax[1][0].plot(ell, norm*Cl_data[f,3],
+                    color='C'+str(f),ls='-')
+        ax[1][1].plot(ell, norm*Cl_data[f,4], 
+                    color='C'+str(f),ls='-')
+        ax[1][2].plot(ell, norm*Cl_data[f,5],
+                    color='C'+str(f),ls='-')
+
+    if plot_hline_one:
+        ax[0][0].hlines(1,ell[0],ell[-1],linestyles='dashed',color='black')
+        ax[0][1].hlines(1,ell[0],ell[-1],linestyles='dashed',color='black')
+        ax[0][2].hlines(1,ell[0],ell[-1],linestyles='dashed',color='black')
+        ax[1][0].hlines(1,ell[0],ell[-1],linestyles='dashed',color='black')
+        ax[1][1].hlines(1,ell[0],ell[-1],linestyles='dashed',color='black')
+        ax[1][2].hlines(1,ell[0],ell[-1],linestyles='dashed',color='black')
+
+    ax[0][0].set_title('TT')
+    ax[0][1].set_title('EE')
+    ax[0][2].set_title('BB')
+    ax[1][0].set_title('TE')
+    ax[1][1].set_title('EB')
+    ax[1][2].set_title('TB')        
+    ax[1][0].set_xlabel('$\ell$')
+    ax[1][1].set_xlabel('$\ell$')
+    ax[1][2].set_xlabel('$\ell$')
+    
+    ax[0][0].set_ylabel(axis_labels[0])
+    ax[1][0].set_ylabel(axis_labels[1])
+    ax[0][2].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
+
+    ax[1][0].set_xscale('log')
+    ax[1][1].set_xscale('log')
+    ax[1][2].set_xscale('log')
+    plt.subplots_adjust(wspace=0, hspace=0)
+    fig.suptitle(title)
+    
+    plt.savefig( os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel), save_name), bbox_inches='tight') 
+    plt.close()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='simplistic simulator')
     parser.add_argument("--globals", type=str,
                         help="Path to yaml with global parameters")
+    parser.add_argument("--use_mpi", action="store_true",
+                        help="Use MPI instead of for loops to pre-process multiple maps, or simulate multiple sims.")
     parser.add_argument("--sims", default=None,
                         help="Generate a set of sims if True.")    
     parser.add_argument("--plots", action="store_true",
                         help="Plot the generated maps if True.")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
+    GetNoiseCov(args)
 
-    # if args.sims and args.plots:
-    #     warnings.warn("Both --sims and --plot are set to True. "
-    #                   "Too many plots will be generated. "
-    #                   "Set --plot to False")
-    #     args.plots = False
-    # get_cov_matrix_pixel(args)    
-    noise_cov, noise_cov_preprocessed = GetNoiseCov(args)
-    meta = BBmeta(args.globals)
+    
 
-    np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['covmat_directory'], 'pixel_noise_cov.npy' ),
-                noise_cov )
-    np.save(os.path.join(meta.output_dirs['root'], meta.output_dirs['covmat_directory'], 'pixel_noise_cov_preprocessed.npy' ),
-                noise_cov_preprocessed )    
-    IPython.embed()
+

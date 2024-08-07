@@ -6,7 +6,7 @@ data_dirs:
 
 
 output_dirs: 
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/testMPI24052024/OnTheFlySims"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/100SimsNside64to32WithNhitsCorrected/OnTheFlySims"
   cmb_directory: "CMB"
   cmb_beamed_directory: "CMB_beamed"
   fg_directory: "fg"
@@ -18,7 +18,7 @@ output_dirs:
 
 
 general_pars:
-    nsims: 10
+    nsims: 100
     lmax: -1
     nside: 64
 
@@ -51,6 +51,7 @@ noise_sim_pars:
     sensitivity_mode: 2
     SAC_yrs_LF: 1
     knee_mode: 1
+    include_nhits: True
 
 
 ############  sims but metadata error: #########
@@ -69,7 +70,7 @@ masks:
   binary_mask: "binary_mask.fits"
   galactic_mask_root: "planck_galactic_mask"
   point_source_mask: "point_source_mask.fits"
-
+  mask_handler_binary_zero_threshold: 1.0e-2 #default 1.0e-3
   
   include_in_mask: []
   gal_mask_mode: "gal070"
