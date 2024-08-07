@@ -45,6 +45,7 @@ def MakeSims(args):
     if meta_sim.map_sim_pars['cmb_sim_no_pysm']:
         if args.verbose: print('Creating CMB map...')
 
+
         if args.plots:
             
             path_Cl_BB_lens = meta_sim.get_fname_cls_fiducial_cmb('lensed')
@@ -52,7 +53,9 @@ def MakeSims(args):
 
             Cl_BB_prim = meta_sim.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
             Cl_lens = hp.read_cl(path_Cl_BB_lens)
+
             if args.verbose: print('Plotting Fiducial CMB spectra...')
+
             ell_range = np.arange(Cl_lens.shape[-1])
             Cl_prim = hp.read_cl(path_Cl_BB_prim_r1)[...,:Cl_lens.shape[-1]]
 
@@ -76,6 +79,7 @@ def MakeSims(args):
             plt.close()
 
 
+
         Cl_cmb_model = get_Cl_CMB_model_from_meta(args)
         
         if meta_sim.map_sim_pars['fixed_cmb']:
@@ -87,6 +91,7 @@ def MakeSims(args):
                              nside=meta_sim.map_sim_pars['nside_sim'], new=True, pixwin=False)
         if meta_sim.map_sim_pars['fixed_cmb']:
             np.random.seed(None) # Resetting seed after CMB generation
+
     else:
         print('ERROR: CMB sims only handled using synfast on fiducial Cls')
         return 
@@ -106,7 +111,9 @@ def MakeSims(args):
         beam_corrected=False, remove_kluge=False, CMBS4=''
     )
 
+
     if args.verbose: print('Map_white_noise_levels = ', Map_white_noise_levels)
+
 
     instrument_config = {
         'frequency' : meta.general_pars['frequencies'],
@@ -116,7 +123,9 @@ def MakeSims(args):
 
     instrument = standardize_instrument(instrument_config)
 
+
     if args.verbose: print('Creating Pysm Fg maps...')
+
     sky = get_sky(meta_sim.map_sim_pars['nside_sim'], d_config+s_config)
 
     fg_freq_maps = get_observation(instrument, sky, noise=False) 
@@ -127,9 +136,11 @@ def MakeSims(args):
 
 
     for f in range(len(meta.general_pars['frequencies'])):
+
         if args.verbose: print('Beaming frequency channel:', meta.general_pars['frequencies'][f])
 
         lmax_convolution = 3* max(meta.general_pars['nside'], meta_sims.general_pars['nside'])
+
 
         # here lmax seems to play an important role            
         CMB_fg_alms_T, CMB_fg_alms_Q, CMB_fg_alms_U = hp.map2alm(CMB_fg_freq_maps[f], lmax=lmax_convolution, pol=True)
@@ -150,12 +161,13 @@ def MakeSims(args):
         CMB_fg_alms_out_T, CMB_fg_alms_out_Q, CMB_fg_alms_out_U = hp.alm2map([alm_out_T,alm_out_E,alm_out_B], meta_sims.general_pars['nside'],
                                                     lmax=lmax_convolution, pixwin=False, fwhm=0.0, pol=True) 
 
+
         CMB_fg_freq_maps_beamed.append([CMB_fg_alms_out_T, CMB_fg_alms_out_Q, CMB_fg_alms_out_U])        
     CMB_fg_freq_maps_beamed = np.array(CMB_fg_freq_maps_beamed)
 
-
     
     if args.verbose: print('Creating noise maps...')
+
     if meta_sim.noise_sim_pars['noise_option']=='white_noise':
         nlev_map = fg_freq_maps*0.0
         for f in range(len(instrument.frequency)):
@@ -163,7 +175,9 @@ def MakeSims(args):
         nlev_map /= hp.nside2resol(meta_sim.map_sim_pars['nside_sim'], arcmin=True)
         noise_maps = np.random.normal(fg_freq_maps*0.0, nlev_map, fg_freq_maps.shape)
     elif meta_sim.noise_sim_pars['noise_option']=='':
+
         if args.verbose: print('No noise case')
+
         noise_maps = 0 * fg_freq_maps
     else:
         print('ERROR: Other noise cases not handled yet...')
@@ -192,6 +206,7 @@ def MakeSims(args):
     
     CMB_fg_noise_freq_maps = CMB_fg_freq_maps_beamed + noise_maps
 
+
     if meta_sim.noise_sim_pars['include_nhits']:
         # Importing mask from the simulations nside to apply to simulated maps
         # Necessary to do it here when applying 1/sqrt(nhits) to the noise maps as it will create inf in the noise maps
@@ -201,6 +216,7 @@ def MakeSims(args):
 
     return CMB_fg_noise_freq_maps, noise_maps, fg_freq_maps, cmb_sky, CMB_fg_freq_maps_beamed, fsky_binary
         
+
 
 def get_maps(args):
     meta = BBmeta(args.globals)
@@ -230,21 +246,25 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
     meta = BBmeta(args.globals)
     map_dimensions = len(freq_maps.shape)
 
+
     freq_maps_out = []
 
     if args.verbose: print('  -> common beam correction and NSIDE change: correcting for frequency-dependent beams, convolving with a common beam, modifying NSIDE and include effect of pixel window function')
+
 
     lmax_convolution = 3*meta.general_pars['nside']
     wpix_in = hp.pixwin( hp.npix2nside(freq_maps.shape[-1]),pol=True,lmax=lmax_convolution) # Pixel window function of input maps
     wpix_out = hp.pixwin(meta.general_pars['nside'],pol=True,lmax=lmax_convolution) # Pixel window function of output maps
     wpix_in[1][0:2] = 1. #in order not to divide by 0
     Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), lmax=lmax_convolution, pol=True)
+
  
     for f in range(len(meta.general_pars['frequencies'])):
         #beam corrections
         Bl_gauss_fwhm = hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=lmax_convolution, pol=True)
 
         bl_correction =  Bl_gauss_common / Bl_gauss_fwhm
+
 
         sm_corr_T = bl_correction[:,0] * wpix_out[0]/wpix_in[0]
         sm_corr_P = bl_correction[:,1] * wpix_out[1]/wpix_in[1]
@@ -270,6 +290,7 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
         #alm-->mapf
         cmb_out_T,cmb_out_Q,cmb_out_U = hp.alm2map([alm_out_T,alm_out_E,alm_out_B],meta.general_pars['nside'],
                                                     lmax=lmax_convolution,pixwin=False,fwhm=0.0,pol=True) 
+
         # a priori all the options are set to there default, even lmax which is computed wrt input alms
         marco_out_map = np.array([cmb_out_T,cmb_out_Q,cmb_out_U])
         freq_maps_out.append(marco_out_map)
@@ -309,6 +330,7 @@ def plotTTEEBB_diff(args, Cl_data, Cl_model, save_name,
                     legend_labels=[r'label data $C_\ell$ $\nu=$', r'label model $C_\ell$ $\nu=$'], 
                     axis_labels=['y_axis_row0', 'y_axis_row1'],
                     use_D_ell = True):
+
         '''
         This function plots the difference between the data and the model Cls. It directly saves the plot directly.
 
@@ -411,6 +433,7 @@ def get_Nl_white_noise(args, fsky_binary):
     This function computes the white noise level from V3calc using parameters from the metadata manager 
     and returns the noise Cls.
 
+
     Args:
         args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
         fsky_binary (float): The fraction of sky covered by the binary mask.
@@ -429,6 +452,7 @@ def get_Nl_white_noise(args, fsky_binary):
             beam_corrected=False, remove_kluge=False, CMBS4='' )
             
     if args.verbose: print('Map_white_noise_levels = ', Map_white_noise_levels)
+
 
     lmax_convolution = 3*meta_sims.general_pars['nside']
 
@@ -474,7 +498,9 @@ def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_m
         cl_CMB_fg_freq_maps_beamed = []
 
         for f in range(len(meta.general_pars['frequencies'])):
+
             cl_noise_f.append( hp.anafast(noise_maps[f]) )
+
             cl_freq_maps_f.append( hp.anafast(freq_maps[f]))
             cl_fg_freq_maps.append(hp.anafast(fg_freq_maps[f]))
             cl_CMB_fg_freq_maps_beamed.append(hp.anafast(CMB_fg_freq_maps_beamed[f]))
@@ -485,6 +511,7 @@ def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_m
 
         model_noise = get_Nl_white_noise(args, fsky_binary)
 
+
         plotTTEEBB_diff(args, cl_noise_f * fsky_binary, model_noise, 
                         os.path.join(meta_sims.plots_directory, 'Noise_lvl_check.png'), 
                         legend_labels=[r'Noise $C_\ell$ from map $\nu=$', r'Input white noise lvl $\nu=$'], 
@@ -492,8 +519,10 @@ def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_m
 
         Cl_cmb_model = get_Cl_CMB_model_from_meta(args)
 
+
         plotTTEEBB_diff(args, np.array([cl_cmb_sky_maps])* fsky_binary, Cl_cmb_model[...,:cl_cmb_sky_maps.shape[-1]] * fsky_binary, 
                         os.path.join(meta_sims.plots_directory, 'CMB_check.png'), 
+
                         legend_labels=[r'$C_{\ell}^{\rm CMB}$ from map', r'Input $C_{\ell}^{\rm CMB}$'], 
                         axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'])  
 
@@ -509,6 +538,7 @@ def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_m
         beamed_sky_BB = (Cl_cmb_model[...,:3*meta_sim.map_sim_pars['nside_sim']] + cl_fg_freq_maps)[:,2] * Bl_gauss_fwhm_freq[...,1]**2 * wpix_in[1]**2
 
         beamed_sky_model = np.array([ beamed_sky_TT, beamed_sky_EE, beamed_sky_BB ]).swapaxes(0,1)
+
 
         plotTTEEBB_diff(args, cl_CMB_fg_freq_maps_beamed * fsky_binary, beamed_sky_model * fsky_binary, 
                         os.path.join(meta_sims.plots_directory, 'sky_beamed_check.png') , 
@@ -573,6 +603,7 @@ def check_preproc(args, preproc_freq_maps, fg_freq_maps, fsky_binary, sim_num=0)
     # So to mimic and fit the pre-processed maps, only the common beams and pixel window functions must be applied.
     CMB_fg_beamed_spectra = (Cl_cmb_model[...,:lmax_convolution] + cl_fg_freq_maps[...,:lmax_convolution]) * np.array([beam_correction_NODECONV[...,:lmax_convolution]**2])
 
+
     # Noise after pre-processing model: 
     model_noise = get_Nl_white_noise(args, fsky_binary)
     model_noise_beamed = model_noise[...,:lmax_convolution] * beam_correction[...,:lmax_convolution]**2
@@ -601,7 +632,6 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
     meta = BBmeta(args.globals)
-
 
     # MPI VARIABLES
     mpi = args.use_mpi
@@ -632,6 +662,7 @@ if __name__ == "__main__":
         if args.verbose: print('Simulating maps ...')
         meta_sims = BBmeta(args.sims)
   
+
         if not mpi:
             freq_maps_sim_list = []
             for sim_num in range(meta_sims.general_pars['nsims']):
@@ -742,6 +773,7 @@ if __name__ == "__main__":
             if args.verbose: print('Memory usage after checking pre-processed maps is: ', tracemalloc.get_traced_memory())
             # Ensure recvbuf is contiguous
             # to make sure the comm.Gather() works correctly
+
             cl_preproc_freq_maps = np.ascontiguousarray(cl_preproc_freq_maps) 
 
             recvbuf = None
@@ -767,3 +799,4 @@ if __name__ == "__main__":
     if args.verbose: print('Memory usage at the end is: ', tracemalloc.get_traced_memory())
     if rank == 0: 
         print('\n\nPre-Processing step completed succesfully\n\n')   
+
