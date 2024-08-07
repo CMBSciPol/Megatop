@@ -307,7 +307,7 @@ def so_V3_SA_noise(sensitivity_mode,one_over_f_mode,SAC_yrs_LF,f_sky,ell_max,del
                 NlB  *= np.exp( ell*(ell+1)* S4_beams[f]**2 )
             N_ell_P_SA.append( [NlT,NlE,NlB ] ) 
     else:
-        print('SO configuration ')
+        # print('SO configuration ')
         AN_P_27  = (ell / f_knee_pol_SA_27[one_over_f_mode] )**alpha_pol[0] + 1.
         AN_P_39  = (ell / f_knee_pol_SA_39[one_over_f_mode] )**alpha_pol[1] + 1.
         AN_P_93  = (ell / f_knee_pol_SA_93[one_over_f_mode] )**alpha_pol[2] + 1.
