@@ -12,7 +12,7 @@ data_dirs:
   mock_directory: "mock_data"
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/250SimsNside64to32WithNhitsCorrected/outputs"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/250SimsNside64to32WithNhitsCorrectedCommonBeam100/outputs"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  

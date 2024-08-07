@@ -17,6 +17,7 @@ paramfile='/global/homes/j/jost/Megatop/paramfiles/test_preproc_mpi250.yml'
 simparamfile='/global/homes/j/jost/Megatop/paramfiles/simulations250.yml'
 
 echo "Running pipeline with paramfile: ${paramfile}"
+echo "Running pipeline with simparamfile: ${simparamfile}"
 
 echo "------------------------------------------------------------"
 echo "|           PREPARING METADATA AND SIMULATIONS             |"
@@ -40,7 +41,7 @@ python mask_handler.py --globals ${simparamfile} --plots --verbose
 echo "------------------------------------------------------------"
 echo "|                       PRE-PROCESSING                     |"
 echo "------------------------------------------------------------"
-srun -n 250 -c 2 --mpi=pmi2 --cpu_bind=cores python pre_processing.py --globals ${paramfile} --sims ${simparamfile} --plots --use_mpi
+srun -n 250 -c 2 --mpi=pmi2 --cpu_bind=cores python pre_processing.py --globals ${paramfile} --sims ${simparamfile} --plots --use_mpi 
 
 
 echo "------------------------------------------------------------"
