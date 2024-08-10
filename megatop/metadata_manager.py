@@ -354,60 +354,63 @@ class BBmeta(object):
                              )
         return fname    
 
-    # def get_map_filename(self, map_set, id_split, id_sim=None):
-    #     """
-    #     Get the path to file for a given `map_set` and split index.
-    #     Can also get the path to a given simulation if `id_sim` is provided.
+    def get_map_filename(self, map_set, id_split, id_sim=None):
+        """
+        Get the path to file for a given `map_set` and split index.
+        Can also get the path to a given simulation if `id_sim` is provided.
 
-    #     Path to standard map:
-    #         {map_directory}/{map_set_root}_split_{id_split}.fits
-    #     Path to sim map: e.g.
-    #         {sims_directory}/0000/{map_set_root}_split_{id_split}.fits
+        Path to standard map:
+            {map_directory}/{map_set_root}_split_{id_split}.fits
+        Path to sim map: e.g.
+            {sims_directory}/0000/{map_set_root}_split_{id_split}.fits
 
-    #     Parameters
-    #     ----------
-    #     map_set : str
-    #         Name of the map set.
-    #     id_split : int
-    #         Index of the split.
-    #     id_sim : int, optional
-    #         Index of the simulation.
-    #         If None, return the path to the data map.
-    #     """
-    #     map_set_root = self.file_root_from_map_set(map_set)
-    #     if id_sim is not None:
-    #         path_to_maps = os.path.join(
-    #             self.sims_directory,
-    #             f"{id_sim:04d}"
-    #         )
-    #         os.makedirs(path_to_maps, exist_ok=True)
-    #     else:
-    #         path_to_maps = self.map_directory
+        Parameters
+        ----------
+        map_set : str
+            Name of the map set.
+        id_split : int
+            Index of the split.
+        id_sim : int, optional
+            Index of the simulation.
+            If None, return the path to the data map.
+        """
+        map_set_root = self.file_root_from_map_set(map_set)
+        if id_sim is not None:
+            path_to_maps = os.path.join(
+                self.sims_directory,
+                f"{id_sim:04d}"
+            )
+            os.makedirs(path_to_maps, exist_ok=True)
+        else:
+            path_to_maps = self.map_directory
 
-    #     return os.path.join(path_to_maps,
-    #                         f"{map_set_root}_split_{id_split}.fits")
+        if id_split is None:
+            return os.path.join(path_to_maps, f"{map_set_root}.fits")
+        else:
+            return os.path.join(path_to_maps,
+                            f"{map_set_root}_split_{id_split}.fits")
 
 
-    # def read_map(self, map_set, id_split, id_sim=None, pol_only=False):
-    #     """
-    #     Read a map given a map set and split index.
-    #     Can also read a given covariance simulation if `id_sim` is provided.
+    def read_map(self, map_set, id_split, id_sim=None, pol_only=False):
+        """
+        Read a map given a map set and split index.
+        Can also read a given covariance simulation if `id_sim` is provided.
 
-    #     Parameters
-    #     ----------
-    #     map_set : str
-    #         Name of the map set.
-    #     id_split : int
-    #         Index of the split.
-    #     id_sim : int, optional
-    #         Index of the simulation.
-    #         If None, return the data map.
-    #     pol_only : bool, optional
-    #         Return only the polarization maps.
-    #     """
-    #     field = [1, 2] if pol_only else [0, 1, 2]
-    #     fname = self.get_map_filename(map_set, id_split, id_sim)
-    #     return hp.read_map(fname, field=field)
+        Parameters
+        ----------
+        map_set : str
+            Name of the map set.
+        id_split : int
+            Index of the split.
+        id_sim : int, optional
+            Index of the simulation.
+            If None, return the data map.
+        pol_only : bool, optional
+            Return only the polarization maps.
+        """
+        field = [1, 2] if pol_only else [0, 1, 2]
+        fname = self.get_map_filename(map_set, id_split, id_sim)
+        return hp.read_map(fname, field=field)
 
 
 class Timer:
