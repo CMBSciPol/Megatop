@@ -5,14 +5,17 @@
 # Define the directories
 ## Let's start with directories of data products
 data_dirs:
-  root: "/global/homes/j/jost/Megatop/TestMSS2"
-  map_directory: ''
+  root: "/global/cfs/cdirs/sobs/sims/mss-0002/RC1.r01"
+  map_directory: ''  # Empty string: assume the nhits map are stored in root
+  nhits_directory: '' # Empty string:  assume the nhits map are stored in root
+  noise_maps_directory: '/pscratch/sd/j/jost/SO_MEGATOP/MSS2/NoiseMaps'
+  cmb_maps_directory: ''
   # beam_directory: "beams"
   # bandpasses_directory: "bandpasses"
   # mock_directory: "mock_data"
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/MSS2/Coadd"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/MSS2/Coadd_fsky0.19"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  
@@ -42,6 +45,8 @@ map_sets:
     file_root: "sobs_RC1.r01_SAT4_mission_f030_4way_coadd_sky_map_healpix"
     fg_root: "sobs_RC1.r01_SAT4_mission_f030_4way_coadd_foreground_map_healpix"
     cmb_root: "sobs_RC1.r01_SAT4_mission_f030_4way_coadd_cmb_map_healpix"
+    noise_root: "sobs_RC1.r01_SAT4_mission_f030_4way_coadd_noise_map_healpix"
+    nhits_map_path: "sobs_RC1.r01_SAT4_mission_f030_4way_coadd_sky_ivar_healpix"
     freq_tag: 30         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT4" 
     set_tag: MSS2
@@ -49,6 +54,8 @@ map_sets:
     file_root: "sobs_RC1.r01_SAT4_mission_f040_4way_coadd_sky_map_healpix"
     fg_root: "sobs_RC1.r01_SAT4_mission_f040_4way_coadd_foreground_map_healpix"
     cmb_root: "sobs_RC1.r01_SAT4_mission_f040_4way_coadd_cmb_map_healpix"
+    noise_root: "sobs_RC1.r01_SAT4_mission_f040_4way_coadd_noise_map_healpix"
+    nhits_map_path: "sobs_RC1.r01_SAT4_mission_f040_4way_coadd_sky_ivar_healpix"
     freq_tag: 40         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT4" 
     set_tag: MSS2
@@ -56,6 +63,8 @@ map_sets:
     file_root: "sobs_RC1.r01_SAT1_mission_f090_4way_coadd_sky_map_healpix"
     fg_root: "sobs_RC1.r01_SAT1_mission_f090_4way_coadd_foreground_map_healpix"
     cmb_root: "sobs_RC1.r01_SAT1_mission_f090_4way_coadd_cmb_map_healpix"    
+    noise_root: "sobs_RC1.r01_SAT1_mission_f090_4way_coadd_noise_map_healpix"
+    nhits_map_path: "sobs_RC1.r01_SAT1_mission_f090_4way_coadd_sky_ivar_healpix"
     freq_tag: 90         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT1"      # Experiment tag (useful to get noise-bias free cross-split spectra)
     set_tag: MSS2
@@ -63,6 +72,8 @@ map_sets:
     file_root: "sobs_RC1.r01_SAT1_mission_f150_4way_coadd_sky_map_healpix"
     fg_root: "sobs_RC1.r01_SAT1_mission_f150_4way_coadd_foreground_map_healpix"
     cmb_root: "sobs_RC1.r01_SAT1_mission_f150_4way_coadd_cmb_map_healpix"        
+    noise_root: "sobs_RC1.r01_SAT1_mission_f150_4way_coadd_noise_map_healpix"        
+    nhits_map_path: "sobs_RC1.r01_SAT1_mission_f150_4way_coadd_sky_ivar_healpix"
     freq_tag: 150
     exp_tag: "SAT1"
     set_tag: MSS2
@@ -70,6 +81,8 @@ map_sets:
     file_root: "sobs_RC1.r01_SAT3_mission_f230_4way_coadd_sky_map_healpix"
     fg_root: "sobs_RC1.r01_SAT3_mission_f230_4way_coadd_foreground_map_healpix"
     cmb_root: "sobs_RC1.r01_SAT3_mission_f230_4way_coadd_cmb_map_healpix"         
+    noise_root: "sobs_RC1.r01_SAT3_mission_f230_4way_coadd_noise_map_healpix"   
+    nhits_map_path: "sobs_RC1.r01_SAT3_mission_f230_4way_coadd_sky_ivar_healpix"     
     freq_tag: 230         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT3"      # Experiment tag (useful to get noise-bias free cross-split spectra)
     set_tag: MSS2
@@ -77,6 +90,8 @@ map_sets:
     file_root: "sobs_RC1.r01_SAT3_mission_f290_4way_coadd_sky_map_healpix"
     fg_root: "sobs_RC1.r01_SAT3_mission_f290_4way_coadd_foreground_map_healpix"
     cmb_root: "sobs_RC1.r01_SAT3_mission_f290_4way_coadd_cmb_map_healpix"      
+    noise_root: "sobs_RC1.r01_SAT3_mission_f290_4way_coadd_noise_map_healpix"      
+    nhits_map_path: "sobs_RC1.r01_SAT3_mission_f290_4way_coadd_sky_ivar_healpix"  
     freq_tag: 290
     exp_tag: "SAT3"
     set_tag: MSS2
@@ -95,7 +110,7 @@ masks:
   binary_mask: "binary_mask.fits"
   galactic_mask_root: "planck_galactic_mask"
   point_source_mask: "point_source_mask.fits"
-  mask_handler_binary_zero_threshold: 1.0e-3 #default 1.0e-3
+  mask_handler_binary_zero_threshold: 0.1 #1.0e-3 #default 1.0e-3
 
 
   include_in_mask: []
@@ -109,9 +124,9 @@ masks:
 ####################################
 ## General parameters
 general_pars:
-  # frequencies: [27, 39, 93, 145, 225, 280] # [93, 145, 225, 280]
-  frequencies: [30, 40, 90, 150, 230, 290] # [93, 145, 225, 280]
-  nside: 64 #256
+  frequencies: [27, 39, 93, 145, 225, 280] # [93, 145, 225, 280]
+  # frequencies: [30, 40, 90, 150, 230, 290] # [93, 145, 225, 280]
+  nside: 128 #256
   lmin: 10 #30
   lmax: 95 #200
   # nlb: 10
@@ -143,7 +158,24 @@ pre_proc_pars:
 noise_cov_pars:
     include_nhits: #Sim related parameter
     nsims_plot:  # number of simulations that will be used for ploting
+    sim_tag: 'sim_in_noisecov' # tag for the simulations, can be ['sims_in_noisecov', 'load_sims'], sims_in_noisecov: will simulate the (white) noise maps with nhits during the noise cov step,
+                               #  load_sims: will load the noise maps from disk generated during the simulations step. 
+    nsims_noise_cov: 50 # number of simulations used to estimate the noise covariance matrix
     # mask_to_apply: False #"binary_mask.fits"
+
+
+noise_sim_pars:
+    # noise_lvl_uKarcmin: [17.76741806032688, 21.207586012564423, 2.77243249663342, 2.798531403709892, 
+    #                      8.474221515572802, 21.861113346794266] # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
+    # TODO: (?) each element could also be stored in map_sets, maybe more convenient? But less clear that it is for sims
+    noise_lvl_uKarcmin:  # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
+      (SAT4, 30): 17.76741806032688
+      (SAT4, 40): 21.207586012564423
+      (SAT1, 90): 2.77243249663342
+      (SAT1, 150): 2.798531403709892
+      (SAT3, 230): 8.474221515572802
+      (SAT3, 290): 21.861113346794266 
+    include_nhits: True
 
 # ## Simulation related
 map_sim_pars:

@@ -83,7 +83,10 @@ class BBmeta(object):
             if label == "root":
                 self.data_dir = self.data_dirs["root"]
             else:
-                full_path = f"{self.data_dirs['root']}/{path}"
+                # full_path = f"{self.data_dirs['root']}/{path}"
+                # Using os.path.join can handle cases where the path is already
+                # a full path. 'root' is then overrulled. 
+                full_path = os.path.join(self.data_dirs['root'], path)
                 setattr(self, label, full_path)
                 setattr(self, f"{label}_rel", path)
                 os.makedirs(full_path, exist_ok=True)
@@ -92,7 +95,8 @@ class BBmeta(object):
             if label == "root":
                 self.output_dir = self.output_dirs["root"]
             else:
-                full_path = f"{self.output_dirs['root']}/{path}"
+                # full_path = f"{self.output_dirs['root']}/{path}"
+                full_path = os.path.join(self.output_dirs['root'], path)
                 setattr(self, label, full_path)
                 setattr(self, f"{label}_rel", path)
                 os.makedirs(full_path, exist_ok=True)
@@ -412,6 +416,39 @@ class BBmeta(object):
         fname = self.get_map_filename(map_set, id_split, id_sim)
         return hp.read_map(fname, field=field)
 
+    def get_noise_map_filename(self, map_set):
+        """
+        Returns the noise map filename.
+
+        Path to standard map:
+            {noise_map_directory}/{map_set_noise}.fits    
+
+        Args:
+            map_set (str): The map set.
+
+        Returns:
+            str: The noise map filename.
+        """
+        path_to_maps = self.noise_maps_directory
+        map_set_root = self.noise_root_from_map_set(map_set)
+        return os.path.join(path_to_maps, map_set_root+'.fits')
+
+    def get_nhits_map_filename(self, map_set):
+        """
+        Returns the nhits map filename.
+
+        Path to standard map:
+            {nhits_map_directory}/{map_set_nhits}.fits    
+
+        Args:
+            map_set (str): The map set.
+
+        Returns:
+            str: The nhits map filename.
+        """
+        path_to_maps = self.nhits_directory
+        map_set_root = self.nhits_map_path_from_map_set(map_set)
+        return os.path.join(path_to_maps, map_set_root+'.fits')
 
 class Timer:
     """
