@@ -37,21 +37,21 @@ def MakeSims(args):
 
     """
     meta = BBmeta(args.globals)
-    meta_sim = BBmeta(args.sims)
-    d_config = meta_sim.map_sim_pars['dust_model']
-    s_config = meta_sim.map_sim_pars['sync_model']
+    meta_sims = BBmeta(args.sims)
+    d_config = meta_sims.map_sim_pars['dust_model']
+    s_config = meta_sims.map_sim_pars['sync_model']
 
     # performing the CMB simulation with synfast
-    if meta_sim.map_sim_pars['cmb_sim_no_pysm']:
+    if meta_sims.map_sim_pars['cmb_sim_no_pysm']:
         if args.verbose: print('Creating CMB map...')
 
 
         if args.plots:
             
-            path_Cl_BB_lens = meta_sim.get_fname_cls_fiducial_cmb('lensed')
-            path_Cl_BB_prim_r1 = meta_sim.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
+            path_Cl_BB_lens = meta_sims.get_fname_cls_fiducial_cmb('lensed')
+            path_Cl_BB_prim_r1 = meta_sims.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
 
-            Cl_BB_prim = meta_sim.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
+            Cl_BB_prim = meta_sims.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
             Cl_lens = hp.read_cl(path_Cl_BB_lens)
 
             if args.verbose: print('Plotting Fiducial CMB spectra...')
@@ -82,14 +82,18 @@ def MakeSims(args):
 
         Cl_cmb_model = get_Cl_CMB_model_from_meta(args)
         
-        if meta_sim.map_sim_pars['fixed_cmb']:
+        if meta_sims.map_sim_pars['fixed_cmb']:
             # Fixing seed so that the CMB is the same for all sims.
             # WARNING: highly wasteful as it will generate the same CMB for all sims and store them all
             # TODO: Optimize!
+            print('WARNING: Fixed CMB seed is set. This will generate the same CMB for all sims.')
+            print('This is highly wasteful as it will generate the same CMB for all sims and store them all.')
+            print('TODO: Optimize!')
+            print('TURN THIS OFF BY SETTING "fixed_cmb" TO FALSE IN THE SIMULATION PARAMETERS FILE.')
             np.random.seed(0) 
         cmb_sky = hp.synfast(Cl_cmb_model[0], #[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE*0.0, Cl_EE*0.0], 
-                             nside=meta_sim.map_sim_pars['nside_sim'], new=True, pixwin=False)
-        if meta_sim.map_sim_pars['fixed_cmb']:
+                             nside=meta_sims.map_sim_pars['nside_sim'], new=True, pixwin=False)
+        if meta_sims.map_sim_pars['fixed_cmb']:
             np.random.seed(None) # Resetting seed after CMB generation
 
     else:
@@ -104,9 +108,9 @@ def MakeSims(args):
     fsky_binary = sum(binary_mask) / len(binary_mask)
 
     ell, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
-        sensitivity_mode = meta_sim.noise_sim_pars['sensitivity_mode'],
+        sensitivity_mode = meta_sims.noise_sim_pars['sensitivity_mode'],
         one_over_f_mode = 2, # fixed to None since we only use white noise here
-        SAC_yrs_LF = meta_sim.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
+        SAC_yrs_LF = meta_sims.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
         ell_max = meta.general_pars['lmax'], delta_ell=1,
         beam_corrected=False, remove_kluge=False, CMBS4=''
     )
@@ -126,7 +130,7 @@ def MakeSims(args):
 
     if args.verbose: print('Creating Pysm Fg maps...')
 
-    sky = get_sky(meta_sim.map_sim_pars['nside_sim'], d_config+s_config)
+    sky = get_sky(meta_sims.map_sim_pars['nside_sim'], d_config+s_config)
 
     fg_freq_maps = get_observation(instrument, sky, noise=False) 
     CMB_fg_freq_maps = fg_freq_maps + cmb_sky
@@ -168,13 +172,13 @@ def MakeSims(args):
     
     if args.verbose: print('Creating noise maps...')
 
-    if meta_sim.noise_sim_pars['noise_option']=='white_noise':
+    if meta_sims.noise_sim_pars['noise_option']=='white_noise':
         nlev_map = fg_freq_maps*0.0
         for f in range(len(instrument.frequency)):
             nlev_map[f] = np.array([instrument.depth_i[f], instrument.depth_p[f], instrument.depth_p[f]])[:,np.newaxis]*np.ones((3,fg_freq_maps.shape[-1]))
-        nlev_map /= hp.nside2resol(meta_sim.map_sim_pars['nside_sim'], arcmin=True)
+        nlev_map /= hp.nside2resol(meta_sims.map_sim_pars['nside_sim'], arcmin=True)
         noise_maps = np.random.normal(fg_freq_maps*0.0, nlev_map, fg_freq_maps.shape)
-    elif meta_sim.noise_sim_pars['noise_option']=='':
+    elif meta_sims.noise_sim_pars['noise_option']=='':
 
         if args.verbose: print('No noise case')
 
@@ -184,11 +188,11 @@ def MakeSims(args):
         return
  
  
-    if meta_sim.noise_sim_pars['noise_option'] != '' and meta_sim.noise_sim_pars['include_nhits']:
+    if meta_sims.noise_sim_pars['noise_option'] != '' and meta_sims.noise_sim_pars['include_nhits']:
         if args.verbose: print('Including nhits in noise maps...')
-        nhits_map = meta_sim.read_hitmap() 
+        nhits_map = meta_sims.read_hitmap() 
         nhits_map_rescaled = nhits_map / max(nhits_map)
-        binary_mask_sim = meta_sim.read_mask('binary')
+        binary_mask_sim = meta_sims.read_mask('binary')
 
         warnings.filterwarnings("error")        
         try:
@@ -207,10 +211,10 @@ def MakeSims(args):
     CMB_fg_noise_freq_maps = CMB_fg_freq_maps_beamed + noise_maps
 
 
-    if meta_sim.noise_sim_pars['include_nhits']:
+    if meta_sims.noise_sim_pars['include_nhits']:
         # Importing mask from the simulations nside to apply to simulated maps
         # Necessary to do it here when applying 1/sqrt(nhits) to the noise maps as it will create inf in the noise maps
-        binary_mask_sim = meta_sim.read_mask('binary')
+        binary_mask_sim = meta_sims.read_mask('binary')
         CMB_fg_noise_freq_maps[...,np.where(binary_mask_sim==0)[0]] = 0 # hp.UNSEEN
 
 
@@ -218,13 +222,20 @@ def MakeSims(args):
         
 
 
-def get_maps(args):
-    meta = BBmeta(args.globals)
+def get_maps(args, id_split=None):
     # get path from maps and import them
-    print('DUMMY FUNCTION RETURN MAPS FULL OF ONES FOR TESTING NSIDE_INPUT = 512')
-    print('SHAPE = (NFREQ, NSTOKES, NPIX)')
-    freq_maps = np.ones((6,3,hp.nside2npix(512)))
-    # freq_maps = np.ones((6,3,hp.nside2npix(meta.general_pars['nside'])))
+    
+    meta = BBmeta(args.globals)
+    maps_list = meta.maps_list
+    freq_maps = []
+    for m in maps_list:
+        path_m = meta.get_map_filename(m, id_split)
+        map = hp.read_map(path_m, field=None).tolist() 
+        #MSS2 maps don't have the same nside from one frequency to another!!
+        freq_maps.append(map)
+    # freq_maps = np.array(freq_maps)
+    freq_maps = np.array(freq_maps, dtype=object)
+    
     return freq_maps
 
 def CommonBeamConvAndNsideModification(args, freq_maps):
@@ -253,13 +264,15 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
 
 
     lmax_convolution = 3*meta.general_pars['nside']
-    wpix_in = hp.pixwin( hp.npix2nside(freq_maps.shape[-1]),pol=True,lmax=lmax_convolution) # Pixel window function of input maps
     wpix_out = hp.pixwin(meta.general_pars['nside'],pol=True,lmax=lmax_convolution) # Pixel window function of output maps
-    wpix_in[1][0:2] = 1. #in order not to divide by 0
     Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), lmax=lmax_convolution, pol=True)
 
  
     for f in range(len(meta.general_pars['frequencies'])):
+        
+        wpix_in = hp.pixwin( hp.npix2nside(len(freq_maps[f,0])),pol=True,lmax=lmax_convolution) # Pixel window function of input maps
+        wpix_in[1][0:2] = 1. #in order not to divide by 0
+
         #beam corrections
         Bl_gauss_fwhm = hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=lmax_convolution, pol=True)
 
@@ -270,15 +283,10 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
         sm_corr_P = bl_correction[:,1] * wpix_out[1]/wpix_in[1]
 
         #map-->alm
-        if map_dimensions == 2: # if maps are stored in (nstokes*nfreq, npix)
-            cmb_in_T,cmb_in_Q,cmb_in_U = freq_maps[3*f:3*(f+1),:]
-        elif map_dimensions == 3:
-            cmb_in_T,cmb_in_Q,cmb_in_U = freq_maps[f]
-        else:
-            print('freq_maps doesn\'t have the right number of dimensions, either 2 (nstokes*nfreq, npix), or 3 (nfreq, nstokes, npix)') 
-            print('returning original freq_maps ...')
-            return freq_maps
-        
+        cmb_in_T = np.array(freq_maps[f,0])
+        cmb_in_Q = np.array(freq_maps[f,1])
+        cmb_in_U = np.array(freq_maps[f,2])
+
         alm_in_T,alm_in_E,alm_in_B = hp.map2alm([cmb_in_T,cmb_in_Q,cmb_in_U],lmax=lmax_convolution,pol=True, iter=10)
         # here lmax seems to play an important role            
 
@@ -488,7 +496,7 @@ def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_m
             None
         '''
 
-        meta_sim = BBmeta(args.sims)
+        meta_sims = BBmeta(args.sims)
         meta = BBmeta(args.globals)
         cl_cmb_sky_maps = hp.anafast(cmb_sky)
 
@@ -528,14 +536,14 @@ def check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_m
 
         Bl_gauss_fwhm_freq = []
         for f in range(len(meta.general_pars['frequencies'])):
-            Bl_gauss_fwhm_freq.append( hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=3*meta_sim.map_sim_pars['nside_sim']-1, pol=True))
+            Bl_gauss_fwhm_freq.append( hp.gauss_beam( np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=3*meta_sims.map_sim_pars['nside_sim']-1, pol=True))
         Bl_gauss_fwhm_freq = np.array(Bl_gauss_fwhm_freq)
 
-        wpix_in = hp.pixwin( meta_sims.general_pars['nside'], pol=True, lmax=3*meta_sim.map_sim_pars['nside_sim']-1) # Pixel window function of input maps
+        wpix_in = hp.pixwin( meta_sims.general_pars['nside'], pol=True, lmax=3*meta_sims.map_sim_pars['nside_sim']-1) # Pixel window function of input maps
 
-        beamed_sky_TT = (Cl_cmb_model[...,:3*meta_sim.map_sim_pars['nside_sim']] + cl_fg_freq_maps)[:,0] * Bl_gauss_fwhm_freq[...,0]**2 * wpix_in[0]**2
-        beamed_sky_EE = (Cl_cmb_model[...,:3*meta_sim.map_sim_pars['nside_sim']] + cl_fg_freq_maps)[:,1] * Bl_gauss_fwhm_freq[...,1]**2 * wpix_in[1]**2
-        beamed_sky_BB = (Cl_cmb_model[...,:3*meta_sim.map_sim_pars['nside_sim']] + cl_fg_freq_maps)[:,2] * Bl_gauss_fwhm_freq[...,1]**2 * wpix_in[1]**2
+        beamed_sky_TT = (Cl_cmb_model[...,:3*meta_sims.map_sim_pars['nside_sim']] + cl_fg_freq_maps)[:,0] * Bl_gauss_fwhm_freq[...,0]**2 * wpix_in[0]**2
+        beamed_sky_EE = (Cl_cmb_model[...,:3*meta_sims.map_sim_pars['nside_sim']] + cl_fg_freq_maps)[:,1] * Bl_gauss_fwhm_freq[...,1]**2 * wpix_in[1]**2
+        beamed_sky_BB = (Cl_cmb_model[...,:3*meta_sims.map_sim_pars['nside_sim']] + cl_fg_freq_maps)[:,2] * Bl_gauss_fwhm_freq[...,1]**2 * wpix_in[1]**2
 
         beamed_sky_model = np.array([ beamed_sky_TT, beamed_sky_EE, beamed_sky_BB ]).swapaxes(0,1)
 
@@ -619,6 +627,219 @@ def check_preproc(args, preproc_freq_maps, fg_freq_maps, fsky_binary, sim_num=0)
 
     return cl_preproc_freq_maps, model_beamed_total
 
+def wrapper_MakeSimsMPI(args, rank, size):
+    '''
+    This function is a wrapper for the MakeSims function, to be used in MPI mode.
+    It is used to call MakeSims with the correct simulation number in MPI mode.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        rank (int): The rank of the MPI process.
+        size (int): The total number of MPI processes.
+
+    Returns:
+        freq_maps: The frequency maps, with shape (num_freq, num_stokes, num_pixels).
+        fsky_binary: The fraction of sky covered by the binary mask.
+        fg_freq_maps: The foreground frequency maps, with shape (num_freq, num_stokes, num_pixels).
+                      Only used when checking the prepocessing step via plotting.
+
+    '''
+    meta_sims = BBmeta(args.sims)
+
+    if meta_sims.general_pars['nsims'] != size:
+        exit('ERROR: nsims must be equal to size in MPI mode. nsims = '+ str(meta_sims.general_pars['nsims'])+'  size = '+ str(size))
+
+    if args.verbose: print('simulating maps sim number: ', rank + 1, '/', meta_sims.general_pars['nsims'], ' (MPI)')
+    if args.verbose: print('Memory usage before simulation is: ', tracemalloc.get_traced_memory())
+    freq_maps, noise_maps, fg_freq_maps, cmb_sky, CMB_fg_freq_maps_beamed, fsky_binary = MakeSims(args)
+    if args.verbose: print('Memory usage after simulation is: ', tracemalloc.get_traced_memory())
+    np.save(os.path.join(meta_sims.comb_directory, 'comb_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
+            freq_maps )
+    np.save(os.path.join(meta_sims.cmb_directory, 'cmb_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
+            cmb_sky )
+    np.save(os.path.join(meta_sims.cmb_beamed_directory, 'cmb_beamed_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ),
+                CMB_fg_freq_maps_beamed )
+    np.save(os.path.join(meta_sims.fg_directory, 'fg_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
+            fg_freq_maps )
+    np.save(os.path.join(meta_sims.noise_directory, 'noise_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
+            noise_maps )   
+
+    if args.plots:
+        if args.verbose:print('checking sims...')
+        # This only checks the last simulations
+        # TODO: in MPI do all cases or just one? 
+        if args.verbose: print('Memory usage before checking sims is: ', tracemalloc.get_traced_memory())
+        if rank==0:
+            check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_maps_beamed, fsky_binary)
+        if args.verbose: print('Memory usage after checking sims is: ', tracemalloc.get_traced_memory())
+                    
+
+    return freq_maps, fsky_binary, fg_freq_maps
+
+
+def wrapper_MakeSimsNOTMPI(args):
+    '''
+    This function is a wrapper for the MakeSims function, to be used in non-MPI mode.
+    It is used to call MakeSims in a for loop for each simulation number.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+
+    Returns:
+        freq_maps_sim_list: A list of the frequency maps for each simulation, with shape (num_sims, num_freq, num_stokes, num_pixels).
+        fsky_binary: The fraction of sky covered by the binary mask.
+        fg_freq_maps: The foreground frequency maps, with shape (num_freq, num_stokes, num_pixels).
+                      Only used when checking the prepocessing step via plotting. 
+    '''
+    meta_sims = BBmeta(args.sims)
+
+    freq_maps_sim_list = []
+    for sim_num in range(meta_sims.general_pars['nsims']):
+
+        if args.verbose: print('simulating maps sim number: ', sim_num + 1, '/', meta_sims.general_pars['nsims'], ' (for loop, NOT MPI)')
+        if args.verbose: print('Memory usage before simulation is: ', tracemalloc.get_traced_memory())
+        
+        freq_maps, noise_maps, fg_freq_maps, cmb_sky, CMB_fg_freq_maps_beamed, fsky_binary = MakeSims(args)
+        
+        if args.verbose: print('Memory usage after simulation is: ', tracemalloc.get_traced_memory())
+        
+        freq_maps_sim_list.append(freq_maps)
+        
+        if args.verbose: print('saving map sims ...')
+        np.save(os.path.join(meta_sims.comb_directory, 'comb_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ),
+                    freq_maps )
+        np.save(os.path.join(meta_sims.cmb_directory, 'cmb_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), 
+                cmb_sky )
+        np.save(os.path.join(meta_sims.cmb_beamed_directory, 'cmb_beamed_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), 
+                CMB_fg_freq_maps_beamed )
+        np.save(os.path.join(meta_sims.fg_directory, 'fg_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), 
+                fg_freq_maps )
+        np.save(os.path.join(meta_sims.noise_directory, 'noise_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), 
+                noise_maps )    
+    
+    if args.plots:
+        if args.verbose:print('checking sims...')
+        # This only checks the last simulations
+        if args.verbose: print('Memory usage before checking sims is: ', tracemalloc.get_traced_memory())
+        check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_maps_beamed, fsky_binary)
+        if args.verbose: print('Memory usage after checking sims is: ', tracemalloc.get_traced_memory())
+                    
+
+    return freq_maps_sim_list, fsky_binary, fg_freq_maps
+
+
+def wrapper_preprocNOTMPI(args, freq_maps_sim_list, fg_freq_maps=None, fsky_binary=None):
+    '''
+    This function is a wrapper for the pre-processing functions, to be used in non-MPI mode.
+    It is used to call the pre-processing functions in a for loop for each simulation number.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        freq_maps_sim_list: A list of the frequency maps for each simulation, with shape (num_sims, num_freq, num_stokes, num_pixels).
+        fg_freq_maps (ndarray): The foreground frequency maps, with shape (num_freq, num_stokes, num_pixels). Only used if args.sims and args.plots are True.
+        fsky_binary (float): The fraction of sky covered by the binary mask. Only used if args.sims and args.plots are True.
+    Returns:
+        None
+    '''
+    if args.sims:
+        meta_sims = BBmeta(args.sims)
+        nsims = meta_sims.general_pars['nsims']
+    else:
+        nsims = 1
+        freq_maps_sim_list = [freq_maps_sim_list]
+
+    
+
+    for sim_num in range(nsims):
+        if args.verbose: print('Memory usage before pre-processing is: ', tracemalloc.get_traced_memory())
+        if args.verbose: print('Pre-precessing freq-maps #', sim_num + 1, ' out of ', nsims)
+        freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps_sim_list[sim_num])
+        freq_maps_common_beamed_masked = ApplyBinaryMask(args, freq_maps_common_beamed)
+        if args.verbose: print('Memory usage after pre-processing is: ', tracemalloc.get_traced_memory())
+        if args.verbose: print('saving pre-processed maps ...')
+        np.save(os.path.join(meta.pre_process_directory, 'freq_maps_common_beamed_masked'+str(sim_num).zfill(5)+'.npy' ),
+                freq_maps_common_beamed_masked )
+        np.save(os.path.join(meta.pre_process_directory, 'freq_maps_common_beamed'+str(sim_num).zfill(5)+'.npy' ),
+                freq_maps_common_beamed )
+
+    if args.sims and args.plots:
+        if args.verbose: print('checking pre-processed maps...\n')
+        # This only checks the last simulations
+        cl_preproc_freq_maps, model_beamed_total = check_preproc( args, freq_maps_common_beamed, fg_freq_maps, fsky_binary, sim_num=sim_num)
+
+
+def wrapper_preprocMPI(args, freq_maps, rank, size,  fg_freq_maps=None, fsky_binary=None):
+    '''
+    This function is a wrapper for the pre-processing functions, to be used in MPI mode.
+    It is used to call the pre-processing functions with the correct simulation number in MPI mode.
+
+    Args:
+        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        freq_maps: The frequency maps, with shape (num_freq, num_stokes, num_pixels).
+        rank (int): The rank of the MPI process.
+        size (int): The total number of MPI processes.
+        fg_freq_maps (ndarray): The foreground frequency maps, with shape (num_freq, num_stokes, num_pixels). Only used if args.sims and args.plots are True.
+        fsky_binary (float): The fraction of sky covered by the binary mask. Only used if args.sims and args.plots are True.
+
+    
+    Returns:
+        None
+
+    '''
+    meta_sims = BBmeta(args.sims)
+
+    if args.verbose: print('Pre-precessing freq-maps #', rank + 1, ' out of ', size, ' (MPI)')
+    if args.verbose: print('Memory usage before pre-processing is: ', tracemalloc.get_traced_memory())
+    freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps)
+    freq_maps_common_beamed_masked = ApplyBinaryMask(args, freq_maps_common_beamed)
+    if args.verbose: print('Memory usage after pre-processing is: ', tracemalloc.get_traced_memory())
+
+    if args.verbose: print('saving pre-processed maps ...\n')
+    np.save(os.path.join(meta.pre_process_directory, 'freq_maps_common_beamed_masked'+str(rank).zfill(5)+'.npy' ),
+            freq_maps_common_beamed_masked )
+    
+    if not meta_sims.noise_sim_pars['include_nhits']:
+        # If nhits is used for the noise, all maps should be masked. 
+        np.save(os.path.join(meta.pre_process_directory, 'freq_maps_common_beamed'+str(rank).zfill(5)+'.npy' ),
+                freq_maps_common_beamed )
+        
+    if args.sims and args.plots:
+        if args.verbose: print('checking pre-processed maps...\n')
+        if args.verbose: print('Memory usage before checking pre-processed maps is: ', tracemalloc.get_traced_memory())
+        cl_preproc_freq_maps, model_beamed_total = check_preproc( args, freq_maps_common_beamed, fg_freq_maps, fsky_binary, sim_num=rank)        
+        if args.verbose: print('Memory usage after checking pre-processed maps is: ', tracemalloc.get_traced_memory())
+        # Ensure recvbuf is contiguous
+        # to make sure the comm.Gather() works correctly
+
+        cl_preproc_freq_maps = np.ascontiguousarray(cl_preproc_freq_maps) 
+
+        recvbuf = None
+        if rank == 0:
+            shape_recvbuf = (size,) + cl_preproc_freq_maps.shape
+            recvbuf = np.empty(shape_recvbuf)
+
+            # Ensure recvbuf is contiguous
+            # to make sure the comm.Gather() works correctly
+            recvbuf = np.ascontiguousarray(recvbuf)
+
+        comm.Gather(cl_preproc_freq_maps, recvbuf, root=0)
+
+        if rank == 0:
+            if args.verbose: print('checking MEAN preproc results...\n')
+
+            mean_cl_preproc_freq_maps = np.mean(recvbuf, axis=0)
+            plotTTEEBB_diff(args, mean_cl_preproc_freq_maps, model_beamed_total,
+                            os.path.join( meta.plot_dir_from_output_dir(meta.pre_process_directory_rel), 'mean_preproc_cl_check.png'), 
+                            legend_labels=[r'Mean preproc $C_\ell$ from map $\nu=$', r'Model Cl after preproc $\nu=$'], 
+                            axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'])       
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='simplistic simulator')
     parser.add_argument("--globals", type=str,
@@ -635,7 +856,8 @@ if __name__ == "__main__":
 
     # MPI VARIABLES
     mpi = args.use_mpi
-    
+    print('MPI: ', mpi)
+
     if mpi:
         try:
             from mpi4py import MPI
@@ -654,58 +876,25 @@ if __name__ == "__main__":
             mpi = False
             rank=0
             pass
+    else:
+        rank=0
+        size=1
 
     tracemalloc.start()
     if args.verbose: print('Memory usage at the start is: ', tracemalloc.get_traced_memory())
 
     if args.sims:
         if args.verbose: print('Simulating maps ...')
-        meta_sims = BBmeta(args.sims)
+        # meta_sims = BBmeta(args.sims)
   
 
         if not mpi:
-            freq_maps_sim_list = []
-            for sim_num in range(meta_sims.general_pars['nsims']):
+            freq_maps_sim_list, fsky_binary, fg_freq_maps = wrapper_MakeSimsNOTMPI(args)
 
-                if args.verbose: print('simulating maps sim number: ', sim_num + 1, '/', meta_sims.general_pars['nsims'], ' (for loop, NOT MPI)')
-                if args.verbose: print('Memory usage before simulation is: ', tracemalloc.get_traced_memory())
-                
-                freq_maps, noise_maps, fg_freq_maps, cmb_sky, CMB_fg_freq_maps_beamed, fsky_binary = MakeSims(args)
-                
-                if args.verbose: print('Memory usage after simulation is: ', tracemalloc.get_traced_memory())
-                
-                freq_maps_sim_list.append(freq_maps)
-                
-                if args.verbose: print('saving map sims ...')
-                np.save(os.path.join(meta_sims.comb_directory, 'comb_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ),
-                         freq_maps )
-                np.save(os.path.join(meta_sims.cmb_directory, 'cmb_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), 
-                        cmb_sky )
-                np.save(os.path.join(meta_sims.cmb_beamed_directory, 'cmb_beamed_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), 
-                        CMB_fg_freq_maps_beamed )
-                np.save(os.path.join(meta_sims.fg_directory, 'fg_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), 
-                        fg_freq_maps )
-                np.save(os.path.join(meta_sims.noise_directory, 'noise_freq_maps_SIM'+str(sim_num).zfill(5)+'.npy' ), 
-                        noise_maps )
         
         if mpi:
-            if meta_sims.general_pars['nsims'] != size:
-                exit('ERROR: nsims must be equal to size in MPI mode. nsims = '+ str(meta_sims.general_pars['nsims'])+'  size = '+ str(size))
+            freq_maps = wrapper_MakeSimsMPI(args, rank, size)
 
-            if args.verbose: print('simulating maps sim number: ', rank + 1, '/', meta_sims.general_pars['nsims'], ' (MPI)')
-            if args.verbose: print('Memory usage before simulation is: ', tracemalloc.get_traced_memory())
-            freq_maps, noise_maps, fg_freq_maps, cmb_sky, CMB_fg_freq_maps_beamed, fsky_binary = MakeSims(args)
-            if args.verbose: print('Memory usage after simulation is: ', tracemalloc.get_traced_memory())
-            np.save(os.path.join(meta_sims.comb_directory, 'comb_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
-                    freq_maps )
-            np.save(os.path.join(meta_sims.cmb_directory, 'cmb_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
-                    cmb_sky )
-            np.save(os.path.join(meta_sims.cmb_beamed_directory, 'cmb_beamed_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ),
-                     CMB_fg_freq_maps_beamed )
-            np.save(os.path.join(meta_sims.fg_directory, 'fg_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
-                    fg_freq_maps )
-            np.save(os.path.join(meta_sims.noise_directory, 'noise_freq_maps_SIM'+str(rank).zfill(5)+'.npy' ), 
-                    noise_maps )
 
         
     else:
@@ -714,87 +903,16 @@ if __name__ == "__main__":
         # TODO: formating for importing real maps
         freq_maps = get_maps(args)
 
-    
-    if args.sims and args.plots:
-        if args.verbose:print('checking sims...')
-        # This only checks the last simulations
-        # TODO: in MPI do all cases or just one? 
-        if args.verbose: print('Memory usage before checking sims is: ', tracemalloc.get_traced_memory())
-        if mpi and rank==0:
-            check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_maps_beamed, fsky_binary)
-        elif not mpi:
-            check_sims(args, cmb_sky, noise_maps, freq_maps, fg_freq_maps, CMB_fg_freq_maps_beamed, fsky_binary)
-        if args.verbose: print('Memory usage after checking sims is: ', tracemalloc.get_traced_memory())
-        
 
 
-    if not mpi:
-        for sim_num in range(meta_sims.general_pars['nsims']):
-            if args.verbose: print('Memory usage before pre-processing is: ', tracemalloc.get_traced_memory())
-            if args.verbose: print('Pre-precessing freq-maps #', sim_num + 1, ' out of ', meta_sims.general_pars['nsims'])
-            freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps_sim_list[sim_num])
-            freq_maps_common_beamed_masked = ApplyBinaryMask(args, freq_maps_common_beamed)
-            if args.verbose: print('Memory usage after pre-processing is: ', tracemalloc.get_traced_memory())
-            if args.verbose: print('saving pre-processed maps ...')
-            np.save(os.path.join(meta.pre_process_directory, 'freq_maps_common_beamed_masked'+str(sim_num).zfill(5)+'.npy' ),
-                    freq_maps_common_beamed_masked )
-            np.save(os.path.join(meta.pre_process_directory, 'freq_maps_common_beamed'+str(sim_num).zfill(5)+'.npy' ),
-                    freq_maps_common_beamed )
-        
-        if args.sims and args.plots:
-            if args.verbose: print('checking pre-processed maps...\n')
-            # This only checks the last simulations
-            cl_preproc_freq_maps, model_beamed_total = check_preproc( args, freq_maps_common_beamed, fg_freq_maps, fsky_binary, sim_num=sim_num)
-        
-
+    if not mpi and args.sims:
+        wrapper_preprocNOTMPI(args, freq_maps_sim_list, fg_freq_maps, fsky_binary)
+    elif not mpi and not args.sims:
+        wrapper_preprocNOTMPI(args, freq_maps, None, None)
 
     if mpi:
-        # TODO: check mpi version
-     
-        if args.verbose: print('Pre-precessing freq-maps #', rank + 1, ' out of ', meta_sims.general_pars['nsims'], ' (MPI)')
-        if args.verbose: print('Memory usage before pre-processing is: ', tracemalloc.get_traced_memory())
-        freq_maps_common_beamed = CommonBeamConvAndNsideModification(args, freq_maps)
-        freq_maps_common_beamed_masked = ApplyBinaryMask(args, freq_maps_common_beamed)
-        if args.verbose: print('Memory usage after pre-processing is: ', tracemalloc.get_traced_memory())
-
-        if args.verbose: print('saving pre-processed maps ...\n')
-        np.save(os.path.join(meta.pre_process_directory, 'freq_maps_common_beamed_masked'+str(rank).zfill(5)+'.npy' ),
-                freq_maps_common_beamed_masked )
-        
-        if not meta_sims.noise_sim_pars['include_nhits']:
-            # If nhits is used for the noise, all maps should be masked. 
-            np.save(os.path.join(meta.pre_process_directory, 'freq_maps_common_beamed'+str(rank).zfill(5)+'.npy' ),
-                    freq_maps_common_beamed )
-            
-        if args.sims and args.plots:
-            if args.verbose: print('checking pre-processed maps...\n')
-            if args.verbose: print('Memory usage before checking pre-processed maps is: ', tracemalloc.get_traced_memory())
-            cl_preproc_freq_maps, model_beamed_total = check_preproc( args, freq_maps_common_beamed, fg_freq_maps, fsky_binary, sim_num=rank)        
-            if args.verbose: print('Memory usage after checking pre-processed maps is: ', tracemalloc.get_traced_memory())
-            # Ensure recvbuf is contiguous
-            # to make sure the comm.Gather() works correctly
-
-            cl_preproc_freq_maps = np.ascontiguousarray(cl_preproc_freq_maps) 
-
-            recvbuf = None
-            if rank == 0:
-                shape_recvbuf = (size,) + cl_preproc_freq_maps.shape
-                recvbuf = np.empty(shape_recvbuf)
-
-                # Ensure recvbuf is contiguous
-                # to make sure the comm.Gather() works correctly
-                recvbuf = np.ascontiguousarray(recvbuf)
-
-            comm.Gather(cl_preproc_freq_maps, recvbuf, root=0)
-
-            if rank == 0:
-                if args.verbose: print('checking MEAN preproc results...\n')
-
-                mean_cl_preproc_freq_maps = np.mean(recvbuf, axis=0)
-                plotTTEEBB_diff(args, mean_cl_preproc_freq_maps, model_beamed_total,
-                                os.path.join( meta.plot_dir_from_output_dir(meta.pre_process_directory_rel), 'mean_preproc_cl_check.png'), 
-                                legend_labels=[r'Mean preproc $C_\ell$ from map $\nu=$', r'Model Cl after preproc $\nu=$'], 
-                                axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'])       
+        wrapper_preprocMPI(args, freq_maps, rank, size,  fg_freq_maps, fsky_binary)
+    
 
     if args.verbose: print('Memory usage at the end is: ', tracemalloc.get_traced_memory())
     if rank == 0: 

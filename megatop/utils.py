@@ -5,6 +5,9 @@ import healpy as hp
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import camb
+from inspect import currentframe, getframeinfo, stack
+import tracemalloc
+from mpi4py import MPI
 
 
 def get_theory_cls(cosmo_params, lmax, lmin=0):
@@ -650,3 +653,115 @@ def get_spin_derivatives(map):
     cmap.set_under("w")
 
     return first, second
+
+def MPISUM(array, comm, rank, root):
+    '''
+    Reduces an array using the SUM operator to the root process using MPI.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The array to reduce.
+    comm : MPI.COMM_WORLD
+        The MPI communicator.
+    rank : int
+        The rank of the process.
+    root : int
+        The root process.
+
+    Returns
+    -------
+    array_recvbuf : np.ndarray
+        The reduced array.
+
+    '''
+
+    if rank==root:
+        array_recvbuf = np.zeros_like(array)
+    else:
+        array_recvbuf = None
+    
+    array = np.ascontiguousarray(array) 
+
+    comm.Reduce(array, array_recvbuf, op=MPI.SUM, root=root)
+
+    return array_recvbuf
+
+def MPIGATHER(array, comm, rank, size, root):
+    '''
+    Gathers an array to the root process using MPI.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The array to gather.
+    comm : MPI.COMM_WORLD
+        The MPI communicator.
+    rank : int
+        The rank of the process.
+    size : int
+        The size of the communicator.
+    root : int
+        The root process.
+
+    Returns
+    -------
+    array_recvbuf : np.ndarray
+        The gathered array.
+
+    '''
+
+    array = np.ascontiguousarray(array) 
+
+    array_recvbuf = None
+    if rank == 0:
+        shape_recvbuf_array = (size,) + array.shape
+        array_recvbuf = np.empty(shape_recvbuf_array)
+
+        # Ensure recvbuf is contiguous
+        # to make sure the comm.Gather() works correctly
+        array_recvbuf = np.ascontiguousarray(array_recvbuf)
+
+    comm.Gather(array, array_recvbuf, root=root)
+
+    return array_recvbuf
+
+def debuginfo(message):
+    '''
+    prints the filename and line number of the caller function as well as the message
+
+    Parameters
+    ----------
+    message : str
+        The message to print.   
+
+    Returns
+    -------
+    None
+
+    '''
+    caller = getframeinfo(stack()[2][0])
+    print("%s:%d - %s" % (caller.filename, caller.lineno, message)) # python3 syntax print
+
+
+def MemoryUsage(args, message=''):
+    ''''
+    Prints the memory usage of the current process.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The arguments from the command line. 
+        In particular looks for the verbose flag. If false, the function does nothing.
+    message : str, optional
+        The message to print. The default is ''.
+
+    Returns
+    -------
+    None
+
+    '''
+    if args.verbose:
+        current, peak = tracemalloc.get_traced_memory()
+        message_all = message + f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB"
+        debuginfo(message_all)
