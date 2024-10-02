@@ -1,20 +1,20 @@
-data_dirs:
-  root: "../data"
-  map_directory: "maps"
-  beam_directory: "beams"
-  bandpasses_directory: "bandpasses"
+# data_dirs:
+#   root: "../data"
+#   map_directory: "maps"
+#   beam_directory: "beams"
+#   bandpasses_directory: "bandpasses"
 
 
-output_dirs: 
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/100SimsNside64to32WithNhitsCorrected/OnTheFlySims"
-  cmb_directory: "CMB"
-  cmb_beamed_directory: "CMB_beamed"
-  fg_directory: "fg"
-  noise_directory: "noise"
-  comb_directory: "comb"
-  comb_spectra_directory: "comb_spectra"
-  plots_directory: "plots"
-  mask_directory: "masks" #not useful for sims but metadata error
+# output_dirs: 
+#   root: "/pscratch/sd/j/jost/SO_MEGATOP/100SimsNside64to32WithNhitsCorrected/OnTheFlySims"
+#   cmb_directory: "CMB"
+#   cmb_beamed_directory: "CMB_beamed"
+#   fg_directory: "fg"
+#   noise_directory: "noise"
+#   comb_directory: "comb"
+#   comb_spectra_directory: "comb_spectra"
+#   plots_directory: "plots"
+#   mask_directory: "masks" #not useful for sims but metadata error
 
 
 general_pars:
@@ -77,12 +77,3 @@ masks:
   apod_radius: 10.0
   apod_radius_point_source: 4.0
   apod_type: "C1"
-
-# map_sim_pars:
-#   dust_model: 'd0' #todo: remove, redundant with simulations.yml?
-#   sync_model: 's0' #todo: remove, redundant with simulations.yml?
-#   tag: 'SO_sims' #todo: remove, redundant with simulations.yml?
-#   cmb_sim_no_pysm: True  #todo: remove, redundant with simulations.yml?
-#
-#   r_input: 0.0 #todo: remove, redundant with simulations.yml?
-#   A_lens:  1.0 #todo: remove, redundant with simulations.yml?  

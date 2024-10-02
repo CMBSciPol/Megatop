@@ -5,21 +5,23 @@
 # Define the directories
 ## Let's start with directories of data products
 data_dirs:
-  root: "/global/homes/j/jost/Megatop/data"
+  root: "/Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/data/test/data"
   map_directory: "maps"
   beam_directory: "beams"
   bandpasses_directory: "bandpasses"
   mock_directory: "mock_data"
+  
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/100SimsNside64to32WithNhitsCorrected/outputs"
+  root: "/Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/data/test/outputs"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  
+  plots_directory: "plots"
 
 
 fiducial_cmb: 
-  cls_cmb_directory: "/global/homes/j/jost/Megatop/fiducial_cmb_spectra"
+  cls_cmb_directory: "/Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/data/fiducial_cmb_spectra"
   lensed: "Cls_Planck2018_lensed_scalar.fits"
   unlensed_scalar_tensor_r1: "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
 
@@ -133,3 +135,12 @@ map_sim_pars:
   bypass_noise_cov: True #todo: remove, redundant with simulations.yml?
   r_input: 0.0 #todo: remove, redundant with simulations.yml?
   A_lens:  1.0 #todo: remove, redundant with simulations.yml?
+  fixed_cmb: False
+  nside_sim: 32
+
+noise_sim_pars:
+    noise_option: 'white_noise'
+    sensitivity_mode: 2
+    SAC_yrs_LF: 1
+    knee_mode: 1
+    include_nhits: True

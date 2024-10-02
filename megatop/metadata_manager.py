@@ -50,6 +50,9 @@ class BBmeta(object):
         for map_sets_attribute in map_sets_attributes:
             self._init_getter_from_map_set(map_sets_attribute)
 
+        #frequency from map_set
+        self.frequencies = [self.freq_tag_from_map_set(m) for m in self.map_sets]
+
         # A list of the maps used in the analysis
         self.maps_list = self._get_map_list()
 
@@ -66,7 +69,7 @@ class BBmeta(object):
                 )
 
         # Simulation
-        self._init_simulation_params()
+        # self._init_simulation_params() #TODO needed ?!?
 
         # Fiducial cls
         # self.cosmo_cls_file = f"{self.pre_process_directory}/cosmo_cls.npz"
@@ -162,6 +165,11 @@ class BBmeta(object):
         else:
             # Using custom nhits map
             return self.masks["input_nhits_path"]
+    
+    def idx_from_list(self, frequencies):
+        if not (set(self.frequencies) <= set(frequencies)):
+            raise Exception(f"Some frequencies are not part of {frequencies} (can't compute noise for them). Check your yaml !") 
+        return  [frequencies.index(fr) for fr in self.frequencies]
 
     def read_mask(self, mask_type):
         """
