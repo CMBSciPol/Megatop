@@ -116,6 +116,7 @@ noise_cov_pars:
     include_nhits: True
     nsims_plot: 1 # number of simulations that will be used for ploting
     # mask_to_apply: False #"binary_mask.fits"
+    sim_tag: 'load_sims'
 
 # ## Simulation related
 map_sim_pars:

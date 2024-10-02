@@ -15,13 +15,20 @@ import time
 import tracemalloc
 
 
-def get_maps(args):
-    meta = BBmeta(args.globals)
+def get_maps(args, id_split=None):
     # get path from maps and import them
-    print('DUMMY FUNCTION RETURN MAPS FULL OF ONES FOR TESTING NSIDE_INPUT = 512')
-    print('SHAPE = (NFREQ, NSTOKES, NPIX)')
-    freq_maps = np.ones((6,3,hp.nside2npix(512)))
-    # freq_maps = np.ones((6,3,hp.nside2npix(meta.general_pars['nside'])))
+    
+    meta = BBmeta(args.globals)
+    maps_list = meta.maps_list
+    freq_maps = []
+    for m in maps_list:
+        path_m = meta.get_map_filename(m, id_split)
+        map = hp.read_map(path_m, field=None).tolist() 
+        #MSS2 maps don't have the same nside from one frequency to another!!
+        freq_maps.append(map)
+    # freq_maps = np.array(freq_maps)
+    freq_maps = np.array(freq_maps, dtype=object)
+    
     return freq_maps
 
 def read_maps(args):
@@ -60,9 +67,7 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
     if args.verbose: print('-> common beam correction and NSIDE change: correcting for frequency-dependent beams, convolving with a common beam, modifying NSIDE and include effect of pixel window function')
 
     lmax_convolution = 3*meta.general_pars['nside']
-    wpix_in = hp.pixwin( hp.npix2nside(freq_maps.shape[-1]),pol=True,lmax=lmax_convolution) # Pixel window function of input maps
     wpix_out = hp.pixwin(meta.general_pars['nside'],pol=True,lmax=lmax_convolution) # Pixel window function of output maps
-    wpix_in[1][0:2] = 1. #in order not to divide by 0
     Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), lmax=lmax_convolution, pol=True)
 
     for f in range(len(meta.frequencies)):
@@ -75,15 +80,10 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
         sm_corr_P = bl_correction[:,1] * wpix_out[1]/wpix_in[1]
 
         #map-->alm
-        if map_dimensions == 2: # if maps are stored in (nstokes*nfreq, npix)
-            cmb_in_T,cmb_in_Q,cmb_in_U = freq_maps[3*f:3*(f+1),:]
-        elif map_dimensions == 3:
-            cmb_in_T,cmb_in_Q,cmb_in_U = freq_maps[f]
-        else:
-            print('freq_maps doesn\'t have the right number of dimensions, either 2 (nstokes*nfreq, npix), or 3 (nfreq, nstokes, npix)') 
-            print('returning original freq_maps ...')
-            return freq_maps
-        
+        cmb_in_T = np.array(freq_maps[f,0])
+        cmb_in_Q = np.array(freq_maps[f,1])
+        cmb_in_U = np.array(freq_maps[f,2])
+
         alm_in_T,alm_in_E,alm_in_B = hp.map2alm([cmb_in_T,cmb_in_Q,cmb_in_U],lmax=lmax_convolution,pol=True, iter=10)
         # here lmax seems to play an important role            
 
