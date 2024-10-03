@@ -67,7 +67,9 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
     if args.verbose: print('-> common beam correction and NSIDE change: correcting for frequency-dependent beams, convolving with a common beam, modifying NSIDE and include effect of pixel window function')
 
     lmax_convolution = 3*meta.general_pars['nside']
+    wpix_in = hp.pixwin( hp.npix2nside(freq_maps.shape[-1]),pol=True,lmax=lmax_convolution) # Pixel window function of input maps
     wpix_out = hp.pixwin(meta.general_pars['nside'],pol=True,lmax=lmax_convolution) # Pixel window function of output maps
+    wpix_in[1][0:2] = 1. #in order not to divide by 0
     Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), lmax=lmax_convolution, pol=True)
 
     for f in range(len(meta.frequencies)):
@@ -216,8 +218,6 @@ if __name__ == "__main__":
                         help="Path to yaml with global parameters")
     parser.add_argument("--use_mpi", action="store_true",
                         help="Use MPI instead of for loops to pre-process multiple maps, or simulate multiple sims.")
-    parser.add_argument("--sims", default=None,
-                        help="Generate a set of sims if True.")    
     parser.add_argument("--plots", action="store_true",
                         help="Plot the generated maps if True.")
     parser.add_argument("--verbose", action="store_true")
