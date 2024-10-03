@@ -3,6 +3,7 @@ import numpy as np
 import os
 import healpy as hp
 import time
+import warnings
 
 class BBmeta(object):
     """
@@ -50,6 +51,9 @@ class BBmeta(object):
         for map_sets_attribute in map_sets_attributes:
             self._init_getter_from_map_set(map_sets_attribute)
 
+        #frequency from map_set
+        self.frequencies = [self.freq_tag_from_map_set(m) for m in self.map_sets]
+
         # A list of the maps used in the analysis
         self.maps_list = self._get_map_list()
 
@@ -66,11 +70,9 @@ class BBmeta(object):
                 )
 
         # Simulation
-        self._init_simulation_params()
+        if self.map_sim_pars is not None:
+            self._init_simulation_params() 
 
-        # Fiducial cls
-        # self.cosmo_cls_file = f"{self.pre_process_directory}/cosmo_cls.npz"
-  
         # Initialize a timer
         self.timer = Timer()
 
@@ -166,6 +168,11 @@ class BBmeta(object):
         else:
             # Using custom nhits map
             return self.masks["input_nhits_path"]
+    
+    def idx_from_list(self, frequencies):
+        if not (set(self.frequencies) <= set(frequencies)):
+            raise Exception(f"Some frequencies are not part of {frequencies} (can't compute noise for them). Check your yaml !") 
+        return  [frequencies.index(fr) for fr in self.frequencies]
 
     def read_mask(self, mask_type):
         """
@@ -256,18 +263,35 @@ class BBmeta(object):
         """
         Loop over the simulation parameters and set them as attributes.
         """
-        for name in ["cmb_model", "dust_model", "sync_model", "tag",
-                     "cmb_sim_no_pysm", "external_sky_sims", "combined_directory",
-                     "external_binary_mask", "external_noise_cov", "pixel_based_noise_cov", "isim",
-                     "noise_cov_beam_correction", "bypass_noise_cov", "r_input", "A_lens"]:
-            setattr(self, name, self.map_sim_pars[name])
+        if not hasattr(self, 'noise_sim_pars'):
+            raise AttributeError("The 'noise_sim_pars' field is missing from the config file.")
 
-    # def _init_tf_estimation_params(self):
-    #     """
-    #     Loop over the transfer function parameters and set them as attributes.
-    #     """
-    #     for name in self.tf_settings:
-    #         setattr(self, name, self.tf_settings[name])
+        # Check for inconsistent CMB simulation settings
+        self.sky_model = self.map_sim_pars['sky_model']
+        if self.map_sim_pars['cmb_sim_no_pysm']:
+            for cmb in ['c1', 'c2', 'c3', 'c4']:
+                if cmb in self.sky_model:
+                    warnings.warn("You specified a PySM CMB model while setting 'cmb_sim_no_pysm' to False. Dropping the PySM CMB model.")
+                    self.sky_model.remove(cmb)
+            if not hasattr(self, 'fiducial_cmb'):
+                raise AttributeError("The 'fiducial_cmb' field is missing from the config file.")
+            keys = ["r_input", "A_lens"]
+            missing_keys = [key for key in keys if key not in self.map_sim_pars]
+            if missing_keys:
+                raise KeyError(f"Missing keys in map_sim_pars: {missing_keys}")
+        
+        
+        #noise checks
+        if self.noise_sim_pars['noise_option'] not in ['white_noise', 'no_noise', 'noise_spectra']:
+            raise KeyError("Only no_noise, white_noise and noise_spectra noise options are supported for now ...")
+        if self.noise_sim_pars['experiment'] not in ['SO']:
+            raise KeyError("Only SO simulations supported for now ")
+        if self.noise_sim_pars['experiment'] == 'SO':
+            keys = ['sensitivity_mode', 'SAC_yrs_LF']
+            missing_keys = [key for key in keys if key not in self.noise_sim_pars]
+            if missing_keys:
+                raise KeyError(f"Missing keys in noise_sim_pars: {missing_keys}")
+        
 
     def save_fiducial_cl(self, ell, cl_dict, cl_type):
         """
