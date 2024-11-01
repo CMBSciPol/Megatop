@@ -7,6 +7,7 @@ from fgbuster.observation_helpers import get_instrument, get_sky, get_observatio
 import os
 import matplotlib.pyplot as plt
 import megatop.V3calc as V3
+from megatop.utils import get_Cl_CMB_model_from_meta
 
 
 SO_FREQS = [27, 39, 93, 145, 220, 280] #TODO: Dodgy ...
@@ -55,11 +56,13 @@ def make_sims(meta, verbose=True, plots=False, noise_only=False):
 
     if meta.noise_sim_pars['noise_option']=='white_noise':
         if verbose: print('White noise only case')
-        nlev_map = cmb_fg_freq_maps_beamed*0.0
+        # nlev_map = cmb_fg_freq_maps_beamed*0.0
+        nlev_map = np.zeros((len(meta.frequencies), 3, hp.nside2npix(nside)))
         for i_f,f in enumerate(instrument.frequency): 
             nlev_map[i_f] = np.array([instrument.depth_i[i_f], instrument.depth_p[i_f], instrument.depth_p[i_f]])[:,np.newaxis]*np.ones((3,hp.nside2npix(nside)))
         nlev_map /= hp.nside2resol(nside, arcmin=True)
-        noise_maps = np.random.normal(cmb_fg_freq_maps_beamed*0.0, nlev_map, (len(meta.frequencies), 3, hp.nside2npix(nside)))
+        noise_maps = np.random.normal( np.zeros((len(meta.frequencies), 3, hp.nside2npix(nside))), 
+                                      nlev_map, (len(meta.frequencies), 3, hp.nside2npix(nside)))
     elif meta.noise_sim_pars['noise_option']=='no_noise':
         if verbose: print('No noise case')
         noise_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(nside)))
@@ -197,36 +200,10 @@ def make_sims(meta, verbose=True, plots=False, noise_only=False):
 
     return cmb_fg_noise_freq_maps, cmb_fg_freq_maps_beamed, noise_maps #TODO check if cmb_fg_noise_freq_maps is needed or not ...
 
-def get_Cl_CMB_model_from_meta(meta):
-    '''
-    This function reads the fiducial CMB Cls from the metadata manager and combines scalar, lensing and tensor 
-    contributions to return the model Cls according to A_lens and r in the simulation parameter file.
-
-    Args:
-        meta: metadata_manager object containing all the config file options
-        
-    Returns:
-        Cl_cmb_model (ndarray): The model CMB Cls, with shape (num_freq, num_spectra [TT,EE,BB,TE,EB,TB], num_ell).
-    '''
-    path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb('lensed')
-    path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
-
-    Cl_BB_prim = meta.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
-    Cl_lens = hp.read_cl(path_Cl_BB_lens)
-
-    l_max_lens = len(Cl_lens[0])
-    Cl_BB_lens = meta.map_sim_pars['A_lens']*Cl_lens[2]
-    Cl_TT = Cl_lens[0]
-    Cl_EE = Cl_lens[1]
-    Cl_TE = Cl_lens[3]
-
-    Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
-    Cl_cmb_model = np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE*0.0, Cl_EE*0.0]])    
-    return Cl_cmb_model
 
 def get_noise_beams(meta, fsky_binary, verbose=True):
     '''
-    This function returns the noise an beams depending on the noise_sim_pars settings in the config file.
+    This function returns the noise and beams depending on the noise_sim_pars settings in the config file.
 
     Args:
         meta: metadata_manager object containing all the config file options

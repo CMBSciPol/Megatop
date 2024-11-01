@@ -186,16 +186,42 @@ def beam_hpix(ll, nside):
     return beam_gaussian(ll, fwhm_hp_amin)
 
 
-def create_binning(nside, delta_ell):
+# def create_binning(nside, delta_ell):
+#     """
+#     """
+#     bin_low = np.arange(0, 3*nside, delta_ell)
+#     bin_high = bin_low + delta_ell - 1
+#     bin_high[-1] = 3*nside - 1
+#     bin_center = (bin_low + bin_high) / 2
+
+#     return bin_low, bin_high, bin_center
+
+def create_binning(nside, delta_ell, end_first_bin=None):
+                #    , lmin=None, lmax=None):
     """
     """
-    bin_low = np.arange(0, 3*nside, delta_ell)
-    bin_high = bin_low + delta_ell - 1
+    if end_first_bin is not None:
+        bin_low = np.arange(end_first_bin, 3*nside, delta_ell)
+        bin_high = bin_low + delta_ell - 1
+        bin_low = np.concatenate(([0], bin_low))
+        bin_high = np.concatenate(([end_first_bin-1], bin_high))
+    else:
+        bin_low = np.arange(0, 3*nside, delta_ell)
+        bin_high = bin_low + delta_ell - 1
     bin_high[-1] = 3*nside - 1
     bin_center = (bin_low + bin_high) / 2
 
-    return bin_low, bin_high, bin_center
+    # if lmin is not None:
+    #     bin_low = bin_low[bin_low >= lmin]
+    #     bin_high = bin_high[bin_high >= lmin]
+    #     bin_center = bin_center[bin_center >= lmin]
+    
+    # if lmax is not None:
+    #     bin_low = bin_low[bin_low <= lmax]
+    #     bin_high = bin_high[bin_high <= lmax]
+    #     bin_center = bin_center[bin_center <= lmax]
 
+    return bin_low, bin_high, bin_center
 
 def power_law_cl(ell, amp, delta_ell, power_law_index):
     """
@@ -654,6 +680,33 @@ def get_spin_derivatives(map):
 
     return first, second
 
+def get_Cl_CMB_model_from_meta(meta):
+    '''
+    This function reads the fiducial CMB Cls from the metadata manager and combines scalar, lensing and tensor 
+    contributions to return the model Cls according to A_lens and r in the simulation parameter file.
+
+    Args:
+        meta: metadata_manager object containing all the config file options
+        
+    Returns:
+        Cl_cmb_model (ndarray): The model CMB Cls, with shape (num_freq, num_spectra [TT,EE,BB,TE,EB,TB], num_ell).
+    '''
+    path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb('lensed')
+    path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
+
+    Cl_BB_prim = meta.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
+    Cl_lens = hp.read_cl(path_Cl_BB_lens)
+
+    l_max_lens = len(Cl_lens[0])
+    Cl_BB_lens = meta.map_sim_pars['A_lens']*Cl_lens[2]
+    Cl_TT = Cl_lens[0]
+    Cl_EE = Cl_lens[1]
+    Cl_TE = Cl_lens[3]
+
+    Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
+    Cl_cmb_model = np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE*0.0, Cl_EE*0.0]])    
+    return Cl_cmb_model
+
 def MPISUM(array, comm, rank, root):
     '''
     Reduces an array using the SUM operator to the root process using MPI.
@@ -765,3 +818,29 @@ def MemoryUsage(args, message=''):
         current, peak = tracemalloc.get_traced_memory()
         message_all = message + f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB"
         debuginfo(message_all)
+
+
+def apply_lminlmax_to_dict(dict, bin_index_lminlmax):
+    '''
+    Applies the lmin and lmax binning to all the spectra in a dictionary.
+
+    Parameters
+    ----------
+    dict : dict
+        The dictionary containing the spectra. The keys are the spectra names (e.g. CMBxCMB, CMBxDust etc.).
+        Each value is a 2D array with shape (num_cross_auto_spectra, num_ell).
+        This corresponds to the typical output of the map_to_cl step.
+    bin_index_lminlmax : np.ndarray
+        The indices that fall within ell_min and ell_max for the relevant binning scheme used.
+        It is typically generated in the map_to_cl step and stored in the binning.npz file.
+
+    Returns
+    -------
+    new_dict : dict
+        The dictionary with the new ell bounds.
+
+    '''
+    new_dict = {}
+    for key in dict.keys():
+        new_dict[key] = dict[key][...,bin_index_lminlmax]
+    return new_dict        

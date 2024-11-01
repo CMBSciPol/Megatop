@@ -224,7 +224,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     meta = BBmeta(args.globals)
     input_maps = read_maps(args)
-    print(input_maps.shape)
+    if args.verbose: print('input_maps shape = ', input_maps.shape)
     convolved_maps = CommonBeamConvAndNsideModification(args, input_maps)
     masked_convolved_maps = ApplyBinaryMask(args, convolved_maps)
     check_preproc(args)

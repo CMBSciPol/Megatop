@@ -10,7 +10,7 @@ import IPython
 from matplotlib import cm
 import math
 import megatop.V3calc as V3
-from pre_processing import CommonBeamConvAndNsideModification, plotTTEEBB_diff, get_Nl_white_noise
+from pre_processing import CommonBeamConvAndNsideModification #, plotTTEEBB_diff, get_Nl_white_noise
 from tqdm import tqdm
 import time
 from mpi4py import MPI
@@ -51,21 +51,28 @@ def GetNoiseCov(args):
     MemoryUsage(args, f'rank = {rank} ')
 
     if args.sims:
-        if meta.noise_cov_pars['sim_tag'] == 'load_sims':
+        if meta.noise_cov_pars['noise_cov_method'] == 'load_sims':
             # Warning: if rank != root or plots == False the output will be None
-            noise_cov_mean, noise_cov_preprocessed_mean, binary_mask_from_nhits_nside_sims, freq_noise_maps_pre_processed_array, freq_noise_maps_array = wrapper_load_sim_noise_cov(args, meta, mpi, rank, size, root, comm)
+            noise_cov_mean, noise_cov_preprocessed_mean, binary_mask_from_nhits_nside_sims,\
+                  freq_noise_maps_pre_processed_array, freq_noise_maps_array = wrapper_load_sim_noise_cov(args, meta, mpi, 
+                                                                                                          rank, size, root, 
+                                                                                                          comm)
             
 
             if args.plots and rank==root:
-                binary_mask_from_nhits_preproc = wrapper_plotting(args, meta, rank, noise_cov_mean, noise_cov_preprocessed_mean, freq_noise_maps_array, freq_noise_maps_pre_processed_array, binary_mask_from_nhits_nside_sims)
+                binary_mask_from_nhits_preproc = wrapper_plotting(args, meta, rank, noise_cov_mean, 
+                                                                  noise_cov_preprocessed_mean, freq_noise_maps_array, 
+                                                                  freq_noise_maps_pre_processed_array, 
+                                                                  binary_mask_from_nhits_nside_sims)
                 
 
             if args.plots and rank==root:
-                wrapper_plotting_matrices_and_maps(args, meta,rank, noise_cov_mean, noise_cov_preprocessed_mean, binary_mask_from_nhits_nside_sims, binary_mask_from_nhits_preproc)
+                wrapper_plotting_matrices_and_maps(args, meta,rank, noise_cov_mean, noise_cov_preprocessed_mean, 
+                                                   binary_mask_from_nhits_nside_sims, binary_mask_from_nhits_preproc)
                 
 
 
-        elif  meta.noise_cov_pars['sim_tag'] == 'sim_in_noisecov':
+        elif  meta.noise_cov_pars['noise_cov_method'] == 'sim_in_noisecov':
             wrapper_sim_in_noisecov(args, meta, mpi, rank, root, comm)
 
         else:
@@ -76,11 +83,13 @@ def GetNoiseCov(args):
             exit()
   
     else:
-        noise_cov_preprocessed_mean, freq_noise_maps_pre_processed, nside_in_list = wrapper_cov_noise_from_noise_maps(args, meta, mpi)
+        noise_cov_preprocessed_mean, freq_noise_maps_pre_processed, \
+            nside_in_list = wrapper_cov_noise_from_noise_maps(args, meta, mpi)
 
 
         if args.plots:
-            wrapper_plotting_noise_cov_from_noise_maps(args, meta, noise_cov_preprocessed_mean, freq_noise_maps_pre_processed, nside_in_list)
+            wrapper_plotting_noise_cov_from_noise_maps(args, meta, noise_cov_preprocessed_mean, 
+                                                       freq_noise_maps_pre_processed, nside_in_list)
 
 
     if rank == 0:
@@ -134,9 +143,9 @@ def wrapper_load_sim_noise_cov(args, meta, mpi, rank, size, root, comm):
     meta_sims = BBmeta(args.sims)
     nsims = meta_sims.general_pars['nsims']
 
-    noise_cov = np.zeros( [ len(meta.general_pars['frequencies']), 3,hp.nside2npix(meta_sims.map_sim_pars['nside_sim'])])
+    noise_cov = np.zeros( [ len(meta.frequencies), 3,hp.nside2npix(meta_sims.map_sim_pars['nside_sim'])])
 
-    noise_cov_preprocessed = np.zeros([ len(meta.general_pars['frequencies']), 3,hp.nside2npix(meta.general_pars['nside'])])
+    noise_cov_preprocessed = np.zeros([ len(meta.frequencies), 3,hp.nside2npix(meta.general_pars['nside'])])
 
     if args.plots:
         freq_noise_maps_pre_processed_array = []
@@ -262,7 +271,7 @@ def wrapper_sim_in_noisecov(args, meta, mpi, rank, root, comm=None):
 
     '''
 
-    if args.verbose: print('sim_tag = sim_in_noisecov')
+    if args.verbose: print('noise_cov_method = sim_in_noisecov')
     MemoryUsage(args, f'rank = {rank} ')
     
     maps_list = meta.maps_list
@@ -270,7 +279,7 @@ def wrapper_sim_in_noisecov(args, meta, mpi, rank, root, comm=None):
     if not mpi:
         start = time.time()
         MemoryUsage(args, f'rank = {rank} ')
-        noise_cov_preprocessed = np.zeros([ len(meta.general_pars['frequencies']), 3,hp.nside2npix(meta.general_pars['nside'])])
+        noise_cov_preprocessed = np.zeros([ len(meta.frequencies), 3,hp.nside2npix(meta.general_pars['nside'])])
         for sim_id in range(nsims):
             if args.verbose: print('sim_id = ', sim_id)
             freq_noise_maps = []
@@ -296,7 +305,7 @@ def wrapper_sim_in_noisecov(args, meta, mpi, rank, root, comm=None):
     if mpi:
         MemoryUsage(args, f'rank = {rank} ')
                             
-        noise_cov_preprocessed = np.zeros([ len(meta.general_pars['frequencies']), 3,hp.nside2npix(meta.general_pars['nside'])])
+        noise_cov_preprocessed = np.zeros([ len(meta.frequencies), 3,hp.nside2npix(meta.general_pars['nside'])])
         if args.verbose: print('sim_id (MPI rank)= ', rank)
         freq_noise_maps = []
         for map_name in maps_list:
@@ -326,7 +335,7 @@ def wrapper_sim_in_noisecov(args, meta, mpi, rank, root, comm=None):
     if rank==root:
         # Saving noise_cov and noise_cov_preprocessed to disk
         print('SAVING NOISE COV PREPROCESSED TO DISK')
-        np.save(os.path.join(meta.covmat_directory, 'pixel_noise_cov_preprocessed_whitenoise_sim_in_noisecov_mpi.npy' ),
+        np.save(os.path.join(meta.covmat_directory, 'pixel_noise_cov_preprocessed.npy' ),
                 noise_cov_preprocessed_mean )  
 
        
@@ -366,7 +375,7 @@ def wrapper_cov_noise_from_noise_maps(args, meta, mpi):
         print('MPI not implemented for noise_cov computation without OnTheFlySims yet, sorry...')
         exit()
     
-    noise_cov_preprocessed = np.zeros([ len(meta.general_pars['frequencies']), 3,hp.nside2npix(meta.general_pars['nside'])])
+    noise_cov_preprocessed = np.zeros([ len(meta.frequencies), 3,hp.nside2npix(meta.general_pars['nside'])])
 
     # Importing noise maps
     freq_noise_maps_array = []
@@ -416,12 +425,22 @@ def MakeNoiseMapsNhitsMSS2(meta, map_set, verbose=False):
     start = time.time()
 
     if meta.noise_sim_pars['include_nhits']:
-        path_nhits = meta.get_nhits_map_filename(map_set)
 
-        nhits_map = hp.read_map(path_nhits)
-        nside_nhits = hp.get_nside(nhits_map)
-        binary_mask_nhits = utils.get_binary_mask_from_nhits(nhits_map, nside_nhits, 
-                                                             zero_threshold=meta.masks['mask_handler_binary_zero_threshold'])
+        if hasattr(meta, 'nhits_directory'):
+            # This is done cause different frequencies can have different nhits maps (see MSS2)
+            # TODO: I don't think such an option is implemented in onfly_sims, maybe it can be useful? 
+            # Although it adds complexity
+            path_nhits = meta.get_nhits_map_filename(map_set)
+            nhits_map = hp.read_map(path_nhits)
+        
+            nside_nhits = hp.get_nside(nhits_map)
+            binary_mask_nhits = utils.get_binary_mask_from_nhits(nhits_map, nside_nhits, 
+                                                                 zero_threshold=meta.masks['mask_handler_binary_zero_threshold'])
+        else:
+            # If there isn't any nhits_directory specified, we use the standard nhits map used for the rest of the analysis
+            nhits_map = meta.read_hitmap() 
+            nside_nhits = hp.get_nside(nhits_map)            
+            binary_mask_nhits = meta.read_mask('binary')
     else:
         nside_nhits = meta.nside
 
@@ -431,7 +450,7 @@ def MakeNoiseMapsNhitsMSS2(meta, map_set, verbose=False):
     map_noise = np.random.normal(0, noise_lvl_uk[tag_to_index[meta.map_sets[map_set]['freq_tag']]], (3,hp.nside2npix(nside_nhits)))
     '''
 
-    noise_lvl_uk = meta.noise_sim_pars['noise_lvl_uKarcmin'][f"({meta.map_sets[map_set]['exp_tag']}, {meta.map_sets[map_set]['freq_tag']})"] / hp.nside2resol(nside_nhits, arcmin=True)
+    noise_lvl_uk = meta.noise_cov_pars['noise_lvl_uKarcmin'][f"({meta.map_sets[map_set]['exp_tag']}, {meta.map_sets[map_set]['freq_tag']})"] / hp.nside2resol(nside_nhits, arcmin=True)
     #TODO: Having to convert what should be a tuple key into a string for it to be undestood by the yaml parser is not ideal
     map_noise = np.random.normal(0, noise_lvl_uk, (3,hp.nside2npix(nside_nhits)))
 
@@ -552,7 +571,7 @@ def wrapper_plotting(args, meta, rank, noise_cov_mean, noise_cov_preprocessed_me
                      freq_noise_maps_pre_processed_array, binary_mask_from_nhits_nside_sims):
     '''
     Wrapper for plotting the noise covariance matrix and the frequency maps before and after pre-processing in the case where
-    simulations are loaded from disk (i.e.  meta.noise_cov_pars['sim_tag'] == 'load_sims').
+    simulations are loaded from disk (i.e.  meta.noise_cov_pars['noise_cov_method'] == 'load_sims').
     This will:
         - check the white noise level of the mean noise covariance
         - create a noise simulation from the mean noise covariance
@@ -644,13 +663,12 @@ def wrapper_plotting(args, meta, rank, noise_cov_mean, noise_cov_preprocessed_me
                     'hist_ratio_noisecov_map_SIM_FROM_COV.png', plot_gauss=True, 
                     binary_mask=binary_mask_from_nhits_nside_sims)      
 
-    Noise_ell = get_Nl_white_noise(args, fsky_binary=fsky_mask)
 
 
     # Computing frequency spectra of noise_cov_mean, noise_sim_from_cov 
     cl_noise_cov_FREQ_mean = []
     cl_noise_sim_from_cov_FREQ = []
-    for f in range(len(meta.general_pars['frequencies'])):
+    for f in range(len(meta.frequencies)):
         cl_noise_cov_FREQ_mean.append( hp.anafast(noise_cov_mean[f], lmax = 3*meta.general_pars['nside'],
                                                 pol=True))
         cl_noise_sim_from_cov_FREQ.append( hp.anafast(noise_sim_from_cov[f], lmax = 3*meta.general_pars['nside'],
@@ -658,27 +676,30 @@ def wrapper_plotting(args, meta, rank, noise_cov_mean, noise_cov_preprocessed_me
     cl_noise_cov_FREQ_mean = np.array(cl_noise_cov_FREQ_mean)
     cl_noise_sim_from_cov_FREQ = np.array(cl_noise_sim_from_cov_FREQ)
 
+    print('plotTTEEBB_diff and get_Nl_white_noise are no longer available in the pipeline due to lack of check in preprocessing (for now?)')
+    # TODO: once checks are re-implemented in pre-processing, this function should be updated?
 
-    min_ell_max = min(Noise_ell.shape[-1],cl_noise_sim_from_cov_FREQ.shape[-1])
+    # Noise_ell = get_Nl_white_noise(args, fsky_binary=fsky_mask)
+    # min_ell_max = min(Noise_ell.shape[-1],cl_noise_sim_from_cov_FREQ.shape[-1])
     # Plotting the difference between spectra of the noise simulation generated from noise_cov_mean and the theoretical power spectra from V3calc
-    plotTTEEBB_diff(args,
-                    cl_noise_sim_from_cov_FREQ[...,:min_ell_max],
-                    Noise_ell[...,:min_ell_max],
-                    os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
-                                'noise_SIMFromCov_vs_model_cl.png'), 
-                    legend_labels=[r'$C_\ell$ $\nu=$', r'Noise model $C_\ell$ $\nu=$'], 
-                    axis_labels=[r'$C_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'],
-                    use_D_ell=False)
+    # plotTTEEBB_diff(args,
+    #                 cl_noise_sim_from_cov_FREQ[...,:min_ell_max],
+    #                 Noise_ell[...,:min_ell_max],
+    #                 os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+    #                             'noise_SIMFromCov_vs_model_cl.png'), 
+    #                 legend_labels=[r'$C_\ell$ $\nu=$', r'Noise model $C_\ell$ $\nu=$'], 
+    #                 axis_labels=[r'$C_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'],
+    #                 use_D_ell=False)
 
     # Plotting the difference between spectra of the noise_cov_mean and the theoretical power spectra from V3calc
-    plotTTEEBB_diff(args,
-                    cl_noise_cov_FREQ_mean[...,:min_ell_max],# * (fsky_mask*4*np.pi)**2,
-                    Noise_ell[...,:min_ell_max],   
-                    os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
-                                'noise_cov_mean_vs_model_cl.png'), 
-                    legend_labels=[r'$D_\ell$ $\nu=$', r'cov $D_\ell$ $\nu=$'], 
-                    axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'],
-                    use_D_ell=False)
+    # plotTTEEBB_diff(args,
+    #                 cl_noise_cov_FREQ_mean[...,:min_ell_max],# * (fsky_mask*4*np.pi)**2,
+    #                 Noise_ell[...,:min_ell_max],   
+    #                 os.path.join(meta.plot_dir_from_output_dir(meta.covmat_directory_rel),
+    #                             'noise_cov_mean_vs_model_cl.png'), 
+    #                 legend_labels=[r'$D_\ell$ $\nu=$', r'cov $D_\ell$ $\nu=$'], 
+    #                 axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'],
+    #                 use_D_ell=False)
 
 
     # ==================================================================================================
@@ -795,7 +816,7 @@ def wrapper_plotting_matrices_and_maps(args, meta,rank, noise_cov_mean, noise_co
                                        binary_mask_from_nhits_nside_sims,binary_mask_from_nhits_preproc):
     '''
     Wrapper for plotting the noise covariance matrix and the frequency maps before and after pre-processing in the case where
-    simulations are loaded from disk (i.e.  meta.noise_cov_pars['sim_tag'] == 'load_sims').
+    simulations are loaded from disk (i.e.  meta.noise_cov_pars['noise_cov_method'] == 'load_sims').
     This will:
         - plot the noise covariance matrix
         - plot the noise covariance matrix after pre-processing
@@ -1009,9 +1030,9 @@ def CheckWhiteNoiselvl(args, noise_cov, fsky, mask=None):
     meta = BBmeta(args.globals)
 
     ell, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
-        sensitivity_mode = meta.general_pars['sensitivity_mode'],
+        sensitivity_mode = meta.noise_sim_pars['sensitivity_mode'],
         one_over_f_mode = 2, # fixed to None since we only use white noise here
-        SAC_yrs_LF = meta.general_pars['SAC_yrs_LF'], f_sky = fsky, 
+        SAC_yrs_LF = meta.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky, 
         ell_max = meta.general_pars['lmax'], delta_ell=1,
         beam_corrected=False, remove_kluge=False, CMBS4='')
 
@@ -1108,7 +1129,7 @@ def plot_allspectra(args, Cl_data, save_name,
                     color='C'+str(f),ls='-', alpha=1)
         ax[0][1].plot(ell, norm*Cl_data[f,1], 
                     color='C'+str(f),ls='-', alpha=1)
-        ax[0][2].plot(ell, norm*Cl_data[f,2], label=legend_labels[0]+str(meta.general_pars['frequencies'][f]) * (Cl_data.shape[0]!=1), #
+        ax[0][2].plot(ell, norm*Cl_data[f,2], label=legend_labels[0]+str(meta.frequencies[f]) * (Cl_data.shape[0]!=1), #
                     color='C'+str(f),ls='-', alpha=1)
         ax[1][0].plot(ell, norm*Cl_data[f,3],
                     color='C'+str(f),ls='-')
