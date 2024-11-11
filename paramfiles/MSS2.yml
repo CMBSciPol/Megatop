@@ -15,10 +15,13 @@ data_dirs:
   # mock_directory: "mock_data"
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/MSS2/Coadd_fsky0.19"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/MSS2/End2End"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  
+  plots_directory: "plots"
+  components_directory: "components"
+  spectra_directory: "spectra"  
 
 
 fiducial_cmb: 
@@ -110,7 +113,7 @@ masks:
   binary_mask: "binary_mask.fits"
   galactic_mask_root: "planck_galactic_mask"
   point_source_mask: "point_source_mask.fits"
-  mask_handler_binary_zero_threshold: 0.1 #1.0e-3 #default 1.0e-3
+  mask_handler_binary_zero_threshold: 0.1 #default 1.0e-3
 
 
   include_in_mask: []
@@ -124,11 +127,11 @@ masks:
 ####################################
 ## General parameters
 general_pars:
-  frequencies: [27, 39, 93, 145, 225, 280] # [93, 145, 225, 280]
+  # frequencies: [27, 39, 93, 145, 225, 280] # [93, 145, 225, 280]
   # frequencies: [30, 40, 90, 150, 230, 290] # [93, 145, 225, 280]
   nside: 128 #256
-  lmin: 10 #30
-  lmax: 95 #200
+  lmin: 30 #30
+  lmax: 256 #200
   # nlb: 10
   # custom_bins: True
   # noise_option: 'white_noise'
@@ -156,18 +159,8 @@ pre_proc_pars:
     fwhm: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
 
 noise_cov_pars:
-    include_nhits: #Sim related parameter
-    nsims_plot:  # number of simulations that will be used for ploting
-    sim_tag: 'sim_in_noisecov' # tag for the simulations, can be ['sims_in_noisecov', 'load_sims'], sims_in_noisecov: will simulate the (white) noise maps with nhits during the noise cov step,
+    noise_cov_method: 'sim_in_noisecov' # tag for the simulations, can be ['sims_in_noisecov', 'load_sims'], sims_in_noisecov: will simulate the (white) noise maps with nhits during the noise cov step,
                                #  load_sims: will load the noise maps from disk generated during the simulations step. 
-    nsims_noise_cov: 50 # number of simulations used to estimate the noise covariance matrix
-    # mask_to_apply: False #"binary_mask.fits"
-
-
-noise_sim_pars:
-    # noise_lvl_uKarcmin: [17.76741806032688, 21.207586012564423, 2.77243249663342, 2.798531403709892, 
-    #                      8.474221515572802, 21.861113346794266] # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
-    # TODO: (?) each element could also be stored in map_sets, maybe more convenient? But less clear that it is for sims
     noise_lvl_uKarcmin:  # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
       (SAT4, 30): 17.76741806032688
       (SAT4, 40): 21.207586012564423
@@ -175,22 +168,46 @@ noise_sim_pars:
       (SAT1, 150): 2.798531403709892
       (SAT3, 230): 8.474221515572802
       (SAT3, 290): 21.861113346794266 
-    include_nhits: True
+    nsims_noise_cov: 2 # number of simulations used to estimate the noise covariance matrix
+    include_nhits: True #Sim related parameter
+    nsims_plot: 1 # number of simulations that will be used for ploting
 
-# ## Simulation related
+parametric_sep_pars:
+  # minimization options
+  method: 'TNC'
+  tol: 1.0e-18
+  options:
+    disp: False
+    gtol: 1.0e-12
+    eps: 1.0e-12
+    maxiter: 100
+    ftol: 1.0e-12
+
+map2cl_pars:
+    delta_ell: 10 # can also be a list
+    purify_e: True
+    purify_b: True
+    n_iter_namaster: 3
+
+# noise_sim_pars:
+#     # noise_lvl_uKarcmin: [17.76741806032688, 21.207586012564423, 2.77243249663342, 2.798531403709892, 
+#     #                      8.474221515572802, 21.861113346794266] # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
+#     # TODO: (?) each element could also be stored in map_sets, maybe more convenient? But less clear that it is for sims
+#     noise_lvl_uKarcmin:  # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
+#       (SAT4, 30): 17.76741806032688
+#       (SAT4, 40): 21.207586012564423
+#       (SAT1, 90): 2.77243249663342
+#       (SAT1, 150): 2.798531403709892
+#       (SAT3, 230): 8.474221515572802
+#       (SAT3, 290): 21.861113346794266 
+#     include_nhits: True
+
+
+####################################
+# Metadata related to simulation   #
+####################################
+
+#Simulation of signal and foregrounds
 map_sim_pars:
-  cmb_model: 'c1' #todo: remove, redundant with simulations.yml?
-  dust_model: 'd0' #todo: remove, redundant with simulations.yml?
-  sync_model: 's0' #todo: remove, redundant with simulations.yml?
-  tag: 'SO_sims' #todo: remove, redundant with simulations.yml?
-  cmb_sim_no_pysm: True  #todo: remove, redundant with simulations.yml?
-  external_sky_sims: '/global/cfs/cdirs/sobs/users/krach/BBSims/'  #todo: remove, redundant with simulations.yml?
-  combined_directory: '/global/cfs/cdirs/sobs/users/krach/BBSims/' #todo: remove, redundant with simulations.yml?
-  external_binary_mask: '' #todo: remove, redundant with simulations.yml?
-  external_noise_cov: '' #todo: remove, redundant with simulations.yml?
-  pixel_based_noise_cov: False #todo: remove, redundant with simulations.yml?
-  isim:  0 #todo: remove, redundant with simulations.yml?
-  noise_cov_beam_correction: False #todo: remove, redundant with simulations.yml?
-  bypass_noise_cov: True #todo: remove, redundant with simulations.yml?
-  r_input: 0.0 #todo: remove, redundant with simulations.yml?
-  A_lens:  1.0 #todo: remove, redundant with simulations.yml?
+
+noise_sim_pars:

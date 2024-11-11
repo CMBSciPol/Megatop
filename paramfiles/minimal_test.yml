@@ -95,13 +95,13 @@ masks:
 general_pars:
   # frequencies: [27, 39, 93, 145, 225, 280] # [93, 145, 225, 280] #TODO: redundant
   nside: 64
-  lmin: 10 #30
-  lmax: 95 #200
+  lmin: 30 #30
+  lmax: 128 #200
   # nlb: 10
   # custom_bins: True
-  include_stat_res: False
-  no_inh: False
-  Nspec: 0
+  # include_stat_res: False
+  # no_inh: False
+  # Nspec: 0
 
 
 pre_proc_pars:
@@ -119,7 +119,7 @@ noise_cov_pars:
       (SAT1, 145): 2.798531403709892
       (SAT3, 220): 8.474221515572802
       (SAT3, 280): 21.861113346794266 
-    mock_noise_directory: '/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest/data/mock_noise' #TODO: redundant with data_dirs.mock_directory ? 
+    # mock_noise_directory: '/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest/data/mock_noise' #TODO: redundant with data_dirs.mock_directory ? 
     nsims_noise_cov: 2
     include_nhits: True
     nsims_plot: 1 # number of simulations that will be used for ploting

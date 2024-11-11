@@ -424,7 +424,7 @@ def MakeNoiseMapsNhitsMSS2(meta, map_set, verbose=False):
     # TODO: put in simulation step ?
     start = time.time()
 
-    if meta.noise_sim_pars['include_nhits']:
+    if meta.noise_cov_pars['include_nhits']:
 
         if hasattr(meta, 'nhits_directory'):
             # This is done cause different frequencies can have different nhits maps (see MSS2)
@@ -449,14 +449,14 @@ def MakeNoiseMapsNhitsMSS2(meta, map_set, verbose=False):
     noise_lvl_uk = meta.noise_sim_pars['noise_lvl_uKarcmin'] / hp.nside2resol(nside_nhits, arcmin=True)
     map_noise = np.random.normal(0, noise_lvl_uk[tag_to_index[meta.map_sets[map_set]['freq_tag']]], (3,hp.nside2npix(nside_nhits)))
     '''
-
+    
     noise_lvl_uk = meta.noise_cov_pars['noise_lvl_uKarcmin'][f"({meta.map_sets[map_set]['exp_tag']}, {meta.map_sets[map_set]['freq_tag']})"] / hp.nside2resol(nside_nhits, arcmin=True)
     #TODO: Having to convert what should be a tuple key into a string for it to be undestood by the yaml parser is not ideal
     map_noise = np.random.normal(0, noise_lvl_uk, (3,hp.nside2npix(nside_nhits)))
 
     map_noise[...,binary_mask_nhits==0] = hp.UNSEEN
 
-    if meta.noise_sim_pars['include_nhits']:
+    if meta.noise_cov_pars['include_nhits']:
         nhits_map_rescaled = nhits_map / max(nhits_map)
 
         map_noise[...,np.where(binary_mask_nhits==1)[0]] /= np.sqrt(nhits_map_rescaled[np.where(binary_mask_nhits==1)[0]])
@@ -1029,12 +1029,17 @@ def CheckWhiteNoiselvl(args, noise_cov, fsky, mask=None):
 
     meta = BBmeta(args.globals)
 
-    ell, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
-        sensitivity_mode = meta.noise_sim_pars['sensitivity_mode'],
-        one_over_f_mode = 2, # fixed to None since we only use white noise here
-        SAC_yrs_LF = meta.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky, 
-        ell_max = meta.general_pars['lmax'], delta_ell=1,
-        beam_corrected=False, remove_kluge=False, CMBS4='')
+    if meta.noise_sim_pars is not None:
+        ell, N_ell_P_SA, Map_white_noise_levels = V3.so_V3_SA_noise(
+            sensitivity_mode = meta.noise_sim_pars['sensitivity_mode'],
+            one_over_f_mode = 2, # fixed to None since we only use white noise here
+            SAC_yrs_LF = meta.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky, 
+            ell_max = meta.general_pars['lmax'], delta_ell=1,
+            beam_corrected=False, remove_kluge=False, CMBS4='')
+    elif 'noise_lvl_uKarcmin' in meta.noise_cov_pars and meta.noise_cov_pars['noise_lvl_uKarcmin'] is not None: 
+        Map_white_noise_levels = np.array(list(meta.noise_cov_pars['noise_lvl_uKarcmin'].values()))
+    else:
+        exit('ERROR: No noise level provided in noise_cov_pars or noise_sim_pars')
 
     # putting masked pixels to nan to use nanmean
     if mask is not None:

@@ -39,8 +39,8 @@ def read_maps(args):
     cmb_fg_freq_maps_beamed = []
     for i, map in enumerate(meta.maps_list):
         fname=os.path.join(meta.map_directory, meta.map_sets[map]['file_root']+'.fits')
-        cmb_fg_freq_maps_beamed.append(hp.read_map(fname, field=None))
-    return np.array(cmb_fg_freq_maps_beamed)
+        cmb_fg_freq_maps_beamed.append(hp.read_map(fname, field=None).tolist())
+    return np.array(cmb_fg_freq_maps_beamed, dtype=object)
 
 def CommonBeamConvAndNsideModification(args, freq_maps):
     '''
@@ -67,12 +67,14 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
     if args.verbose: print('-> common beam correction and NSIDE change: correcting for frequency-dependent beams, convolving with a common beam, modifying NSIDE and include effect of pixel window function')
 
     lmax_convolution = 3*meta.general_pars['nside']
-    wpix_in = hp.pixwin( hp.npix2nside(freq_maps.shape[-1]),pol=True,lmax=lmax_convolution) # Pixel window function of input maps
     wpix_out = hp.pixwin(meta.general_pars['nside'],pol=True,lmax=lmax_convolution) # Pixel window function of output maps
-    wpix_in[1][0:2] = 1. #in order not to divide by 0
     Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), lmax=lmax_convolution, pol=True)
 
     for f in range(len(meta.frequencies)):
+        # Input window function. WARNING: Must be done in the loop, as input map don't necessarily have the same nside (e.g. MSS2)
+        wpix_in = hp.pixwin( hp.npix2nside(len(freq_maps[f,0])),pol=True,lmax=lmax_convolution) # Pixel window function of input maps
+        wpix_in[1][0:2] = 1. #in order not to divide by 0
+        
         #beam corrections
         Bl_gauss_fwhm = hp.gauss_beam(np.radians(meta.pre_proc_pars['fwhm'][f]/60), lmax=lmax_convolution, pol=True)
 
