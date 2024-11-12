@@ -5,7 +5,7 @@
 # Define the directories
 ## Let's start with directories of data products
 data_dirs:
-  root: "/Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/data/test/data"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest/data"
   map_directory: "maps"
   beam_directory: "beams"
   bandpasses_directory: "bandpasses"
@@ -13,16 +13,17 @@ data_dirs:
   
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/data/test/outputs"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest/outputs"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  
   plots_directory: "plots"
   components_directory: "components"
+  spectra_directory: "spectra"
 
 
 fiducial_cmb: 
-  cls_cmb_directory: "/Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/data/fiducial_cmb_spectra"
+  cls_cmb_directory: "/global/homes/j/jost/Megatop/fiducial_cmb_spectra"
   lensed: "Cls_Planck2018_lensed_scalar.fits"
   unlensed_scalar_tensor_r1: "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
 
@@ -40,6 +41,14 @@ fiducial_cmb:
 #   exp_tag: ...                 #
 ##################################
 map_sets:
+  SAT1_f027:
+    file_root: "cmb_sat_f027"
+    freq_tag: 27         # Freq. tag (e.g. useful to coadd freqs)
+    exp_tag: "SAT4"      # Experiment tag (useful to get noise-bias free cross-split spectra)
+  SAT1_f039:
+    file_root: "cmb_sat1_f039"
+    freq_tag: 39         # Freq. tag (e.g. useful to coadd freqs)
+    exp_tag: "SAT4"      # Experiment tag (useful to get noise-bias free cross-split spectra)    
   SAT1_f093:
     file_root: "cmb_sat1_f093"
     freq_tag: 93         # Freq. tag (e.g. useful to coadd freqs)
@@ -103,11 +112,17 @@ pre_proc_pars:
 noise_cov_pars:
     noise_cov: 'white_noise'
     white_noise_levels: [ 4.65454857  5.23636714 10.48726965 25.75820616]
-    mock_noise_directory: '/Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/data/test/data/mock_noise/'
+    mock_noise_directory: '/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest/data/mock_noise' #TODO: redundant with data_dirs.mock_directory ? 
     nsims: 100
     include_nhits: True
     nsims_plot: 1 # number of simulations that will be used for ploting
     # mask_to_apply: False #"binary_mask.fits"
+
+map2cl_pars:
+    delta_ell: 10 # can also be a list
+    purify_e: True
+    purify_b: True
+    n_iter_namaster: 3
 
 ####################################
 # Metadata related to the simulation #
@@ -124,9 +139,10 @@ map_sim_pars:
 #sSimulation of the noise
 noise_sim_pars:
     experiment: 'SO'
-    noise_option: 'noise_spectra'
+    noise_option: 'white_noise'
     sensitivity_mode: 2
     SAC_yrs_LF: 1
     knee_mode: 1 
     include_nhits: True
     save_noise_sim: True
+
