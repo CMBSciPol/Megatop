@@ -8,6 +8,7 @@ import camb
 from inspect import currentframe, getframeinfo, stack
 import tracemalloc
 from mpi4py import MPI
+import IPython
 
 
 def get_theory_cls(cosmo_params, lmax, lmin=0):
@@ -694,11 +695,17 @@ def get_Cl_CMB_model_from_meta(meta):
     path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb('lensed')
     path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
 
-    Cl_BB_prim = meta.map_sim_pars['r_input']*hp.read_cl(path_Cl_BB_prim_r1)[2]
+    if meta.map_sim_pars is not None:
+        r_input = meta.map_sim_pars['r_input']
+        A_lens = meta.map_sim_pars['A_lens']
+    else:
+        r_input = 0.0
+        A_lens = 1.0
+    Cl_BB_prim = r_input * hp.read_cl(path_Cl_BB_prim_r1)[2]
     Cl_lens = hp.read_cl(path_Cl_BB_lens)
 
     l_max_lens = len(Cl_lens[0])
-    Cl_BB_lens = meta.map_sim_pars['A_lens']*Cl_lens[2]
+    Cl_BB_lens = A_lens * Cl_lens[2]
     Cl_TT = Cl_lens[0]
     Cl_EE = Cl_lens[1]
     Cl_TE = Cl_lens[3]

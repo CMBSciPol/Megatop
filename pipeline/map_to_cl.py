@@ -7,6 +7,7 @@ import numpy as np
 import os
 import healpy as hp
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 from matplotlib import cm
 from tqdm import tqdm
 import time
@@ -72,45 +73,107 @@ def plot_all_Cls(all_Cls, bin_centre, file_path, cmb_theory_cls=None):
     plt.savefig(file_path)
     plt.close()
 
+# def plot_all_Cls_and_diffs(all_Cls, reference_cl, bin_centre, file_path, reference_name='Input CMB'):
+
+#     # Define the labels
+#     labels = ['EE', 'EB', 'BE', 'BB']
+
+#     # Create the figure
+#     fig, axs = plt.subplots(8, 1, figsize=(10, 20), gridspec_kw={'height_ratios': [2, 1, 2, 1, 2, 1, 2, 1]}, sharex=True,
+#                             )
+#     axs = axs.flatten()
+    
+#     # Loop over the different power spectra
+#     for i in range(axs.size):
+#         # Loop over the different components
+#         for j, key in enumerate(all_Cls.keys()):
+#             if not i % 2: # Every other plot shows the spectra, the other the difference wrt the reference (else case)
+#                 axs[i].plot(bin_centre, all_Cls[key][int(i/2)], label=key, color='C' + str(j))
+#                 axs[i].plot(bin_centre, -all_Cls[key][int(i/2)], linestyle='--', color='C' + str(j))
+#                 axs[i].plot(bin_centre, reference_cl[int(i/2)], label=reference_name, color='black')
+                
+#                 axs[i].set_title(labels[int(i/2)])
+#                 axs[i].set_xlabel(r'$\ell$')
+#                 axs[i].set_ylabel(r'$C_{\ell}$')
+#                 if i == 0:
+#                     axs[i].legend()
+
+#                 axs[i].set_yscale('log')
+#                 axs[i].set_xscale('log')
+
+#             else:
+#                 if key=='CMBxCMB':
+#                     axs[i].plot(bin_centre, all_Cls[key][int(i/2)] - reference_cl[int(i/2)], label=key, color='C' + str(j))
+#                     xlims = axs[i].get_xlim()
+#                     axs[i].hlines(0, xlims[0], xlims[1], color='black', linestyle='--')
+#                     axs[i].set_xlim(xlims)
+#                     axs[i].set_xlabel(r'$\ell$')
+#                     axs[i].set_ylabel(r'$\Delta C_{\ell}$')
+#                     axs[i].set_xscale('log')
+
+#     plt.savefig(file_path)
+#     plt.close()
+
 def plot_all_Cls_and_diffs(all_Cls, reference_cl, bin_centre, file_path, reference_name='Input CMB'):
 
     # Define the labels
     labels = ['EE', 'EB', 'BE', 'BB']
 
-    # Create the figure
-    fig, axs = plt.subplots(8, 1, figsize=(10, 20), gridspec_kw={'height_ratios': [2, 1, 2, 1, 2, 1, 2, 1]})
-    axs = axs.flatten()
- 
-    # Loop over the different power spectra
-    for i in range(axs.size):
-        # Loop over the different components
-        for j, key in enumerate(all_Cls.keys()):
-            if not i % 2:
-                axs[i].plot(bin_centre, all_Cls[key][int(i/2)], label=key, color='C' + str(j))
-                axs[i].plot(bin_centre, -all_Cls[key][int(i/2)], linestyle='--', color='C' + str(j))
-                axs[i].plot(bin_centre, reference_cl[int(i/2)], label=reference_name, color='black')
-                
-                axs[i].set_title(labels[int(i/2)])
-                axs[i].set_xlabel(r'$\ell$')
-                axs[i].set_ylabel(r'$C_{\ell}$')
-                if i == 0:
-                    axs[i].legend()
+    # Set up figure and gridspec
+    fig = plt.figure(figsize=(6, 16))
+    # 8 rows total: 2 for each plot pair + 2 for spacing
+    gs = gridspec.GridSpec(11, 1, figure=fig, height_ratios=[1, 1, 0.6, 1, 1, 0.6, 1, 1, 0.6, 1, 1])
 
-                axs[i].set_yscale('log')
-                axs[i].set_xscale('log')
+    # Plot each pair with shared x-axis and no space between
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1], sharex=ax1)
+    ax3 = fig.add_subplot(gs[3])
+    ax4 = fig.add_subplot(gs[4], sharex=ax3)
+    ax5 = fig.add_subplot(gs[6])
+    ax6 = fig.add_subplot(gs[7], sharex=ax5)
+    ax7 = fig.add_subplot(gs[9])
+    ax8 = fig.add_subplot(gs[10], sharex=ax7)
 
-            else:
-                if key=='CMBxCMB':
-                    axs[i].plot(bin_centre, all_Cls[key][int(i/2)] - reference_cl[int(i/2)], label=key, color='C' + str(j))
-                    xlims = axs[i].get_xlim()
-                    axs[i].hlines(0, xlims[0], xlims[1], color='black', linestyle='--')
-                    axs[i].set_xlim(xlims)
-                    axs[i].set_xlabel(r'$\ell$')
-                    axs[i].set_ylabel(r'$\Delta C_{\ell}$')
-                    axs[i].set_xscale('log')
+    # Hide x-axis labels for the top plots of each pair
+    plt.setp(ax1.get_xticklabels(), visible=False)
+    plt.setp(ax3.get_xticklabels(), visible=False)
+    plt.setp(ax5.get_xticklabels(), visible=False)
+
+    # Reduce spacing between plots
+    gs.update(hspace=0)  # No space between subplots within pairs
+
+    # Add spacing between the pairs
+    fig.subplots_adjust(hspace=0.5)  # Space only between pairs
+
+    for i, (top_ax, bot_ax) in enumerate(zip( [ax1, ax3, ax5, ax7], [ax2, ax4, ax6, ax8])):
+
+        for j, key in enumerate(all_Cls.keys()):   
+            
+            top_ax.plot(bin_centre, all_Cls[key][i], label=key, color='C' + str(j))
+            top_ax.plot(bin_centre, -all_Cls[key][i], linestyle='--', color='C' + str(j))
+            top_ax.plot(bin_centre, reference_cl[i], label=reference_name, color='black')
+            
+            top_ax.set_title(labels[i])
+            top_ax.set_xlabel(r'$\ell$')
+            top_ax.set_ylabel(r'$C_{\ell}$')
+            if i == 0:
+                top_ax.legend()
+
+            top_ax.set_yscale('log')
+            top_ax.set_xscale('log')
+
+            if key=='CMBxCMB':
+                bot_ax.plot(bin_centre, all_Cls[key][i] - reference_cl[i], label=key, color='C' + str(j))
+                xlims = bot_ax.get_xlim()
+                bot_ax.hlines(0, xlims[0], xlims[1], color='black', linestyle='--')
+                bot_ax.set_xlim(xlims)
+                bot_ax.set_xlabel(r'$\ell$')
+                bot_ax.set_ylabel(r'$\Delta C_{\ell}$')
+                bot_ax.set_xscale('log')
 
     plt.savefig(file_path)
-    plt.close()
+    plt.close()    
+
 
 
 
@@ -149,11 +212,11 @@ def spectra_estimation(args):
     Cl_lens = hp.read_cl(path_Cl_lens)
 
     wpix_out = hp.pixwin(meta.general_pars['nside'],pol=True,lmax=3*meta.nside) # Pixel window function of output maps
-    Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), lmax=3*meta.nside, pol=True)
+    Bl_gauss_common = hp.gauss_beam(np.radians(meta.pre_proc_pars['common_beam_correction']/60), 
+                                    lmax=3*meta.nside, pol=True)
     wpix_in = hp.pixwin( meta.general_pars["nside"],pol=True,lmax=3*meta.nside) # Pixel window function of input maps
     wpix_in[1][0:2] = 1. #in order not to divide by 0
 
-    # IPython.embed()
     effective_beam = Bl_gauss_common[:,1] * wpix_out[1] #/ wpix_in[1]
     map_T_init_wsp, map_Q_init_wsp, map_U_init_wsp = hp.synfast(Cl_lens, meta.nside, new=True)
     fields_init_wsp = nmt.NmtField(mask_analysis, [map_Q_init_wsp, map_U_init_wsp], 
@@ -181,6 +244,12 @@ def spectra_estimation(args):
 
 
     timer_spectra.start('noise_spectra_estimation')
+    # The noise map outputed by comp-sep is not cleanly masked.
+    # To avoid numerical issues, we apply the mask to the noise maps.
+    binary_mask = meta.read_mask('binary').astype(bool)
+    invAtNA[..., np.where(binary_mask==0)[0]] = 0
+
+    
     noise_dict = {'NoiseCMB': invAtNA[0,0], 'NoiseDust': invAtNA[1,1], 'NoiseSynch': invAtNA[2,2]}
     noise_dict_offdiag = {'NoiseCMBDust': invAtNA[0,1], 'NoiseDustSynch': invAtNA[1,2], 'NoiseCMBSynch': invAtNA[0,2]} 
     # Here we assume that InvAtNA is symmetric, which seems true up to numerical precision
@@ -208,16 +277,21 @@ def spectra_estimation(args):
 
         plot_all_Cls(all_Clslminlmax, bin_centre[bin_index_lminlmax], plot_dir+'/all_Cls.png', 
                     cmb_theory_cls=reshape_input_cmb_spectra[:,bin_index_lminlmax])
-        plot_all_Cls_and_diffs({'CMBxCMB':all_Clslminlmax['CMBxCMB']}, reshape_input_cmb_spectra[:,bin_index_lminlmax], bin_centre[bin_index_lminlmax], plot_dir+'/Delta_CMB.png', reference_name='Input CMB')
+        plot_all_Cls_and_diffs({'CMBxCMB':all_Clslminlmax['CMBxCMB']}, reshape_input_cmb_spectra[:,bin_index_lminlmax], 
+                               bin_centre[bin_index_lminlmax], plot_dir+'/Delta_CMB.png', reference_name='Input CMB')
 
         unbiased_Cls = {}
         for key_signal, key_noise in zip(all_Cls.keys(), Cls_noise.keys()):
             unbiased_Cls[key_signal] = all_Clslminlmax[key_signal] - Cls_noiselminlmax[key_noise]
+
         plot_all_Cls(unbiased_Cls, bin_centre[bin_index_lminlmax],plot_dir+'/unbiased_Cls.png',
                     cmb_theory_cls=reshape_input_cmb_spectra[:,bin_index_lminlmax])
-        plot_all_Cls_and_diffs({'CMBxCMB':unbiased_Cls['CMBxCMB']}, reshape_input_cmb_spectra[:,bin_index_lminlmax], bin_centre[bin_index_lminlmax], plot_dir+'/Delta_CMB_debiased.png', reference_name='Input CMB')
+        plot_all_Cls_and_diffs({'CMBxCMB':unbiased_Cls['CMBxCMB']}, reshape_input_cmb_spectra[:,bin_index_lminlmax], 
+                               bin_centre[bin_index_lminlmax], plot_dir+'/Delta_CMB_debiased.png', 
+                               reference_name='Input CMB')
         
-        plot_all_Cls(Cls_noiselminlmax, bin_centre[bin_index_lminlmax], plot_dir+'/Noise_Cls.png', cmb_theory_cls=reshape_input_cmb_spectra[:,bin_index_lminlmax])
+        plot_all_Cls(Cls_noiselminlmax, bin_centre[bin_index_lminlmax], plot_dir+'/Noise_Cls.png', 
+                     cmb_theory_cls=reshape_input_cmb_spectra[:,bin_index_lminlmax])
         plot_all_Cls(Cls_noise_offdiaglminlmax, bin_centre[bin_index_lminlmax], plot_dir+'/Noise_Cls_offdiag.png', 
                     cmb_theory_cls=reshape_input_cmb_spectra[:,bin_index_lminlmax])
         timer_spectra.stop('plotting', "Plotting", args.verbose)

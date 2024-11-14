@@ -15,7 +15,7 @@ data_dirs:
   # mock_directory: "mock_data"
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/MSS2/End2End"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/MSS2/End2End_useNoiseMap"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  

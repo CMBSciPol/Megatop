@@ -44,6 +44,7 @@ def weighted_comp_sep(args):
                                                   options=options, tol=tol, method=method)
     
     if args.verbose: print('success: ',res.success)
+    if args.verbose: print('results: ',res.x)
     timer_compsep.stop('compsep', "Component separation", args.verbose)
     
     A = MixingMatrix(*components)
@@ -69,8 +70,38 @@ def weighted_comp_sep(args):
     # space could be saved by adding an if statement in the above dict construction (TODO?)
     np.save(os.path.join(meta.components_directory, 'components_maps.npy'), res.s)
     np.save(os.path.join(meta.components_directory, 'invAtNA.npy'), res.invAtNA)
+
+    if args.plots:
+        timer_compsep.start('plotting')
+        components_results_plotting(res, meta)
+        timer_compsep.stop('plotting', "Plotting", args.verbose)
+
     timer_compsep.stop('full_step', "Full component separation step", args.verbose)
     return res
+    
+def components_results_plotting(res, meta):
+    binary_mask = meta.read_mask('binary').astype(bool)
+    res.s[..., np.where(binary_mask==0)[0]] = hp.UNSEEN	
+
+    plot_dir = meta.plot_dir_from_output_dir(meta.components_directory_rel)
+    
+    fig = plt.figure(figsize=(12, 12))
+    for i, component_label in enumerate(['CMB', 'Dust', 'Synchrotron']):
+        for j, stokes_label in enumerate(['Q', 'U']):
+            hp.mollview(res.s[i,j], title= component_label + ' ' + stokes_label, 
+                        sub=(3, 2, (2*i+j)+1), fig=fig, cbar=True)
+    plt.savefig(plot_dir+'/components_maps.png')
+    plt.close()
+
+    res.invAtNA[..., np.where(binary_mask==0)[0]] = hp.UNSEEN	
+
+    fig = plt.figure(figsize=(12, 12))
+    for i, component_label in enumerate(['Noise CMB', 'Noise Dust', 'Noise Synchrotron']):
+        for j, stokes_label in enumerate(['Q', 'U']):
+            hp.mollview(res.invAtNA[i,i,j], title= component_label + '--' + stokes_label + ' -- norm = log' , 
+                        sub=(3, 2, (2*i+j)+1), fig=fig, cbar=True, norm='log')
+    plt.savefig(plot_dir+'/noise_per_components_maps.png')
+    plt.close()
     
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ python pre_processing.py --globals ${paramfile} --plots
 echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"
 echo "------------------------------------------------------------"
-python get_noise_cov_pixel.py --globals ${paramfile} --verbose --plots --sims True
+python get_noise_cov_pixel.py --globals ${paramfile} --verbose --plots
 
 
 echo "------------------------------------------------------------"
