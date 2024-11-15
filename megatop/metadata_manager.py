@@ -282,9 +282,9 @@ class BBmeta(object):
         
         
         #noise checks
-        if self.noise_sim_pars['noise_option'] not in ['white_noise', 'no_noise', 'noise_spectra']:
-            raise KeyError("Only no_noise, white_noise and noise_spectra noise options are supported for now ...")
-        if self.noise_sim_pars['experiment'] not in ['SO']:
+        if self.noise_sim_pars['noise_option'] not in ['white_noise', 'no_noise', 'noise_spectra', 'MSS2']:
+            raise KeyError("Only no_noise, white_noise, noise_spectra and MSS2 noise options are supported for now ...")
+        if self.noise_sim_pars['experiment'] not in ['SO', 'MSS2']:
             raise KeyError("Only SO simulations supported for now ")
         if self.noise_sim_pars['experiment'] == 'SO':
             keys = ['sensitivity_mode', 'SAC_yrs_LF']

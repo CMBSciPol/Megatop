@@ -7,8 +7,9 @@ from fgbuster.observation_helpers import get_instrument, get_sky, get_observatio
 import os
 import matplotlib.pyplot as plt
 import megatop.V3calc as V3
-from megatop.utils import get_Cl_CMB_model_from_meta
-
+from megatop.utils import get_Cl_CMB_model_from_meta, MakeNoiseMapsNhitsMSS2
+import IPython
+import pysm3
 
 SO_FREQS = [27, 39, 93, 145, 220, 280] #TODO: Dodgy ...
 
@@ -63,9 +64,11 @@ def make_sims(meta, verbose=True, plots=False, noise_only=False):
         nlev_map /= hp.nside2resol(nside, arcmin=True)
         noise_maps = np.random.normal( np.zeros((len(meta.frequencies), 3, hp.nside2npix(nside))), 
                                       nlev_map, (len(meta.frequencies), 3, hp.nside2npix(nside)))
+    
     elif meta.noise_sim_pars['noise_option']=='no_noise':
         if verbose: print('No noise case')
         noise_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(nside)))
+    
     elif meta.noise_sim_pars['noise_option']=='noise_spectra':
         if verbose: print('Full noise spectra case')
         print("NOT TESTED YET !!!!")#TODO TEST THIS !!!!
@@ -74,7 +77,16 @@ def make_sims(meta, verbose=True, plots=False, noise_only=False):
             noise_maps[i_f] = hp.synfast(3*(n_ell[i_f],)+3*(None,), #using same noise spectra for T, E and B !
                                          new=True, 
                                          pixwin=False, 
-                                         nside = nside) 
+                                         nside = nside)
+             
+    elif  meta.noise_sim_pars['noise_option']=='MSS2':
+        noise_maps = []
+        print('WARNING: When using MSS2 as noise_option, the nhits option and noise lvl will come from the noise_cov_pars. \n\
+              noise_sims_pars.include_nhits should be put to FALSE. Otherwise the nhits will be applied twce and the noise std might be wrong.')
+        for map_name in meta.maps_list:
+            noise_maps.append( MakeNoiseMapsNhitsMSS2(meta, map_name, verbose = args.verbose).tolist())
+        noise_maps = np.array(noise_maps, dtype=object)
+        
     else:
         raise ValueError('ERROR: Other noise cases not handled yet...')
  
@@ -150,12 +162,27 @@ def make_sims(meta, verbose=True, plots=False, noise_only=False):
 
     # Creating Pysm Fg maps 
     meta.timer.start('fg')
-    tag=''
-    for s in meta.sky_model:
-        tag+=s
-    sky = get_sky(nside, tag=tag)
+    # tag=''
+    # for s in meta.sky_model:
+    #     tag+=s
+    # sky = get_sky(nside, tag=tag)
+    
+    # This does the exact same job as get_sky, but is more flexible, directly compatilbe with pysm standards
+    # Also the fgbuster function get_sky can't handle tag with more that one digit, e.g. d10 will return an error.
+    sky = pysm3.Sky(nside=nside, preset_strings=meta.sky_model) 
 
     fg_freq_maps = get_observation(instrument, sky, noise=False) 
+
+    meta.timer.start('rot_GE')
+    rot_gal2ec = hp.Rotator(coord="GE")
+    fg_freq_maps = np.array([rot_gal2ec.rotate_map_alms(fg_freq_maps_freq) for fg_freq_maps_freq in fg_freq_maps]) 
+    meta.timer.stop('rot_GE', "Rotating fg maps from Galactic to Ecliptic (GE)", verbose)
+
+    # Galactic to equatorial:
+    # meta.timer.start('rot_GC')
+    # rot_gal2eq = hp.Rotator(coord="GC")
+    # fg_freq_maps_GC = np.array([rot_gal2eq.rotate_map_alms(fg_freq_maps_freq) for fg_freq_maps_freq in fg_freq_maps]) 
+    # meta.timer.stop('rot_GC', "Rotating fg maps from Galactic to Equatorial (GC)", verbose)
     cmb_fg_freq_maps = fg_freq_maps + cmb_map
 
     if verbose: print('Beaming sky maps...', end=" ")
@@ -226,6 +253,14 @@ def get_noise_beams(meta, fsky_binary, verbose=True):
         beams = beams[idx_freqs]
         map_white_noise_levels =  map_white_noise_levels[idx_freqs]
         if verbose: print('Map_white_noise_levels = ', map_white_noise_levels)
+
+    if meta.noise_sim_pars['experiment'] == 'MSS2':
+        print('WARNING: When using MSS2 as experiment, ouptut map_noise_lvl from get_noise_beams() should be ignored.')
+        print('The white noise lvl are actually imported and used in MakeNoiseMapsNhitsMSS2()')
+        beams = meta.pre_proc_pars['fwhm']
+        map_white_noise_levels = np.zeros(len(meta.frequencies))
+        n_ell = 0
+
     else: 
         print("ONLY SO IMPLEMETED FOR NOW") #TODO implement custom experiment?
     return n_ell, map_white_noise_levels, beams

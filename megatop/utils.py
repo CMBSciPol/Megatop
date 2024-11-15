@@ -9,6 +9,7 @@ from inspect import currentframe, getframeinfo, stack
 import tracemalloc
 from mpi4py import MPI
 import IPython
+import time
 
 
 def get_theory_cls(cosmo_params, lmax, lmin=0):
@@ -851,3 +852,69 @@ def apply_lminlmax_to_dict(dict, bin_index_lminlmax):
     for key in dict.keys():
         new_dict[key] = dict[key][...,bin_index_lminlmax]
     return new_dict        
+
+
+def MakeNoiseMapsNhitsMSS2(meta, map_set, verbose=False):
+    """
+    Generates noise maps and nhits maps for a given map set using white noise level from the yml file 
+    and applying nhits for inhomogeneous noise if the meta.noise_sim_pars['include_nhits'] is true.
+
+    Parameters
+    ----------
+    meta : object
+        The metadata manager object from BBmeta.
+    map_set : str
+        The map set name, helps retrieve the map's information through the metadata manager.
+    verbose : bool, optional
+        Whether to print verbose output. The default is False.
+
+    Returns
+    -------
+    map_noise: np.ndarray
+        The noise map for the fiven map set (i.e. the frequency channel) with shape (3, npix).
+
+    """
+    # TODO: put in simulation step ?
+    start = time.time()
+
+    if meta.noise_cov_pars['include_nhits']:
+
+        if hasattr(meta, 'nhits_directory'):
+            # This is done cause different frequencies can have different nhits maps (see MSS2)
+            # TODO: I don't think such an option is implemented in onfly_sims, maybe it can be useful? 
+            # Although it adds complexity
+            path_nhits = meta.get_nhits_map_filename(map_set)
+            nhits_map = hp.read_map(path_nhits)
+        
+            nside_nhits = hp.get_nside(nhits_map)
+            binary_mask_nhits = get_binary_mask_from_nhits(nhits_map, nside_nhits, 
+                                                                 zero_threshold=meta.masks['mask_handler_binary_zero_threshold'])
+        else:
+            # If there isn't any nhits_directory specified, we use the standard nhits map used for the rest of the analysis
+            nhits_map = meta.read_hitmap() 
+            nside_nhits = hp.get_nside(nhits_map)            
+            binary_mask_nhits = meta.read_mask('binary')
+    else:
+        nside_nhits = meta.nside
+
+    '''
+    tag_to_index = {30:0, 40:1, 90:2, 150:3, 230:4, 290:5} # TODO: this is a bit dodgy and hardcoded, better implementation needed (in metadata manager or yml?)
+    noise_lvl_uk = meta.noise_sim_pars['noise_lvl_uKarcmin'] / hp.nside2resol(nside_nhits, arcmin=True)
+    map_noise = np.random.normal(0, noise_lvl_uk[tag_to_index[meta.map_sets[map_set]['freq_tag']]], (3,hp.nside2npix(nside_nhits)))
+    '''
+    
+    noise_lvl_uk = meta.noise_cov_pars['noise_lvl_uKarcmin'][f"({meta.map_sets[map_set]['exp_tag']}, {meta.map_sets[map_set]['freq_tag']})"] / hp.nside2resol(nside_nhits, arcmin=True)
+    #TODO: Having to convert what should be a tuple key into a string for it to be undestood by the yaml parser is not ideal
+    map_noise = np.random.normal(0, noise_lvl_uk, (3,hp.nside2npix(nside_nhits)))
+
+    map_noise[...,binary_mask_nhits==0] = hp.UNSEEN
+
+    if meta.noise_cov_pars['include_nhits']:
+        nhits_map_rescaled = nhits_map / max(nhits_map)
+
+        map_noise[...,np.where(binary_mask_nhits==1)[0]] /= np.sqrt(nhits_map_rescaled[np.where(binary_mask_nhits==1)[0]])
+        map_noise[...,np.where(binary_mask_nhits==0)[0]] = hp.UNSEEN
+        map_noise[...,np.where(binary_mask_nhits==1)[0]] *= noise_lvl_uk / np.std(map_noise[...,np.where(binary_mask_nhits==1)[0]])
+    if verbose: print('time = ', time.time()-start)
+    
+    return map_noise
