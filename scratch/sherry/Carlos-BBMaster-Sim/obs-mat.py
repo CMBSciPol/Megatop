@@ -21,6 +21,8 @@ path = os.path.join(sim_dir, obsmat_dir, f_name)
 import scipy.sparse
 import matspy
 P = scipy.sparse.load_npz(path)
+main_diags = P.diagonal()
+print(main_diags)
 #plt.spy(P)
-fig,ax = matspy.spy_to_mpl(P)
-fig.savefig('CarlosObsMat.png', dpi=300,bbox_inches='tight')
+#fig,ax = matspy.spy_to_mpl(P)
+#fig.savefig('CarlosObsMat.png', dpi=300,bbox_inches='tight')
