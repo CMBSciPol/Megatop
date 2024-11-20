@@ -1,37 +1,41 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
-freq = '090'
+#On NERSC
+sim_dir = '/global/cfs/projectdirs/sobs/awg_bb/'
+obsmat_dir = 'bbmaster_paper/obs_mat_nside128_fpthin8'
+f_name = 'obsmat_coadd-full.npz'
+path = os.path.join(sim_dir, obsmat_dir, f_name)
 
-file_dir = '/lustre/work/SO-MEGATOP/MSS2'
-inds = {'090':'SAT1',
-	'150':'SAT1',
-	'230':'SAT3',
-	'290':'SAT3',
-	'030':'SAT4',
-	'040':'SAT4',
-}
-freqs = inds.keys()
+#MSS2 path
+mss2_dir = '/global/cfs/cdirs/sobs/sims/mss-0002/RC1.r01'
+mss2_name = 'sobs_RC1.r01_SAT1_mission_f090_4way_coadd_sky_obsmat_healpix.npz'
+mss2_path = os.path.join(mss2_dir, mss2_name)
 
-path = file_dir + '/sobs_RC1.r01_{}_mission_f{}_4way_coadd_sky_obsmat_healpix.npz'.format(inds[freq],freq)
-obs_mat = np.load(path)
+#Load as Regular Mat
+#obs_mat = np.load(path)
+#data,indices,ptrs = obs_mat['data'],obs_mat['indices'],obs_mat['indptr']
 
-data,indices,ptrs = obs_mat['data'],obs_mat['indices'],obs_mat['indptr']
+#plt.hist(data,bins=60)
+#plt.yscale("log")
+#plt.spy(data)
 
-nside = 128
-npix = 12 * nside ** 2
-test_size = 30000
-output = np.array([])
+##Load as SparseMat
+import scipy.sparse
+import matspy
 
-for i in range(test_size):
-    ind_s, ind_e = ptrs[i:i+2]
-    new_row = np.zeros(npix)
-    if ind_e > ind_s:
-        for ind in indices[ind_s:ind_e]:
-            if ind <= npix:
-                new_row[ind] = data[ind]
-        output = np.vstack((output,new_row))
+P = scipy.sparse.load_npz(mss2_path)
 
-plt.plot(output)
-plt.show()
-#plt.savefig('test.png')
+size = 196608
+# Make into TT only:
+#P_TT = P[:size, :size]
+#scipy.sparse.save_npz('MSS2_obs_TT.npz',P_TT)
+
+#Save the diagonals:
+
+
+#fig,ax = matspy.spy_to_mpl(P)
+#fig.savefig('MSS2ObsMat.png', dpi=300,bbox_inches='tight')
+
+
