@@ -1,5 +1,6 @@
 import numpy as np
 import os
+
 # import soopercool.SO_Noise_Calculator_Public_v3_1_2 as noise_calc
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -13,18 +14,17 @@ import time
 
 
 def get_theory_cls(cosmo_params, lmax, lmin=0):
-    """
-    """
+    """ """
     params = camb.set_params(**cosmo_params)
     results = camb.get_results(params)
-    powers = results.get_cmb_power_spectra(params, CMB_unit='muK', raw_cl=True)
-    lth = np.arange(lmin, lmax+1)
+    powers = results.get_cmb_power_spectra(params, CMB_unit="muK", raw_cl=True)
+    lth = np.arange(lmin, lmax + 1)
 
     cl_th = {
-        "TT": powers["total"][:, 0][lmin:lmax+1],
-        "EE": powers["total"][:, 1][lmin:lmax+1],
-        "TE": powers["total"][:, 3][lmin:lmax+1],
-        "BB": powers["total"][:, 2][lmin:lmax+1]
+        "TT": powers["total"][:, 0][lmin : lmax + 1],
+        "EE": powers["total"][:, 1][lmin : lmax + 1],
+        "TE": powers["total"][:, 3][lmin : lmax + 1],
+        "BB": powers["total"][:, 2][lmin : lmax + 1],
     }
     for spec in ["EB", "TB"]:
         cl_th[spec] = np.zeros_like(lth)
@@ -33,8 +33,7 @@ def get_theory_cls(cosmo_params, lmax, lmin=0):
 
 
 def generate_noise_map_white(nside, noise_rms_muKarcmin, ncomp=3):
-    """
-    """
+    """ """
     size = 12 * nside**2
 
     pixel_area_deg = hp.nside2pixarea(nside, degrees=True)
@@ -53,8 +52,7 @@ def generate_noise_map_white(nside, noise_rms_muKarcmin, ncomp=3):
     return out_map
 
 
-def get_noise_cls(noise_kwargs, lmax, lmin=0, fsky=0.1,
-                  is_beam_deconvolved=False):
+def get_noise_cls(noise_kwargs, lmax, lmin=0, fsky=0.1, is_beam_deconvolved=False):
     """
     Load polarization noise from SO SAT noise model.
     Assume polarization noise is half of that.
@@ -67,39 +65,32 @@ def get_noise_cls(noise_kwargs, lmax, lmin=0, fsky=0.1,
 
     noise_model = noise_calc.SOSatV3point1(
         sensitivity_mode=sensitivity_mode,
-        N_tubes=[1., 1., 1.],
+        N_tubes=[1.0, 1.0, 1.0],
         one_over_f_mode=oof_mode,
-        survey_years=noise_kwargs["survey_years"]
+        survey_years=noise_kwargs["survey_years"],
     )
     lth, _, nlth_P = noise_model.get_noise_curves(
-        fsky,
-        lmax + 1,
-        delta_ell=1,
-        deconv_beam=is_beam_deconvolved
+        fsky, lmax + 1, delta_ell=1, deconv_beam=is_beam_deconvolved
     )
     lth = np.concatenate(([0, 1], lth))[lmin:]
-    nlth_P = np.array(
-        [np.concatenate(([0, 0], nl))[lmin:] for nl in nlth_P]
-    )
+    nlth_P = np.array([np.concatenate(([0, 0], nl))[lmin:] for nl in nlth_P])
 
     # Attention: at the moment, the noise model's frequencies must match
     # soopercool's frequency tags.
     freq_tags = [int(f) for f in noise_model.get_bands()]
     nl_all_frequencies = {}
     for i_f, freq_tag in enumerate(freq_tags):
-        nl_th_dict = {pq: nlth_P[i_f]
-                      for pq in ["EE", "EB", "BE", "BB"]}
-        nl_th_dict["TT"] = 0.5*nlth_P[i_f]
-        nl_th_dict["TE"] = 0.*nlth_P[i_f]
-        nl_th_dict["TB"] = 0.*nlth_P[i_f]
+        nl_th_dict = {pq: nlth_P[i_f] for pq in ["EE", "EB", "BE", "BB"]}
+        nl_th_dict["TT"] = 0.5 * nlth_P[i_f]
+        nl_th_dict["TE"] = 0.0 * nlth_P[i_f]
+        nl_th_dict["TB"] = 0.0 * nlth_P[i_f]
         nl_all_frequencies[freq_tag] = nl_th_dict
 
     return lth, nl_all_frequencies
 
 
 def generate_noise_map(nl_T, nl_P, hitmap, n_splits, is_anisotropic=True):
-    """
-    """
+    """ """
     # healpix ordering ["TT", "EE", "BB", "TE"]
     noise_mat = np.array([nl_T, nl_P, nl_P, np.zeros_like(nl_P)])
     # Normalize the noise
@@ -109,7 +100,7 @@ def generate_noise_map(nl_T, nl_P, hitmap, n_splits, is_anisotropic=True):
 
     if is_anisotropic:
         # Weight with hitmap
-        noise_map[:, hitmap != 0] /= np.sqrt(hitmap[hitmap != 0] / np.max(hitmap)) # noqa
+        noise_map[:, hitmap != 0] /= np.sqrt(hitmap[hitmap != 0] / np.max(hitmap))  # noqa
 
     return noise_map
 
@@ -122,8 +113,7 @@ def random_src_mask(mask, nsrcs, mask_radius_arcmin):
     src_ids = np.random.choice(np.where(mask == 1)[0], nsrcs)
     for src_id in src_ids:
         vec = hp.pix2vec(hp.get_nside(mask), src_id)
-        disc = hp.query_disc(hp.get_nside(mask), vec,
-                             np.deg2rad(mask_radius_arcmin / 60))
+        disc = hp.query_disc(hp.get_nside(mask), vec, np.deg2rad(mask_radius_arcmin / 60))
         ps_mask[disc] = 0
     return ps_mask
 
@@ -137,13 +127,14 @@ def get_beam_windows(meta, plot=False):
     noise_model = noise_calc.SOSatV3point1(
         survey_years=meta.noise["survey_years"],
         sensitivity_mode=meta.noise["sensitivity_mode"],
-        one_over_f_mode=oof_dict[meta.noise["one_over_f_mode"]]
+        one_over_f_mode=oof_dict[meta.noise["one_over_f_mode"]],
     )
 
-    lth = np.arange(3*meta.nside)
-    beam_arcmin = {int(freq_band): beam_arcmin
-                   for freq_band, beam_arcmin in zip(noise_model.get_bands(),
-                                                     noise_model.get_beams())}
+    lth = np.arange(3 * meta.nside)
+    beam_arcmin = {
+        int(freq_band): beam_arcmin
+        for freq_band, beam_arcmin in zip(noise_model.get_bands(), noise_model.get_beams())
+    }
     beams_dict = {}
     for map_set in meta.map_sets_list:
         freq_tag = meta.freq_tag_from_map_set(map_set)
@@ -151,8 +142,10 @@ def get_beam_windows(meta, plot=False):
         file_root = meta.file_root_from_map_set(map_set)
 
         if not os.path.exists(file_root):
-            np.savetxt(f"{meta.beam_directory}/beam_{file_root}.dat",
-                       np.transpose([lth, beams_dict[map_set]]))
+            np.savetxt(
+                f"{meta.beam_directory}/beam_{file_root}.dat",
+                np.transpose([lth, beams_dict[map_set]]),
+            )
         if plot:
             plt.plot(lth, beams_dict[map_set], label=map_set)
     if plot:
@@ -198,26 +191,26 @@ def beam_hpix(ll, nside):
 
 #     return bin_low, bin_high, bin_center
 
+
 def create_binning(nside, delta_ell, end_first_bin=None):
-                #    , lmin=None, lmax=None):
-    """
-    """
+    #    , lmin=None, lmax=None):
+    """ """
     if end_first_bin is not None:
-        bin_low = np.arange(end_first_bin, 3*nside, delta_ell)
+        bin_low = np.arange(end_first_bin, 3 * nside, delta_ell)
         bin_high = bin_low + delta_ell - 1
         bin_low = np.concatenate(([0], bin_low))
-        bin_high = np.concatenate(([end_first_bin-1], bin_high))
+        bin_high = np.concatenate(([end_first_bin - 1], bin_high))
     else:
-        bin_low = np.arange(0, 3*nside, delta_ell)
+        bin_low = np.arange(0, 3 * nside, delta_ell)
         bin_high = bin_low + delta_ell - 1
-    bin_high[-1] = 3*nside - 1
+    bin_high[-1] = 3 * nside - 1
     bin_center = (bin_low + bin_high) / 2
 
     # if lmin is not None:
     #     bin_low = bin_low[bin_low >= lmin]
     #     bin_high = bin_high[bin_high >= lmin]
     #     bin_center = bin_center[bin_center >= lmin]
-    
+
     # if lmax is not None:
     #     bin_low = bin_low[bin_low <= lmax]
     #     bin_high = bin_high[bin_high <= lmax]
@@ -225,9 +218,9 @@ def create_binning(nside, delta_ell, end_first_bin=None):
 
     return bin_low, bin_high, bin_center
 
+
 def power_law_cl(ell, amp, delta_ell, power_law_index):
-    """
-    """
+    """ """
     pl_ps = {}
     for spec in ["TT", "TE", "TB", "EE", "EB", "BB"]:
         if isinstance(amp, dict):
@@ -264,20 +257,30 @@ def m_filter_map(map, map_file, mask, m_cut):
     alms = hp.map2alm(map_masked, lmax=lmax)
 
     n_modes_to_filter = (m_cut + 1) * (lmax + 1) - ((m_cut + 1) * m_cut) // 2
-    alms[:, :n_modes_to_filter] = 0.
+    alms[:, :n_modes_to_filter] = 0.0
 
     filtered_map = hp.alm2map(alms, nside=nside, lmax=lmax)
 
-    hp.write_map(map_file.replace('.fits', '_filtered.fits'),
-                 filtered_map, overwrite=True,
-                 dtype=np.float32)
+    hp.write_map(
+        map_file.replace(".fits", "_filtered.fits"), filtered_map, overwrite=True, dtype=np.float32
+    )
 
 
-def toast_filter_map(map, map_file, mask,
-                     template, config, schedule,
-                     nside, instrument, band,
-                     sbatch_job_name, sbatch_dir,
-                     nhits_map_only=False, sim_noise=False):
+def toast_filter_map(
+    map,
+    map_file,
+    mask,
+    template,
+    config,
+    schedule,
+    nside,
+    instrument,
+    band,
+    sbatch_job_name,
+    sbatch_dir,
+    nhits_map_only=False,
+    sim_noise=False,
+):
     """
     Create sbatch scripts for each simulation, based on given template file.
 
@@ -328,48 +331,43 @@ def toast_filter_map(map, map_file, mask,
     config_file = Path(config).resolve()
     schedule_file = Path(schedule).resolve()
     sbatch_dir = Path(sbatch_dir).resolve()
-    sbatch_outdir = sbatch_dir/sbatch_job_name
+    sbatch_outdir = sbatch_dir / sbatch_job_name
     sbatch_outdir.mkdir(parents=True, exist_ok=True)
-    sbatch_file = sbatch_dir/(sbatch_job_name + '.sh')
-    sbatch_log = sbatch_dir/(sbatch_job_name + '.log')
+    sbatch_file = sbatch_dir / (sbatch_job_name + ".sh")
+    sbatch_log = sbatch_dir / (sbatch_job_name + ".log")
 
     jinja2_env = Environment(
-        loader=FileSystemLoader(template_dir),
-        trim_blocks=True,
-        lstrip_blocks=True)
+        loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True
+    )
     jinja2_temp = jinja2_env.get_template(template_name)
 
-    with open(sbatch_file, mode='w') as f:
-        f.write(jinja2_temp.render(
-            sbatch_job_name=sbatch_job_name,
-            sbatch_log=sbatch_log,
-            outdir=str(sbatch_outdir),
-            nside=nside,
-            band=band,
-            telescope=instrument,
-            config=str(config_file),
-            schedule=str(schedule_file),
-            map_file=str(map_file),
-            nhits_map_only=nhits_map_only,
-            sim_noise=sim_noise,
-            ))
+    with open(sbatch_file, mode="w") as f:
+        f.write(
+            jinja2_temp.render(
+                sbatch_job_name=sbatch_job_name,
+                sbatch_log=sbatch_log,
+                outdir=str(sbatch_outdir),
+                nside=nside,
+                band=band,
+                telescope=instrument,
+                config=str(config_file),
+                schedule=str(schedule_file),
+                map_file=str(map_file),
+                nhits_map_only=nhits_map_only,
+                sim_noise=sim_noise,
+            )
+        )
     os.chmod(sbatch_file, 0o755)
     return sbatch_file
 
 
-def get_split_pairs_from_coadd_ps_name(map_set1, map_set2,
-                                       all_splits_ps_names,
-                                       cross_splits_ps_names,
-                                       auto_splits_ps_names):
-    """
-    """
-    split_pairs_list = {
-        "auto": [],
-        "cross": []
-    }
+def get_split_pairs_from_coadd_ps_name(
+    map_set1, map_set2, all_splits_ps_names, cross_splits_ps_names, auto_splits_ps_names
+):
+    """ """
+    split_pairs_list = {"auto": [], "cross": []}
     for split_ms1, split_ms2 in all_splits_ps_names:
-        if (not (split_ms1.startswith(map_set1) and
-                 split_ms2.startswith(map_set2))):
+        if not (split_ms1.startswith(map_set1) and split_ms2.startswith(map_set2)):
             continue
 
         if (split_ms1, split_ms2) in cross_splits_ps_names:
@@ -385,15 +383,20 @@ def plot_map(map, fname, vrange_T=300, vrange_P=10, title=None, TQU=True):
     for i, m in enumerate(fields):
         vrange = vrange_T if m == "T" else vrange_P
         plt.figure(figsize=(16, 9))
-        hp.mollview(map[i], title=f"{title}_{m}", unit=r'$\mu$K$_{\rm CMB}$',
-                    cmap=cm.coolwarm, min=-vrange, max=vrange)
+        hp.mollview(
+            map[i],
+            title=f"{title}_{m}",
+            unit=r"$\mu$K$_{\rm CMB}$",
+            cmap=cm.coolwarm,
+            min=-vrange,
+            max=vrange,
+        )
         hp.graticule()
         plt.savefig(f"{fname}_{m}.png", bbox_inches="tight")
 
 
 def beam_alms(alms, bl):
-    """
-    """
+    """ """
     if bl is not None:
         for i, alm in enumerate(alms):
             alms[i] = hp.almxfl(alm, bl)
@@ -401,24 +404,21 @@ def beam_alms(alms, bl):
     return alms
 
 
-def generate_map_from_alms(alms, nside, pureE=False, pureB=False,
-                           pureT=False, bl=None):
-    """
-    """
+def generate_map_from_alms(alms, nside, pureE=False, pureB=False, pureT=False, bl=None):
+    """ """
     alms = beam_alms(alms, bl)
     Tlm, Elm, Blm = alms
     if pureE:
-        alms = [Tlm*0., Elm, Blm*0.]
+        alms = [Tlm * 0.0, Elm, Blm * 0.0]
     elif pureB:
-        alms = [Tlm*0., Elm*0., Blm]
+        alms = [Tlm * 0.0, Elm * 0.0, Blm]
     elif pureT:
-        alms = [Tlm, Elm*0., Blm*0.]
+        alms = [Tlm, Elm * 0.0, Blm * 0.0]
 
-    return hp.alm2map(alms, nside, lmax=3*nside - 1)
+    return hp.alm2map(alms, nside, lmax=3 * nside - 1)
 
 
-def bin_validation_power_spectra(cls_dict, nmt_binning,
-                                 bandpower_window_function):
+def bin_validation_power_spectra(cls_dict, nmt_binning, bandpower_window_function):
     """
     Bin multipoles of transfer function validation power spectra into
     binned bandpowers.
@@ -434,13 +434,16 @@ def bin_validation_power_spectra(cls_dict, nmt_binning,
                 cls_vec = np.array([cls_dict[val_type]["TT"][:nl]])
                 cls_vec = cls_vec.reshape(1, nl)
             elif spin_comb == "spin0xspin2":
-                cls_vec = np.array([cls_dict[val_type]["TE"][:nl],
-                                    cls_dict[val_type]["TB"][:nl]])
+                cls_vec = np.array([cls_dict[val_type]["TE"][:nl], cls_dict[val_type]["TB"][:nl]])
             elif spin_comb == "spin2xspin2":
-                cls_vec = np.array([cls_dict[val_type]["EE"][:nl],
-                                    cls_dict[val_type]["EB"][:nl],
-                                    cls_dict[val_type]["EB"][:nl],
-                                    cls_dict[val_type]["BB"][:nl]])
+                cls_vec = np.array(
+                    [
+                        cls_dict[val_type]["EE"][:nl],
+                        cls_dict[val_type]["EB"][:nl],
+                        cls_dict[val_type]["EB"][:nl],
+                        cls_dict[val_type]["BB"][:nl],
+                    ]
+                )
 
             cls_vec_binned = np.einsum("ijkl,kl", bpw_mat, cls_vec)
 
@@ -472,9 +475,13 @@ def plot_transfer_function(lb, tf_dict, lmin, lmax, field_pairs, file_name):
             ax.set_title(f"{f1} $\\rightarrow$ {f2}", fontsize=14)
 
             ax.errorbar(
-                lb, tf_dict[f"{f1}_to_{f2}"], tf_dict[f"{f1}_to_{f2}_std"],
-                marker=".", markerfacecolor="white",
-                color="navy")
+                lb,
+                tf_dict[f"{f1}_to_{f2}"],
+                tf_dict[f"{f1}_to_{f2}_std"],
+                marker=".",
+                markerfacecolor="white",
+                color="navy",
+            )
 
             if id1 == 8:
                 ax.set_xlabel(r"$\ell$", fontsize=14)
@@ -482,20 +489,21 @@ def plot_transfer_function(lb, tf_dict, lmin, lmax, field_pairs, file_name):
                 ax.set_xticks([])
 
             if f1 == f2:
-                ax.axhline(1., color="k", ls="--")
+                ax.axhline(1.0, color="k", ls="--")
             else:
                 ax.axhline(0, color="k", ls="--")
-                ax.ticklabel_format(axis="y", style="scientific",
-                                    scilimits=(0, 0), useMathText=True)
+                ax.ticklabel_format(
+                    axis="y", style="scientific", scilimits=(0, 0), useMathText=True
+                )
 
             ax.set_xlim(lmin, lmax)
 
     plt.savefig(file_name, bbox_inches="tight")
 
 
-def plot_transfer_validation(meta, map_set_1, map_set_2,
-                             cls_theory, cls_theory_binned,
-                             cls_mean_dict, cls_std_dict):
+def plot_transfer_validation(
+    meta, map_set_1, map_set_2, cls_theory, cls_theory_binned, cls_mean_dict, cls_std_dict
+):
     """
     Plot the transfer function validation power spectra and save to disk.
     """
@@ -510,35 +518,38 @@ def plot_transfer_validation(meta, map_set_1, map_set_2,
             f1, f2 = "TEB"[id1], "TEB"[id2]
             spec = f2 + f1 if id1 > id2 else f1 + f2
 
-            main = plt.subplot(grid[3*id1:3*(id1+1)-1, id2])
-            sub = plt.subplot(grid[3*(id1+1)-1, id2])
+            main = plt.subplot(grid[3 * id1 : 3 * (id1 + 1) - 1, id2])
+            sub = plt.subplot(grid[3 * (id1 + 1) - 1, id2])
 
             # Plot theory
             ell = cls_theory[val_type]["l"]
-            rescaling = 1 if val_type == "tf_val" \
-                else ell * (ell + 1) / (2*np.pi)
-            main.plot(ell, rescaling*cls_theory[val_type][spec], color="k")
+            rescaling = 1 if val_type == "tf_val" else ell * (ell + 1) / (2 * np.pi)
+            main.plot(ell, rescaling * cls_theory[val_type][spec], color="k")
 
             offset = 0.5
-            rescaling = 1 if val_type == "tf_val" else lb*(lb + 1) / (2*np.pi)
+            rescaling = 1 if val_type == "tf_val" else lb * (lb + 1) / (2 * np.pi)
 
             # Plot filtered & unfiltered (decoupled)
             if not meta.validate_beam:
                 main.errorbar(
-                    lb - offset, rescaling*cls_mean_dict[val_type,
-                                                         "unfiltered",
-                                                         spec],
-                    rescaling*cls_std_dict[val_type, "unfiltered", spec],
-                    color="navy", marker=".", markerfacecolor="white",
-                    label=r"Unfiltered decoupled $C_\ell$", ls="None"
+                    lb - offset,
+                    rescaling * cls_mean_dict[val_type, "unfiltered", spec],
+                    rescaling * cls_std_dict[val_type, "unfiltered", spec],
+                    color="navy",
+                    marker=".",
+                    markerfacecolor="white",
+                    label=r"Unfiltered decoupled $C_\ell$",
+                    ls="None",
                 )
             main.errorbar(
-                lb + offset, rescaling*cls_mean_dict[val_type,
-                                                     "filtered",
-                                                     spec],
-                rescaling*cls_std_dict[val_type, "filtered", spec],
-                color="darkorange", marker=".", markerfacecolor="white",
-                label=r"Filtered decoupled $C_\ell$", ls="None"
+                lb + offset,
+                rescaling * cls_mean_dict[val_type, "filtered", spec],
+                rescaling * cls_std_dict[val_type, "filtered", spec],
+                color="darkorange",
+                marker=".",
+                markerfacecolor="white",
+                label=r"Filtered decoupled $C_\ell$",
+                ls="None",
             )
 
             if f1 == f2:
@@ -551,35 +562,37 @@ def plot_transfer_validation(meta, map_set_1, map_set_2,
 
             if not meta.validate_beam:
                 residual_unfiltered = (
-                    (cls_mean_dict[val_type, "unfiltered", spec]
-                     - cls_theory_binned[val_type, spec])
-                    / cls_std_dict[val_type, "unfiltered", spec]
-                )
+                    cls_mean_dict[val_type, "unfiltered", spec] - cls_theory_binned[val_type, spec]
+                ) / cls_std_dict[val_type, "unfiltered", spec]
                 sub.plot(
                     lb - offset,
                     residual_unfiltered * np.sqrt(meta.tf_est_num_sims),
-                    color="navy", marker=".", markerfacecolor="white",
-                    ls="None"
+                    color="navy",
+                    marker=".",
+                    markerfacecolor="white",
+                    ls="None",
                 )
             residual_filtered = (
-                (cls_mean_dict[val_type, "filtered", spec]
-                 - cls_theory_binned[val_type, spec])
-                / cls_std_dict[val_type, "filtered", spec]
+                cls_mean_dict[val_type, "filtered", spec] - cls_theory_binned[val_type, spec]
+            ) / cls_std_dict[val_type, "filtered", spec]
+            sub.plot(
+                lb + offset,
+                residual_filtered * np.sqrt(meta.tf_est_num_sims),
+                color="darkorange",
+                marker=".",
+                markerfacecolor="white",
+                ls="None",
             )
-            sub.plot(lb + offset,
-                     residual_filtered * np.sqrt(meta.tf_est_num_sims),
-                     color="darkorange", marker=".",
-                     markerfacecolor="white", ls="None")
 
             # Multipole range
             main.set_xlim(2, meta.lmax)
             sub.set_xlim(*main.get_xlim())
 
             # Suplot y range
-            sub.set_ylim((-5., 5.))
+            sub.set_ylim((-5.0, 5.0))
 
             # Cosmetix
-            main.set_title(f1+f2, fontsize=14)
+            main.set_title(f1 + f2, fontsize=14)
             if spec == "TT":
                 main.legend(fontsize=13)
             main.set_xticklabels([])
@@ -592,16 +605,15 @@ def plot_transfer_validation(meta, map_set_1, map_set_2,
                 if isinstance(rescaling, float):
                     main.set_ylabel(r"$C_\ell$", fontsize=13)
                 else:
-                    main.set_ylabel(r"$\ell(\ell+1)C_\ell/2\pi$",
-                                    fontsize=13)
-                sub.set_ylabel(r"$\Delta C_\ell / (\sigma/\sqrt{N_\mathrm{sims}})$",  # noqa
-                               fontsize=13)
+                    main.set_ylabel(r"$\ell(\ell+1)C_\ell/2\pi$", fontsize=13)
+                sub.set_ylabel(
+                    r"$\Delta C_\ell / (\sigma/\sqrt{N_\mathrm{sims}})$",  # noqa
+                    fontsize=13,
+                )
 
         plot_dir = meta.plot_dir_from_output_dir(meta.coupling_directory)
-        plot_suffix = (f"__{map_set_1}_{map_set_2}" if meta.validate_beam
-                       else "")
-        plt.savefig(f"{plot_dir}/decoupled_{val_type}{plot_suffix}.pdf",
-                    bbox_inches="tight")
+        plot_suffix = f"__{map_set_1}_{map_set_2}" if meta.validate_beam else ""
+        plt.savefig(f"{plot_dir}/decoupled_{val_type}{plot_suffix}.pdf", bbox_inches="tight")
 
 
 def get_binary_mask_from_nhits(nhits_map, nside, zero_threshold=1e-3):
@@ -609,8 +621,8 @@ def get_binary_mask_from_nhits(nhits_map, nside, zero_threshold=1e-3):
     Make binary mask by smoothing, normalizing and thresholding nhits map.
     """
     nhits_smoothed = hp.smoothing(
-        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64),
-        fwhm=np.pi/180)
+        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64), fwhm=np.pi / 180
+    )
     nhits_smoothed[nhits_smoothed < 0] = 0
     nhits_smoothed /= np.amax(nhits_smoothed)
     binary_mask = np.zeros_like(nhits_smoothed)
@@ -619,13 +631,16 @@ def get_binary_mask_from_nhits(nhits_map, nside, zero_threshold=1e-3):
     return binary_mask
 
 
-def get_apodized_mask_from_nhits(nhits_map, nside,
-                                 galactic_mask=None,
-                                 point_source_mask=None,
-                                 zero_threshold=1e-3,
-                                 apod_radius=10.,
-                                 apod_radius_point_source=4.,
-                                 apod_type="C1"):
+def get_apodized_mask_from_nhits(
+    nhits_map,
+    nside,
+    galactic_mask=None,
+    point_source_mask=None,
+    zero_threshold=1e-3,
+    apod_radius=10.0,
+    apod_radius_point_source=4.0,
+    apod_type="C1",
+):
     """
     Produce an appropriately apodized mask from an nhits map as used in
     the BB pipeline paper (https://arxiv.org/abs/2302.04276).
@@ -642,8 +657,8 @@ def get_apodized_mask_from_nhits(nhits_map, nside,
 
     # Smooth and normalize hits map
     nhits_map = hp.smoothing(
-        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64),
-        fwhm=np.pi/180)
+        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64), fwhm=np.pi / 180
+    )
     nhits_map /= np.amax(nhits_map)
 
     # Get binary mask
@@ -654,15 +669,12 @@ def get_apodized_mask_from_nhits(nhits_map, nside,
         binary_mask *= hp.ud_grade(galactic_mask, nside)
 
     # Apodize the binary mask
-    binary_mask = nmt.mask_apodization(binary_mask, apod_radius,
-                                       apotype=apod_type)
+    binary_mask = nmt.mask_apodization(binary_mask, apod_radius, apotype=apod_type)
 
     # Multiply with point source mask
     if point_source_mask is not None:
         binary_mask *= hp.ud_grade(point_source_mask, nside)
-        binary_mask = nmt.mask_apodization(binary_mask,
-                                           apod_radius_point_source,
-                                           apotype=apod_type)
+        binary_mask = nmt.mask_apodization(binary_mask, apod_radius_point_source, apotype=apod_type)
 
     return nhits_map * binary_mask
 
@@ -672,9 +684,9 @@ def get_spin_derivatives(map):
     First and second spin derivatives of a given spin-0 map.
     """
     nside = hp.npix2nside(np.shape(map)[-1])
-    ell = np.arange(3*nside)
-    alpha1i = np.sqrt(ell*(ell + 1.))
-    alpha2i = np.sqrt((ell - 1.)*ell*(ell + 1.)*(ell + 2.))
+    ell = np.arange(3 * nside)
+    alpha1i = np.sqrt(ell * (ell + 1.0))
+    alpha2i = np.sqrt((ell - 1.0) * ell * (ell + 1.0) * (ell + 2.0))
     first = hp.alm2map(hp.almxfl(hp.map2alm(map), alpha1i), nside=nside)
     second = hp.alm2map(hp.almxfl(hp.map2alm(map), alpha2i), nside=nside)
     cmap = cm.YlOrRd
@@ -682,23 +694,24 @@ def get_spin_derivatives(map):
 
     return first, second
 
+
 def get_Cl_CMB_model_from_meta(meta):
-    '''
-    This function reads the fiducial CMB Cls from the metadata manager and combines scalar, lensing and tensor 
+    """
+    This function reads the fiducial CMB Cls from the metadata manager and combines scalar, lensing and tensor
     contributions to return the model Cls according to A_lens and r in the simulation parameter file.
 
     Args:
         meta: metadata_manager object containing all the config file options
-        
+
     Returns:
         Cl_cmb_model (ndarray): The model CMB Cls, with shape (num_freq, num_spectra [TT,EE,BB,TE,EB,TB], num_ell).
-    '''
-    path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb('lensed')
-    path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb('unlensed_scalar_tensor_r1')
+    """
+    path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb("lensed")
+    path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb("unlensed_scalar_tensor_r1")
 
     if meta.map_sim_pars is not None:
-        r_input = meta.map_sim_pars['r_input']
-        A_lens = meta.map_sim_pars['A_lens']
+        r_input = meta.map_sim_pars["r_input"]
+        A_lens = meta.map_sim_pars["A_lens"]
     else:
         r_input = 0.0
         A_lens = 1.0
@@ -712,11 +725,12 @@ def get_Cl_CMB_model_from_meta(meta):
     Cl_TE = Cl_lens[3]
 
     Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
-    Cl_cmb_model = np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE*0.0, Cl_EE*0.0]])    
+    Cl_cmb_model = np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0.0, Cl_EE * 0.0]])
     return Cl_cmb_model
 
+
 def MPISUM(array, comm, rank, root):
-    '''
+    """
     Reduces an array using the SUM operator to the root process using MPI.
 
     Parameters
@@ -735,21 +749,22 @@ def MPISUM(array, comm, rank, root):
     array_recvbuf : np.ndarray
         The reduced array.
 
-    '''
+    """
 
-    if rank==root:
+    if rank == root:
         array_recvbuf = np.zeros_like(array)
     else:
         array_recvbuf = None
-    
-    array = np.ascontiguousarray(array) 
+
+    array = np.ascontiguousarray(array)
 
     comm.Reduce(array, array_recvbuf, op=MPI.SUM, root=root)
 
     return array_recvbuf
 
+
 def MPIGATHER(array, comm, rank, size, root):
-    '''
+    """
     Gathers an array to the root process using MPI.
 
     Parameters
@@ -770,9 +785,9 @@ def MPIGATHER(array, comm, rank, size, root):
     array_recvbuf : np.ndarray
         The gathered array.
 
-    '''
+    """
 
-    array = np.ascontiguousarray(array) 
+    array = np.ascontiguousarray(array)
 
     array_recvbuf = None
     if rank == 0:
@@ -787,32 +802,33 @@ def MPIGATHER(array, comm, rank, size, root):
 
     return array_recvbuf
 
+
 def debuginfo(message):
-    '''
+    """
     prints the filename and line number of the caller function as well as the message
 
     Parameters
     ----------
     message : str
-        The message to print.   
+        The message to print.
 
     Returns
     -------
     None
 
-    '''
+    """
     caller = getframeinfo(stack()[2][0])
-    print("%s:%d - %s" % (caller.filename, caller.lineno, message)) # python3 syntax print
+    print("%s:%d - %s" % (caller.filename, caller.lineno, message))  # python3 syntax print
 
 
-def MemoryUsage(args, message=''):
-    ''''
+def MemoryUsage(args, message=""):
+    """'
     Prints the memory usage of the current process.
 
     Parameters
     ----------
     args : argparse.Namespace
-        The arguments from the command line. 
+        The arguments from the command line.
         In particular looks for the verbose flag. If false, the function does nothing.
     message : str, optional
         The message to print. The default is ''.
@@ -821,15 +837,17 @@ def MemoryUsage(args, message=''):
     -------
     None
 
-    '''
+    """
     if args.verbose:
         current, peak = tracemalloc.get_traced_memory()
-        message_all = message + f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB"
+        message_all = (
+            message + f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB"
+        )
         debuginfo(message_all)
 
 
 def apply_lminlmax_to_dict(dict, bin_index_lminlmax):
-    '''
+    """
     Applies the lmin and lmax binning to all the spectra in a dictionary.
 
     Parameters
@@ -847,16 +865,16 @@ def apply_lminlmax_to_dict(dict, bin_index_lminlmax):
     new_dict : dict
         The dictionary with the new ell bounds.
 
-    '''
+    """
     new_dict = {}
     for key in dict.keys():
-        new_dict[key] = dict[key][...,bin_index_lminlmax]
-    return new_dict        
+        new_dict[key] = dict[key][..., bin_index_lminlmax]
+    return new_dict
 
 
 def MakeNoiseMapsNhitsMSS2(meta, map_set, verbose=False):
     """
-    Generates noise maps and nhits maps for a given map set using white noise level from the yml file 
+    Generates noise maps and nhits maps for a given map set using white noise level from the yml file
     and applying nhits for inhomogeneous noise if the meta.noise_sim_pars['include_nhits'] is true.
 
     Parameters
@@ -877,44 +895,53 @@ def MakeNoiseMapsNhitsMSS2(meta, map_set, verbose=False):
     # TODO: put in simulation step ?
     start = time.time()
 
-    if meta.noise_cov_pars['include_nhits']:
-
-        if hasattr(meta, 'nhits_directory'):
+    if meta.noise_cov_pars["include_nhits"]:
+        if hasattr(meta, "nhits_directory"):
             # This is done cause different frequencies can have different nhits maps (see MSS2)
-            # TODO: I don't think such an option is implemented in onfly_sims, maybe it can be useful? 
+            # TODO: I don't think such an option is implemented in onfly_sims, maybe it can be useful?
             # Although it adds complexity
             path_nhits = meta.get_nhits_map_filename(map_set)
             nhits_map = hp.read_map(path_nhits)
-        
+
             nside_nhits = hp.get_nside(nhits_map)
-            binary_mask_nhits = get_binary_mask_from_nhits(nhits_map, nside_nhits, 
-                                                                 zero_threshold=meta.masks['mask_handler_binary_zero_threshold'])
+            binary_mask_nhits = get_binary_mask_from_nhits(
+                nhits_map,
+                nside_nhits,
+                zero_threshold=meta.masks["mask_handler_binary_zero_threshold"],
+            )
         else:
             # If there isn't any nhits_directory specified, we use the standard nhits map used for the rest of the analysis
-            nhits_map = meta.read_hitmap() 
-            nside_nhits = hp.get_nside(nhits_map)            
-            binary_mask_nhits = meta.read_mask('binary')
+            nhits_map = meta.read_hitmap()
+            nside_nhits = hp.get_nside(nhits_map)
+            binary_mask_nhits = meta.read_mask("binary")
     else:
         nside_nhits = meta.nside
 
-    '''
+    """
     tag_to_index = {30:0, 40:1, 90:2, 150:3, 230:4, 290:5} # TODO: this is a bit dodgy and hardcoded, better implementation needed (in metadata manager or yml?)
     noise_lvl_uk = meta.noise_sim_pars['noise_lvl_uKarcmin'] / hp.nside2resol(nside_nhits, arcmin=True)
     map_noise = np.random.normal(0, noise_lvl_uk[tag_to_index[meta.map_sets[map_set]['freq_tag']]], (3,hp.nside2npix(nside_nhits)))
-    '''
-    
-    noise_lvl_uk = meta.noise_cov_pars['noise_lvl_uKarcmin'][f"({meta.map_sets[map_set]['exp_tag']}, {meta.map_sets[map_set]['freq_tag']})"] / hp.nside2resol(nside_nhits, arcmin=True)
-    #TODO: Having to convert what should be a tuple key into a string for it to be undestood by the yaml parser is not ideal
-    map_noise = np.random.normal(0, noise_lvl_uk, (3,hp.nside2npix(nside_nhits)))
+    """
 
-    map_noise[...,binary_mask_nhits==0] = hp.UNSEEN
+    noise_lvl_uk = meta.noise_cov_pars["noise_lvl_uKarcmin"][
+        f"({meta.map_sets[map_set]['exp_tag']}, {meta.map_sets[map_set]['freq_tag']})"
+    ] / hp.nside2resol(nside_nhits, arcmin=True)
+    # TODO: Having to convert what should be a tuple key into a string for it to be undestood by the yaml parser is not ideal
+    map_noise = np.random.normal(0, noise_lvl_uk, (3, hp.nside2npix(nside_nhits)))
 
-    if meta.noise_cov_pars['include_nhits']:
+    map_noise[..., binary_mask_nhits == 0] = hp.UNSEEN
+
+    if meta.noise_cov_pars["include_nhits"]:
         nhits_map_rescaled = nhits_map / max(nhits_map)
 
-        map_noise[...,np.where(binary_mask_nhits==1)[0]] /= np.sqrt(nhits_map_rescaled[np.where(binary_mask_nhits==1)[0]])
-        map_noise[...,np.where(binary_mask_nhits==0)[0]] = hp.UNSEEN
-        map_noise[...,np.where(binary_mask_nhits==1)[0]] *= noise_lvl_uk / np.std(map_noise[...,np.where(binary_mask_nhits==1)[0]])
-    if verbose: print('time = ', time.time()-start)
-    
+        map_noise[..., np.where(binary_mask_nhits == 1)[0]] /= np.sqrt(
+            nhits_map_rescaled[np.where(binary_mask_nhits == 1)[0]]
+        )
+        map_noise[..., np.where(binary_mask_nhits == 0)[0]] = hp.UNSEEN
+        map_noise[..., np.where(binary_mask_nhits == 1)[0]] *= noise_lvl_uk / np.std(
+            map_noise[..., np.where(binary_mask_nhits == 1)[0]]
+        )
+    if verbose:
+        print("time = ", time.time() - start)
+
     return map_noise

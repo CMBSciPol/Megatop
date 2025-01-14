@@ -5,6 +5,7 @@ import healpy as hp
 import time
 import warnings
 
+
 class BBmeta(object):
     """
     Metadata manager for the BBmaster pipeline.
@@ -12,6 +13,7 @@ class BBmeta(object):
     a single interface to all the parameters and products
     that will be used from different stages of the pipeline.
     """
+
     def __init__(self, fname_config):
         """
         Initialize the pipeline manager from a yaml file.
@@ -41,37 +43,36 @@ class BBmeta(object):
             yaml.dump(self.config, f)
 
         # Basic sanity checks
-        if self.lmax > 3*self.nside-1:
-            raise ValueError("lmax should be lower or equal "
-                             f"to 3*nside-1 = {3*self.nside-1}")
+        if self.lmax > 3 * self.nside - 1:
+            raise ValueError(f"lmax should be lower or equal to 3*nside-1 = {3 * self.nside - 1}")
 
-        # Initialize method to parse map_sets metadata            
-        map_sets_attributes = list(self.map_sets[
-            next(iter(self.map_sets))].keys())
+        # Initialize method to parse map_sets metadata
+        map_sets_attributes = list(self.map_sets[next(iter(self.map_sets))].keys())
         for map_sets_attribute in map_sets_attributes:
             self._init_getter_from_map_set(map_sets_attribute)
 
-        #frequency from map_set
+        # frequency from map_set
         self.frequencies = [self.freq_tag_from_map_set(m) for m in self.map_sets]
 
         # A list of the maps used in the analysis
         self.maps_list = self._get_map_list()
 
         # Determine if input hit counts map exists
-        self.use_input_nhits = (self.masks["input_nhits_path"] is not None)
+        self.use_input_nhits = self.masks["input_nhits_path"] is not None
 
         # Initialize masks file_names
-        for mask_type in ["binary_mask", "galactic_mask", "point_source_mask",
-                          "analysis_mask", "nhits_map"]:
-            setattr(
-                self,
-                f"{mask_type}_name",
-                getattr(self, f"_get_{mask_type}_name")()
-                )
+        for mask_type in [
+            "binary_mask",
+            "galactic_mask",
+            "point_source_mask",
+            "analysis_mask",
+            "nhits_map",
+        ]:
+            setattr(self, f"{mask_type}_name", getattr(self, f"_get_{mask_type}_name")())
 
         # Simulation
         if self.map_sim_pars is not None:
-            self._init_simulation_params() 
+            self._init_simulation_params()
 
         # Initialize a timer
         self.timer = Timer()
@@ -87,30 +88,28 @@ class BBmeta(object):
             else:
                 # full_path = f"{self.data_dirs['root']}/{path}"
                 # Using os.path.join can handle cases where the path is already
-                # a full path. 'root' is then overrulled. 
-                full_path = os.path.join(self.data_dirs['root'], path)
+                # a full path. 'root' is then overrulled.
+                full_path = os.path.join(self.data_dirs["root"], path)
                 setattr(self, label, full_path)
                 setattr(self, f"{label}_rel", path)
                 try:
                     os.makedirs(full_path, exist_ok=True)
                 except PermissionError:
-                    print(f"PermissionError: Could not create {full_path}")	
-                    print('We continue without creating the directory')
-
+                    print(f"PermissionError: Could not create {full_path}")
+                    print("We continue without creating the directory")
 
         for label, path in self.output_dirs.items():
             if label == "root":
                 self.output_dir = self.output_dirs["root"]
             else:
                 # full_path = f"{self.output_dirs['root']}/{path}"
-                full_path = os.path.join(self.output_dirs['root'], path)
+                full_path = os.path.join(self.output_dirs["root"], path)
                 setattr(self, label, full_path)
                 setattr(self, f"{label}_rel", path)
                 os.makedirs(full_path, exist_ok=True)
 
     def _set_general_attributes(self):
-        """
-        """
+        """ """
         for key, value in self.general_pars.items():
             setattr(self, key, value)
 
@@ -134,7 +133,7 @@ class BBmeta(object):
         setattr(
             self,
             f"{map_set_attribute}_from_map_set",
-            lambda map_set: self.map_sets[map_set][map_set_attribute]
+            lambda map_set: self.map_sets[map_set][map_set_attribute],
         )
 
     def _get_galactic_mask_name(self):
@@ -154,8 +153,7 @@ class BBmeta(object):
         """
         Get the name of the point source mask.
         """
-        return os.path.join(self.mask_directory,
-                            self.masks["point_source_mask"])
+        return os.path.join(self.mask_directory, self.masks["point_source_mask"])
 
     def _get_analysis_mask_name(self):
         """
@@ -173,11 +171,13 @@ class BBmeta(object):
         else:
             # Using custom nhits map
             return self.masks["input_nhits_path"]
-    
+
     def idx_from_list(self, frequencies):
         if not (set(self.frequencies) <= set(frequencies)):
-            raise Exception(f"Some frequencies are not part of {frequencies} (can't compute noise for them). Check your yaml !") 
-        return  [frequencies.index(fr) for fr in self.frequencies]
+            raise Exception(
+                f"Some frequencies are not part of {frequencies} (can't compute noise for them). Check your yaml !"
+            )
+        return [frequencies.index(fr) for fr in self.frequencies]
 
     def read_mask(self, mask_type):
         """
@@ -190,8 +190,7 @@ class BBmeta(object):
             Can be "binary", "galactic", "point_source" or "analysis".
         """
         return hp.ud_grade(
-            hp.read_map(getattr(self, f"{mask_type}_mask_name")),
-            nside_out=self.nside
+            hp.read_map(getattr(self, f"{mask_type}_mask_name")), nside_out=self.nside
         )
 
     def save_mask(self, mask_type, mask, overwrite=False):
@@ -208,8 +207,9 @@ class BBmeta(object):
         overwrite : bool, optional
             Overwrite the mask if it already exists.
         """
-        return hp.write_map(getattr(self, f"{mask_type}_mask_name"), mask,
-                            overwrite=overwrite, dtype=np.float32)
+        return hp.write_map(
+            getattr(self, f"{mask_type}_mask_name"), mask, overwrite=overwrite, dtype=np.float32
+        )
 
     def read_hitmap(self):
         """
@@ -230,7 +230,9 @@ class BBmeta(object):
         """
         hp.write_map(
             os.path.join(self.mask_directory, self.masks["nhits_map"]),
-            map, dtype=np.float32, overwrite=overwrite
+            map,
+            dtype=np.float32,
+            overwrite=overwrite,
         )
 
     def read_nmt_binning(self):
@@ -238,9 +240,9 @@ class BBmeta(object):
         Read the binning file and return the corresponding NmtBin object.
         """
         import pymaster as nmt
+
         binning = np.load(self.path_to_binning)
-        return nmt.NmtBin.from_edges(binning["bin_low"],
-                                     binning["bin_high"] + 1)
+        return nmt.NmtBin.from_edges(binning["bin_low"], binning["bin_high"] + 1)
 
     def get_n_bandpowers(self):
         """
@@ -257,8 +259,7 @@ class BBmeta(object):
         return binner.get_effective_ells()
 
     def read_beam(self, map_set):
-        """
-        """
+        """ """
         file_root = self.file_root_from_map_set(map_set)
         beam_file = f"{self.beam_directory}/beam_{file_root}.dat"
         l, bl = np.loadtxt(beam_file, unpack=True)
@@ -268,35 +269,42 @@ class BBmeta(object):
         """
         Loop over the simulation parameters and set them as attributes.
         """
-        if not hasattr(self, 'noise_sim_pars'):
+        if not hasattr(self, "noise_sim_pars"):
             raise AttributeError("The 'noise_sim_pars' field is missing from the config file.")
 
         # Check for inconsistent CMB simulation settings
-        self.sky_model = self.map_sim_pars['sky_model']
-        if self.map_sim_pars['cmb_sim_no_pysm']:
-            for cmb in ['c1', 'c2', 'c3', 'c4']:
+        self.sky_model = self.map_sim_pars["sky_model"]
+        if self.map_sim_pars["cmb_sim_no_pysm"]:
+            for cmb in ["c1", "c2", "c3", "c4"]:
                 if cmb in self.sky_model:
-                    warnings.warn("You specified a PySM CMB model while setting 'cmb_sim_no_pysm' to False. Dropping the PySM CMB model.")
+                    warnings.warn(
+                        "You specified a PySM CMB model while setting 'cmb_sim_no_pysm' to False. Dropping the PySM CMB model."
+                    )
                     self.sky_model.remove(cmb)
-            if not hasattr(self, 'fiducial_cmb'):
+            if not hasattr(self, "fiducial_cmb"):
                 raise AttributeError("The 'fiducial_cmb' field is missing from the config file.")
             keys = ["r_input", "A_lens"]
             missing_keys = [key for key in keys if key not in self.map_sim_pars]
             if missing_keys:
                 raise KeyError(f"Missing keys in map_sim_pars: {missing_keys}")
-        
-        
-        #noise checks
-        if self.noise_sim_pars['noise_option'] not in ['white_noise', 'no_noise', 'noise_spectra', 'MSS2']:
-            raise KeyError("Only no_noise, white_noise, noise_spectra and MSS2 noise options are supported for now ...")
-        if self.noise_sim_pars['experiment'] not in ['SO', 'MSS2']:
+
+        # noise checks
+        if self.noise_sim_pars["noise_option"] not in [
+            "white_noise",
+            "no_noise",
+            "noise_spectra",
+            "MSS2",
+        ]:
+            raise KeyError(
+                "Only no_noise, white_noise, noise_spectra and MSS2 noise options are supported for now ..."
+            )
+        if self.noise_sim_pars["experiment"] not in ["SO", "MSS2"]:
             raise KeyError("Only SO simulations supported for now ")
-        if self.noise_sim_pars['experiment'] == 'SO':
-            keys = ['sensitivity_mode', 'SAC_yrs_LF']
+        if self.noise_sim_pars["experiment"] == "SO":
+            keys = ["sensitivity_mode", "SAC_yrs_LF"]
             missing_keys = [key for key in keys if key not in self.noise_sim_pars]
             if missing_keys:
                 raise KeyError(f"Missing keys in noise_sim_pars: {missing_keys}")
-        
 
     def save_fiducial_cl(self, ell, cl_dict, cl_type):
         """
@@ -330,8 +338,7 @@ class BBmeta(object):
         return np.load(fname)
 
     def plot_dir_from_output_dir(self, out_dir):
-        """
-        """
+        """ """
         root = self.output_dir
 
         if root in out_dir:
@@ -343,7 +350,7 @@ class BBmeta(object):
 
         return path_to_plots
 
-    def get_fname_mask(self, map_type='analysis'):
+    def get_fname_mask(self, map_type="analysis"):
         """
         Get the full filepath to a mask of predefined type.
 
@@ -354,19 +361,21 @@ class BBmeta(object):
             Defaults to 'analysis'.
         """
         base_dir = self.mask_directory
-        if map_type == 'analysis':
-            fname = os.path.join(base_dir, self.masks['analysis_mask'])
-        elif map_type == 'binary':
-            fname = os.path.join(base_dir, self.masks['binary_mask'])
-        elif map_type == 'point_source':
-            fname = os.path.join(base_dir, self.masks['point_source_mask'])
+        if map_type == "analysis":
+            fname = os.path.join(base_dir, self.masks["analysis_mask"])
+        elif map_type == "binary":
+            fname = os.path.join(base_dir, self.masks["binary_mask"])
+        elif map_type == "point_source":
+            fname = os.path.join(base_dir, self.masks["point_source_mask"])
         else:
-            raise ValueError("The map_type chosen does not exits. "
-                             "Choose between 'analysis', 'binary', "
-                             "'point_source'.")
+            raise ValueError(
+                "The map_type chosen does not exits. "
+                "Choose between 'analysis', 'binary', "
+                "'point_source'."
+            )
         return fname
-    
-    def get_fname_cls_fiducial_cmb(self, cl_type='lensed'):
+
+    def get_fname_cls_fiducial_cmb(self, cl_type="lensed"):
         """
         Get the full filepath to a fiducial CMB power spectra of predefined type.
 
@@ -376,16 +385,17 @@ class BBmeta(object):
             Choose between 'lensed', 'unlensed_scalar_tensor_r1'.
             Defaults to 'lensed'.
         """
-        base_dir = self.fiducial_cmb['cls_cmb_directory']
-        if cl_type == 'lensed':
-            fname = os.path.join(base_dir, self.fiducial_cmb['lensed'])
-        elif cl_type == 'unlensed_scalar_tensor_r1':
-            fname = os.path.join(base_dir, self.fiducial_cmb['unlensed_scalar_tensor_r1'])
+        base_dir = self.fiducial_cmb["cls_cmb_directory"]
+        if cl_type == "lensed":
+            fname = os.path.join(base_dir, self.fiducial_cmb["lensed"])
+        elif cl_type == "unlensed_scalar_tensor_r1":
+            fname = os.path.join(base_dir, self.fiducial_cmb["unlensed_scalar_tensor_r1"])
         else:
-            raise ValueError("The cl_type chosen does not exits. "
-                             "Choose between 'lensed', 'unlensed_scalar_tensor_r1'."
-                             )
-        return fname    
+            raise ValueError(
+                "The cl_type chosen does not exits. "
+                "Choose between 'lensed', 'unlensed_scalar_tensor_r1'."
+            )
+        return fname
 
     def get_map_filename(self, map_set, id_split, id_sim=None):
         """
@@ -409,10 +419,7 @@ class BBmeta(object):
         """
         map_set_root = self.file_root_from_map_set(map_set)
         if id_sim is not None:
-            path_to_maps = os.path.join(
-                self.sims_directory,
-                f"{id_sim:04d}"
-            )
+            path_to_maps = os.path.join(self.sims_directory, f"{id_sim:04d}")
             os.makedirs(path_to_maps, exist_ok=True)
         else:
             path_to_maps = self.map_directory
@@ -420,9 +427,7 @@ class BBmeta(object):
         if id_split is None:
             return os.path.join(path_to_maps, f"{map_set_root}.fits")
         else:
-            return os.path.join(path_to_maps,
-                            f"{map_set_root}_split_{id_split}.fits")
-
+            return os.path.join(path_to_maps, f"{map_set_root}_split_{id_split}.fits")
 
     def read_map(self, map_set, id_split, id_sim=None, pol_only=False):
         """
@@ -450,7 +455,7 @@ class BBmeta(object):
         Returns the noise map filename.
 
         Path to standard map:
-            {noise_map_directory}/{map_set_noise}.fits    
+            {noise_map_directory}/{map_set_noise}.fits
 
         Args:
             map_set (str): The map set.
@@ -464,14 +469,14 @@ class BBmeta(object):
             path_to_maps = self.mock_directory
 
         map_set_root = self.noise_root_from_map_set(map_set)
-        return os.path.join(path_to_maps, map_set_root+'.fits')
+        return os.path.join(path_to_maps, map_set_root + ".fits")
 
     def get_nhits_map_filename(self, map_set):
         """
         Returns the nhits map filename.
 
         Path to standard map:
-            {nhits_map_directory}/{map_set_nhits}.fits    
+            {nhits_map_directory}/{map_set_nhits}.fits
 
         Args:
             map_set (str): The map set.
@@ -481,13 +486,15 @@ class BBmeta(object):
         """
         path_to_maps = self.nhits_directory
         map_set_root = self.nhits_map_path_from_map_set(map_set)
-        return os.path.join(path_to_maps, map_set_root+'.fits')
+        return os.path.join(path_to_maps, map_set_root + ".fits")
+
 
 class Timer:
     """
     Basic timer class to time different
     parts of pipeline stages.
     """
+
     def __init__(self):
         """
         Initialize the timers with an empty dict
@@ -531,6 +538,5 @@ class Timer:
         dt = time.time() - self.timers[timer_label]
         self.timers.pop(timer_label)
         if verbose:
-            prefix = f"[{text_to_output}]" if text_to_output \
-                else f"[{timer_label}]"
+            prefix = f"[{text_to_output}]" if text_to_output else f"[{timer_label}]"
             print(f"{prefix} Took {dt:.02f} s to process.")
