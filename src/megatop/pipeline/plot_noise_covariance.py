@@ -1,10 +1,11 @@
 import argparse
-from megatop.metadata_manager import BBmeta, Timer
-import healpy as hp
-import numpy as np
 import os
+
+import healpy as hp
 import matplotlib.pyplot as plt
-import megatop.V3calc as V3
+import numpy as np
+
+from megatop.utils.metadata_manager import BBmeta, Timer
 
 
 def plot_all_maps(meta, map_array, output, file_name):
@@ -110,7 +111,7 @@ if __name__ == "__main__":
 
     for i, map_name in enumerate(meta.maps_list):
         spectra_dict[map_name] = hp.anafast(noise_cov_maps[i], lmax=lmax)
-    plot_all_spectra(spectra_dict, plot_dir, f"check_spectra_noise_cov")
+    plot_all_spectra(spectra_dict, plot_dir, "check_spectra_noise_cov")
     timer_plots.stop("plots_noise_cov", "Noise covariance outputs plots", args.verbose)
 
     print("\n\nPlotting Noise Covariance outputs completed succesfully\n\n")

@@ -1,12 +1,13 @@
-import yaml
-import numpy as np
 import os
-import healpy as hp
 import time
 import warnings
 
+import healpy as hp
+import numpy as np
+import yaml
 
-class BBmeta(object):
+
+class BBmeta:
     """
     Metadata manager for the BBmaster pipeline.
     The purpose of this class is to provide
@@ -140,7 +141,7 @@ class BBmeta(object):
         """
         Get the name of the galactic mask.
         """
-        fname = f"{self.masks['galactic_mask_root']}_{self.masks['gal_mask_mode']}.fits"  # noqa
+        fname = f"{self.masks['galactic_mask_root']}_{self.masks['gal_mask_mode']}.fits"
         return os.path.join(self.mask_directory, fname)
 
     def _get_binary_mask_name(self):
@@ -262,7 +263,7 @@ class BBmeta(object):
         """ """
         file_root = self.file_root_from_map_set(map_set)
         beam_file = f"{self.beam_directory}/beam_{file_root}.dat"
-        l, bl = np.loadtxt(beam_file, unpack=True)
+        l, bl = np.loadtxt(beam_file, unpack=True)  # noqa: E741
         return l, bl
 
     def _init_simulation_params(self):

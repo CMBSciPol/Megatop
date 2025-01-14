@@ -1,23 +1,19 @@
 import argparse
-from megatop import BBmeta, utils
-from megatop.utils import MemoryUsage, MPISUM, MPIGATHER, MakeNoiseMapsNhitsMSS2
-import numpy as np
+import math
 import os
+import time
+import tracemalloc
+
 import healpy as hp
 import matplotlib.pyplot as plt
-import glob
-import IPython
+import numpy as np
 from matplotlib import cm
-import math
-import megatop.V3calc as V3
-from pre_processing import (
-    CommonBeamConvAndNsideModification,
-)  # , plotTTEEBB_diff, get_Nl_white_noise
-from tqdm import tqdm
-import time
 from mpi4py import MPI
-import tracemalloc
-from inspect import currentframe, getframeinfo, stack
+
+import megatop.utils.V3calc as V3
+from megatop.pipeline.pre_processing import CommonBeamConvAndNsideModification
+from megatop.utils import BBmeta
+from megatop.utils.utils import MPIGATHER, MPISUM, MakeNoiseMapsNhitsMSS2, MemoryUsage
 
 # =================================================================================
 # =                     Main function, calling the wrappers etc                   =
@@ -34,7 +30,6 @@ def GetNoiseCov(args):
             comm = MPI.COMM_WORLD
             size = comm.Get_size()
             rank = comm.rank
-            barrier = comm.barrier
             root = 0
             mpi = True
         except (ModuleNotFoundError, ImportError) as e:
@@ -486,10 +481,7 @@ def wrapper_cov_noise_from_noise_maps(args, meta, mpi):
             args, freq_noise_maps_array
         )
 
-    if (
-        "save_preprocessed_noise_maps" in meta.noise_cov_pars
-        and meta.noise_cov_pars["save_preprocessed_noise_maps"]
-    ):
+    if meta.noise_cov_pars.get("save_preprocessed_noise_maps"):
         if args.verbose:
             print("Saving pre-processed noise maps to disk")
         np.save(
@@ -625,7 +617,7 @@ def plot_cov_matrix(
                 cmap=cmap,
                 cbar=True,
                 hold=True,
-                title=r"Noise cov map $\nu={}$ GHz".format(meta.frequencies[f]),
+                title=rf"Noise cov map $\nu={meta.frequencies[f]}$ GHz",
                 norm=norm,
                 min=minmax[0],
                 max=minmax[1],
@@ -643,7 +635,7 @@ def plot_cov_matrix(
                 cmap=cmap,
                 cbar=True,
                 hold=True,
-                title=r"Noise cov map $\nu={}$ GHz".format(meta.frequencies[f]),
+                title=rf"Noise cov map $\nu={meta.frequencies[f]}$ GHz",
                 norm=None,
                 min=minmax[0],
                 max=minmax[1],
@@ -1178,7 +1170,7 @@ def wrapper_plotting_matrices_and_maps(
     ratio_noisecov_before_after_preproc[..., binary_mask_from_nhits_preproc] /= (
         noise_cov_mean_downgraded[..., binary_mask_from_nhits_preproc]
     )
-    ratio_noisecov_before_after_preproc[..., np.where(binary_mask_from_nhits_preproc == False)] = 0
+    ratio_noisecov_before_after_preproc[..., np.where(~binary_mask_from_nhits_preproc)] = 0
 
     for s in range(3):
         stokes_letter = ["T", "Q", "U"]
@@ -1213,7 +1205,7 @@ def wrapper_plotting_matrices_and_maps(
         cmap=cmap,
         cbar=True,
         hold=True,
-        title=r"Noise cov map $\nu={}$ GHz".format(meta.frequencies[f]),
+        title=rf"Noise cov map $\nu={meta.frequencies[f]}$ GHz",
         norm=None,
     )
     hp.graticule()
@@ -1225,7 +1217,7 @@ def wrapper_plotting_matrices_and_maps(
         cmap=cmap,
         cbar=True,
         hold=True,
-        title=r"Noise cov map $\nu={}$ GHz".format(meta.frequencies[f]),
+        title=rf"Noise cov map $\nu={meta.frequencies[f]}$ GHz",
         norm=None,
     )
     hp.graticule()
@@ -1582,9 +1574,9 @@ def plot_allspectra(
     ax[1][0].set_title("TE")
     ax[1][1].set_title("EB")
     ax[1][2].set_title("TB")
-    ax[1][0].set_xlabel("$\ell$")
-    ax[1][1].set_xlabel("$\ell$")
-    ax[1][2].set_xlabel("$\ell$")
+    ax[1][0].set_xlabel(r"$\ell$")
+    ax[1][1].set_xlabel(r"$\ell$")
+    ax[1][2].set_xlabel(r"$\ell$")
 
     ax[0][0].set_ylabel(axis_labels[0])
     ax[1][0].set_ylabel(axis_labels[1])

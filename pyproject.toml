@@ -10,6 +10,7 @@ description = "A map-based CMB polarization data analysis pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "camb",
   "fgbuster",
   "healpy",
   "matplotlib",
@@ -33,7 +34,7 @@ extend-select = [
   # "EXE",  # flake8-executable
   # "FURB", # refurb
   # "G",    # flake8-logging-format
-  "I",    # isort
+  "I", # isort
   # "ICN",  # flake8-import-conventions
   # "NPY",  # NumPy specific rules
   # "PD",   # pandas-vet
@@ -44,11 +45,11 @@ extend-select = [
   # "PTH",  # flake8-use-pathlib
   # "PYI",  # flake8-pyi
   # "RET",  # flake8-return
-  "RUF",  # Ruff-specific
+  "RUF", # Ruff-specific
   # "SIM",  # flake8-simplify
-  "T10",  # flake8-debugger
+  "T10", # flake8-debugger
   # "T20",  # flake8-print
-  "UP",  # pyupgrade
+  "UP", # pyupgrade
   # "YTT", # flake8-2020
 ]
 ignore = [

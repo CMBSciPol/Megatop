@@ -1,23 +1,11 @@
 import argparse
-from megatop.metadata_manager import BBmeta, Timer
-import IPython
-import warnings
+import copy
+import os
+
 import healpy as hp
 import numpy as np
-from fgbuster.observation_helpers import (
-    get_instrument,
-    get_sky,
-    get_observation,
-    standardize_instrument,
-)
-import glob
-import os
-import sys
-import matplotlib.pyplot as plt
-import megatop.V3calc as V3
-import copy
-import time
-import tracemalloc
+
+from megatop.utils.metadata_manager import BBmeta, Timer
 
 
 def get_maps(args, id_split=None):
@@ -114,7 +102,6 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
     meta = BBmeta(args.globals)
     timer_beam = Timer()
     timer_beam.start("beam")
-    map_dimensions = len(freq_maps.shape)
     freq_maps_out = []
 
     if args.verbose:
@@ -236,7 +223,7 @@ def check_preproc(args):
         cl_preproc_freq_maps (ndarray): The pre-processed frequency maps Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
         model_beamed_total (ndarray): The model beamed total Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
     """
-    meta = BBmeta(args.globals)
+    # meta = BBmeta(args.globals)
     print("NO CHECKS DONE FOR NOW !!!!!")  # TODO
     # Cl_cmb_model = get_Cl_CMB_model_from_meta(args)[:,:3] # Keeping only TT, EE, BB
 

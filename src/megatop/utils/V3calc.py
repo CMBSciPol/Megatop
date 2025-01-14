@@ -1,4 +1,3 @@
-from __future__ import print_function
 import numpy as np
 
 
@@ -250,7 +249,7 @@ def so_V3_SA_noise(
     ## calculate the survey area and time
     t = 5 * 365.0 * 24.0 * 3600  ## five years in seconds
     t = t * 0.2  ## retention after observing efficiency and cuts
-    if remove_kluge == False:
+    if not remove_kluge:
         t = t * 0.85  ## a kluge for the noise non-uniformity of the map edges
         # print("when generating relizations from a hits map, the total integration time should be 1/0.85 longer")
         # print("since we should remove a cluge for map non-uniformity since this is included correcly in a hits map")

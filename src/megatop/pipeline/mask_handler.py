@@ -1,17 +1,19 @@
 import argparse
+import os
+import urllib.request
+
 import healpy as hp
-from megatop import BBmeta
-from megatop.utils import (
-    random_src_mask,
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import cm
+
+from megatop.utils import BBmeta
+from megatop.utils.utils import (
     get_apodized_mask_from_nhits,
     get_binary_mask_from_nhits,
     get_spin_derivatives,
+    random_src_mask,
 )
-import numpy as np
-import os
-import matplotlib.pyplot as plt
-from matplotlib import cm
-import urllib.request
 
 
 def mask_handler(args):
@@ -130,7 +132,7 @@ def mask_handler(args):
             ]
             for id_key, gal_key in enumerate(gal_keys):
                 meta.timer.start(f"gal{id_key}")
-                fname = f"{mask_dir}/{meta.masks['galactic_mask_root']}_{gal_key.lower()}.fits"  # noqa
+                fname = f"{mask_dir}/{meta.masks['galactic_mask_root']}_{gal_key.lower()}.fits"
                 gal_mask_p15 = hp.read_map(mask_p15_file, field=id_key)
                 if not os.path.exists(fname):
                     # Rotate in equatorial coordinates

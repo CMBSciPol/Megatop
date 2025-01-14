@@ -1,19 +1,15 @@
 import argparse
-from megatop.metadata_manager import BBmeta, Timer
-from megatop import utils
-from fgbuster.component_model import CMB, Dust, Synchrotron
-import fgbuster as fg
-import numpy as np
 import os
+
 import healpy as hp
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib import cm
-from tqdm import tqdm
-import time
-import IPython
+import matplotlib.pyplot as plt
+import numpy as np
 import pymaster as nmt
 import scipy
+
+from megatop.utils import utils
+from megatop.utils.metadata_manager import BBmeta, Timer
 
 
 def compute_auto_cross_cl_from_maps_list(
@@ -306,8 +302,8 @@ def spectra_estimation(args):
 
     np.savez(os.path.join(meta.spectra_directory, "cross_components_Cls.npz"), **all_Cls)
 
-    if args.plots:
-        all_Clslminlmax = utils.apply_lminlmax_to_dict(all_Cls, bin_index_lminlmax)
+    # if args.plots:
+    #     all_Clslminlmax = utils.apply_lminlmax_to_dict(all_Cls, bin_index_lminlmax)
     timer_spectra.stop("spectra_estimation", "Spectra estimation", args.verbose)
 
     timer_spectra.start("noise_spectra_estimation")
@@ -345,65 +341,65 @@ def spectra_estimation(args):
     if args.plots:
         print("WARNING: Plots are now done in plot_spectra.py and not in map_to_cl.py")
 
-    if False:  # args.plots:
-        timer_spectra.start("plotting")
-        plot_dir = meta.plot_dir_from_output_dir(meta.spectra_directory_rel)
-        input_cmb_spectra = utils.get_Cl_CMB_model_from_meta(meta)[0][:, : 3 * meta.nside]
-        binned_input_cmb_spectra = nmt_bins.bin_cell(input_cmb_spectra)
-        reshape_input_cmb_spectra = np.array(
-            [
-                binned_input_cmb_spectra[1],
-                binned_input_cmb_spectra[-2],
-                binned_input_cmb_spectra[-2],
-                binned_input_cmb_spectra[2],
-            ]
-        )
+    # if False:  # args.plots:
+    #     timer_spectra.start("plotting")
+    #     plot_dir = meta.plot_dir_from_output_dir(meta.spectra_directory_rel)
+    #     input_cmb_spectra = utils.get_Cl_CMB_model_from_meta(meta)[0][:, : 3 * meta.nside]
+    #     binned_input_cmb_spectra = nmt_bins.bin_cell(input_cmb_spectra)
+    #     reshape_input_cmb_spectra = np.array(
+    #         [
+    #             binned_input_cmb_spectra[1],
+    #             binned_input_cmb_spectra[-2],
+    #             binned_input_cmb_spectra[-2],
+    #             binned_input_cmb_spectra[2],
+    #         ]
+    #     )
 
-        plot_all_Cls(
-            all_Clslminlmax,
-            bin_centre[bin_index_lminlmax],
-            plot_dir + "/all_Cls.png",
-            cmb_theory_cls=reshape_input_cmb_spectra[:, bin_index_lminlmax],
-        )
-        plot_all_Cls_and_diffs(
-            {"CMBxCMB": all_Clslminlmax["CMBxCMB"]},
-            reshape_input_cmb_spectra[:, bin_index_lminlmax],
-            bin_centre[bin_index_lminlmax],
-            plot_dir + "/Delta_CMB.png",
-            reference_name="Input CMB",
-        )
+    #     plot_all_Cls(
+    #         all_Clslminlmax,
+    #         bin_centre[bin_index_lminlmax],
+    #         plot_dir + "/all_Cls.png",
+    #         cmb_theory_cls=reshape_input_cmb_spectra[:, bin_index_lminlmax],
+    #     )
+    #     plot_all_Cls_and_diffs(
+    #         {"CMBxCMB": all_Clslminlmax["CMBxCMB"]},
+    #         reshape_input_cmb_spectra[:, bin_index_lminlmax],
+    #         bin_centre[bin_index_lminlmax],
+    #         plot_dir + "/Delta_CMB.png",
+    #         reference_name="Input CMB",
+    #     )
 
-        unbiased_Cls = {}
-        for key_signal, key_noise in zip(all_Cls.keys(), Cls_noise.keys()):
-            unbiased_Cls[key_signal] = all_Clslminlmax[key_signal] - Cls_noiselminlmax[key_noise]
+    #     unbiased_Cls = {}
+    #     for key_signal, key_noise in zip(all_Cls.keys(), Cls_noise.keys()):
+    #         unbiased_Cls[key_signal] = all_Clslminlmax[key_signal] - Cls_noiselminlmax[key_noise]
 
-        plot_all_Cls(
-            unbiased_Cls,
-            bin_centre[bin_index_lminlmax],
-            plot_dir + "/unbiased_Cls.png",
-            cmb_theory_cls=reshape_input_cmb_spectra[:, bin_index_lminlmax],
-        )
-        plot_all_Cls_and_diffs(
-            {"CMBxCMB": unbiased_Cls["CMBxCMB"]},
-            reshape_input_cmb_spectra[:, bin_index_lminlmax],
-            bin_centre[bin_index_lminlmax],
-            plot_dir + "/Delta_CMB_debiased.png",
-            reference_name="Input CMB",
-        )
+    #     plot_all_Cls(
+    #         unbiased_Cls,
+    #         bin_centre[bin_index_lminlmax],
+    #         plot_dir + "/unbiased_Cls.png",
+    #         cmb_theory_cls=reshape_input_cmb_spectra[:, bin_index_lminlmax],
+    #     )
+    #     plot_all_Cls_and_diffs(
+    #         {"CMBxCMB": unbiased_Cls["CMBxCMB"]},
+    #         reshape_input_cmb_spectra[:, bin_index_lminlmax],
+    #         bin_centre[bin_index_lminlmax],
+    #         plot_dir + "/Delta_CMB_debiased.png",
+    #         reference_name="Input CMB",
+    #     )
 
-        plot_all_Cls(
-            Cls_noiselminlmax,
-            bin_centre[bin_index_lminlmax],
-            plot_dir + "/Noise_Cls.png",
-            cmb_theory_cls=reshape_input_cmb_spectra[:, bin_index_lminlmax],
-        )
-        plot_all_Cls(
-            Cls_noise_offdiaglminlmax,
-            bin_centre[bin_index_lminlmax],
-            plot_dir + "/Noise_Cls_offdiag.png",
-            cmb_theory_cls=reshape_input_cmb_spectra[:, bin_index_lminlmax],
-        )
-        timer_spectra.stop("plotting", "Plotting", args.verbose)
+    #     plot_all_Cls(
+    #         Cls_noiselminlmax,
+    #         bin_centre[bin_index_lminlmax],
+    #         plot_dir + "/Noise_Cls.png",
+    #         cmb_theory_cls=reshape_input_cmb_spectra[:, bin_index_lminlmax],
+    #     )
+    #     plot_all_Cls(
+    #         Cls_noise_offdiaglminlmax,
+    #         bin_centre[bin_index_lminlmax],
+    #         plot_dir + "/Noise_Cls_offdiag.png",
+    #         cmb_theory_cls=reshape_input_cmb_spectra[:, bin_index_lminlmax],
+    #     )
+    #     timer_spectra.stop("plotting", "Plotting", args.verbose)
 
     return all_Cls
 

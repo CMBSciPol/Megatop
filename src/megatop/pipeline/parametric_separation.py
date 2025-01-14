@@ -1,16 +1,14 @@
 import argparse
-from megatop.metadata_manager import BBmeta, Timer
-from fgbuster.component_model import CMB, Dust, Synchrotron
-from fgbuster.mixingmatrix import MixingMatrix
-import fgbuster as fg
-import numpy as np
 import os
+
+import fgbuster as fg
 import healpy as hp
 import matplotlib.pyplot as plt
-from matplotlib import cm
-from tqdm import tqdm
-import time
-import IPython
+import numpy as np
+from fgbuster.component_model import CMB, Dust, Synchrotron
+from fgbuster.mixingmatrix import MixingMatrix
+
+from megatop.utils.metadata_manager import BBmeta, Timer
 
 
 def weighted_comp_sep(args):

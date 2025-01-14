@@ -1,11 +1,11 @@
 import argparse
-from megatop.metadata_manager import BBmeta, Timer
-import healpy as hp
-import numpy as np
 import os
+
+import healpy as hp
 import matplotlib.pyplot as plt
-import megatop.V3calc as V3
-import IPython
+import numpy as np
+
+from megatop.utils.metadata_manager import BBmeta, Timer
 
 
 def plot_all_maps(meta, map_array, output, file_name):
@@ -109,7 +109,7 @@ if __name__ == "__main__":
 
     for i, map_name in enumerate(meta.maps_list):
         spectra_dict[map_name] = hp.anafast(freq_maps_beamed_masked[i], lmax=lmax)
-    plot_all_spectra(spectra_dict, plot_dir, f"check_spectra_pre_processed")
+    plot_all_spectra(spectra_dict, plot_dir, "check_spectra_pre_processed")
     timer_plots.stop("plots_pre_proc", "Pre-processing outputs plots", args.verbose)
 
     print("\n\nPlotting Pre-processing outputs completed succesfully\n\n")

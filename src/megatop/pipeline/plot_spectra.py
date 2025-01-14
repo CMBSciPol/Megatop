@@ -1,14 +1,14 @@
 import argparse
-from megatop.metadata_manager import BBmeta, Timer
-import healpy as hp
-import numpy as np
 import os
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import megatop.V3calc as V3
-from megatop import utils
-import pymaster as nmt
+
 import IPython
+import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import numpy as np
+import pymaster as nmt
+
+from megatop.utils import utils
+from megatop.utils.metadata_manager import BBmeta, Timer
 
 
 def plot_all_Cls(all_Cls, bin_centre, file_path, cmb_theory_cls=None):
@@ -103,7 +103,7 @@ def plot_all_Cls_and_diffs(
 
 
 def main_spectra_plotting(meta):
-    mask = meta.read_mask("binary").astype(bool)
+    # mask = meta.read_mask("binary").astype(bool)
     fsky_mask = 1  # sum(mask) / len(mask)
 
     bin_low, bin_high, bin_centre = utils.create_binning(

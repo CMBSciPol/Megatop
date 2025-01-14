@@ -1,16 +1,15 @@
-import numpy as np
 import os
+import time
+import tracemalloc
+from inspect import getframeinfo, stack
 
-# import soopercool.SO_Noise_Calculator_Public_v3_1_2 as noise_calc
+import camb
 import healpy as hp
 import matplotlib.pyplot as plt
+import numpy as np
+import pymaster as nmt
 from matplotlib import cm
-import camb
-from inspect import currentframe, getframeinfo, stack
-import tracemalloc
 from mpi4py import MPI
-import IPython
-import time
 
 
 def get_theory_cls(cosmo_params, lmax, lmin=0):
@@ -52,43 +51,6 @@ def generate_noise_map_white(nside, noise_rms_muKarcmin, ncomp=3):
     return out_map
 
 
-def get_noise_cls(noise_kwargs, lmax, lmin=0, fsky=0.1, is_beam_deconvolved=False):
-    """
-    Load polarization noise from SO SAT noise model.
-    Assume polarization noise is half of that.
-    """
-    oof_dict = {"pessimistic": 0, "optimistic": 1}
-    oof_mode = noise_kwargs["one_over_f_mode"]
-    oof_mode = oof_dict[oof_mode]
-
-    sensitivity_mode = noise_kwargs["sensitivity_mode"]
-
-    noise_model = noise_calc.SOSatV3point1(
-        sensitivity_mode=sensitivity_mode,
-        N_tubes=[1.0, 1.0, 1.0],
-        one_over_f_mode=oof_mode,
-        survey_years=noise_kwargs["survey_years"],
-    )
-    lth, _, nlth_P = noise_model.get_noise_curves(
-        fsky, lmax + 1, delta_ell=1, deconv_beam=is_beam_deconvolved
-    )
-    lth = np.concatenate(([0, 1], lth))[lmin:]
-    nlth_P = np.array([np.concatenate(([0, 0], nl))[lmin:] for nl in nlth_P])
-
-    # Attention: at the moment, the noise model's frequencies must match
-    # soopercool's frequency tags.
-    freq_tags = [int(f) for f in noise_model.get_bands()]
-    nl_all_frequencies = {}
-    for i_f, freq_tag in enumerate(freq_tags):
-        nl_th_dict = {pq: nlth_P[i_f] for pq in ["EE", "EB", "BE", "BB"]}
-        nl_th_dict["TT"] = 0.5 * nlth_P[i_f]
-        nl_th_dict["TE"] = 0.0 * nlth_P[i_f]
-        nl_th_dict["TB"] = 0.0 * nlth_P[i_f]
-        nl_all_frequencies[freq_tag] = nl_th_dict
-
-    return lth, nl_all_frequencies
-
-
 def generate_noise_map(nl_T, nl_P, hitmap, n_splits, is_anisotropic=True):
     """ """
     # healpix ordering ["TT", "EE", "BB", "TE"]
@@ -100,7 +62,7 @@ def generate_noise_map(nl_T, nl_P, hitmap, n_splits, is_anisotropic=True):
 
     if is_anisotropic:
         # Weight with hitmap
-        noise_map[:, hitmap != 0] /= np.sqrt(hitmap[hitmap != 0] / np.max(hitmap))  # noqa
+        noise_map[:, hitmap != 0] /= np.sqrt(hitmap[hitmap != 0] / np.max(hitmap))
 
     return noise_map
 
@@ -116,42 +78,6 @@ def random_src_mask(mask, nsrcs, mask_radius_arcmin):
         disc = hp.query_disc(hp.get_nside(mask), vec, np.deg2rad(mask_radius_arcmin / 60))
         ps_mask[disc] = 0
     return ps_mask
-
-
-def get_beam_windows(meta, plot=False):
-    """
-    Compute and save dictionary with beam window functions for each map set.
-    """
-    oof_dict = {"pessimistic": 0, "optimistic": 1}
-
-    noise_model = noise_calc.SOSatV3point1(
-        survey_years=meta.noise["survey_years"],
-        sensitivity_mode=meta.noise["sensitivity_mode"],
-        one_over_f_mode=oof_dict[meta.noise["one_over_f_mode"]],
-    )
-
-    lth = np.arange(3 * meta.nside)
-    beam_arcmin = {
-        int(freq_band): beam_arcmin
-        for freq_band, beam_arcmin in zip(noise_model.get_bands(), noise_model.get_beams())
-    }
-    beams_dict = {}
-    for map_set in meta.map_sets_list:
-        freq_tag = meta.freq_tag_from_map_set(map_set)
-        beams_dict[map_set] = beam_gaussian(lth, beam_arcmin[freq_tag])
-        file_root = meta.file_root_from_map_set(map_set)
-
-        if not os.path.exists(file_root):
-            np.savetxt(
-                f"{meta.beam_directory}/beam_{file_root}.dat",
-                np.transpose([lth, beams_dict[map_set]]),
-            )
-        if plot:
-            plt.plot(lth, beams_dict[map_set], label=map_set)
-    if plot:
-        plt.yscale("log")
-        plt.legend()
-        plt.savefig(f"{meta.beam_directory}/beams.png")
 
 
 def beam_gaussian(ll, fwhm_amin):
@@ -315,8 +241,9 @@ def toast_filter_map(
     sim_noise : bool
         If True, simulate noise with TOAST.
     """
-    from jinja2 import Environment, FileSystemLoader
     from pathlib import Path
+
+    from jinja2 import Environment, FileSystemLoader
 
     del map, mask  # delete unused arguments
 
@@ -607,7 +534,7 @@ def plot_transfer_validation(
                 else:
                     main.set_ylabel(r"$\ell(\ell+1)C_\ell/2\pi$", fontsize=13)
                 sub.set_ylabel(
-                    r"$\Delta C_\ell / (\sigma/\sqrt{N_\mathrm{sims}})$",  # noqa
+                    r"$\Delta C_\ell / (\sigma/\sqrt{N_\mathrm{sims}})$",
                     fontsize=13,
                 )
 
@@ -653,8 +580,6 @@ def get_apodized_mask_from_nhits(
     * (optional) apodize (binary * galactic * point source)
     * Multiply everything by (smoothed) nhits map
     """
-    import pymaster as nmt
-
     # Smooth and normalize hits map
     nhits_map = hp.smoothing(
         hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64), fwhm=np.pi / 180
@@ -791,7 +716,7 @@ def MPIGATHER(array, comm, rank, size, root):
 
     array_recvbuf = None
     if rank == 0:
-        shape_recvbuf_array = (size,) + array.shape
+        shape_recvbuf_array = (size, *array.shape)
         array_recvbuf = np.empty(shape_recvbuf_array)
 
         # Ensure recvbuf is contiguous
@@ -818,7 +743,7 @@ def debuginfo(message):
 
     """
     caller = getframeinfo(stack()[2][0])
-    print("%s:%d - %s" % (caller.filename, caller.lineno, message))  # python3 syntax print
+    print(f"{caller.filename}:{caller.lineno} - {message}")
 
 
 def MemoryUsage(args, message=""):

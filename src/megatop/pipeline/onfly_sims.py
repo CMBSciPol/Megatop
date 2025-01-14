@@ -1,20 +1,19 @@
 import argparse
-from megatop.metadata_manager import BBmeta
+import os
 import warnings
+
 import healpy as hp
+import matplotlib.pyplot as plt
 import numpy as np
+import pysm3
 from fgbuster.observation_helpers import (
-    get_instrument,
-    get_sky,
     get_observation,
     standardize_instrument,
 )
-import os
-import matplotlib.pyplot as plt
-import megatop.V3calc as V3
-from megatop.utils import get_Cl_CMB_model_from_meta, MakeNoiseMapsNhitsMSS2
-import IPython
-import pysm3
+
+import megatop.utils.V3calc as V3
+from megatop.utils.metadata_manager import BBmeta
+from megatop.utils.utils import MakeNoiseMapsNhitsMSS2, get_Cl_CMB_model_from_meta
 
 SO_FREQS = [27, 39, 93, 145, 220, 280]  # TODO: Dodgy ...
 
@@ -503,7 +502,7 @@ def save_noise_maps(meta, noise_maps, id=0):
         hp.write_map(
             fname, noise_maps[i_f], dtype=["float64", "float64", "float64"], overwrite=True
         )
-    fname = os.path.join(meta.mock_directory, "noise_sim_id_{:04d}".format(id))
+    fname = os.path.join(meta.mock_directory, f"noise_sim_id_{id:04d}")
     np.save(fname, noise_maps)
 
 
