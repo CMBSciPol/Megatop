@@ -22,6 +22,7 @@ dependencies = [
 
 [tool.ruff]
 line-length = 100
+exclude = ["scripts/get_carlos_sims.py"]
 
 [tool.ruff.lint]
 extend-select = [
