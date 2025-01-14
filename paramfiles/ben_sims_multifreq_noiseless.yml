@@ -5,16 +5,16 @@
 # Define the directories
 ## Let's start with directories of data products
 data_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest_d0s0_nside128_correctsave_all5arcmin/data"
-  map_directory: "maps"
+  root: "/pscratch/sd/b/beringue/BB-AWG/MEGATOP/1224_sims_obsmat_freqs"
+  map_directory: ""
   beam_directory: "beams"
   bandpasses_directory: "bandpasses"
-  mock_directory: "mock_noise"
+  mock_directory: ""
 
   
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest_d0s0_nside128_correctsave_all5arcmin/outputs"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/ben_sims_multifreq_noiseless/outputs_0000"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  
@@ -64,7 +64,7 @@ map_sets:
     noise_root: "noise_sat1_f145"   
   SAT3_f220:
     file_root: "sat3_f220"
-    freq_tag: 220         # Freq. tag (e.g. useful to coadd freqs)
+    freq_tag: 225         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT3"      # Experiment tag (useful to get noise-bias free cross-split spectra)
     noise_root: "noise_sat3_f220"   
   SAT3_f280:
@@ -80,7 +80,7 @@ map_sets:
 masks:
   # Load nhits map from disk? Give absolute location here.
   # If left blank, the mask handler will download the nominal nhits map.
-  input_nhits_path:
+  input_nhits_path: "/global/cfs/cdirs/sobs/sims/mss-0002/RC1.r01/sobs_RC1.r01_SAT4_mission_f030_4way_coadd_sky_ivar_healpix.fits"
 
   # Copies of all masks are stored under these names inside mask_directory
   analysis_mask: "analysis_mask.fits"
@@ -90,8 +90,8 @@ masks:
   point_source_mask: "point_source_mask.fits"
   mask_handler_binary_zero_threshold: 0.1 #default 1.0e-3
 
-  include_in_mask: ['galactic']
-  gal_mask_mode: "gal070"
+  include_in_mask: []
+  gal_mask_mode: 
   apod_radius: 10.0
   apod_radius_point_source: 4.0
   apod_type: "C1"
@@ -105,6 +105,9 @@ general_pars:
   nside: 128
   lmin: 30 #30
   lmax: 256 #200
+  ben_sims: True
+  id_sim: 0
+  noiseless_filtered: True
   # nlb: 10
   # custom_bins: True
   # include_stat_res: False
@@ -113,14 +116,15 @@ general_pars:
 
 
 pre_proc_pars:
-    common_beam_correction: 5.0 # In arcmin. If 0 the common beam step will be skipped
-    # fwhm: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
-    fwhm: [5., 5., 5., 5., 5., 5.] # In arcmin for each frequency. TODO: replace with path to import from file?
+    common_beam_correction: 100.0 # In arcmin. If 0 the common beam step will be skipped
+    fwhm: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
+    # fwhm: [5., 5., 5., 5., 5., 5.] # In arcmin for each frequency. TODO: replace with path to import from file?
     # fwhm: [30., 30., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
 
 
 noise_cov_pars:
     noise_cov_method: 'load_sims'
+    save_preprocessed_noise_maps: True
     # white_noise_levels: [ 4.65454857  5.23636714 10.48726965 25.75820616]
     # noise_lvl_uKarcmin:  # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
     #   (SAT4, 27): 17.76741806032688
@@ -130,8 +134,8 @@ noise_cov_pars:
     #   (SAT3, 220): 8.474221515572802
     #   (SAT3, 280): 21.861113346794266 
     # mock_noise_directory: '/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest/data/mock_noise' #TODO: redundant with data_dirs.mock_directory ? 
-    nsims_noise_cov: 2
-    include_nhits: False
+    # nsims_noise_cov: 2
+    # include_nhits: False
     nsims_plot: 1 # number of simulations that will be used for ploting
     # mask_to_apply: False #"binary_mask.fits"
 

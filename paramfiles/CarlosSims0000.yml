@@ -1,0 +1,176 @@
+# Here is a sample .yaml file that can be used
+# to store the metadata necessary to run the
+# SO BB pipeline.
+
+# Define the directories
+## Let's start with directories of data products
+data_dirs:
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/CarlosInput/Gaussian_f090_0000"
+  map_directory: ''  # Empty string: assume the nhits map are stored in root
+  nhits_directory: '' # Empty string:  assume the nhits map are stored in root
+  noise_maps_directory: '/pscratch/sd/j/jost/SO_MEGATOP/CarlosInput/Gaussian_f090_0000/noise'
+  cmb_maps_directory: ''
+  # beam_directory: "beams"
+  # bandpasses_directory: "bandpasses"
+  # mock_directory: "mock_data"
+## Then directories in which we will store outputs
+output_dirs:
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/Carlos/Test0000_commonbeam50"
+  mask_directory: "masks"
+  pre_process_directory: "pre_processing"
+  covmat_directory: "covariances"  
+  plots_directory: "plots"
+  components_directory: "components"
+  spectra_directory: "spectra"  
+
+
+fiducial_cmb: 
+  cls_cmb_directory: "/global/homes/j/jost/Megatop/fiducial_cmb_spectra"
+  lensed: "Cls_Planck2018_lensed_scalar.fits"
+  unlensed_scalar_tensor_r1: "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
+
+##################################
+#    Metadata related to maps    #
+# ------------------------------ #
+#                                #
+# The structure of input splits  #
+# is the following:              #
+#                                #
+# tag:                           #
+#   file_root: ...               #
+#   n_splits: ...                #
+#   freq_tag: ...                #
+#   exp_tag: ...                 #
+##################################
+# /global/cfs/cdirs/sobs/sims/mss-0002/RC1.r01/
+map_sets:
+  SAT_f090:
+    file_root: "f090_full_map"
+    fg_root: 
+    cmb_root: 
+    noise_root: "f090_full_noise_map"
+    nhits_map_path: 
+    freq_tag: 93         # Freq. tag (e.g. useful to coadd freqs)
+    exp_tag: "SAT1"      # Experiment tag (useful to get noise-bias free cross-split spectra)
+    set_tag: CarlosSims
+  SAT_f150:
+    file_root: "f150_full_map"
+    fg_root: 
+    cmb_root: 
+    noise_root: "f150_full_noise_map"
+    nhits_map_path: 
+    freq_tag: 145
+    exp_tag: "SAT1"
+    set_tag: CarlosSims
+  Planck_f353_A:
+    file_root: "f353_A_full_map"
+    fg_root: 
+    cmb_root: 
+    noise_root: "f353_noise_map_diff_splits" # WARNING: This is a placeholder, the noise map is not used in the analysis
+    nhits_map_path: 
+    freq_tag: 353
+    exp_tag: "Planck_A"
+    set_tag: CarlosSims
+  Planck_f353_B:
+    file_root: "f353_B_full_map"
+    fg_root: 
+    cmb_root: 
+    noise_root: "f353_noise_map_diff_splits" # WARNING: This is a placeholder, the noise map is not used in the analysis
+    nhits_map_path: 
+    freq_tag: 353
+    exp_tag: "Planck_B"
+    set_tag: CarlosSims
+
+
+
+
+####################
+# Masking metadata #
+####################
+masks:
+  # Load nhits map from disk? Give absolute location here.
+  # If left blank, the mask handler will download the nominal nhits map.
+  input_nhits_path: "/global/cfs/projectdirs/sobs/awg_bb/bbmaster_paper/hits_full.fits"
+
+  # Copies of all masks are stored under these names inside mask_directory
+  analysis_mask: "analysis_mask.fits"
+  nhits_map: "nhits_map.fits"
+  binary_mask: "binary_mask.fits"
+  galactic_mask_root: "planck_galactic_mask"
+  point_source_mask: "point_source_mask.fits"
+  mask_handler_binary_zero_threshold: 0.1 #default 1.0e-3
+
+
+  include_in_mask: []
+  gal_mask_mode: "gal070"
+  apod_radius: 10.0
+  apod_radius_point_source: 4.0
+  apod_type: "C1"
+
+####################################
+# Metadata related to the analysis #
+####################################
+## General parameters
+general_pars:
+  nside: 512 #256
+  lmin: 30 #30
+  lmax: 1000 #200
+
+pre_proc_pars:
+    common_beam_correction: 50.0 # In arcmin. If 0 the common beam step will be skipped
+    fwhm: [30., 17., 5., 5.] # In arcmin for each frequency. TODO: replace with path to import from file?
+    # fwhm: [30., 30., 30., 30.] # In arcmin for each frequency. TODO: replace with path to import from file?
+
+noise_cov_pars:
+    noise_cov_method: 'load_sims' # tag for the simulations, can be ['sims_in_noisecov', 'load_sims'], sims_in_noisecov: will simulate the (white) noise maps with nhits during the noise cov step,
+                               #  load_sims: will load the noise maps from disk generated during the simulations step. 
+
+    # nsims_noise_cov:  # number of simulations used to estimate the noise covariance matrix
+    # include_nhits: True #Sim related parameter
+    nsims_plot: 1 # number of simulations that will be used for ploting
+
+parametric_sep_pars:
+  # minimization options
+  method: 'TNC'
+  tol: 1.0e-18
+  options:
+    disp: False
+    gtol: 1.0e-12
+    eps: 1.0e-12
+    maxiter: 100
+    ftol: 1.0e-12
+  DEBUG_UseSynchrotron: False
+
+map2cl_pars:
+    delta_ell: 10 # can also be a list
+    purify_e: True
+    purify_b: True
+    n_iter_namaster: 3
+
+plot_pars:
+  lmin_plot: 30
+  lmax_plot: 500
+
+# noise_sim_pars:
+#     # noise_lvl_uKarcmin: [17.76741806032688, 21.207586012564423, 2.77243249663342, 2.798531403709892, 
+#     #                      8.474221515572802, 21.861113346794266] # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
+#     # TODO: (?) each element could also be stored in map_sets, maybe more convenient? But less clear that it is for sims
+#     noise_lvl_uKarcmin:  # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
+#       (SAT4, 30): 17.76741806032688
+#       (SAT4, 40): 21.207586012564423
+#       (SAT1, 90): 2.77243249663342
+#       (SAT1, 150): 2.798531403709892
+#       (SAT3, 230): 8.474221515572802
+#       (SAT3, 290): 21.861113346794266 
+#     include_nhits: True
+
+
+####################################
+# Metadata related to simulation   #
+####################################
+
+#Simulation of signal and foregrounds
+map_sim_pars:
+
+noise_sim_pars:
+

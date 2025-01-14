@@ -43,7 +43,7 @@ def make_sims(meta, verbose=True, plots=False, noise_only=False):
     fsky_binary = sum(binary_mask) / len(binary_mask)
 
     n_ell, map_white_noise_levels, beams_FWHM = get_noise_beams(meta, fsky_binary=fsky_binary)
-
+    
     instrument_config = {
         'frequency' : meta.frequencies,
         'depth_i' : map_white_noise_levels/np.sqrt(2),
@@ -217,11 +217,14 @@ def make_sims(meta, verbose=True, plots=False, noise_only=False):
     
     cmb_fg_noise_freq_maps = cmb_fg_freq_maps_beamed + noise_maps
 
-    if meta.noise_sim_pars['include_nhits']:  #TODO: This is not used for now !!
+    # if meta.noise_sim_pars['include_nhits']:  #TODO: This is not used for now !!
         # Importing mask from the simulations nside to apply to simulated maps
         # Necessary to do it here when applying 1/sqrt(nhits) to the noise maps as it will create inf in the noise maps
-        binary_mask_sim = meta.read_mask('binary')
-        cmb_fg_noise_freq_maps[...,np.where(binary_mask_sim==0)[0]] = 0 # hp.UNSEEN
+    # Applying mask to all products:
+    binary_mask_sim = meta.read_mask('binary')
+    cmb_fg_noise_freq_maps[...,np.where(binary_mask_sim==0)[0]] = 0 # hp.UNSEEN
+    cmb_fg_freq_maps_beamed[...,np.where(binary_mask_sim==0)[0]] = 0 # hp.UNSEEN
+    noise_maps[...,np.where(binary_mask_sim==0)[0]] = 0 # hp.UNSEEN
 
     meta.timer.stop('sim', "Simulating one sky", verbose)
 
@@ -249,10 +252,20 @@ def get_noise_beams(meta, fsky_binary, verbose=True):
                 SAC_yrs_LF = meta.noise_sim_pars['SAC_yrs_LF'], f_sky = fsky_binary, 
                 ell_max = meta.general_pars['lmax'], delta_ell=1,
                 beam_corrected=False, remove_kluge=False, CMBS4='')
-        beams = V3.so_V3_SA_beams()
-        beams = beams[idx_freqs]
+        # beams = V3.so_V3_SA_beams()
+        # beams = beams[idx_freqs]
+        print('WARNING: The beam used are the ones from the yml file, not the ones from V3calc')
+        print('This is much more flexible')
+        beams = meta.pre_proc_pars['fwhm']
+
         map_white_noise_levels =  map_white_noise_levels[idx_freqs]
         if verbose: print('Map_white_noise_levels = ', map_white_noise_levels)
+        # TODO: create an exception or warning  or a way to propoely handle the case if noise_cov_method: 'sim_in_noisecov' is used with SO
+        # indeed then the noise lvl would be different for now...
+        if meta.noise_cov_pars['noise_cov_method'] == 'sim_in_noisecov':
+            print('WARNING: When using SO as experiment, for the noise covariance step one should be carefull when using noise_cov_method = sim_in_noise_cov')
+            print('Please make sure the noise lvl in noise_cov_pars.noise_lvl_uKarcmin is the same as the one used in the simulation.')
+            print('A solution is to use MSS2 experiment which will use consistent noise lvl')
 
     if meta.noise_sim_pars['experiment'] == 'MSS2':
         print('WARNING: When using MSS2 as experiment, ouptut map_noise_lvl from get_noise_beams() should be ignored.')
@@ -371,7 +384,57 @@ def check_sims(meta, cmb_fg_freq_maps_beamed):
             None
         '''
         print("NO CHECKS DONE FOR NOW !!!!!") #TODO
-        # # cl_cmb_sky_maps = hp.anafast(cmb_sky)
+
+        
+def save_sims(meta,cmb_fg_freq_maps_beamed):
+    for i_f, map in enumerate(meta.maps_list):
+        fname=os.path.join(meta.map_directory, meta.map_sets[map]['file_root']+'.fits')
+        hp.write_map(fname, cmb_fg_freq_maps_beamed[i_f], dtype=['float64', 'float64', 'float64'], overwrite=True)
+
+def save_noise_maps(meta, noise_maps, id=0):
+    for i_f, map in enumerate(meta.maps_list):
+        fname=os.path.join(meta.mock_directory, meta.map_sets[map]['noise_root']+'.fits')
+        hp.write_map(fname, noise_maps[i_f], dtype=['float64', 'float64', 'float64'], overwrite=True)
+    fname=os.path.join(meta.mock_directory, 'noise_sim_id_{:04d}'.format(id))
+    np.save(fname, noise_maps)
+    
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='simplistic simulator')
+    parser.add_argument("--globals", type=str,
+                        help="Path to yaml with global parameters") 
+    parser.add_argument("--plots", action="store_true",
+                        help="Plot various outputs maps if True.")
+    parser.add_argument("--sim_id", type=int,
+                        help="Id of the simulation (useful fo noise covariance estimation)")
+    parser.add_argument("--verbose", action="store_true")
+    args = parser.parse_args()
+    meta = BBmeta(args.globals)
+    cmb_fg_noise_freq_maps, cmb_fg_freq_maps_beamed, noise_maps = make_sims(meta, verbose=args.verbose, plots=args.plots)
+    check_sims(meta, cmb_fg_freq_maps_beamed)
+    if meta.noise_sim_pars["save_noise_sim"]:
+        if args.sim_id is not None:
+            save_noise_maps(meta,noise_maps,args.sim_id)
+        else:
+            save_noise_maps(meta,noise_maps)
+
+    # save_sims(meta, cmb_fg_freq_maps_beamed)
+    save_sims(meta, cmb_fg_noise_freq_maps)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            # # cl_cmb_sky_maps = hp.anafast(cmb_sky)
 
         # cl_noise_f = []
         # cl_cmb_fg_freq_maps_beamed = []
@@ -412,34 +475,3 @@ def check_sims(meta, cmb_fg_freq_maps_beamed):
         #                 os.path.join(meta.plots_directory, 'sky_beamed_check.png') , 
         #                 legend_labels=[r'$C_{\ell}^{\rm CMB+fg beamed}$ from map', r'Input $C_{\ell}^{\rm CMB+fg beamed}$'], 
         #                 axis_labels=[r'$D_\ell \, [\mu K \, rad]^2$', r'$\frac{\Delta_{\ell}}{\rm{Input}_\ell}$'])
-        
-def save_sims(meta,cmb_fg_freq_maps_beamed):
-    for i_f, map in enumerate(meta.maps_list):
-        fname=os.path.join(meta.map_directory, meta.map_sets[map]['file_root']+'.fits')
-        hp.write_map(fname, cmb_fg_freq_maps_beamed[i_f], dtype=['float64', 'float64', 'float64'], overwrite=True)
-
-def save_noise_maps(meta, noise_maps, id=0):
-    fname=os.path.join(meta.mock_directory, 'noise_sim_id_{:04d}'.format(id))
-    np.save(fname, noise_maps)
-    
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='simplistic simulator')
-    parser.add_argument("--globals", type=str,
-                        help="Path to yaml with global parameters") 
-    parser.add_argument("--plots", action="store_true",
-                        help="Plot various outputs maps if True.")
-    parser.add_argument("--sim_id", type=int,
-                        help="Id of the simulation (useful fo noise covariance estimation)")
-    parser.add_argument("--verbose", action="store_true")
-    args = parser.parse_args()
-    meta = BBmeta(args.globals)
-    cmb_fg_noise_freq_maps, cmb_fg_freq_maps_beamed, noise_maps = make_sims(meta, verbose=args.verbose, plots=args.plots)
-    check_sims(meta, cmb_fg_freq_maps_beamed)
-    if meta.noise_sim_pars["save_noise_sim"]:
-        if args.sim_id is not None:
-            save_noise_maps(meta,noise_maps,args.sim_id)
-        else:
-            save_noise_maps(meta,noise_maps)
-
-    save_sims(meta, cmb_fg_freq_maps_beamed)

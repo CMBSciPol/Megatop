@@ -13,7 +13,7 @@ from tqdm import tqdm
 import time
 import IPython
 import pymaster as nmt
-
+import scipy
 
 def compute_auto_cross_cl_from_maps_list(maps_dict, mask, beam, workspace, purify_e=True, purify_b=True, n_iter=3):
 
@@ -205,6 +205,7 @@ def spectra_estimation(args):
     
     # Loading analysis mask
     mask_analysis = meta.read_mask('analysis')
+    binary_mask = meta.read_mask('binary').astype(bool)
 
     # Initializin workspace
     timer_spectra.start('initializing_workspace')
@@ -233,7 +234,41 @@ def spectra_estimation(args):
 
     # Testing the function
     timer_spectra.start('spectra_estimation')
-    comp_dict = {'CMB': comp_maps[0], 'Dust': comp_maps[1], 'Synch': comp_maps[2]}
+    
+    # if hp.UNSEEN is used in comp-sep, the comp-maps will use it as well which will be a problem for namaster, we regularize it here
+    comp_maps *= binary_mask 
+    # The noise map outputed by comp-sep is not cleanly masked.
+    # To avoid numerical issues, we apply the mask to the noise maps.
+    
+    noise_map_after_compsep = np.load(os.path.join(meta.components_directory, 'noise_map_after_compsep.npy'))
+    noise_map_after_compsep[..., np.where(binary_mask==0)[0]] = 0
+    invAtNA[..., np.where(binary_mask==0)[0]] = 0
+    # Let's comput the matrix sqrt of invAtNA:
+    
+    # sqrt_invAtNA = scipy.linalg.sqrtm(invAtNA) this doesn't work because of the shape
+    timer_spectra.start('sqrtm_invAtNA')
+    sqrt_invAtNA = np.zeros_like(invAtNA)
+    for p in range(invAtNA.shape[-1]):
+        if binary_mask[p] == 0:
+            continue
+        for stokes in range(invAtNA.shape[-2]):
+            sqrt_invAtNA[...,stokes,p] = scipy.linalg.sqrtm(invAtNA[...,stokes,p])
+    timer_spectra.stop('sqrtm_invAtNA', "Computing matrix sqrt of invAtNA", args.verbose)
+
+    # IPython.embed()
+    if meta.parametric_sep_pars['DEBUG_UseSynchrotron']:
+        comp_dict = {'CMB': comp_maps[0], 'Dust': comp_maps[1], 'Synch': comp_maps[2]}
+        # noise_dict = {'NoiseCMB': invAtNA[0,0], 'NoiseDust': invAtNA[1,1], 'NoiseSynch': invAtNA[2,2]}
+        # noise_dict = {'NoiseCMB': sqrt_invAtNA[0,0], 'NoiseDust': sqrt_invAtNA[1,1], 'NoiseSynch': sqrt_invAtNA[2,2]}
+        noise_dict = {'NoiseCMB': noise_map_after_compsep[0], 'NoiseDust': noise_map_after_compsep[1], 'NoiseSynch': noise_map_after_compsep[2]}
+        # noise_dict = {'NoiseCMB': np.sqrt(invAtNA[0,0]), 'NoiseDust': np.sqrt(invAtNA[1,1]), 'NoiseSynch': np.sqrt(invAtNA[2,2])}
+        noise_dict_offdiag = {'NoiseCMBDust': invAtNA[0,1], 'NoiseDustSynch': invAtNA[1,2], 'NoiseCMBSynch': invAtNA[0,2]} 
+    else:
+        comp_dict = {'CMB': comp_maps[0], 'Dust': comp_maps[1]}
+        # noise_dict = {'NoiseCMB': invAtNA[0,0], 'NoiseDust': invAtNA[1,1]}
+        noise_dict = {'NoiseCMB': sqrt_invAtNA[0,0], 'NoiseDust': sqrt_invAtNA[1,1]}
+        # noise_dict = {'NoiseCMB': np.sqrt(invAtNA[0,0]), 'NoiseDust': np.sqrt(invAtNA[1,1])}
+        noise_dict_offdiag = {'NoiseCMBDust': invAtNA[0,1]}         
     all_Cls = compute_auto_cross_cl_from_maps_list(comp_dict, mask_analysis, effective_beam, workspace_cc, purify_e=meta.map2cl_pars['purify_e'], 
                                                    purify_b=meta.map2cl_pars['purify_b'], n_iter=meta.map2cl_pars['n_iter_namaster'])    
     
@@ -244,31 +279,34 @@ def spectra_estimation(args):
 
 
     timer_spectra.start('noise_spectra_estimation')
-    # The noise map outputed by comp-sep is not cleanly masked.
-    # To avoid numerical issues, we apply the mask to the noise maps.
-    binary_mask = meta.read_mask('binary').astype(bool)
-    invAtNA[..., np.where(binary_mask==0)[0]] = 0
+
+
 
     
-    noise_dict = {'NoiseCMB': invAtNA[0,0], 'NoiseDust': invAtNA[1,1], 'NoiseSynch': invAtNA[2,2]}
-    noise_dict_offdiag = {'NoiseCMBDust': invAtNA[0,1], 'NoiseDustSynch': invAtNA[1,2], 'NoiseCMBSynch': invAtNA[0,2]} 
+
     # Here we assume that InvAtNA is symmetric, which seems true up to numerical precision
     Cls_noise = compute_auto_cross_cl_from_maps_list(noise_dict, mask_analysis, effective_beam, workspace_cc, purify_e=meta.map2cl_pars['purify_e'], 
                                                    purify_b=meta.map2cl_pars['purify_b'], n_iter=meta.map2cl_pars['n_iter_namaster'])
     np.savez(os.path.join(meta.spectra_directory, 'noise_Cls.npz'), **Cls_noise)    
-
-    if args.plots: Cls_noiselminlmax = utils.apply_lminlmax_to_dict(Cls_noise, bin_index_lminlmax)
+    # IPython.embed() 
+    # Cls_noise_sqrt = compute_auto_cross_cl_from_maps_list(sqrt_noise_dict, mask_analysis, effective_beam, workspace_cc, purify_e=meta.map2cl_pars['purify_e'], 
+    #                                                purify_b=meta.map2cl_pars['purify_b'], n_iter=meta.map2cl_pars['n_iter_namaster'])
+    # if args.plots: Cls_noiselminlmax = utils.apply_lminlmax_to_dict(Cls_noise, bin_index_lminlmax)
     
 
     Cls_noise_offdiag = compute_auto_cross_cl_from_maps_list(noise_dict_offdiag, mask_analysis, effective_beam, workspace_cc, purify_e=meta.map2cl_pars['purify_e'],
                                                     purify_b=meta.map2cl_pars['purify_b'], n_iter=meta.map2cl_pars['n_iter_namaster'])
     np.savez(os.path.join(meta.spectra_directory, 'noise_Cls_offdiag.npz'), **Cls_noise_offdiag)
+    # if args.plots: Cls_noise_offdiaglminlmax = utils.apply_lminlmax_to_dict(Cls_noise_offdiag, bin_index_lminlmax)
+
     
-    if args.plots: Cls_noise_offdiaglminlmax = utils.apply_lminlmax_to_dict(Cls_noise_offdiag, bin_index_lminlmax)
-    
+
+
     timer_spectra.stop('noise_spectra_estimation', "Noise spectra estimation", args.verbose)
     
-    if args.plots:
+    if args.plots: print('WARNING: Plots are now done in plot_spectra.py and not in map_to_cl.py')
+
+    if False: # args.plots:
         timer_spectra.start('plotting')
         plot_dir = meta.plot_dir_from_output_dir(meta.spectra_directory_rel)
         input_cmb_spectra = utils.get_Cl_CMB_model_from_meta(meta)[0][:,:3*meta.nside]

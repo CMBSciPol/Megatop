@@ -91,7 +91,12 @@ class BBmeta(object):
                 full_path = os.path.join(self.data_dirs['root'], path)
                 setattr(self, label, full_path)
                 setattr(self, f"{label}_rel", path)
-                os.makedirs(full_path, exist_ok=True)
+                try:
+                    os.makedirs(full_path, exist_ok=True)
+                except PermissionError:
+                    print(f"PermissionError: Could not create {full_path}")	
+                    print('We continue without creating the directory')
+
 
         for label, path in self.output_dirs.items():
             if label == "root":
@@ -453,7 +458,11 @@ class BBmeta(object):
         Returns:
             str: The noise map filename.
         """
-        path_to_maps = self.noise_maps_directory
+        try:
+            path_to_maps = self.noise_maps_directory
+        except AttributeError:
+            path_to_maps = self.mock_directory
+
         map_set_root = self.noise_root_from_map_set(map_set)
         return os.path.join(path_to_maps, map_set_root+'.fits')
 

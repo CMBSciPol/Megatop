@@ -381,15 +381,34 @@ def wrapper_cov_noise_from_noise_maps(args, meta, mpi):
     freq_noise_maps_array = []
     maps_list = meta.maps_list
     nside_in_list = []
-    for m in maps_list:
-        if args.verbose: print('Importing map: ', m)
-        path_noise_map = meta.get_noise_map_filename(m)
+    if hasattr(meta, 'ben_sims') and meta.ben_sims:
+        if args.verbose: print('Using ben_sims')
 
-        freq_noise_maps_array.append(hp.read_map(path_noise_map, field=None).tolist())
-        nside_in_list.append(hp.get_nside(freq_noise_maps_array[-1][-1]))
+        # freq_noise_maps_array = np.load(meta.map_directory + 'noise_nhits_freqs_nside128_'+str(meta.id_sim).zfill(4)+'.npy')
+        freq_noise_maps_array = np.load('/pscratch/sd/b/beringue/BB-AWG/MEGATOP/1224_sims_obsmat_freqs/noise_nhits_freqs_nside128_'+str(meta.id_sim).zfill(4)+'.npy')
+        nside_in_list = [hp.npix2nside(freq_noise_maps_array.shape[-1])]*freq_noise_maps_array.shape[0]
+    else:
+        for m in maps_list:
+            if args.verbose: print('Importing map: ', m)
+            path_noise_map = meta.get_noise_map_filename(m)
 
-    freq_noise_maps_array = np.array(freq_noise_maps_array, dtype=object)
-    freq_noise_maps_pre_processed = CommonBeamConvAndNsideModification(args, freq_noise_maps_array)
+            freq_noise_maps_array.append(hp.read_map(path_noise_map, field=None).tolist())
+            nside_in_list.append(hp.get_nside(freq_noise_maps_array[-1][-1]))
+    
+    if np.all(np.array(meta.pre_proc_pars['common_beam_correction']) == np.array(meta.pre_proc_pars['fwhm'])):
+        print('Common beam correction is the same as the input beam, no need to apply it.')	
+        print('WARNING: this is mostly for testing it might not actually represent the real noise')
+        freq_noise_maps_array = np.array(freq_noise_maps_array) # not using dtype=object to avoid issue with addition for noise_cov_preprocessed
+        freq_noise_maps_pre_processed = freq_noise_maps_array
+
+    else:   
+        freq_noise_maps_array = np.array(freq_noise_maps_array, dtype=object)
+        freq_noise_maps_pre_processed = CommonBeamConvAndNsideModification(args, freq_noise_maps_array)
+    
+    if 'save_preprocessed_noise_maps' in meta.noise_cov_pars and meta.noise_cov_pars['save_preprocessed_noise_maps']:
+        if args.verbose: print('Saving pre-processed noise maps to disk')
+        np.save(os.path.join(meta.covmat_directory, 'freq_noise_maps_preprocessed.npy' ),
+                freq_noise_maps_pre_processed )
 
     noise_cov_preprocessed += freq_noise_maps_pre_processed**2
 
@@ -397,7 +416,6 @@ def wrapper_cov_noise_from_noise_maps(args, meta, mpi):
 
     np.save(os.path.join(meta.covmat_directory, 'pixel_noise_cov_preprocessed.npy' ),
             noise_cov_preprocessed_mean ) 
-
     return noise_cov_preprocessed_mean, freq_noise_maps_pre_processed, nside_in_list        
 
 
@@ -507,9 +525,21 @@ def plot_cov_matrix(args, noise_cov_mean, file_name, mask_unseen=None, norm=None
         noise_cov_mean_ = noise_cov_mean[f].copy()
         if mask_unseen is not None:
             noise_cov_mean_[np.where(mask_unseen==0)[0]] = hp.UNSEEN
-        hp.mollview(noise_cov_mean_, cmap=cmap, cbar=True, hold=True, 
+        
+        try:
+            hp.mollview(noise_cov_mean_, cmap=cmap, cbar=True, hold=True, 
+                        title=r'Noise cov map $\nu={}$ GHz'.format(meta.frequencies[f]),
+                        norm=norm, min=minmax[0], max=minmax[1]) 
+        except ValueError as e:
+            print('WARNING catching ERROR: ', e)
+            print('Noise cov map could not be plotted for frequency ', meta.frequencies[f])
+            print('This is likely due to choice of norm=', norm, ' with negative values in the map.')
+            print('Please check the input data.')
+            print('ERROR HANDLED by setting norm=None (default)')
+            hp.mollview(noise_cov_mean_, cmap=cmap, cbar=True, hold=True, 
                     title=r'Noise cov map $\nu={}$ GHz'.format(meta.frequencies[f]),
-                    norm=norm, min=minmax[0], max=minmax[1]) 
+                    norm=None, min=minmax[0], max=minmax[1]) 
+            continue
         hp.graticule()
 
     map_noise_cov_save_path = os.path.join(plot_dir, file_name)
@@ -1080,8 +1110,8 @@ def CheckNoiseSpectra(args, noise_cov, noise_map, mask=None):
     ratio_noisecov_sim = np.empty(noise_map.shape)
     cl_ratio_noisecov_sim = []
 
-    for f in range(6):
-        for s in range(3):
+    for f in range(len(meta.maps_list)):
+        for s in range(noise_cov.shape[1]):
             ratio = noise_map[f,s].copy()
             ratio[np.where(noise_cov[f,s] != 0)] /= np.sqrt(noise_cov[f,s][np.where(noise_cov[f,s] != 0)])
             ratio[np.where(noise_cov[f,s] == 0)] = 0

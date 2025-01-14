@@ -32,19 +32,34 @@ def weighted_comp_sep(args):
 
     timer_compsep.start('compsep')
     instrument = {'frequency': meta.frequencies}
-    components = [CMB(), Dust(150., temp=20.0), Synchrotron(150.)]
+    if meta.parametric_sep_pars['DEBUG_UseSynchrotron']:
+        components = [CMB(), Dust(150., temp=20.0), Synchrotron(150.)]
+        components_label_list = ['CMB', 'Dust', 'Synchrotron']  # This is only used for plotting
+    else:
+        components = [CMB(), Dust(150., temp=20.0) ] 
+        components_label_list = ['CMB', 'Dust'] # This is only used for plotting
 
     options = meta.parametric_sep_pars['options']
     tol = meta.parametric_sep_pars['tol']
     method = meta.parametric_sep_pars['method']
 
+    # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
+    # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
+    binary_mask = meta.read_mask('binary').astype(bool)
+    freq_maps_preprocessed_QU_masked = freq_maps_preprocessed[:,1:]
+    freq_maps_preprocessed_QU_masked[..., np.where(binary_mask==0)[0]] = hp.UNSEEN
+
+    noise_cov_QU_masked = noise_cov[:,1:]
+    noise_cov_QU_masked[..., np.where(binary_mask==0)[0]] = hp.UNSEEN
+
     res = fg.separation_recipes.weighted_comp_sep(components, instrument,
-                                                  data=freq_maps_preprocessed[:,1:], 
-                                                  cov=noise_cov[:,1:], # Slice to remove the T maps, otherwise the separation will be biased
+                                                  data=freq_maps_preprocessed_QU_masked, 
+                                                  cov=noise_cov_QU_masked, # Slice to remove the T maps, otherwise the separation will be biased
                                                   options=options, tol=tol, method=method)
     
     if args.verbose: print('success: ',res.success)
     if args.verbose: print('results: ',res.x)
+    if args.verbose: print('results: ',res)
     timer_compsep.stop('compsep', "Component separation", args.verbose)
     
     A = MixingMatrix(*components)
@@ -52,13 +67,38 @@ def weighted_comp_sep(args):
     A_maxL = A_ev(res.x)
     res.A_maxL = A_maxL
 
-    # IPython.embed()
+    
     # test_invAtNA = np.linalg.inv(np.einsum('cf,fqp,fs->csqp', A_maxL.T, 1/noise_cov[:,1:], A_maxL).T).T
-    # sanity_check = np.max(np.abs((test_invAtNA - res.invAtNA) / res.invAtNA * 100))
+    # sanity_check = np.max(np.abs( ((test_invAtNA - res.invAtNA) / res.invAtNA * 100))[...,binary_mask])
 
     # test_invAtNA_U = np.dot(A_maxL.T, np.dot(1/noise_cov[:,2], A_maxL))
     # sanity_check = np.linalg.inv(A_maxL.T @ noise_cov @ A_maxL) - res.invAtNA
-    # W_maxL = res.invAtNA @ A_maxL.T @ np.linalg.inv(noise_cov)
+    W_maxL = np.einsum('ijsp, jf, fsp -> ifsp' ,res.invAtNA[:,:], A_maxL.T, 1/noise_cov[:,1:])
+    res.W_maxL = W_maxL
+
+    # Apply W to noise simulation:
+    
+    print('\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n')
+    print('WARNING: THE APPLICATION OF W TO THE NOISE MAP IS A TEST')
+    print('IT SHOULD BE APPLIED TO NOISE MAPS AFTER PRE-PROCESSING')
+    print('FOR THE TEST THE PREPOCESSING DOESN\'T CHANGE ANYTHING')
+    print('DO NOT USE IT FOR ESTIMATING NOISE Cls IN GENERAL (FOR NOW)')
+    print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n')
+    freq_noise_maps_array = []
+
+
+    # maps_list = meta.maps_list
+    # for m in maps_list:
+    #     if args.verbose: print('Importing map: ', m)
+    #     path_noise_map = meta.get_noise_map_filename(m)
+    #     freq_noise_maps_array.append(hp.read_map(path_noise_map, field=None).tolist())
+    # freq_noise_maps_array = np.array(freq_noise_maps_array)
+    freq_noise_maps_array = np.load(os.path.join(meta.covmat_directory, 'freq_noise_maps_preprocessed.npy' ))
+    
+    freq_noise_maps_array = freq_noise_maps_array[:,1:]
+    noise_map_after_compsep = np.einsum('ifsp,fsp->isp', W_maxL, freq_noise_maps_array)
+    noise_map_after_compsep[..., np.where(binary_mask==0)[0]] = 0 # hp.UNSEEN
+
 
     res_dict = {}
     for attr in dir(res):
@@ -70,23 +110,24 @@ def weighted_comp_sep(args):
     # space could be saved by adding an if statement in the above dict construction (TODO?)
     np.save(os.path.join(meta.components_directory, 'components_maps.npy'), res.s)
     np.save(os.path.join(meta.components_directory, 'invAtNA.npy'), res.invAtNA)
+    np.save(os.path.join(meta.components_directory, 'noise_map_after_compsep.npy'), noise_map_after_compsep)
 
     if args.plots:
         timer_compsep.start('plotting')
-        components_results_plotting(res, meta)
+        components_results_plotting(res, meta, components_label_list, noise_map_after_compsep)
         timer_compsep.stop('plotting', "Plotting", args.verbose)
 
     timer_compsep.stop('full_step', "Full component separation step", args.verbose)
     return res
     
-def components_results_plotting(res, meta):
+def components_results_plotting(res, meta, components_label_list =['CMB', 'Dust', 'Synchrotron'], noise_map_after_compsep=None):
     binary_mask = meta.read_mask('binary').astype(bool)
     res.s[..., np.where(binary_mask==0)[0]] = hp.UNSEEN	
 
     plot_dir = meta.plot_dir_from_output_dir(meta.components_directory_rel)
-    
+
     fig = plt.figure(figsize=(12, 12))
-    for i, component_label in enumerate(['CMB', 'Dust', 'Synchrotron']):
+    for i, component_label in enumerate(components_label_list):
         for j, stokes_label in enumerate(['Q', 'U']):
             hp.mollview(res.s[i,j], title= component_label + ' ' + stokes_label, 
                         sub=(3, 2, (2*i+j)+1), fig=fig, cbar=True)
@@ -96,12 +137,22 @@ def components_results_plotting(res, meta):
     res.invAtNA[..., np.where(binary_mask==0)[0]] = hp.UNSEEN	
 
     fig = plt.figure(figsize=(12, 12))
-    for i, component_label in enumerate(['Noise CMB', 'Noise Dust', 'Noise Synchrotron']):
+    for i, component_label in enumerate(components_label_list):
         for j, stokes_label in enumerate(['Q', 'U']):
-            hp.mollview(res.invAtNA[i,i,j], title= component_label + '--' + stokes_label + ' -- norm = log' , 
+            hp.mollview(res.invAtNA[i,i,j], title= 'Noise ' + component_label + '--' + stokes_label + ' -- norm = log' , 
                         sub=(3, 2, (2*i+j)+1), fig=fig, cbar=True, norm='log')
     plt.savefig(plot_dir+'/noise_per_components_maps.png')
     plt.close()
+
+    if noise_map_after_compsep is not None:
+        fig = plt.figure(figsize=(12, 12))
+        noise_map_after_compsep[..., np.where(binary_mask==0)[0]] = hp.UNSEEN
+        for i, component_label in enumerate(components_label_list):
+            for j, stokes_label in enumerate(['Q', 'U']):
+                hp.mollview(noise_map_after_compsep[i,j], title= 'Noise ' + component_label + '--' + stokes_label, 
+                            sub=(3, 2, (2*i+j)+1), fig=fig, cbar=True)
+        plt.savefig(plot_dir+'/noise_maps_after_compsep.png')
+        plt.close()
     
 
 if __name__ == "__main__":

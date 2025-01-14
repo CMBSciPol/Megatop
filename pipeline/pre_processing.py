@@ -42,6 +42,34 @@ def read_maps(args):
         cmb_fg_freq_maps_beamed.append(hp.read_map(fname, field=None).tolist())
     return np.array(cmb_fg_freq_maps_beamed, dtype=object)
 
+def read_maps_ben_sims(args, id_sim=0):
+    '''
+        To complete ...
+    '''
+    meta = BBmeta(args.globals)
+    if hasattr(meta, 'ben_unfiltered') and meta.ben_unfiltered:
+        beamed_sky_unfiltered = np.load(meta.map_directory + 'signal_unfiltered_freqs_nside128_'+str(id_sim).zfill(4)+'.npy')
+        # noise_maps = np.load(meta.map_directory + 'noise_nhits_freqs_nside128_'+str(id_sim).zfill(4)+'.npy')
+        noise_maps = np.load('/pscratch/sd/b/beringue/BB-AWG/MEGATOP/1224_sims_obsmat_freqs/noise_nhits_freqs_nside128_'+str(meta.id_sim).zfill(4)+'.npy')
+        cmb_fg_freq_maps_beamed = beamed_sky_unfiltered + noise_maps
+    elif hasattr(meta, 'noiseless_filtered') and meta.noiseless_filtered:
+        print('NOISELESS FILTERED CASE')
+        try:
+            cmb_fg_freq_maps_beamed = np.load(meta.map_directory + 'total_freqs_nside128_'+str(id_sim).zfill(4)+'.npy')
+        except FileNotFoundError:
+            cmb_fg_freq_maps_beamed = np.load(meta.map_directory + 'total_beamed_freqs_nside128_'+str(id_sim).zfill(4)+'.npy')
+
+        noise_maps = np.load('/pscratch/sd/b/beringue/BB-AWG/MEGATOP/1224_sims_obsmat_freqs/noise_nhits_freqs_nside128_'+str(meta.id_sim).zfill(4)+'.npy')
+        cmb_fg_freq_maps_beamed = cmb_fg_freq_maps_beamed - noise_maps
+    else:
+        try:
+            cmb_fg_freq_maps_beamed = np.load(meta.map_directory + 'total_beamed_freqs_nside128_'+str(id_sim).zfill(4)+'.npy')
+        except FileNotFoundError:
+            cmb_fg_freq_maps_beamed = np.load(meta.map_directory + 'total_freqs_nside128_'+str(id_sim).zfill(4)+'.npy')
+            
+
+    return cmb_fg_freq_maps_beamed
+
 def CommonBeamConvAndNsideModification(args, freq_maps):
     '''
     This function takes the frequency maps and applies the common beam correction, deconvolves the frequency beams,
@@ -101,8 +129,8 @@ def CommonBeamConvAndNsideModification(args, freq_maps):
                                                     lmax=lmax_convolution,pixwin=False,fwhm=0.0,pol=True) 
 
         # a priori all the options are set to there default, even lmax which is computed wrt input alms
-        marco_out_map = np.array([cmb_out_T,cmb_out_Q,cmb_out_U])
-        freq_maps_out.append(marco_out_map)
+        out_map = np.array([cmb_out_T,cmb_out_Q,cmb_out_U])
+        freq_maps_out.append(out_map)
     timer_beam.stop('beam', "Common beam convolution", args.verbose)
     return np.array(freq_maps_out)
 
@@ -225,13 +253,25 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
     meta = BBmeta(args.globals)
-    input_maps = read_maps(args)
+    
+    if hasattr(meta, 'ben_sims') and meta.ben_sims:
+        print('Reading ben sims')
+        input_maps = read_maps_ben_sims(args, id_sim=meta.id_sim)
+    else:
+        input_maps = read_maps(args)
     if args.verbose: print('input_maps shape = ', input_maps.shape)
-    convolved_maps = CommonBeamConvAndNsideModification(args, input_maps)
+
+    if np.all(np.array(meta.pre_proc_pars['common_beam_correction']) == np.array(meta.pre_proc_pars['fwhm'])):
+        print('Common beam correction is the same as the input beam, no need to apply it.')	
+        print('WARNING: this is mostly for testing it might not actually represent the real noise')
+        convolved_maps = input_maps.astype('float64')
+    else:
+        convolved_maps = CommonBeamConvAndNsideModification(args, input_maps)
     masked_convolved_maps = ApplyBinaryMask(args, convolved_maps)
     check_preproc(args)
     save_preprocessed_maps(args, masked_convolved_maps)
 
+    print('\n\nPre-processing step completed succesfully\n\n')
     
     # # MPI VARIABLES
     # mpi = args.use_mpi
