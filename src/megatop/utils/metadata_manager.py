@@ -5,6 +5,7 @@ import warnings
 import healpy as hp
 import numpy as np
 import yaml
+import logging
 
 
 class BBmeta:
@@ -77,6 +78,13 @@ class BBmeta:
 
         # Initialize a timer
         self.timer = Timer()
+        debug = False #TODO fixed for now
+        logging.basicConfig(
+            format="%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s",
+            datefmt="%d-%b-%y %H:%M:%S",
+            level=logging.DEBUG if debug else logging.INFO,
+        )
+        self.logger = logging.getLogger()
 
     def _set_directory_attributes(self):
         """
@@ -516,7 +524,7 @@ class Timer:
             raise ValueError(f"Timer {timer_label} already exists.")
         self.timers[timer_label] = time.time()
 
-    def stop(self, timer_label, text_to_output=None, verbose=True):
+    def stop(self, timer_label, logger, text_to_output=None):
         """
         Stop the timer with a given label.
         Allows to output a custom text different
@@ -538,6 +546,5 @@ class Timer:
 
         dt = time.time() - self.timers[timer_label]
         self.timers.pop(timer_label)
-        if verbose:
-            prefix = f"[{text_to_output}]" if text_to_output else f"[{timer_label}]"
-            print(f"{prefix} Took {dt:.02f} s to process.")
+        prefix = f"[{text_to_output}]" if text_to_output else f"[{timer_label}]"
+        logger.info(f"{prefix} Took {dt:.02f} s to process.")

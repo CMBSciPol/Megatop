@@ -68,7 +68,7 @@ def mask_handler(meta):
         apod_type="C1",
     )
     first_nom, second_nom = get_spin_derivatives(nominal_mask)
-    meta.timer.stop("apodized", "Computing nominal apodized mask", args.verbose)
+    meta.timer.stop("apodized", meta.logger, "Computing nominal apodized mask")
 
     if not meta.use_input_nhits:
         meta.logger.info("Using nominal mask as final one.")

@@ -82,7 +82,7 @@ masks:
   point_source_mask: "point_source_mask.fits"
   binary_mask_zero_threshold: 1.0e-2 #default 1.0e-3
 
-  include_in_mask: ['galactic']
+  include_in_mask: []
   gal_mask_mode: "gal070"
   apod_radius: 10.0
   apod_radius_point_source: 4.0

@@ -1,18 +1,20 @@
+import argparse
 from matplotlib import cm
 import healpy as hp
 import os
 import matplotlib.pyplot as plt
 from megatop.utils.mask_utils import get_spin_derivatives
+from megatop.utils import BBmeta
 
 def plotter(meta):
     cmap = cm.RdBu
     cmap.set_under("w")
-    plot_dir = meta.output_dirs["plots_directory"]
+    plot_dir = meta.plot_dir_from_output_dir(meta.mask_directory_rel)
 
     #Plotting hits map
     nhits = meta.read_hitmap()
     plt.figure(figsize=(16, 9))
-    hp.mollview(nhits, cmap=cmap, cbar=True)
+    hp.mollview(nhits, cmap=cmap, cbar=True, title = "Hits map")
     hp.graticule()
     plt.savefig(os.path.join(plot_dir, meta.masks["nhits_map"]).replace(".fits", ".png"))
     plt.clf()
@@ -20,7 +22,7 @@ def plotter(meta):
     #Plotting binary mask map
     binary_mask = meta.read_mask("binary")
     plt.figure(figsize=(16, 9))
-    hp.mollview(binary_mask, cmap=cmap, cbar=True)
+    hp.mollview(binary_mask, cmap=cmap, cbar=True, title = "Binary mask, derived from hits map")
     hp.graticule()
     plt.savefig(os.path.join(plot_dir, meta.masks["binary_mask"]).replace(".fits", ".png"))
     plt.clf()
@@ -30,7 +32,7 @@ def plotter(meta):
     if "galactic" in meta.masks["include_in_mask"]:
         galactic_mask = meta.read_mask("galactic")
         plt.figure(figsize=(16, 9))
-        hp.mollview(galactic_mask, cmap=cmap, cbar=True)
+        hp.mollview(galactic_mask, cmap=cmap, cbar=True, title = f"Galactic map {meta.masks["gal_mask_mode"]}")
         hp.graticule()
         plt.savefig(os.path.join(plot_dir, f"{meta.masks["galactic_mask_root"]}_{meta.masks["gal_mask_mode"]}.png"))
         plt.clf()
@@ -39,7 +41,7 @@ def plotter(meta):
     if "point_source" in meta.masks["include_in_mask"]:
         point_source_mask = meta.read_mask("point_source")
         plt.figure(figsize=(16, 9))
-        hp.mollview(point_source_mask, cmap=cmap, cbar=True)
+        hp.mollview(point_source_mask, cmap=cmap, cbar=True, title = "Point source mask")
         hp.graticule()
         plt.savefig(os.path.join(plot_dir, meta.masks["point_source_mask"]).replace(".fits", ".png"))
         plt.clf()
@@ -47,7 +49,7 @@ def plotter(meta):
     #Plotting final analysis mask
     final_mask = meta.read_mask("analysis")
     plt.figure(figsize=(16, 9))
-    hp.mollview(final_mask, cmap=cmap, cbar=True)
+    hp.mollview(final_mask, cmap=cmap, cbar=True, title = "Final analysis mask")
     hp.graticule()
     plt.savefig(os.path.join(plot_dir, meta.masks["analysis_mask"]).replace(".fits", ".png"))
     plt.clf()
@@ -55,7 +57,7 @@ def plotter(meta):
     first, second = get_spin_derivatives(final_mask)
     # Plot first spin derivative of analysis mask
     plt.figure(figsize=(16, 9))
-    hp.mollview(first, title="First spin derivative", cmap=cmap, cbar=True)
+    hp.mollview(first, title="First spin derivative of the final analysis mask", cmap=cmap, cbar=True)
     hp.graticule()
     plt.savefig(
         os.path.join(plot_dir, meta.masks["analysis_mask"]).replace(".fits", "_first.png")
@@ -64,10 +66,17 @@ def plotter(meta):
 
     # Plot second spin derivative of analysis mask
     plt.figure(figsize=(16, 9))
-    hp.mollview(second, title="Second spin derivative", cmap=cmap, cbar=True)
+    hp.mollview(second, title="Second spin derivative of the final analysis mask", cmap=cmap, cbar=True)
     hp.graticule()
     plt.savefig(
         os.path.join(plot_dir, meta.masks["analysis_mask"]).replace(".fits", "_second.png")
     )
     plt.clf()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="simplistic simulator")
+    parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
+    args = parser.parse_args()
+    meta = BBmeta(args.globals)
+    plotter(meta)
 
