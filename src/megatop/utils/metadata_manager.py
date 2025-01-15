@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import warnings
@@ -5,7 +6,6 @@ import warnings
 import healpy as hp
 import numpy as np
 import yaml
-import logging
 
 
 class BBmeta:
@@ -59,18 +59,8 @@ class BBmeta:
         # A list of the maps used in the analysis
         self.maps_list = self._get_map_list()
 
-        # Determine if input hit counts map exists
-        self.use_input_nhits = self.masks["input_nhits_path"] is not None
-
-        # Initialize masks file_names
-        for mask_type in [
-            "binary_mask",
-            "galactic_mask",
-            "point_source_mask",
-            "analysis_mask",
-            "nhits_map",
-        ]:
-            setattr(self, f"{mask_type}_name", getattr(self, f"_get_{mask_type}_name")())
+        # Masks
+        self._init_masks_params()
 
         # Simulation
         if self.map_sim_pars is not None:
@@ -78,7 +68,9 @@ class BBmeta:
 
         # Initialize a timer
         self.timer = Timer()
-        debug = False #TODO fixed for now
+
+        # Initialize a logger
+        debug = False  # TODO fixed for now
         logging.basicConfig(
             format="%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s",
             datefmt="%d-%b-%y %H:%M:%S",
@@ -149,7 +141,7 @@ class BBmeta:
         """
         Get the name of the galactic mask.
         """
-        fname = f"{self.masks['galactic_mask_root']}_{self.masks['gal_mask_mode']}.fits"
+        fname = f"{self.masks['galactic_mask_root']}_{self.masks['galactic_mask_mode']}.fits"
         return os.path.join(self.mask_directory, fname)
 
     def _get_binary_mask_name(self):
@@ -273,6 +265,49 @@ class BBmeta:
         beam_file = f"{self.beam_directory}/beam_{file_root}.dat"
         l, bl = np.loadtxt(beam_file, unpack=True)  # noqa: E741
         return l, bl
+
+    def _init_masks_params(self):
+        """ " """
+        keys = [
+            "analysis_mask",
+            "nhits_map",
+            "binary_mask",
+            "point_source_mask",
+            "binary_mask_zero_threshold",
+            "include_in_mask",
+            "apod_radius",
+            "apod_type",
+        ]
+
+        # Determine if input hit counts map exists
+        self.use_input_nhits = self.masks["input_nhits_path"] is not None
+
+        # Determine if input point source maps exists or is needed
+        self.use_input_point_source = (
+            "input_point_source_path" in self.masks
+            and "point_source" in self.masks["include_in_mask"]
+        )
+
+        # Initialize masks file_names
+        for mask_type in [
+            "binary_mask",
+            "analysis_mask",
+            "nhits_map",
+        ]:
+            setattr(self, f"{mask_type}_name", getattr(self, f"_get_{mask_type}_name")())
+
+        if "galactic" in self.masks["include_in_mask"]:
+            keys += ["galactic_mask_root", "galactic_mask_mode"]
+            setattr(self, "galactic_mask_name", getattr(self, "_get_galactic_mask_name")())
+        if "point_source" in self.masks["include_in_mask"]:
+            keys += ["apod_radius_point_source"]
+            setattr(self, "point_source_mask_name", getattr(self, "_get_point_source_mask_name")())
+            if not self.use_input_point_source:
+                keys += ["mock_nsrcs", "mock_srcs_hole_radius"]
+
+        missing_keys = [key for key in keys if key not in self.masks]
+        if missing_keys:
+            raise KeyError(f"Missing keys in masks: {missing_keys}")
 
     def _init_simulation_params(self):
         """
@@ -547,4 +582,4 @@ class Timer:
         dt = time.time() - self.timers[timer_label]
         self.timers.pop(timer_label)
         prefix = f"[{text_to_output}]" if text_to_output else f"[{timer_label}]"
-        logger.info(f"{prefix} Took {dt:.02f} s to process.")
+        logger.info(f"{prefix} took {dt:.02f}s to process.")

@@ -1,12 +1,12 @@
 import healpy as hp
-import numpy as np 
+import numpy as np
 import pymaster as nmt
 
 
 def random_src_mask(mask, nsrcs, mask_radius_arcmin):
     """
     Generate a modified version of a mask by randomly masking circular regions around selected points.
-    
+
     Parameters
     ----------
     mask : array
@@ -32,7 +32,7 @@ def random_src_mask(mask, nsrcs, mask_radius_arcmin):
 def get_binary_mask_from_nhits(nhits_map, nside, zero_threshold=1e-3):
     """
     Generate a binary mask from a nhits by setting to zero pixels below a certain threshold and to 1 others.
-    
+
     Parameters
     ----------
     nhits_map : array
@@ -118,7 +118,7 @@ def get_apodized_mask_from_nhits(
         binary_mask *= hp.ud_grade(point_source_mask, nside)
         binary_mask = nmt.mask_apodization(binary_mask, apod_radius_point_source, apotype=apod_type)
 
-    return nhits_map * binary_mask 
+    return nhits_map * binary_mask
 
 
 def get_spin_derivatives(map):

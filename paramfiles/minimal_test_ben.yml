@@ -72,7 +72,7 @@ map_sets:
 masks:
   # Load nhits map from disk? Give absolute location here.
   # If left blank, the mask handler will download the nominal nhits map.
-  input_nhits_path:
+  input_nhits_path: /Users/benjaminberingue/Documents/Research/BB/data/test_refactor/nhits_test_mss2.fits
 
   # Copies of all masks are stored under these names inside mask_directory
   analysis_mask: "analysis_mask.fits"
@@ -82,8 +82,10 @@ masks:
   point_source_mask: "point_source_mask.fits"
   binary_mask_zero_threshold: 1.0e-2 #default 1.0e-3
 
-  include_in_mask: []
-  gal_mask_mode: "gal070"
+  include_in_mask: ['galactic', 'point_source']
+  mock_nsrcs: 100
+  mock_srcs_hole_radius: 20
+  galactic_mask_mode: "gal070"
   apod_radius: 10.0
   apod_radius_point_source: 4.0
   apod_type: "C1"
