@@ -14,7 +14,7 @@ data_dirs:
   
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest_d0s0_nside128_correctsave_all5arcmin/outputs"
+  root: "/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest_d0s0_nside128_correctsave_all5arcmin/v1RefactorOutputs"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"  
@@ -113,7 +113,7 @@ general_pars:
 
 
 pre_proc_pars:
-    common_beam_correction: 5.0 # In arcmin. If 0 the common beam step will be skipped
+    common_beam_correction: 10.0 # In arcmin. If 0 the common beam step will be skipped
     # fwhm: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
     fwhm: [5., 5., 5., 5., 5., 5.] # In arcmin for each frequency. TODO: replace with path to import from file?
     # fwhm: [30., 30., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
