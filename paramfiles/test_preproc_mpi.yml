@@ -80,7 +80,7 @@ masks:
   binary_mask: "binary_mask.fits"
   galactic_mask_root: "planck_galactic_mask"
   point_source_mask: "point_source_mask.fits"
-  mask_handler_binary_zero_threshold: 1.0e-2 #default 1.0e-3
+  binary_mask_zero_threshold: 1.0e-2 #default 1.0e-3
 
   include_in_mask: ['galactic']
   gal_mask_mode: "gal070"
