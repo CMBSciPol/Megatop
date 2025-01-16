@@ -1,17 +1,15 @@
 import argparse
-import copy
-import os
 
 import healpy as hp
 import numpy as np
 
-
-
-from megatop.utils.metadata_manager import BBmeta, Timer
-from megatop.utils.preproc_utils import CommonBeamConvAndNsideModification, save_preprocessed_maps, read_maps, read_maps_ben_sims
-
-
-
+from megatop.utils.metadata_manager import BBmeta
+from megatop.utils.preproc_utils import (
+    CommonBeamConvAndNsideModification,
+    read_maps,
+    read_maps_ben_sims,
+    save_preprocessed_maps,
+)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ?
@@ -41,18 +39,15 @@ if __name__ == "__main__":
         print("Common beam correction is the same as the input beam, no need to apply it.")
         print("WARNING: this is mostly for testing it might not actually represent the real noise")
         convolved_maps = input_maps.astype("float64")
-        
+
     else:
         convolved_maps = CommonBeamConvAndNsideModification(meta, args, input_maps)
-
 
     # Applying binary mask
     binary_mask_path = meta.get_fname_mask("binary")
     binary_mask = hp.read_map(binary_mask_path, dtype=float)
     masked_convolved_maps = convolved_maps * binary_mask
-    
+
     save_preprocessed_maps(meta, args, masked_convolved_maps)
 
     print("\n\nPre-processing step completed succesfully\n\n")
-
-

@@ -7,7 +7,6 @@ import camb
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
-import pymaster as nmt
 from matplotlib import cm
 from mpi4py import MPI
 
@@ -541,117 +540,6 @@ def plot_transfer_validation(
         plot_dir = meta.plot_dir_from_output_dir(meta.coupling_directory)
         plot_suffix = f"__{map_set_1}_{map_set_2}" if meta.validate_beam else ""
         plt.savefig(f"{plot_dir}/decoupled_{val_type}{plot_suffix}.pdf", bbox_inches="tight")
-
-
-def get_binary_mask_from_nhits(nhits_map, nside, zero_threshold=1e-3):
-    """
-    Make binary mask by smoothing, normalizing and thresholding nhits map.
-    """
-    nhits_smoothed = hp.smoothing(
-        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64), fwhm=np.pi / 180
-    )
-    nhits_smoothed[nhits_smoothed < 0] = 0
-    nhits_smoothed /= np.amax(nhits_smoothed)
-    binary_mask = np.zeros_like(nhits_smoothed)
-    binary_mask[nhits_smoothed > zero_threshold] = 1
-
-    return binary_mask
-
-
-def get_apodized_mask_from_nhits(
-    nhits_map,
-    nside,
-    galactic_mask=None,
-    point_source_mask=None,
-    zero_threshold=1e-3,
-    apod_radius=10.0,
-    apod_radius_point_source=4.0,
-    apod_type="C1",
-):
-    """
-    Produce an appropriately apodized mask from an nhits map as used in
-    the BB pipeline paper (https://arxiv.org/abs/2302.04276).
-
-    Procedure:
-    * Make binary mask by smoothing, normalizing and thresholding nhits map
-    * (optional) multiply binary mask by galactic mask
-    * Apodize (binary * galactic)
-    * (optional) multiply (binary * galactic) with point source mask
-    * (optional) apodize (binary * galactic * point source)
-    * Multiply everything by (smoothed) nhits map
-    """
-    # Smooth and normalize hits map
-    nhits_map = hp.smoothing(
-        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64), fwhm=np.pi / 180
-    )
-    nhits_map /= np.amax(nhits_map)
-
-    # Get binary mask
-    binary_mask = get_binary_mask_from_nhits(nhits_map, nside, zero_threshold)
-
-    # Multiply by Galactic mask
-    if galactic_mask is not None:
-        binary_mask *= hp.ud_grade(galactic_mask, nside)
-
-    # Apodize the binary mask
-    binary_mask = nmt.mask_apodization(binary_mask, apod_radius, apotype=apod_type)
-
-    # Multiply with point source mask
-    if point_source_mask is not None:
-        binary_mask *= hp.ud_grade(point_source_mask, nside)
-        binary_mask = nmt.mask_apodization(binary_mask, apod_radius_point_source, apotype=apod_type)
-
-    return nhits_map * binary_mask
-
-
-def get_spin_derivatives(map):
-    """
-    First and second spin derivatives of a given spin-0 map.
-    """
-    nside = hp.npix2nside(np.shape(map)[-1])
-    ell = np.arange(3 * nside)
-    alpha1i = np.sqrt(ell * (ell + 1.0))
-    alpha2i = np.sqrt((ell - 1.0) * ell * (ell + 1.0) * (ell + 2.0))
-    first = hp.alm2map(hp.almxfl(hp.map2alm(map), alpha1i), nside=nside)
-    second = hp.alm2map(hp.almxfl(hp.map2alm(map), alpha2i), nside=nside)
-    cmap = cm.YlOrRd
-    cmap.set_under("w")
-
-    return first, second
-
-
-def get_Cl_CMB_model_from_meta(meta):
-    """
-    This function reads the fiducial CMB Cls from the metadata manager and combines scalar, lensing and tensor
-    contributions to return the model Cls according to A_lens and r in the simulation parameter file.
-
-    Args:
-        meta: metadata_manager object containing all the config file options
-
-    Returns:
-        Cl_cmb_model (ndarray): The model CMB Cls, with shape (num_freq, num_spectra [TT,EE,BB,TE,EB,TB], num_ell).
-    """
-    path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb("lensed")
-    path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb("unlensed_scalar_tensor_r1")
-
-    if meta.map_sim_pars is not None:
-        r_input = meta.map_sim_pars["r_input"]
-        A_lens = meta.map_sim_pars["A_lens"]
-    else:
-        r_input = 0.0
-        A_lens = 1.0
-    Cl_BB_prim = r_input * hp.read_cl(path_Cl_BB_prim_r1)[2]
-    Cl_lens = hp.read_cl(path_Cl_BB_lens)
-
-    l_max_lens = len(Cl_lens[0])
-    Cl_BB_lens = A_lens * Cl_lens[2]
-    Cl_TT = Cl_lens[0]
-    Cl_EE = Cl_lens[1]
-    Cl_TE = Cl_lens[3]
-
-    Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
-    Cl_cmb_model = np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0.0, Cl_EE * 0.0]])
-    return Cl_cmb_model
 
 
 def MPISUM(array, comm, rank, root):

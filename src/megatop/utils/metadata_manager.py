@@ -327,7 +327,7 @@ class BBmeta:
                     self.sky_model.remove(cmb)
             if not hasattr(self, "fiducial_cmb"):
                 raise AttributeError("The 'fiducial_cmb' field is missing from the config file.")
-            keys = ["r_input", "A_lens"]
+            keys = ["r_input", "A_lens_input"]
             missing_keys = [key for key in keys if key not in self.map_sim_pars]
             if missing_keys:
                 raise KeyError(f"Missing keys in map_sim_pars: {missing_keys}")

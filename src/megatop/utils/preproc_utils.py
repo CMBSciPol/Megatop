@@ -1,20 +1,10 @@
-import os
-import time
-import tracemalloc
-from inspect import getframeinfo, stack
-
-import camb
-import healpy as hp
-import matplotlib.pyplot as plt
-import numpy as np
-import pymaster as nmt
-from matplotlib import cm
-from mpi4py import MPI
 import copy
+import os
+
+import healpy as hp
+import numpy as np
 
 from megatop.utils.metadata_manager import Timer
-
-
 
 
 def ApplyBinaryMask(meta, args, freq_maps, use_UNSEEN=False):
@@ -29,7 +19,7 @@ def ApplyBinaryMask(meta, args, freq_maps, use_UNSEEN=False):
     Returns:
         freq_maps_masked (ndarray): The frequency maps after applying the binary mask, with shape (num_freq, num_stokes, num_pixels).
     """
-    
+
     timer_mask = Timer()
     # TODO: once refactoring done, this should use meta.timer and use the logger.
     timer_mask.start("mask")
@@ -57,13 +47,14 @@ def save_preprocessed_maps(meta, args, freq_maps_beamed_masked):
         freq_maps_beamed_masked (ndarray): The frequency maps after applying the binary mask and the common beam correction, with shape (num_freq, num_stokes, num_pixels).
 
     Returns:
-        None   
+        None
     """
-    
+
     fname = os.path.join(meta.pre_process_directory, "freq_maps_preprocessed.npy")
     np.save(fname, freq_maps_beamed_masked)
     if args.verbose:
         print(f"Pre-processed maps (masked and beamed) saved to {fname}")
+
 
 def CommonBeamConvAndNsideModification(meta, args, freq_maps):
     """
@@ -80,7 +71,6 @@ def CommonBeamConvAndNsideModification(meta, args, freq_maps):
                                  and pixel window function effect,
                                  with shape (num_freq, num_stokes, num_pixels).
     """
-
 
     timer_beam = Timer()
     # TODO: once refactoring done, this should use meta.timer and use the logger.
@@ -161,9 +151,9 @@ def read_maps(meta):
 
     Returns:
         cmb_fg_freq_maps_beamed (ndarray): The frequency maps, with shape (num_freq, num_stokes, num_pixels).
-        
+
     """
-    
+
     cmb_fg_freq_maps_beamed = []
     for i, map in enumerate(meta.maps_list):
         fname = os.path.join(meta.map_directory, meta.map_sets[map]["file_root"] + ".fits")
@@ -174,16 +164,16 @@ def read_maps(meta):
 def read_maps_ben_sims(meta, id_sim=0):
     """
     This function reads the frequency maps from the files of the ben sims and returns them as an array.
-    
+
     Args:
         meta: The metadata manager.
         id_sim (int): The id of the simulation to read the maps from.
 
     Returns:
         cmb_fg_freq_maps_beamed (ndarray): The frequency maps, with shape (num_freq, num_stokes, num_pixels).
-    
+
     """
-    
+
     if hasattr(meta, "ben_unfiltered") and meta.ben_unfiltered:
         beamed_sky_unfiltered = np.load(
             meta.map_directory + "signal_unfiltered_freqs_nside128_" + str(id_sim).zfill(4) + ".npy"
