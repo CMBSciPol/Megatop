@@ -120,20 +120,7 @@ pre_proc_pars:
 
 
 noise_cov_pars:
-    noise_cov_method: 'load_sims'
-    # white_noise_levels: [ 4.65454857  5.23636714 10.48726965 25.75820616]
-    # noise_lvl_uKarcmin:  # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
-    #   (SAT4, 27): 17.76741806032688
-    #   (SAT4, 39): 21.207586012564423
-    #   (SAT1, 93): 2.77243249663342
-    #   (SAT1, 145): 2.798531403709892
-    #   (SAT3, 220): 8.474221515572802
-    #   (SAT3, 280): 21.861113346794266 
-    # mock_noise_directory: '/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest/data/mock_noise' #TODO: redundant with data_dirs.mock_directory ? 
-    nsims_noise_cov: 2
-    include_nhits: False
-    nsims_plot: 1 # number of simulations that will be used for ploting
-    # mask_to_apply: False #"binary_mask.fits"
+    nrealisation_noise_cov:
 
 parametric_sep_pars:
   # minimization options

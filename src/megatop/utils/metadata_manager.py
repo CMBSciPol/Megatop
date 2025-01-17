@@ -494,7 +494,7 @@ class BBmeta:
         fname = self.get_map_filename(map_set, id_split, id_sim)
         return hp.read_map(fname, field=field)
 
-    def get_noise_map_filename(self, map_set):
+    def get_noise_map_filename(self, map_set, id_sim=None):
         """
         Returns the noise map filename.
 
@@ -513,7 +513,11 @@ class BBmeta:
             path_to_maps = self.mock_directory
 
         map_set_root = self.noise_root_from_map_set(map_set)
-        return os.path.join(path_to_maps, map_set_root + ".fits")
+        if id_sim is not None:
+            file_name = map_set_root + f"_{id_sim:04d}.fits"
+        else:
+            file_name = map_set_root + ".fits"
+        return os.path.join(path_to_maps, file_name)
 
     def get_nhits_map_filename(self, map_set):
         """

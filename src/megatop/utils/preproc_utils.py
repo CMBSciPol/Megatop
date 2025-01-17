@@ -1,28 +1,27 @@
+import os
+import healpy as hp
+import numpy as np
 import copy
 import os
 
 import healpy as hp
 import numpy as np
 
-from megatop.utils.metadata_manager import Timer
 
-
-def ApplyBinaryMask(meta, args, freq_maps, use_UNSEEN=False):
+def ApplyBinaryMask(meta, freq_maps, use_UNSEEN=False):
     """
     This function applies the binary mask to the frequency maps.
 
     Args:
-        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        meta: The metadata manager.
         freq_maps (ndarray): The frequency maps to mask, with shape (num_freq, num_stokes, num_pixels).
         use_UNSEEN (bool): If True, the UNSEEN value is used for the masked pixels, otherwise the masked pixels are set to zero.
 
     Returns:
         freq_maps_masked (ndarray): The frequency maps after applying the binary mask, with shape (num_freq, num_stokes, num_pixels).
     """
-
-    timer_mask = Timer()
-    # TODO: once refactoring done, this should use meta.timer and use the logger.
-    timer_mask.start("mask")
+    
+    meta.timer.start("mask")
     binary_mask_path = meta.get_fname_mask("binary")
     binary_mask = hp.read_map(binary_mask_path, dtype=float)
 
@@ -32,18 +31,17 @@ def ApplyBinaryMask(meta, args, freq_maps, use_UNSEEN=False):
         freq_maps_masked[:, np.where(binary_mask == 0)[0]] = hp.UNSEEN
     else:
         freq_maps_masked *= binary_mask
-    timer_mask.stop("mask", "Masking", args.verbose)
+    meta.timer.stop("mask", meta.logger,"Masking")
     return freq_maps_masked
 
 
-def save_preprocessed_maps(meta, args, freq_maps_beamed_masked):
+def save_preprocessed_maps(meta, freq_maps_beamed_masked):
     """
     This function saves the pre-processed maps (masked and beamed) to a .npy file in the pre-processing directory with name
     "freq_maps_preprocessed.npy".
 
     Args:
         meta: The metadata manager.
-        args: The parser arguments, used here to check if the verbose mode is activated.
         freq_maps_beamed_masked (ndarray): The frequency maps after applying the binary mask and the common beam correction, with shape (num_freq, num_stokes, num_pixels).
 
     Returns:
@@ -52,17 +50,15 @@ def save_preprocessed_maps(meta, args, freq_maps_beamed_masked):
 
     fname = os.path.join(meta.pre_process_directory, "freq_maps_preprocessed.npy")
     np.save(fname, freq_maps_beamed_masked)
-    if args.verbose:
-        print(f"Pre-processed maps (masked and beamed) saved to {fname}")
+    meta.logger.info(f"Pre-processed maps (masked and beamed) saved to {fname}")
 
-
-def CommonBeamConvAndNsideModification(meta, args, freq_maps):
+def CommonBeamConvAndNsideModification(meta, freq_maps):
     """
     This function takes the frequency maps and applies the common beam correction, deconvolves the frequency beams,
     changes the NSIDE of the maps and includes the effect of the pixel window function.
 
     Args:
-        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
+        meta: The metadata manager.
         freq_maps (ndarray): The frequency maps, with shape (num_freq, num_stokes, num_pixels).
 
     Returns:
@@ -72,16 +68,14 @@ def CommonBeamConvAndNsideModification(meta, args, freq_maps):
                                  with shape (num_freq, num_stokes, num_pixels).
     """
 
-    timer_beam = Timer()
-    # TODO: once refactoring done, this should use meta.timer and use the logger.
 
-    timer_beam.start("beam")
+    meta.timer.start("beam")
+
     freq_maps_out = []
 
-    if args.verbose:
-        print(
-            "-> common beam correction and NSIDE change: correcting for frequency-dependent beams, convolving with a common beam, modifying NSIDE and include effect of pixel window function"
-        )
+    meta.logger.info(
+        "-> common beam correction and NSIDE change: correcting for frequency-dependent beams, convolving with a common beam, modifying NSIDE and include effect of pixel window function"
+    )
 
     lmax_convolution = 3 * meta.general_pars["nside"]
     wpix_out = hp.pixwin(
@@ -138,7 +132,7 @@ def CommonBeamConvAndNsideModification(meta, args, freq_maps):
         # a priori all the options are set to there default, even lmax which is computed wrt input alms
         out_map = np.array([cmb_out_T, cmb_out_Q, cmb_out_U])
         freq_maps_out.append(out_map)
-    timer_beam.stop("beam", "Common beam convolution", args.verbose)
+    meta.timer.stop("beam", meta.logger, "Common beam convolution")
     return np.array(freq_maps_out)
 
 
@@ -174,11 +168,13 @@ def read_maps_ben_sims(meta, id_sim=0):
 
     """
 
+    meta.logger.info("WARNING: ben_sims related function will be removed")
+    # TODO: REMOVE ben_sims related function
+    
     if hasattr(meta, "ben_unfiltered") and meta.ben_unfiltered:
         beamed_sky_unfiltered = np.load(
             meta.map_directory + "signal_unfiltered_freqs_nside128_" + str(id_sim).zfill(4) + ".npy"
         )
-        # noise_maps = np.load(meta.map_directory + 'noise_nhits_freqs_nside128_'+str(id_sim).zfill(4)+'.npy')
         noise_maps = np.load(
             "/pscratch/sd/b/beringue/BB-AWG/MEGATOP/1224_sims_obsmat_freqs/noise_nhits_freqs_nside128_"
             + str(meta.id_sim).zfill(4)
@@ -186,7 +182,7 @@ def read_maps_ben_sims(meta, id_sim=0):
         )
         cmb_fg_freq_maps_beamed = beamed_sky_unfiltered + noise_maps
     elif hasattr(meta, "noiseless_filtered") and meta.noiseless_filtered:
-        print("NOISELESS FILTERED CASE")
+        meta.logger.info("NOISELESS FILTERED CASE")
         try:
             cmb_fg_freq_maps_beamed = np.load(
                 meta.map_directory + "total_freqs_nside128_" + str(id_sim).zfill(4) + ".npy"

@@ -616,7 +616,7 @@ def MPIGATHER(array, comm, rank, size, root):
     return array_recvbuf
 
 
-def debuginfo(message):
+def debuginfo(meta, message):
     """
     prints the filename and line number of the caller function as well as the message
 
@@ -631,10 +631,10 @@ def debuginfo(message):
 
     """
     caller = getframeinfo(stack()[2][0])
-    print(f"{caller.filename}:{caller.lineno} - {message}")
+    meta.logger.info(f"{caller.filename}:{caller.lineno} - {message}")
 
 
-def MemoryUsage(args, message=""):
+def MemoryUsage(meta, message=""):
     """'
     Prints the memory usage of the current process.
 
@@ -651,12 +651,12 @@ def MemoryUsage(args, message=""):
     None
 
     """
-    if args.verbose:
-        current, peak = tracemalloc.get_traced_memory()
-        message_all = (
-            message + f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB"
-        )
-        debuginfo(message_all)
+
+    current, peak = tracemalloc.get_traced_memory()
+    message_all = (
+        message + f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB"
+    )
+    debuginfo(meta, message_all)
 
 
 def apply_lminlmax_to_dict(dict, bin_index_lminlmax):
@@ -705,6 +705,7 @@ def MakeNoiseMapsNhitsMSS2(meta, map_set, verbose=False):
         The noise map for the fiven map set (i.e. the frequency channel) with shape (3, npix).
 
     """
+    # TODO: Is this function still used somewhere??
     # TODO: put in simulation step ?
     start = time.time()
 
