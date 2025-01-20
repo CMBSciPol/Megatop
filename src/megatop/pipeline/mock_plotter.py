@@ -217,10 +217,9 @@ def plotTTEEBB(
 def plot_fg_sims(meta, maps=True, cls=True):
     fg_freqs_maps = mock_utils.generate_map_fgs_pysm(meta)
     fg_freqs_maps_beamed = np.zeros_like(fg_freqs_maps)
-    beams = [91.0, 63.0, 30.0, 17.0, 11.0, 9.0]
     for i_f, f in enumerate(meta.frequencies):
         fg_freqs_maps_beamed[i_f] = mock_utils.beam_winpix_correction(
-            meta, fg_freqs_maps[i_f], beams[i_f]
+            meta, fg_freqs_maps[i_f], meta.beams_FWHM_arcmin[i_f]
         )
     binary_mask = meta.read_mask("binary")
     fg_freqs_maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
@@ -314,11 +313,11 @@ def plot_noise_sims(meta, maps=True, cls=True):
     nhits_map = meta.read_hitmap()
     nhits_map_rescaled = nhits_map / max(nhits_map)
     if meta.noise_sim_pars["noise_option"] == "white_noise":
-        n_ell, map_white_noise_levels, _ = mock_utils.get_noise_beams(meta, fsky_binary)
+        n_ell, map_white_noise_levels = mock_utils.get_noise(meta, fsky_binary)
         noise_freqs_maps = mock_utils.get_noise_map_from_white_noise(meta, map_white_noise_levels)
 
     elif meta.noise_sim_pars["noise_option"] == "noise_spectra":
-        n_ell, map_white_noise_levels, _ = mock_utils.get_noise_beams(meta, fsky_binary)
+        n_ell, map_white_noise_levels = mock_utils.get_noise(meta, fsky_binary)
         noise_freqs_maps = mock_utils.get_noise_map_from_noise_spectra(meta, n_ell)
 
     if maps:
@@ -388,12 +387,56 @@ def plot_noise_sims(meta, maps=True, cls=True):
         )
 
 
+def plot_saved_sims(meta, maps=True, cls=True):
+    combined_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
+    for i_f, map in enumerate(meta.maps_list):
+        fname = os.path.join(meta.map_directory, meta.map_sets[map]["file_root"] + ".fits")
+        combined_maps[i_f] = hp.read_map(fname)
+    binary_mask = meta.read_mask("binary")
+    combined_maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
+    if maps:
+        cmap = cm.RdBu
+        cmap.set_under("w")
+        vmin = {"I": -300, "Q": -10, "U": -10}
+        vmax = {"I": 300, "Q": 10, "U": 10}
+        plt.figure(figsize=(20, 7))
+        k = 0
+        for j_stokes, stokes in enumerate(["I", "Q", "U"]):
+            for i_f, fr in enumerate(meta.frequencies):
+                hp.mollview(
+                    combined_maps[i_f, j_stokes],
+                    cmap=cmap,
+                    title=f"{fr} GHz {stokes}",
+                    min=vmin[stokes],
+                    max=vmax[stokes],
+                    sub=(3, len(meta.frequencies), k + 1),
+                )
+                k += 1
+        plot_dir = meta.plot_dir_from_output_dir("sims")
+        plt.savefig(os.path.join(plot_dir, "combined_map.png"), bbox_inches="tight")
+        plt.clf()
+    if cls:
+        cls = []
+        for i_f, f in enumerate(meta.frequencies):
+            cls.append(hp.anafast(combined_maps[i_f]))
+        cls = np.array(cls)
+        plot_dir = meta.plot_dir_from_output_dir("sims")
+        plotTTEEBB(
+            plot_dir=plot_dir,
+            freqs=meta.frequencies,
+            Cl=cls,
+            save_name="combined_cls.png",
+            lims={"x": (2, 200), "y": (1e-3, 1e5)},
+        )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="simplistic simulator")
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
     args = parser.parse_args()
     meta = BBmeta(args.globals)
     plot_fiducial_spectra(meta)
-    # plot_fg_sims(meta)
-    # plot_cmb_sims(meta)
+    plot_fg_sims(meta)
+    plot_cmb_sims(meta)
     plot_noise_sims(meta)
+    plot_saved_sims(meta)

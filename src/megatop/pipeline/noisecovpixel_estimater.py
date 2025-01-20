@@ -1,21 +1,14 @@
 import argparse
-import math
 import os
-import time
 import tracemalloc
 
 import healpy as hp
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import cm
 from mpi4py import MPI
 
-import megatop.utils.V3calc as V3
-from megatop.utils.preproc_utils import CommonBeamConvAndNsideModification
 from megatop.utils import BBmeta
-from megatop.utils.utils import MPIGATHER, MPISUM, MakeNoiseMapsNhitsMSS2, MemoryUsage
-
-import IPython
+from megatop.utils.preproc_utils import CommonBeamConvAndNsideModification
+from megatop.utils.utils import MPISUM, MemoryUsage
 
 # =================================================================================
 # =                     Main function, calling the wrappers etc                   =
@@ -37,33 +30,29 @@ def GetNoiseCov(meta):
     None
 
     """
-    
-    tracemalloc.start()
 
+    tracemalloc.start()
 
     try:
         comm = MPI.COMM_WORLD
         size = comm.Get_size()
         rank = comm.rank
         root = 0
-        
+
     except (ModuleNotFoundError, ImportError) as e:
         # Error handling
-        meta.logger.info("ERROR IN MPI:{}".format(e))
+        meta.logger.info(f"ERROR IN MPI:{e}")
         meta.logger.info("Proceeding without MPI\n")
-        
+
         root = 0
         rank = 0
         size = 1
 
         pass
 
-    
     MemoryUsage(meta, f"rank = {rank} ")
 
-
-   
-    meta.logger.info("rank = {}, size = {}".format(rank, size))
+    meta.logger.info(f"rank = {rank}, size = {size}")
 
     noise_cov_preprocessed = np.zeros(
         [len(meta.frequencies), 3, hp.nside2npix(meta.general_pars["nside"])]
@@ -74,8 +63,8 @@ def GetNoiseCov(meta):
     nside_in_list = []
 
     nreal = meta.noise_cov_pars["nrealisation_noise_cov"]
-    
-    # The None case of nreal is useful when calling get_noise_map_filename 
+
+    # The None case of nreal is useful when calling get_noise_map_filename
     # so we need to handle it when creating the list of realisations to loop over
     if nreal is None:
         int_nreal = 1
@@ -86,21 +75,19 @@ def GetNoiseCov(meta):
     # splitting the list of simulation between the ranks of the process:
     rank_realisation_list = np.array_split(realisation_list, size)[rank]
 
-
     for id_realisation in rank_realisation_list:
         freq_noise_maps_array = []
 
         if nreal is None:
             id_realisation = None
 
-        meta.logger.info("id_realisation = {}".format( id_realisation))
-        meta.logger.info("in = {}".format(rank_realisation_list)) # debug in logger
-        
+        meta.logger.info(f"id_realisation = {id_realisation}")
+        meta.logger.info(f"in = {rank_realisation_list}")  # debug in logger
 
-        for m in maps_list:         
+        for m in maps_list:
             path_noise_map = meta.get_noise_map_filename(m, id_sim=id_realisation)
 
-            meta.logger.info("Importing noise map: {}".format(path_noise_map))
+            meta.logger.info(f"Importing noise map: {path_noise_map}")
 
             freq_noise_maps_array.append(hp.read_map(path_noise_map, field=None).tolist())
             nside_in_list.append(hp.get_nside(freq_noise_maps_array[-1][-1]))
@@ -109,8 +96,12 @@ def GetNoiseCov(meta):
             np.array(meta.pre_proc_pars["common_beam_correction"])
             == np.array(meta.pre_proc_pars["fwhm"])
         ):
-            meta.logger.info("Common beam correction is the same as the input beam, no need to apply it.")
-            meta.logger.info("WARNING: this is mostly for testing it might not actually represent the real noise")
+            meta.logger.info(
+                "Common beam correction is the same as the input beam, no need to apply it."
+            )
+            meta.logger.info(
+                "WARNING: this is mostly for testing it might not actually represent the real noise"
+            )
             freq_noise_maps_array = np.array(
                 freq_noise_maps_array
             )  # not using dtype=object to avoid issue with addition for noise_cov_preprocessed
@@ -130,15 +121,14 @@ def GetNoiseCov(meta):
             else:
                 add_sim_id = ".npy"
             np.save(
-                os.path.join(meta.covmat_directory, "freq_noise_maps_preprocessed"+add_sim_id),
+                os.path.join(meta.covmat_directory, "freq_noise_maps_preprocessed" + add_sim_id),
                 freq_noise_maps_pre_processed,
             )
 
         MemoryUsage(meta, f"memory for id_realisation = {id_realisation} ")
 
         noise_cov_preprocessed += freq_noise_maps_pre_processed**2
-    
-    
+
     noise_cov_preprocessed_recvbuf = MPISUM(noise_cov_preprocessed, comm, rank, root)
 
     if rank == root:
@@ -146,7 +136,7 @@ def GetNoiseCov(meta):
         noise_cov_preprocessed_mean = noise_cov_preprocessed_recvbuf / int_nreal
     else:
         noise_cov_preprocessed_mean = None
-    
+
     if rank == root:
         np.save(
             os.path.join(meta.covmat_directory, "pixel_noise_cov_preprocessed.npy"),
@@ -154,12 +144,7 @@ def GetNoiseCov(meta):
         )
 
     if rank == root:
-        meta.logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")        
-
-
-
-
-
+        meta.logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
 
 
 # ==================================================================================================

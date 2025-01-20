@@ -1,11 +1,12 @@
 import logging
 import os
 import time
-import warnings
 
 import healpy as hp
 import numpy as np
 import yaml
+
+import megatop.utils.V3calc as V3
 
 
 class BBmeta:
@@ -30,6 +31,12 @@ class BBmeta:
         with open(fname_config) as f:
             self.config = yaml.load(f, Loader=yaml.FullLoader)
 
+        # Initialize a timer
+        self.timer = Timer()
+
+        # Initialize a logger
+        self._init_logger()
+
         # Set the high-level parameters as attributes
         for key in self.config:
             setattr(self, key, self.config[key])
@@ -44,7 +51,7 @@ class BBmeta:
         with open(f"{self.output_dirs['root']}/config.yaml", "w") as f:
             yaml.dump(self.config, f)
 
-        # Basic sanity checks
+        # Basic sanity checks #TODO is lmax used ?!
         if self.lmax > 3 * self.nside - 1:
             raise ValueError(f"lmax should be lower or equal to 3*nside-1 = {3 * self.nside - 1}")
 
@@ -66,17 +73,8 @@ class BBmeta:
         if self.map_sim_pars is not None:
             self._init_simulation_params()
 
-        # Initialize a timer
-        self.timer = Timer()
-
-        # Initialize a logger
-        debug = False  # TODO fixed for now
-        logging.basicConfig(
-            format="%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s",
-            datefmt="%d-%b-%y %H:%M:%S",
-            level=logging.DEBUG if debug else logging.INFO,
-        )
-        self.logger = logging.getLogger()
+        # Beams
+        self._init_beam_params()
 
     def _set_directory_attributes(self):
         """
@@ -313,24 +311,20 @@ class BBmeta:
         """
         Loop over the simulation parameters and set them as attributes.
         """
-        if not hasattr(self, "noise_sim_pars"):
-            raise AttributeError("The 'noise_sim_pars' field is missing from the config file.")
-
         # Check for inconsistent CMB simulation settings
         self.sky_model = self.map_sim_pars["sky_model"]
-        if self.map_sim_pars["cmb_sim_no_pysm"]:
-            for cmb in ["c1", "c2", "c3", "c4"]:
-                if cmb in self.sky_model:
-                    warnings.warn(
-                        "You specified a PySM CMB model while setting 'cmb_sim_no_pysm' to False. Dropping the PySM CMB model."
-                    )
-                    self.sky_model.remove(cmb)
-            if not hasattr(self, "fiducial_cmb"):
-                raise AttributeError("The 'fiducial_cmb' field is missing from the config file.")
-            keys = ["r_input", "A_lens_input"]
-            missing_keys = [key for key in keys if key not in self.map_sim_pars]
-            if missing_keys:
-                raise KeyError(f"Missing keys in map_sim_pars: {missing_keys}")
+        for cmb in ["c1", "c2", "c3", "c4"]:
+            if cmb in self.sky_model:
+                self.logger.warning(
+                    "You specified a PySM CMB model, not supported. The CMB will be generated from fiducial files instead."
+                )
+                self.sky_model.remove(cmb)
+        if not hasattr(self, "fiducial_cmb"):
+            raise AttributeError("The 'fiducial_cmb' field is missing from the config file.")
+        keys = ["r_input", "A_lens_input"]
+        missing_keys = [key for key in keys if key not in self.map_sim_pars]
+        if missing_keys:
+            raise KeyError(f"Missing keys in map_sim_pars: {missing_keys}")
 
         # noise checks
         if self.noise_sim_pars["noise_option"] not in [
@@ -349,6 +343,43 @@ class BBmeta:
             missing_keys = [key for key in keys if key not in self.noise_sim_pars]
             if missing_keys:
                 raise KeyError(f"Missing keys in noise_sim_pars: {missing_keys}")
+
+    def _init_beam_params(self):
+        """ "Set the self.beam_FWHM_arcmin parameter and self.use_custom_beams flag."""
+        if "beams_FWHM_arcmin" in self.pre_proc_pars.keys():
+            self.use_custom_beams = True
+            try:
+                assert len(self.pre_proc_pars["beams_FWHM_arcmin"]) == len(self.frequencies)
+            except AssertionError:
+                self.logger.error("Different number of frequencies and beams, check yaml!")
+            self.beams_FWHM_arcmin = self.pre_proc_pars["beams_FWHM_arcmin"]
+        else:
+            self.use_custom_beams = False
+            if self.noise_sim_pars["experiment"] == "SO":
+                SO_FREQS = [27, 39, 93, 145, 220, 280]  # Set to match V3 calc
+                idx_freqs = self.idx_from_list(SO_FREQS)
+                self.logger.info("Using SO V3calc beams FWHM.")
+                beams = V3.so_V3_SA_beams()
+                beams = beams[idx_freqs]
+            self.beams_FWHM_arcmin = beams
+
+    def _init_logger(self, debug=False):
+        # Initialize a logger
+        logging.basicConfig(
+            format="%(asctime)s - %(module)s:%(lineno)d - %(levelname)s: %(message)s",
+            datefmt="%d-%b-%y %H:%M:%S",
+            level=logging.DEBUG if debug else logging.INFO,
+        )
+        if not debug:
+            healpy_logger = logging.getLogger("healpy")
+            healpy_logger.addFilter(HealpyFilter())
+            logging.captureWarnings(True)
+            pysm3_logger = logging.getLogger("pysm3")
+            pysm3_logger.addFilter(Pysm3Filter())
+
+        self.logger = logging.getLogger()
+        if not debug:
+            self.logger.addFilter(DeprecationFilter())  # TODO not worning for now !
 
     def save_fiducial_cl(self, ell, cl_dict, cl_type):
         """
@@ -587,3 +618,31 @@ class Timer:
         self.timers.pop(timer_label)
         prefix = f"[{text_to_output}]" if text_to_output else f"[{timer_label}]"
         logger.info(f"{prefix} took {dt:.02f}s to process.")
+
+
+# Custom filter to remove INFO messages from healpy
+class HealpyFilter(logging.Filter):
+    def __init__(self, level=logging.INFO):
+        super().__init__()
+        self.level = level
+
+    def filter(self, record):
+        # Exclude messages from the healpy logger at or below the specified level
+        return not (record.name == "healpy" and record.levelno <= self.level)
+
+
+# Custom filter to remove INFO messages from pysm3
+class Pysm3Filter(logging.Filter):
+    def __init__(self, level=logging.INFO):
+        super().__init__()
+        self.level = level
+
+    def filter(self, record):
+        # Exclude messages from the healpy logger at or below the specified level
+        return not (record.name == "pysm3" and record.levelno <= self.level)
+
+
+class DeprecationFilter(logging.Filter):
+    def filter(self, record):
+        # Ignore warnings if they are DeprecationWarning
+        return not (record.levelname == "WARNING" and "DeprecationWarning" in record.msg)

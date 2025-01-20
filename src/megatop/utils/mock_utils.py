@@ -1,11 +1,9 @@
-import argparse
 import warnings
 
 import healpy as hp
 import numpy as np
 
 import megatop.utils.V3calc as V3
-from megatop.utils import BBmeta
 
 
 def get_Cl_CMB_model_from_meta(meta):
@@ -23,6 +21,8 @@ def get_Cl_CMB_model_from_meta(meta):
     """
     path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb("lensed")
     path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb("unlensed_scalar_tensor_r1")
+    meta.logger.debug(f"Lensing B-mode path: {path_Cl_BB_lens}")
+    meta.logger.debug(f"Primordial B-mode (r=1): {path_Cl_BB_prim_r1}")
 
     if meta.map_sim_pars is not None:
         r_input = meta.map_sim_pars["r_input"]
@@ -69,7 +69,6 @@ def generate_map_cmb(meta, Cl_cmb_model):
     lmax = 2 * meta.nside
     if meta.map_sim_pars["fixed_cmb"]:
         np.random.seed(1234)  # Fixing seed so that the CMB is the same for all sims.
-    meta.logger.info("Generating CMB map")
     map_CMB = hp.synfast(Cl_cmb_model[0], nside=meta.nside, lmax=lmax, new=True, pixwin=False)
     if meta.map_sim_pars["fixed_cmb"]:
         np.random.seed(None)  # Resetting seed.
@@ -77,10 +76,10 @@ def generate_map_cmb(meta, Cl_cmb_model):
 
 
 def generate_map_fgs_pysm(meta, input_coord="G", output_coord="E"):
-    meta.logger.info(f"Generating FG maps for {(*meta.frequencies,)}")
+    meta.logger.info(f"Generating FG maps for {(*meta.frequencies,)}GHz")
     from pysm3 import Sky, units
 
-    sky = Sky(nside=meta.nside, preset_strings=meta.map_sim_pars["sky_model"])
+    sky = Sky(nside=meta.nside, preset_strings=meta.sky_model)
     maps_fgs = []
     for _, fr in enumerate(meta.frequencies):
         m = (
@@ -98,24 +97,22 @@ def generate_map_fgs_pysm(meta, input_coord="G", output_coord="E"):
     return np.array(maps_fgs)
 
 
-def get_noise_beams(meta, fsky_binary, beam_only=False):
+def get_noise(meta, fsky_binary):
     """
-    This function returns the noise and beams depending on the noise_sim_pars settings in the config file.
+    This function returns the noise (spectra or map levels) depending on the noise_sim_pars settings in the config file.
 
     Parameters
     ----------
     meta: metadata_manager
         object containing all the config file options
-    beam_only: bool, optional
-        If True, outputs only the beam_FWHM
+    fsky_binary: float
+        The sky fraction observed.
     Returns
     -------
     n_ell: ndarray or None
         The noise spectra (if computed) shape is (num_freq, num_ell)
     map_white_noise_level: list
         The (polarisation) white noise levels, shape is (num_freqs)
-    beams: list:
-        The beams FWHM (in arcmin), shape is (num_freqs)
     """
     SO_FREQS = [27, 39, 93, 145, 220, 280]  # Set to match V3 calc
     if meta.noise_sim_pars["experiment"] == "SO":
@@ -132,23 +129,15 @@ def get_noise_beams(meta, fsky_binary, beam_only=False):
             remove_kluge=False,
         )
         map_white_noise_levels = map_white_noise_levels[idx_freqs]
-        meta.use_custom_beams = False
-        if meta.use_custom_beams:
-            meta.logger.info(
-                "Using custom beams FWHM as these are specified in the yaml (map_sim_pars)."
-            )
-            beams = meta.beams_FWHM
-        else:
-            meta.logger.info("Using SO V3calc beams FWHM.")
-            beams = V3.so_V3_SA_beams()
-            beams = beams[idx_freqs]
+        n_ell = n_ell[idx_freqs]
         meta.logger.info(
-            f"Map white noise level (Q,U) {', '.join(f'{level:.2f}' for level in map_white_noise_levels)} muK [CHECK units]"
-        )  # TODO check
-        meta.logger.info(f"Beams FWHM {(*beams,)} arcmin ")
-        return n_ell, map_white_noise_levels, beams
+            f"Map white noise level (Q,U) {', '.join(f'{level:.2f}' for level in map_white_noise_levels)} muK-arcmin"
+        )
+        return n_ell, map_white_noise_levels
     else:
-        return None, None, meta.beams_FWHM
+        meta.logger.error(
+            "NO other options yet"
+        )  # shouldn't enter this as checks are done in metadata_manager.
 
 
 def get_noise_map_from_white_noise(meta, map_white_noise_levels):
@@ -313,28 +302,3 @@ def beam_winpix_correction(meta, freq_map, beam_FWHM):
     )
     freq_map_beamed = [alms_out_T, alms_out_Q, alms_out_U]
     return np.array(freq_map_beamed)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="simplistic simulator")
-    parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
-    args = parser.parse_args()
-    meta = BBmeta(args.globals)
-    cl = get_Cl_CMB_model_from_meta(meta)
-    map = generate_map_cmb(meta, cl)
-    maps_fg = generate_map_fgs_pysm(meta)
-    n_ell, map_noise, beams = get_noise_beams(meta, 0.4)
-    noise_maps = get_noise_map_from_white_noise(meta, map_noise)
-    noise_maps_nl = get_noise_map_from_noise_spectra(meta, n_ell)
-
-    fg_beamed = beam_winpix_correction(meta, maps_fg[0], beams[0])
-    cmb_beamed = beam_winpix_correction(meta, map, beams[0])
-
-    print("cmb cls: ", cl.shape)
-    print("cmb map: ", map.shape)
-    print("fgs map: ", maps_fg.shape)
-    print("noise cls: ", n_ell.shape)
-    print("noise maps: ", noise_maps.shape)
-    print("noise maps (from n_ell): ", noise_maps_nl.shape)
-    print("fgs map beamed:", fg_beamed.shape)
-    print("cmb map beamed:", cmb_beamed.shape)

@@ -1,6 +1,3 @@
-import os
-import healpy as hp
-import numpy as np
 import copy
 import os
 
@@ -20,7 +17,7 @@ def ApplyBinaryMask(meta, freq_maps, use_UNSEEN=False):
     Returns:
         freq_maps_masked (ndarray): The frequency maps after applying the binary mask, with shape (num_freq, num_stokes, num_pixels).
     """
-    
+
     meta.timer.start("mask")
     binary_mask_path = meta.get_fname_mask("binary")
     binary_mask = hp.read_map(binary_mask_path, dtype=float)
@@ -31,7 +28,7 @@ def ApplyBinaryMask(meta, freq_maps, use_UNSEEN=False):
         freq_maps_masked[:, np.where(binary_mask == 0)[0]] = hp.UNSEEN
     else:
         freq_maps_masked *= binary_mask
-    meta.timer.stop("mask", meta.logger,"Masking")
+    meta.timer.stop("mask", meta.logger, "Masking")
     return freq_maps_masked
 
 
@@ -52,6 +49,7 @@ def save_preprocessed_maps(meta, freq_maps_beamed_masked):
     np.save(fname, freq_maps_beamed_masked)
     meta.logger.info(f"Pre-processed maps (masked and beamed) saved to {fname}")
 
+
 def CommonBeamConvAndNsideModification(meta, freq_maps):
     """
     This function takes the frequency maps and applies the common beam correction, deconvolves the frequency beams,
@@ -67,7 +65,6 @@ def CommonBeamConvAndNsideModification(meta, freq_maps):
                                  and pixel window function effect,
                                  with shape (num_freq, num_stokes, num_pixels).
     """
-
 
     meta.timer.start("beam")
 
@@ -170,7 +167,7 @@ def read_maps_ben_sims(meta, id_sim=0):
 
     meta.logger.info("WARNING: ben_sims related function will be removed")
     # TODO: REMOVE ben_sims related function
-    
+
     if hasattr(meta, "ben_unfiltered") and meta.ben_unfiltered:
         beamed_sky_unfiltered = np.load(
             meta.map_directory + "signal_unfiltered_freqs_nside128_" + str(id_sim).zfill(4) + ".npy"
