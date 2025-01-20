@@ -126,13 +126,13 @@ def get_noise_beams(meta, fsky_binary, beam_only=False):
             one_over_f_mode=meta.noise_sim_pars["knee_mode"],
             SAC_yrs_LF=meta.noise_sim_pars["SAC_yrs_LF"],
             f_sky=fsky_binary,
-            ell_max=meta.general_pars["lmax"],
+            ell_max=3 * meta.nside - 1,
             delta_ell=1,
             beam_corrected=False,
             remove_kluge=False,
-            CMBS4="",
         )
         map_white_noise_levels = map_white_noise_levels[idx_freqs]
+        meta.use_custom_beams = False
         if meta.use_custom_beams:
             meta.logger.info(
                 "Using custom beams FWHM as these are specified in the yaml (map_sim_pars)."
@@ -185,6 +185,8 @@ def get_noise_map_from_white_noise(meta, map_white_noise_levels):
     )
     if meta.noise_sim_pars["include_nhits"]:
         noise_maps = include_hits_noise(meta, noise_maps)
+    else:
+        noise_maps = include_hits_noise(meta, noise_maps, binary_only=True)
     return noise_maps
 
 
@@ -209,19 +211,30 @@ def get_noise_map_from_noise_spectra(meta, n_ell):
     """
     meta.logger.warning("NOT TESTED YET !!!!")  # TODO TEST THIS !!!!
     noise_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
+    noise_spectra = np.zeros((len(meta.frequencies), 3, 3 * meta.nside - 1))
+    noise_spectra[:, 0, 2:] = n_ell / 2
+    noise_spectra[:, 1, 2:] = n_ell
+    noise_spectra[:, 2, 2:] = n_ell
     for i_f, _ in enumerate(meta.frequencies):
         noise_maps[i_f] = hp.synfast(
-            3 * (n_ell[i_f],) + 3 * (None,),  # using same noise spectra for T, E and B !
+            (
+                noise_spectra[i_f, 0],
+                noise_spectra[i_f, 1],
+                noise_spectra[i_f, 2],
+                np.zeros_like(noise_spectra[i_f, 2]),
+            ),
             new=True,
             pixwin=False,
             nside=meta.nside,
         )
     if meta.noise_sim_pars["include_nhits"]:
         noise_maps = include_hits_noise(meta, noise_maps)
+    else:
+        noise_maps = include_hits_noise(meta, noise_maps, binary_only=True)
     return noise_maps
 
 
-def include_hits_noise(meta, noise_maps, unseen=False):
+def include_hits_noise(meta, noise_maps, unseen=False, binary_only=False):
     """
     This function rescales the noise maps by the hit count map.
 
@@ -233,6 +246,8 @@ def include_hits_noise(meta, noise_maps, unseen=False):
         The input noise maps, shape is (num_freqs, 3 [T, Q, U], num_pix)
     unseen: bool, optional
         If True, the pixels outside the binary masks are set to hp.UNSEEN, else they are set to 0. Default is False.
+    binary_only: bool, optional
+        If True, only apply the binary mask (no hit counts). Default is False.
     Returns
     -------
     noise_maps: ndarray
@@ -241,28 +256,28 @@ def include_hits_noise(meta, noise_maps, unseen=False):
     -----
     * The TQU maps are rescalded by the same hit count map.
     """
-    meta.logger.info("Rescaling the noise maps by the hits count")
-    nhits_map = meta.read_hitmap()
-    nhits_map_rescaled = nhits_map / max(nhits_map)
     binary_mask = meta.read_mask("binary")
-
-    warnings.filterwarnings("error")
-    try:
-        noise_maps[..., np.where(binary_mask == 1)[0]] /= np.sqrt(
-            nhits_map_rescaled[np.where(binary_mask == 1)[0]]
-        )
-        # This avoids dividing by 0 in the noise maps
-    except RuntimeWarning:
-        meta.logger.error("Division by 0 in noise map nhit rescaling.")
-        meta.logger.error(
-            "This means the binary mask is not covering all the parts where nhits = 0."
-        )
-        meta.logger.error(
-            "Please check the mask_handling parameters; changing 'binary_mask_zero_threshold' can help."
-        )
-        meta.logger.error("Exiting...")
-        exit(1)
-    warnings.resetwarnings()
+    if not binary_only:
+        meta.logger.info("Rescaling the noise maps by the hits count")
+        nhits_map = meta.read_hitmap()
+        nhits_map_rescaled = nhits_map / max(nhits_map)
+        warnings.filterwarnings("error")
+        try:
+            noise_maps[..., np.where(binary_mask == 1)[0]] /= np.sqrt(
+                nhits_map_rescaled[np.where(binary_mask == 1)[0]]
+            )
+            # This avoids dividing by 0 in the noise maps
+        except RuntimeWarning:
+            meta.logger.error("Division by 0 in noise map nhit rescaling.")
+            meta.logger.error(
+                "This means the binary mask is not covering all the parts where nhits = 0."
+            )
+            meta.logger.error(
+                "Please check the mask_handling parameters; changing 'binary_mask_zero_threshold' can help."
+            )
+            meta.logger.error("Exiting...")
+            exit(1)
+        warnings.resetwarnings()
     if unseen:
         noise_maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
     else:

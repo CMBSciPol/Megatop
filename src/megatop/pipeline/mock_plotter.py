@@ -158,8 +158,12 @@ def plotTTEEBB_diff(
     ax[1][0].set_xscale("log")
     ax[1][1].set_xscale("log")
     ax[1][2].set_xscale("log")
+    ax[1][0].grid(axis="y", c="k", alpha=0.5, ls="dashed")
+    ax[1][1].grid(axis="y", c="k", alpha=0.5, ls="dashed")
+    ax[1][2].grid(axis="y", c="k", alpha=0.5, ls="dashed")
     ax[0][0].set_xlim(lims["x"])
     ax[0][0].set_ylim(lims["y"])
+    # ax[1][0].set_ylim(-1,1)
     plt.subplots_adjust(wspace=0, hspace=0)
     plt.savefig(os.path.join(plot_dir, save_name), bbox_inches="tight")
     plt.close()
@@ -256,14 +260,14 @@ def plot_fg_sims(meta, maps=True, cls=True):
             freqs=meta.frequencies,
             Cl=cls,
             save_name="fg_cls_unbeamed.png",
-            lims={"x": (2, 500), "y": (1e-2, 1e7)},
+            lims={"x": (2, 200), "y": (1e-3, 1e5)},
         )
         plotTTEEBB(
             plot_dir=plot_dir,
             freqs=meta.frequencies,
             Cl=cls_beamed,
             save_name="fg_cls_beamed.png",
-            lims={"x": (2, 500), "y": (1e-2, 1e7)},
+            lims={"x": (2, 200), "y": (1e-3, 1e5)},
         )
 
 
@@ -273,8 +277,8 @@ def plot_cmb_sims(meta, maps=True, cls=True):
     if maps:
         cmap = cm.RdBu
         cmap.set_under("w")
-        vmin = {"I": -300, "Q": -10, "U": -10}
-        vmax = {"I": 300, "Q": 10, "U": 10}
+        vmin = {"I": -300, "Q": -5, "U": -5}
+        vmax = {"I": 300, "Q": 5, "U": 5}
         plt.figure(figsize=(20, 7))
         k = 0
         for j_stokes, stokes in enumerate(["I", "Q", "U"]):
@@ -300,7 +304,87 @@ def plot_cmb_sims(meta, maps=True, cls=True):
             Cl_data=cls,
             Cl_model=Cl_cmb_model,
             save_name="cmb.png",
-            lims={"x": (2, 500), "y": (1e-2, 1e7)},
+            lims={"x": (2, 200), "y": (1e-5, 1e4)},
+        )
+
+
+def plot_noise_sims(meta, maps=True, cls=True):
+    binary_mask = meta.read_mask("binary")
+    fsky_binary = sum(binary_mask) / len(binary_mask)
+    nhits_map = meta.read_hitmap()
+    nhits_map_rescaled = nhits_map / max(nhits_map)
+    if meta.noise_sim_pars["noise_option"] == "white_noise":
+        n_ell, map_white_noise_levels, _ = mock_utils.get_noise_beams(meta, fsky_binary)
+        noise_freqs_maps = mock_utils.get_noise_map_from_white_noise(meta, map_white_noise_levels)
+
+    elif meta.noise_sim_pars["noise_option"] == "noise_spectra":
+        n_ell, map_white_noise_levels, _ = mock_utils.get_noise_beams(meta, fsky_binary)
+        noise_freqs_maps = mock_utils.get_noise_map_from_noise_spectra(meta, n_ell)
+
+    if maps:
+        cmap = cm.RdBu
+        cmap.set_under("w")
+        vmin = {"I": -2, "Q": -0.5, "U": -0.5}
+        vmax = {"I": 2, "Q": 0.5, "U": 0.5}
+        plt.figure(figsize=(20, 7))
+        k = 0
+        for j_stokes, stokes in enumerate(["I", "Q", "U"]):
+            for i_f, fr in enumerate(meta.frequencies):
+                hp.mollview(
+                    noise_freqs_maps[i_f, j_stokes],
+                    cmap=cmap,
+                    title=f"{fr} GHz {stokes}",
+                    min=vmin[stokes],
+                    max=vmax[stokes],
+                    sub=(3, len(meta.frequencies), k + 1),
+                )
+                k += 1
+        plot_dir = meta.plot_dir_from_output_dir("sims")
+        plt.savefig(os.path.join(plot_dir, "noise_freqs_maps.png"), bbox_inches="tight")
+        plt.clf()
+    if cls:
+        cls = []
+        for i_f, f in enumerate(meta.frequencies):
+            cls.append(hp.anafast(noise_freqs_maps[i_f]))
+        cls = np.array(cls)
+        plot_dir = meta.plot_dir_from_output_dir("sims")
+        if meta.noise_sim_pars["include_nhits"]:
+            fsky_correction = (
+                nhits_map_rescaled[..., np.where(binary_mask == 1)[0]].mean() * fsky_binary
+            )
+        else:
+            fsky_correction = 1.0
+        if meta.noise_sim_pars["noise_option"] == "white_noise":
+            cl_model = np.ones_like(cls)
+            cl_model[:, 0] = (
+                (map_white_noise_levels[:, np.newaxis] / np.sqrt(2) * np.pi / 180 / 60) ** 2
+                * fsky_binary
+                / fsky_correction
+            )
+            cl_model[:, 1] = (
+                (map_white_noise_levels[:, np.newaxis] * np.pi / 180 / 60) ** 2
+                * fsky_binary
+                / fsky_correction
+            )
+            cl_model[:, 2] = (
+                (map_white_noise_levels[:, np.newaxis] * np.pi / 180 / 60) ** 2
+                * fsky_binary
+                / fsky_correction
+            )
+        elif meta.noise_sim_pars["noise_option"] == "noise_spectra":
+            cl_model = np.zeros_like(cls)
+            cl_model[:, 1, 2:-1] = n_ell * fsky_binary / fsky_correction
+            cl_model[:, 2, 2:-1] = n_ell * fsky_binary / fsky_correction
+        plotTTEEBB_diff(
+            plot_dir=plot_dir,
+            freqs=meta.frequencies,
+            Cl_data=cls,
+            Cl_model=cl_model,
+            save_name="noise_spectra.png",
+            lims={"x": (2, 200), "y": (1e-12, 1e-2)},
+            legend_labels=[r"noise spectra $\nu=$", r"noise model $\nu=$"],
+            use_D_ell=False,
+            axis_labels=[r"C_\ell^{noise}", "Relative diff"],
         )
 
 
@@ -310,5 +394,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     meta = BBmeta(args.globals)
     plot_fiducial_spectra(meta)
-    plot_fg_sims(meta)
-    plot_cmb_sims(meta)
+    # plot_fg_sims(meta)
+    # plot_cmb_sims(meta)
+    plot_noise_sims(meta)
