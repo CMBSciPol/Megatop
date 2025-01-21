@@ -2,6 +2,9 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [project]
 name = "Megatop"
 authors = [{ name = "Baptiste Jost" }, { name = "Benjamin Beringue" }]
@@ -11,11 +14,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "camb",
-  "fgbuster",
+  "fgbuster @ git+https://github.com/fgbuster/fgbuster.git",
   "healpy",
   "matplotlib",
   "numpy",
-  "pysm3",
+  "pysm3 @ git+https://github.com/galsci/pysm.git@3.4.1a1",
   "pyyaml",
   "tqdm",
 ]
