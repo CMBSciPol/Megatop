@@ -18,6 +18,7 @@ dependencies = [
   "healpy",
   "matplotlib",
   "numpy",
+  "pymaster",
   "pysm3 @ git+https://github.com/galsci/pysm.git@3.4.1a1",
   "pyyaml",
   "tqdm",

@@ -2,7 +2,40 @@
 
 A map-based CMB polarization data analysis pipeline, from maps to tensor-to-scalar ratio estimation.
 
+## Installation
+
+First clone the repository, for example via https, and navigate to the directory:
+
+```bash
+git clone https://github.com/CMBSciPol/Megatop.git
+cd Megatop
+```
+
+`Megatop` depends on `NaMaster`, which is typically installed either from [PyPI](https://pypi.org/project/pymaster/)
+or [conda-forge](https://anaconda.org/conda-forge/namaster).
+Check the [NaMaster documentation](https://namaster.readthedocs.io/en/latest/source/installation.html) for more information.
+
+If you have the necessary dependencies to install `NaMaster`, you can simply install `Megatop` and its dependencies with pip:
+
+```bash
+pip install .
+```
+
+Otherwise, we recommend starting with a conda environment and pip-installing the rest of the dependencies:
+
+```bash
+conda create -y -p ./conda_env python=3.10 namaster
+pip install .
+```
+
 ## Developing Megatop
+
+For installing, refer to the previous section.
+You may want to install in editable mode for development:
+
+```bash
+pip install -e .
+```
 
 To ensure that your code passes the quality checks,
 you can use our [pre-commit](https://pre-commit.com/) configuration:
