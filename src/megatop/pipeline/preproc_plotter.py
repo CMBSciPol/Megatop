@@ -80,8 +80,8 @@ def plot_all_spectra(spectra_dict, output, file_name):
 
 
 def plot_preprocessed_maps(meta, maps=True, cls=True):
-    meta.logger.info("Plotting Pre-processing outputs")
-    fname = os.path.join(meta.pre_process_directory, "freqs_maps_preprocessed.npy")
+    meta.logger.info("Plotting pre-processing outputs")
+    fname = os.path.join(meta.pre_process_directory, "freq_maps_preprocessed.npy")
     freq_maps_beamed_masked = np.load(fname)
     plot_dir = meta.plot_dir_from_output_dir(meta.pre_process_directory_rel)
     if maps:  # Plotting the maps

@@ -215,15 +215,15 @@ def plotTTEEBB(
 
 
 def plot_fg_sims(meta, maps=True, cls=True):
-    fg_freqs_maps = mock_utils.generate_map_fgs_pysm(meta)
-    fg_freqs_maps_beamed = np.zeros_like(fg_freqs_maps)
+    fg_freq_maps = mock_utils.generate_map_fgs_pysm(meta)
+    fg_freq_maps_beamed = np.zeros_like(fg_freq_maps)
     for i_f, f in enumerate(meta.frequencies):
-        fg_freqs_maps_beamed[i_f] = mock_utils.beam_winpix_correction(
-            meta, fg_freqs_maps[i_f], meta.beams_FWHM_arcmin[i_f]
+        fg_freq_maps_beamed[i_f] = mock_utils.beam_winpix_correction(
+            meta, fg_freq_maps[i_f], meta.beams_FWHM_arcmin[i_f]
         )
     binary_mask = meta.read_mask("binary")
-    fg_freqs_maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-    fg_freqs_maps_beamed[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
+    fg_freq_maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
+    fg_freq_maps_beamed[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
     if maps:
         cmap = cm.RdBu
         cmap.set_under("w")
@@ -234,7 +234,7 @@ def plot_fg_sims(meta, maps=True, cls=True):
         for j_stokes, stokes in enumerate(["I", "Q", "U"]):
             for i_f, fr in enumerate(meta.frequencies):
                 hp.mollview(
-                    fg_freqs_maps_beamed[i_f, j_stokes],
+                    fg_freq_maps_beamed[i_f, j_stokes],
                     cmap=cmap,
                     title=f"{fr} GHz {stokes}",
                     min=vmin[stokes],
@@ -249,8 +249,8 @@ def plot_fg_sims(meta, maps=True, cls=True):
         cls = []
         cls_beamed = []
         for i_f, f in enumerate(meta.frequencies):
-            cls.append(hp.anafast(fg_freqs_maps[i_f]))
-            cls_beamed.append(hp.anafast(fg_freqs_maps_beamed[i_f]))
+            cls.append(hp.anafast(fg_freq_maps[i_f]))
+            cls_beamed.append(hp.anafast(fg_freq_maps_beamed[i_f]))
         cls = np.array(cls)
         cls_beamed = np.array(cls_beamed)
         plot_dir = meta.plot_dir_from_output_dir("sims")
@@ -314,11 +314,11 @@ def plot_noise_sims(meta, maps=True, cls=True):
     nhits_map_rescaled = nhits_map / max(nhits_map)
     if meta.noise_sim_pars["noise_option"] == "white_noise":
         n_ell, map_white_noise_levels = mock_utils.get_noise(meta, fsky_binary)
-        noise_freqs_maps = mock_utils.get_noise_map_from_white_noise(meta, map_white_noise_levels)
+        noise_freq_maps = mock_utils.get_noise_map_from_white_noise(meta, map_white_noise_levels)
 
     elif meta.noise_sim_pars["noise_option"] == "noise_spectra":
         n_ell, map_white_noise_levels = mock_utils.get_noise(meta, fsky_binary)
-        noise_freqs_maps = mock_utils.get_noise_map_from_noise_spectra(meta, n_ell)
+        noise_freq_maps = mock_utils.get_noise_map_from_noise_spectra(meta, n_ell)
 
     if maps:
         cmap = cm.RdBu
@@ -330,7 +330,7 @@ def plot_noise_sims(meta, maps=True, cls=True):
         for j_stokes, stokes in enumerate(["I", "Q", "U"]):
             for i_f, fr in enumerate(meta.frequencies):
                 hp.mollview(
-                    noise_freqs_maps[i_f, j_stokes],
+                    noise_freq_maps[i_f, j_stokes],
                     cmap=cmap,
                     title=f"{fr} GHz {stokes}",
                     min=vmin[stokes],
@@ -339,12 +339,12 @@ def plot_noise_sims(meta, maps=True, cls=True):
                 )
                 k += 1
         plot_dir = meta.plot_dir_from_output_dir("sims")
-        plt.savefig(os.path.join(plot_dir, "noise_freqs_maps.png"), bbox_inches="tight")
+        plt.savefig(os.path.join(plot_dir, "noise_freq_maps.png"), bbox_inches="tight")
         plt.clf()
     if cls:
         cls = []
         for i_f, f in enumerate(meta.frequencies):
-            cls.append(hp.anafast(noise_freqs_maps[i_f]))
+            cls.append(hp.anafast(noise_freq_maps[i_f]))
         cls = np.array(cls)
         plot_dir = meta.plot_dir_from_output_dir("sims")
         if meta.noise_sim_pars["include_nhits"]:

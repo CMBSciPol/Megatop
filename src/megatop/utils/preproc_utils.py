@@ -5,7 +5,7 @@ import healpy as hp
 import numpy as np
 
 
-def apply_binary_mask(meta, freqs_maps, unseen=False):
+def apply_binary_mask(meta, freq_maps, unseen=False):
     """
     This function applies the binary mask to the frequency maps.
 
@@ -27,16 +27,16 @@ def apply_binary_mask(meta, freqs_maps, unseen=False):
     """
     meta.timer.start("masking")
     binary_mask = meta.read_mask("binary")
-    freqs_maps_masked = copy.deepcopy(freqs_maps)
+    freq_maps_masked = copy.deepcopy(freq_maps)
     if unseen:
-        freqs_maps_masked[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
+        freq_maps_masked[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
     else:
-        freqs_maps_masked[..., np.where(binary_mask == 0)[0]] = 0.0
+        freq_maps_masked[..., np.where(binary_mask == 0)[0]] = 0.0
     meta.timer.stop("masking", meta.logger, "Applying binary mask")
-    return freqs_maps_masked
+    return freq_maps_masked
 
 
-def common_beam_and_nside(meta, freqs_maps):
+def common_beam_and_nside(meta, freq_maps):
     """
     This function takes the frequency maps and applies the common beam correction, deconvolves the frequency beams,
     changes the NSIDE of the maps and includes the effect of the pixel window function.
@@ -59,7 +59,7 @@ def common_beam_and_nside(meta, freqs_maps):
     """
 
     meta.timer.start("common")
-    freqs_maps_out = []
+    freq_maps_out = []
     meta.logger.info(
         f"Common beam correction -> {meta.pre_proc_pars['common_beam_correction']} arcmin and NSIDE -> {meta.nside}"
     )
@@ -82,7 +82,7 @@ def common_beam_and_nside(meta, freqs_maps):
             f"Pre-processing {freq} GHz (input beam FWHM {meta.beams_FWHM_arcmin[i_f]} arcmin)"
         )
         wpix_in = hp.pixwin(
-            hp.get_nside(freqs_maps[i_f, 0]), pol=True, lmax=lmax_convolution
+            hp.get_nside(freq_maps[i_f, 0]), pol=True, lmax=lmax_convolution
         )  # Pixel window function of input maps
         wpix_in[1][0:2] = 1.0  # in order not to divide by 0
 
@@ -97,9 +97,9 @@ def common_beam_and_nside(meta, freqs_maps):
         sm_corr_P = bl_correction[:, 1] * wpix_out[1] / wpix_in[1]
 
         # map-->alm
-        map_in_T = np.array(freqs_maps[i_f, 0])
-        map_in_Q = np.array(freqs_maps[i_f, 1])
-        map_in_U = np.array(freqs_maps[i_f, 2])
+        map_in_T = np.array(freq_maps[i_f, 0])
+        map_in_Q = np.array(freq_maps[i_f, 1])
+        map_in_U = np.array(freq_maps[i_f, 2])
 
         alm_in_T, alm_in_E, alm_in_B = hp.map2alm(
             [map_in_T, map_in_Q, map_in_U], lmax=lmax_convolution, pol=True, iter=10
@@ -123,9 +123,9 @@ def common_beam_and_nside(meta, freqs_maps):
 
         # a priori all the options are set to there default, even lmax which is computed wrt input alms
         out_map = np.array([map_out_T, map_out_Q, map_out_U])
-        freqs_maps_out.append(out_map)
+        freq_maps_out.append(out_map)
     meta.timer.stop("common", meta.logger, "Common beam and nside")
-    return np.array(freqs_maps_out)
+    return np.array(freq_maps_out)
 
 
 def read_input_maps(meta):
@@ -145,9 +145,9 @@ def read_input_maps(meta):
     -----
     * The input maps are allowed to have different `num_pixels' to allow for different resolutions.
     """
-    freqs_maps_input = []
+    freq_maps_input = []
     for map in meta.maps_list:
         fname = os.path.join(meta.map_directory, meta.map_sets[map]["file_root"] + ".fits")
         meta.logger.debug(f"Reading map from {fname}")
-        freqs_maps_input.append(hp.read_map(fname, field=None).tolist())
-    return np.array(freqs_maps_input, dtype=object)
+        freq_maps_input.append(hp.read_map(fname, field=None).tolist())
+    return np.array(freq_maps_input, dtype=object)
