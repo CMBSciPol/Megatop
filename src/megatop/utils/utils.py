@@ -10,6 +10,8 @@ import numpy as np
 from matplotlib import cm
 from mpi4py import MPI
 
+from megatop.utils.mask_utils import get_binary_mask_from_nhits
+
 
 def get_theory_cls(cosmo_params, lmax, lmin=0):
     """ """
