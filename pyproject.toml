@@ -42,7 +42,7 @@ mpi = ["mpi4py"]
 
 [tool.ruff]
 line-length = 100
-exclude = ["scripts/get_carlos_sims.py"]
+exclude = ["scripts"]
 
 [tool.ruff.lint]
 extend-select = [
