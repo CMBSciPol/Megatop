@@ -13,7 +13,8 @@ from mpi4py import MPI
 import megatop.utils.V3calc as V3
 from megatop.pipeline.pre_processing import CommonBeamConvAndNsideModification
 from megatop.utils import BBmeta
-from megatop.utils.utils import MPIGATHER, MPISUM, MakeNoiseMapsNhitsMSS2, MemoryUsage
+from megatop.utils.mpi import MPIGATHER, MPISUM
+from megatop.utils.utils import MakeNoiseMapsNhitsMSS2, MemoryUsage
 
 # =================================================================================
 # =                     Main function, calling the wrappers etc                   =

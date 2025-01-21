@@ -28,6 +28,14 @@ conda create -y -p ./conda_env python=3.10 namaster
 pip install .
 ```
 
+If you intend to use functions calling MPI, you will need `mpi4py`, part of the `mpi` optional dependencies:
+
+```bash
+pip install .[mpi]
+```
+
+Refer to the [mpi4py documentation](https://mpi4py.readthedocs.io/en/stable/install.html) for more information.
+
 ## Developing Megatop
 
 For installing, refer to the previous section.

@@ -7,7 +7,6 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
-from mpi4py import MPI
 
 from megatop.utils.mask_utils import get_binary_mask_from_nhits
 
@@ -445,80 +444,6 @@ def plot_transfer_validation(
         plot_dir = meta.plot_dir_from_output_dir(meta.coupling_directory)
         plot_suffix = f"__{map_set_1}_{map_set_2}" if meta.validate_beam else ""
         plt.savefig(f"{plot_dir}/decoupled_{val_type}{plot_suffix}.pdf", bbox_inches="tight")
-
-
-def MPISUM(array, comm, rank, root):
-    """
-    Reduces an array using the SUM operator to the root process using MPI.
-
-    Parameters
-    ----------
-    array : np.ndarray
-        The array to reduce.
-    comm : MPI.COMM_WORLD
-        The MPI communicator.
-    rank : int
-        The rank of the process.
-    root : int
-        The root process.
-
-    Returns
-    -------
-    array_recvbuf : np.ndarray
-        The reduced array.
-
-    """
-
-    if rank == root:
-        array_recvbuf = np.zeros_like(array)
-    else:
-        array_recvbuf = None
-
-    array = np.ascontiguousarray(array)
-
-    comm.Reduce(array, array_recvbuf, op=MPI.SUM, root=root)
-
-    return array_recvbuf
-
-
-def MPIGATHER(array, comm, rank, size, root):
-    """
-    Gathers an array to the root process using MPI.
-
-    Parameters
-    ----------
-    array : np.ndarray
-        The array to gather.
-    comm : MPI.COMM_WORLD
-        The MPI communicator.
-    rank : int
-        The rank of the process.
-    size : int
-        The size of the communicator.
-    root : int
-        The root process.
-
-    Returns
-    -------
-    array_recvbuf : np.ndarray
-        The gathered array.
-
-    """
-
-    array = np.ascontiguousarray(array)
-
-    array_recvbuf = None
-    if rank == 0:
-        shape_recvbuf_array = (size, *array.shape)
-        array_recvbuf = np.empty(shape_recvbuf_array)
-
-        # Ensure recvbuf is contiguous
-        # to make sure the comm.Gather() works correctly
-        array_recvbuf = np.ascontiguousarray(array_recvbuf)
-
-    comm.Gather(array, array_recvbuf, root=root)
-
-    return array_recvbuf
 
 
 def debuginfo(meta, message):

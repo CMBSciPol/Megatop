@@ -7,9 +7,9 @@ import numpy as np
 from mpi4py import MPI
 
 from megatop.utils import BBmeta
+from megatop.utils.mpi import MPISUM
 from megatop.utils.preproc_utils import CommonBeamConvAndNsideModification
-from megatop.utils.utils import MPISUM, MemoryUsage
-
+from megatop.utils.utils import MemoryUsage
 
 # =================================================================================
 # =                     Main function, calling the wrappers etc                   =
@@ -54,8 +54,8 @@ def GetNoiseCov(meta):
     MemoryUsage(meta, f"rank = {rank} ")
 
     meta.logger.info(f"rank = {rank}, size = {size}")
-   
-    meta.logger.info("rank = {}, size = {}".format(rank, size))
+
+    meta.logger.info(f"rank = {rank}, size = {size}")
 
     noise_cov_preprocessed = np.zeros(
         [len(meta.frequencies), 3, hp.nside2npix(meta.general_pars["nside"])]
