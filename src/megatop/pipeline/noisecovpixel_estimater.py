@@ -8,7 +8,7 @@ from mpi4py import MPI
 
 from megatop.utils import BBmeta
 from megatop.utils.mpi import MPISUM
-from megatop.utils.preproc_utils import CommonBeamConvAndNsideModification
+from megatop.utils.preproc_utils import common_beam_and_nside
 from megatop.utils.utils import MemoryUsage
 
 # =================================================================================
@@ -112,9 +112,7 @@ def GetNoiseCov(meta):
 
         else:
             freq_noise_maps_array = np.array(freq_noise_maps_array, dtype=object)
-            freq_noise_maps_pre_processed = CommonBeamConvAndNsideModification(
-                meta, freq_noise_maps_array
-            )
+            freq_noise_maps_pre_processed = common_beam_and_nside(meta, freq_noise_maps_array)
 
         if meta.noise_cov_pars.get("save_preprocessed_noise_maps"):
             meta.logger.info("Saving pre-processed noise maps to disk")
