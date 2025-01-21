@@ -42,11 +42,11 @@ fiducial_cmb:
 ##################################
 map_sets:
   SAT1_f027:
-    file_root: "cmb_sat_f027"
+    file_root: "cmb_sat4_f027"
     freq_tag: 27         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT4"      # Experiment tag (useful to get noise-bias free cross-split spectra)
   SAT1_f039:
-    file_root: "cmb_sat1_f039"
+    file_root: "cmb_sat4_f039"
     freq_tag: 39         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT4"      # Experiment tag (useful to get noise-bias free cross-split spectra)    
   SAT1_f093:
@@ -82,7 +82,7 @@ masks:
   point_source_mask: "point_source_mask.fits"
   binary_mask_zero_threshold: 1.0e-2 #default 1.0e-3
 
-  include_in_mask: ['galactic', 'point_source']
+  include_in_mask: []
   mock_nsrcs: 100
   mock_srcs_hole_radius: 20
   galactic_mask_mode: "gal070"
