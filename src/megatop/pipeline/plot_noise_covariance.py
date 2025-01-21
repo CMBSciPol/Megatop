@@ -81,7 +81,7 @@ def plot_all_spectra(spectra_dict, output, file_name):
     plt.close()
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ?
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
     parser.add_argument("--plots", action="store_true", help="Plot the generated maps if True.")
@@ -115,6 +115,10 @@ if __name__ == "__main__":
     timer_plots.stop("plots_noise_cov", "Noise covariance outputs plots", args.verbose)
 
     print("\n\nPlotting Noise Covariance outputs completed succesfully\n\n")
+
+
+if __name__ == "__main__":
+    main()
 
 
 '''

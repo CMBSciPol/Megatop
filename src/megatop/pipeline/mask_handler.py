@@ -216,9 +216,13 @@ def mask_handler(meta):
     meta.save_mask("analysis", final_mask, overwrite=True)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
     args = parser.parse_args()
     meta = BBmeta(args.globals)
     mask_handler(meta)
+
+
+if __name__ == "__main__":
+    main()

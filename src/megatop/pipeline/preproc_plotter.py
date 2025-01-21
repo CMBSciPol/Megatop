@@ -95,10 +95,14 @@ def plot_preprocessed_maps(meta, maps=True, cls=True):
         plot_all_spectra(spectra_dict, plot_dir, "spectra_pre_processed_anafast")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ?
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
     args = parser.parse_args()
 
     meta = BBmeta(args.globals)
     plot_preprocessed_maps(meta)
+
+
+if __name__ == "__main__":
+    main()

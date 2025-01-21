@@ -152,7 +152,8 @@ def GetNoiseCov(meta):
 # =                                           MAIN CALL                                            =
 # ==================================================================================================
 
-if __name__ == "__main__":
+
+def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
 
@@ -160,3 +161,7 @@ if __name__ == "__main__":
     meta = BBmeta(args.globals)
 
     GetNoiseCov(meta)
+
+
+if __name__ == "__main__":
+    main()

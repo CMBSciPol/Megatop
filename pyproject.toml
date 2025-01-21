@@ -27,6 +27,19 @@ dependencies = [
 [project.optional-dependencies]
 mpi = ["mpi4py"]
 
+[project.scripts]
+"megatop-compsep" = "megatop.pipeline.parametric_separation:main"
+"megatop-map2cl" = "megatop.pipeline.map_to_cl:main"
+"megatop-mask-run" = "megatop.pipeline.mask_handler:main"
+"megatop-mask-plot" = "megatop.pipeline.mask_plotter:main"
+"megatop-mock-run" = "megatop.pipeline.mocker:main"
+"megatop-mock-plot" = "megatop.pipeline.mock_plotter:main"
+"megatop-noisecov-run" = "megatop.pipeline.noisecovpixel_estimater:main"
+"megatop-noisecov-plot" = "megatop.pipeline.plot_noise_covariance:main"
+"megatop-preproc-run" = "megatop.pipeline.preprocesser:main"
+"megatop-preproc-plot" = "megatop.pipeline.preproc_plotter:main"
+"megatop-spectra-plot" = "megatop.pipeline.plot_spectra:main"
+
 [tool.ruff]
 line-length = 100
 exclude = ["scripts/get_carlos_sims.py"]

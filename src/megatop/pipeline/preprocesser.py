@@ -45,7 +45,7 @@ def save_preprocessed_maps(meta, freq_maps):
     meta.logger.info(f"Pre-processed maps saved to {fname}")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ?
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
 
@@ -53,3 +53,7 @@ if __name__ == "__main__":
     meta = BBmeta(args.globals)
     _, freq_maps_convolved_masked = preprocess_map(meta)
     save_preprocessed_maps(meta, freq_maps_convolved_masked)
+
+
+if __name__ == "__main__":
+    main()

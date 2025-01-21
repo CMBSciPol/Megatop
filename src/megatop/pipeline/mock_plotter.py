@@ -430,7 +430,7 @@ def plot_saved_sims(meta, maps=True, cls=True):
         )
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
     args = parser.parse_args()
@@ -440,3 +440,7 @@ if __name__ == "__main__":
     plot_cmb_sims(meta)
     plot_noise_sims(meta)
     plot_saved_sims(meta)
+
+
+if __name__ == "__main__":
+    main()

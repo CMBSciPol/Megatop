@@ -122,7 +122,7 @@ def save_sims(meta, freq_maps_write):
 #     np.save(fname, noise_maps)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
     parser.add_argument(
@@ -137,3 +137,7 @@ if __name__ == "__main__":
     #     else:
     #         save_noise_maps(meta, noise_maps)
     save_sims(meta, combined_freq_maps_beamed)
+
+
+if __name__ == "__main__":
+    main()

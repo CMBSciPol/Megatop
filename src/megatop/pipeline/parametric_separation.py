@@ -185,10 +185,14 @@ def components_results_plotting(
         plt.close()
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ??
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
     parser.add_argument("--plots", action="store_true", help="Plot the generated maps if True.")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
-    res = weighted_comp_sep(args)
+    _ = weighted_comp_sep(args)
+
+
+if __name__ == "__main__":
+    main()
