@@ -20,7 +20,7 @@ def requires_mpi4py(func: Callable[Param, ReturnType]) -> Callable[Param, Return
         return func
 
     @wraps(func)
-    def deferred_func(*args: Param.args, **kwargs: Param.kwargs) -> ReturnType:
+    def deferred_func(*args: Param.args, **kwargs: Param.kwargs) -> ReturnType:  # noqa: ARG001
         msg = "Missing optional library 'mpi4py', part of the 'mpi' dependency group."
         raise ImportError(msg)
 

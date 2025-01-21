@@ -35,10 +35,10 @@ def weighted_comp_sep(args):
     instrument = {"frequency": meta.frequencies}
     if meta.parametric_sep_pars["DEBUG_UseSynchrotron"]:
         components = [CMB(), Dust(150.0, temp=20.0), Synchrotron(150.0)]
-        components_label_list = ["CMB", "Dust", "Synchrotron"]  # This is only used for plotting
+        component_labels = ["CMB", "Dust", "Synchrotron"]  # This is only used for plotting
     else:
         components = [CMB(), Dust(150.0, temp=20.0)]
-        components_label_list = ["CMB", "Dust"]  # This is only used for plotting
+        component_labels = ["CMB", "Dust"]  # This is only used for plotting
 
     options = meta.parametric_sep_pars["options"]
     tol = meta.parametric_sep_pars["tol"]
@@ -125,7 +125,7 @@ def weighted_comp_sep(args):
 
     if args.plots:
         timer_compsep.start("plotting")
-        components_results_plotting(res, meta, components_label_list, noise_map_after_compsep)
+        components_results_plotting(res, meta, component_labels, noise_map_after_compsep)
         timer_compsep.stop("plotting", "Plotting", args.verbose)
 
     timer_compsep.stop("full_step", "Full component separation step", args.verbose)
@@ -133,7 +133,7 @@ def weighted_comp_sep(args):
 
 
 def components_results_plotting(
-    res, meta, components_label_list=["CMB", "Dust", "Synchrotron"], noise_map_after_compsep=None
+    res, meta, components_label=("CMB", "Dust", "Synchrotron"), noise_map_after_compsep=None
 ):
     binary_mask = meta.read_mask("binary").astype(bool)
     res.s[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
@@ -141,8 +141,8 @@ def components_results_plotting(
     plot_dir = meta.plot_dir_from_output_dir(meta.components_directory_rel)
 
     fig = plt.figure(figsize=(12, 12))
-    for i, component_label in enumerate(components_label_list):
-        for j, stokes_label in enumerate(["Q", "U"]):
+    for i, component_label in enumerate(components_label):
+        for j, stokes_label in enumerate("QU"):
             hp.mollview(
                 res.s[i, j],
                 title=component_label + " " + stokes_label,
@@ -156,8 +156,8 @@ def components_results_plotting(
     res.invAtNA[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
 
     fig = plt.figure(figsize=(12, 12))
-    for i, component_label in enumerate(components_label_list):
-        for j, stokes_label in enumerate(["Q", "U"]):
+    for i, component_label in enumerate(components_label):
+        for j, stokes_label in enumerate("QU"):
             hp.mollview(
                 res.invAtNA[i, i, j],
                 title="Noise " + component_label + "--" + stokes_label + " -- norm = log",
@@ -172,8 +172,8 @@ def components_results_plotting(
     if noise_map_after_compsep is not None:
         fig = plt.figure(figsize=(12, 12))
         noise_map_after_compsep[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-        for i, component_label in enumerate(components_label_list):
-            for j, stokes_label in enumerate(["Q", "U"]):
+        for i, component_label in enumerate(components_label):
+            for j, stokes_label in enumerate("QU"):
                 hp.mollview(
                     noise_map_after_compsep[i, j],
                     title="Noise " + component_label + "--" + stokes_label,

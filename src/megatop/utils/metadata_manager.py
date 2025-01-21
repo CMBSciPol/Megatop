@@ -296,10 +296,10 @@ class BBmeta:
 
         if "galactic" in self.masks["include_in_mask"]:
             keys += ["galactic_mask_root", "galactic_mask_mode"]
-            setattr(self, "galactic_mask_name", getattr(self, "_get_galactic_mask_name")())
+            self.galactic_mask_name = self._get_galactic_mask_name()
         if "point_source" in self.masks["include_in_mask"]:
             keys += ["apod_radius_point_source"]
-            setattr(self, "point_source_mask_name", getattr(self, "_get_point_source_mask_name")())
+            self.point_source_mask_name = self._get_point_source_mask_name()
             if not self.use_input_point_source:
                 keys += ["mock_nsrcs", "mock_srcs_hole_radius"]
 

@@ -72,7 +72,9 @@ def plot_all_Cls_and_diffs(
     # Add spacing between the pairs
     fig.subplots_adjust(hspace=0.5)  # Space only between pairs
 
-    for i, (top_ax, bot_ax) in enumerate(zip([ax1, ax3, ax5, ax7], [ax2, ax4, ax6, ax8])):
+    for i, (top_ax, bot_ax) in enumerate(
+        zip([ax1, ax3, ax5, ax7], [ax2, ax4, ax6, ax8], strict=False)
+    ):
         for j, key in enumerate(all_Cls.keys()):
             top_ax.plot(bin_centre, all_Cls[key][i], label=key, color="C" + str(j))
             top_ax.plot(bin_centre, -all_Cls[key][i], linestyle="--", color="C" + str(j))
@@ -164,7 +166,7 @@ def main_spectra_plotting(meta):
     )
 
     unbiased_Cls = {}
-    for key_signal, key_noise in zip(all_Cls.keys(), Cls_noise.keys()):
+    for key_signal, key_noise in zip(all_Cls.keys(), Cls_noise.keys(), strict=False):
         unbiased_Cls[key_signal] = all_Clslminlmax[key_signal] - Cls_noiselminlmax[key_noise]
     plot_all_Cls(
         unbiased_Cls,

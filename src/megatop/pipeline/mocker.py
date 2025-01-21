@@ -80,7 +80,7 @@ def make_sims(meta, components="all"):
     combined_freq_maps_beamed = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
 
     meta.timer.start("beam")
-    for i_f, f in enumerate(meta.frequencies):
+    for i_f, _f in enumerate(meta.frequencies):
         combined_freq_maps[i_f] = cmb_map + fg_freq_maps[i_f] + noise_freq_maps[i_f]
         combined_freq_maps_beamed[i_f] = (
             mock_utils.beam_winpix_correction(
