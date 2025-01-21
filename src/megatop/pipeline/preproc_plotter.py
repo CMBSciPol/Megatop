@@ -5,7 +5,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from megatop.utils.metadata_manager import BBmeta, Timer
+from megatop.utils.metadata_manager import BBmeta
 
 
 def plot_all_maps(meta, map_array, output, file_name):
@@ -79,37 +79,26 @@ def plot_all_spectra(spectra_dict, output, file_name):
     plt.close()
 
 
+def plot_preprocessed_maps(meta, maps=True, cls=True):
+    meta.logger.info("Plotting Pre-processing outputs")
+    fname = os.path.join(meta.pre_process_directory, "freqs_maps_preprocessed.npy")
+    freq_maps_beamed_masked = np.load(fname)
+    plot_dir = meta.plot_dir_from_output_dir(meta.pre_process_directory_rel)
+    if maps:  # Plotting the maps
+        plot_all_maps(meta, freq_maps_beamed_masked, plot_dir, "pre_processed_maps")
+
+    if cls:  # plotting the spectra
+        spectra_dict = {}
+        lmax = 3 * meta.nside
+        for i, map_name in enumerate(meta.maps_list):
+            spectra_dict[map_name] = hp.anafast(freq_maps_beamed_masked[i], lmax=lmax)
+        plot_all_spectra(spectra_dict, plot_dir, "spectra_pre_processed_anafast")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ?
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
-    parser.add_argument("--plots", action="store_true", help="Plot the generated maps if True.")
-    parser.add_argument("--verbose", action="store_true")
-
     args = parser.parse_args()
 
-    if not args.plots:
-        exit()
-
-    timer_plots = Timer()
-    timer_plots.start("plots_pre_proc")
-
-    print("\n\nPlotting Pre-processing outputs\n\n")
-
     meta = BBmeta(args.globals)
-    fname = os.path.join(meta.pre_process_directory, "freq_maps_preprocessed.npy")
-
-    freq_maps_beamed_masked = np.load(fname)
-
-    plot_dir = meta.plot_dir_from_output_dir(meta.pre_process_directory_rel)
-    # Plotting the maps
-    plot_all_maps(meta, freq_maps_beamed_masked, plot_dir, "pre_processed_maps")
-
-    spectra_dict = {}
-    lmax = 3 * meta.nside
-
-    for i, map_name in enumerate(meta.maps_list):
-        spectra_dict[map_name] = hp.anafast(freq_maps_beamed_masked[i], lmax=lmax)
-    plot_all_spectra(spectra_dict, plot_dir, "check_spectra_pre_processed")
-    timer_plots.stop("plots_pre_proc", "Pre-processing outputs plots", args.verbose)
-
-    print("\n\nPlotting Pre-processing outputs completed succesfully\n\n")
+    plot_preprocessed_maps(meta)

@@ -1,15 +1,49 @@
 import argparse
+import os
 
-import healpy as hp
 import numpy as np
 
 from megatop.utils.metadata_manager import BBmeta
 from megatop.utils.preproc_utils import (
-    CommonBeamConvAndNsideModification,
-    read_maps,
-    read_maps_ben_sims,
-    save_preprocessed_maps,
+    apply_binary_mask,
+    common_beam_and_nside,
+    read_input_maps,
 )
+
+
+def preprocess_map(meta, binary_mask=True):
+    meta.timer.start("preproc")
+    input_maps = read_input_maps(meta)
+    meta.logger.info(
+        f"Input maps have shapes: {(*[input_maps[i].shape for i in range(len(meta.frequencies))],)}"
+    )
+    if np.all(
+        np.array(meta.pre_proc_pars["common_beam_correction"]) == np.array(meta.beams_FWHM_arcmin)
+    ):
+        meta.logger.info(
+            "Common beam correction is the same as the input beam, no need to apply it."
+        )
+        meta.logger.warning(
+            "This is mostly for testing it might not actually represent the real noise"
+        )
+        freqs_maps_convolved = input_maps.astype("float64")
+    else:
+        freqs_maps_convolved = common_beam_and_nside(meta, input_maps)
+    meta.logger.info(f"Pre-processed maps have shape: {freqs_maps_convolved.shape}")
+    if binary_mask:
+        freqs_maps_convolved_masked = apply_binary_mask(meta, freqs_maps_convolved)
+    else:
+        freqs_maps_convolved_masked = None
+    meta.timer.stop("preproc", meta.logger, "Pre-processing input maps")
+    return freqs_maps_convolved, freqs_maps_convolved_masked
+
+
+def save_preprocessed_maps(meta, freq_maps):
+    """ """
+    fname = os.path.join(meta.pre_process_directory, "freqs_maps_preprocessed.npy")
+    np.save(fname, freq_maps)
+    meta.logger.info(f"Pre-processed maps saved to {fname}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ?
@@ -17,37 +51,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     meta = BBmeta(args.globals)
-
-    if hasattr(meta, "ben_sims") and meta.ben_sims:
-        meta.logger.info("Reading ben sims")
-        meta.logger.info("WARNING: ben_sims related function will be removed")
-        # TODO: remove ben_sims cases
-        input_maps = read_maps_ben_sims(meta, id_sim=meta.id_sim)
-    else:
-        input_maps = read_maps(meta)
-
-    meta.logger.info(f"input_maps shape = {input_maps.shape}")
-
-    if np.all(
-        np.array(meta.pre_proc_pars["common_beam_correction"])
-        == np.array(meta.pre_proc_pars["fwhm"])
-    ):
-        meta.logger.info(
-            "Common beam correction is the same as the input beam, no need to apply it."
-        )
-        meta.logger.info(
-            "WARNING: this is mostly for testing it might not actually represent the real noise"
-        )
-        convolved_maps = input_maps.astype("float64")
-
-    else:
-        convolved_maps = CommonBeamConvAndNsideModification(meta, input_maps)
-
-    # Applying binary mask
-    binary_mask_path = meta.get_fname_mask("binary")
-    binary_mask = hp.read_map(binary_mask_path, dtype=float)
-    masked_convolved_maps = convolved_maps * binary_mask
-
-    save_preprocessed_maps(meta, masked_convolved_maps)
-
-    meta.logger.info("\n\nPre-processing step completed succesfully\n\n")
+    _, freqs_maps_convolved_masked = preprocess_map(meta)
+    save_preprocessed_maps(meta, freqs_maps_convolved_masked)
