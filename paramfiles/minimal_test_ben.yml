@@ -116,15 +116,20 @@ pre_proc_pars:
     common_beam_correction: 100.0 # In arcmin. If 0 the common beam step will be skipped
     beams_FWHM_arcmin: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
 
-
 noise_cov_pars:
-    noise_cov: 'white_noise'
-    white_noise_levels: [ 4.65454857  5.23636714 10.48726965 25.75820616]
-    mock_noise_directory: '/pscratch/sd/j/jost/SO_MEGATOP/MinimalTest/data/mock_noise' #TODO: redundant with data_dirs.mock_directory ? 
-    nsims: 100
-    include_nhits: True
-    nsims_plot: 1 # number of simulations that will be used for ploting
-    # mask_to_apply: False #"binary_mask.fits"
+    nrealisation_noise_cov: 100
+
+parametric_sep_pars:
+  # minimization options
+  method: 'TNC'
+  tol: 1.0e-18
+  options:
+    disp: False
+    gtol: 1.0e-12
+    eps: 1.0e-12
+    # maxiter: 100
+    ftol: 1.0e-12
+  DEBUG_UseSynchrotron: True
 
 map2cl_pars:
     delta_ell: 10 # can also be a list

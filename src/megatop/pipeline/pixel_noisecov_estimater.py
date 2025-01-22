@@ -79,14 +79,14 @@ def pixel_noisecov_estimation(meta):
         for m in maps_list:
             path_noise_map = meta.get_noise_map_filename(m, id_sim=id_real)
 
-            meta.logger.info(f"Importing noise map: {path_noise_map}")
+            meta.logger.debug(f"Importing noise map: {path_noise_map}")
 
             noise_freq_maps.append(hp.read_map(path_noise_map, field=None).tolist())
             nside_in_list.append(hp.get_nside(noise_freq_maps[-1][-1]))
 
         if np.all(
             np.array(meta.pre_proc_pars["common_beam_correction"])
-            == np.array(meta.pre_proc_pars["fwhm"])
+            == np.array(meta.beams_FWHM_arcmin)
         ):
             meta.logger.info(
                 "Common beam correction is the same as the input beam, no need to apply it."

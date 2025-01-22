@@ -11,27 +11,17 @@ from fgbuster.mixingmatrix import MixingMatrix
 from megatop.utils.metadata_manager import BBmeta, Timer
 
 
-def weighted_comp_sep(args):
-    meta = BBmeta(args.globals)
-    timer_compsep = Timer()
-    timer_compsep.start("full_step")
-    timer_compsep.start("loading_covmat")
-
-    fname_covmat = os.path.join(meta.covmat_directory, "pixel_noise_cov_preprocessed.npy")
-    if args.verbose:
-        print(f"Loading noise covariance from {fname_covmat}")
+def weighted_compsep(meta):
+    meta.timer.start("compsep")
+    
+    fname_covmat = os.path.join(meta.covmat_directory, "pixel_noise_cov_preprocessed.npy") #TODO rename noise_cov -> noisecov ?
+    meta.logger.debug(f"Loading covmat from {fname_covmat}")
     noise_cov = np.load(fname_covmat)
-    timer_compsep.stop("loading_covmat", "Loading noise covariance", args.verbose)
 
-    timer_compsep.start("loading_maps")
     fname_preproc_maps = os.path.join(meta.pre_process_directory, "freq_maps_preprocessed.npy")
-    if args.verbose:
-        print(f"Loading pre-processed frequency maps from {fname_preproc_maps} ")
+    meta.logger.debug(f"Loading input maps from {fname_preproc_maps}")
     freq_maps_preprocessed = np.load(fname_preproc_maps)
 
-    timer_compsep.stop("loading_maps", "Loading pre-processed frequency maps", args.verbose)
-
-    timer_compsep.start("compsep")
     instrument = {"frequency": meta.frequencies}
     if meta.parametric_sep_pars["DEBUG_UseSynchrotron"]:
         components = [CMB(), Dust(150.0, temp=20.0), Synchrotron(150.0)]
@@ -57,24 +47,20 @@ def weighted_comp_sep(args):
         components,
         instrument,
         data=freq_maps_preprocessed_QU_masked,
-        cov=noise_cov_QU_masked,  # Slice to remove the T maps, otherwise the separation will be biased
+        cov=noise_cov_QU_masked, 
         options=options,
         tol=tol,
         method=method,
     )
-
-    if args.verbose:
-        print("success: ", res.success)
-    if args.verbose:
-        print("results: ", res.x)
-    if args.verbose:
-        print("results: ", res)
-    timer_compsep.stop("compsep", "Component separation", args.verbose)
-
+    # Best fit mixing mastrix saved to res object
     A = MixingMatrix(*components)
     A_ev = A.evaluator(np.array(instrument["frequency"]))
     A_maxL = A_ev(res.x)
     res.A_maxL = A_maxL
+
+    meta.logger.info(f"Success: {res.success} -> {res.message}")
+    meta.logger.info(f"Spectral parameters {res.params} -> {res.x}")
+    meta.timer.stop("compsep", meta.logger, "Component separation (FGbuster weighted compsep)")
 
     # test_invAtNA = np.linalg.inv(np.einsum('cf,fqp,fs->csqp', A_maxL.T, 1/noise_cov[:,1:], A_maxL).T).T
     # sanity_check = np.max(np.abs( ((test_invAtNA - res.invAtNA) / res.invAtNA * 100))[...,binary_mask])
@@ -84,51 +70,45 @@ def weighted_comp_sep(args):
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noise_cov[:, 1:])
     res.W_maxL = W_maxL
 
-    # Apply W to noise simulation:
+    # # Apply W to noise simulation:
 
-    print("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
-    print("WARNING: THE APPLICATION OF W TO THE NOISE MAP IS A TEST")
-    print("IT SHOULD BE APPLIED TO NOISE MAPS AFTER PRE-PROCESSING")
-    print("FOR THE TEST THE PREPOCESSING DOESN'T CHANGE ANYTHING")
-    print("DO NOT USE IT FOR ESTIMATING NOISE Cls IN GENERAL (FOR NOW)")
-    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
-    freq_noise_maps_array = []
+    # print("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
+    # print("WARNING: THE APPLICATION OF W TO THE NOISE MAP IS A TEST")
+    # print("IT SHOULD BE APPLIED TO NOISE MAPS AFTER PRE-PROCESSING")
+    # print("FOR THE TEST THE PREPOCESSING DOESN'T CHANGE ANYTHING")
+    # print("DO NOT USE IT FOR ESTIMATING NOISE Cls IN GENERAL (FOR NOW)")
+    # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
+    # freq_noise_maps_array = []
 
-    # maps_list = meta.maps_list
-    # for m in maps_list:
-    #     if args.verbose: print('Importing map: ', m)
-    #     path_noise_map = meta.get_noise_map_filename(m)
-    #     freq_noise_maps_array.append(hp.read_map(path_noise_map, field=None).tolist())
-    # freq_noise_maps_array = np.array(freq_noise_maps_array)
-    freq_noise_maps_array = np.load(
-        os.path.join(meta.covmat_directory, "freq_noise_maps_preprocessed.npy")
-    )
+    # # maps_list = meta.maps_list
+    # # for m in maps_list:
+    # #     if args.verbose: print('Importing map: ', m)
+    # #     path_noise_map = meta.get_noise_map_filename(m)
+    # #     freq_noise_maps_array.append(hp.read_map(path_noise_map, field=None).tolist())
+    # # freq_noise_maps_array = np.array(freq_noise_maps_array)
+    # freq_noise_maps_array = np.load(
+    #     os.path.join(meta.covmat_directory, "freq_noise_maps_preprocessed.npy")
+    # )
 
-    freq_noise_maps_array = freq_noise_maps_array[:, 1:]
-    noise_map_after_compsep = np.einsum("ifsp,fsp->isp", W_maxL, freq_noise_maps_array)
-    noise_map_after_compsep[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
+    # freq_noise_maps_array = freq_noise_maps_array[:, 1:]
+    # noise_map_after_compsep = np.einsum("ifsp,fsp->isp", W_maxL, freq_noise_maps_array)
+    # noise_map_after_compsep[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
 
-    res_dict = {}
-    for attr in dir(res):
-        if not attr.startswith("__"):
-            res_dict[attr] = getattr(res, attr)
-    np.savez(os.path.join(meta.components_directory, "comp_sep_results.npz"), **res_dict)
+    # res_dict = {}
+    # for attr in dir(res):
+    #     if not attr.startswith("__"):
+    #         res_dict[attr] = getattr(res, attr)
+    # np.savez(os.path.join(meta.components_directory, "comp_sep_results.npz"), **res_dict)
 
-    # res.s and res.invAtNA are saved twice, but they are the direct needed outputs for the next step
-    # space could be saved by adding an if statement in the above dict construction (TODO?)
-    np.save(os.path.join(meta.components_directory, "components_maps.npy"), res.s)
-    np.save(os.path.join(meta.components_directory, "invAtNA.npy"), res.invAtNA)
-    np.save(
-        os.path.join(meta.components_directory, "noise_map_after_compsep.npy"),
-        noise_map_after_compsep,
-    )
+    # # res.s and res.invAtNA are saved twice, but they are the direct needed outputs for the next step
+    # # space could be saved by adding an if statement in the above dict construction (TODO?)
+    # np.save(os.path.join(meta.components_directory, "components_maps.npy"), res.s)
+    # np.save(os.path.join(meta.components_directory, "invAtNA.npy"), res.invAtNA)
+    # np.save(
+    #     os.path.join(meta.components_directory, "noise_map_after_compsep.npy"),
+    #     noise_map_after_compsep,
+    # )
 
-    if args.plots:
-        timer_compsep.start("plotting")
-        components_results_plotting(res, meta, component_labels, noise_map_after_compsep)
-        timer_compsep.stop("plotting", "Plotting", args.verbose)
-
-    timer_compsep.stop("full_step", "Full component separation step", args.verbose)
     return res
 
 
@@ -185,13 +165,27 @@ def components_results_plotting(
         plt.close()
 
 
+def save_compsep_results(meta, res):
+    fname_res = os.path.join(meta.components_directory, 'compsep_results.npz')
+    res_dict = {}
+    for attr in dir(res):
+        if not attr.startswith('__'):
+            res_dict[attr] = getattr(res, attr)
+    # Saving result dict
+    meta.logger.info(f"Saving compsep results to {fname_res}")
+    np.savez(fname_res, **res_dict)
+    # Saving component maps
+    fname_compmaps = os.path.join(meta.components_directory, 'components_maps.npy')
+    meta.logger.info(f"Saving component maps to {fname_compmaps}")
+    np.save(fname_compmaps, res.s)
+
 def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ??
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
-    parser.add_argument("--plots", action="store_true", help="Plot the generated maps if True.")
-    parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
-    _ = weighted_comp_sep(args)
+    meta = BBmeta(args.globals)
+    res = weighted_compsep(meta)
+    save_compsep_results(meta, res)
 
 
 if __name__ == "__main__":
