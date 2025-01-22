@@ -8,8 +8,7 @@ import numpy as np
 import pymaster as nmt
 from matplotlib import gridspec
 
-from megatop.utils import utils
-from megatop.utils.metadata_manager import BBmeta, Timer
+from megatop.utils import BBmeta, Timer, utils
 
 
 def plot_all_Cls(all_Cls, bin_centre, file_path, cmb_theory_cls=None):

@@ -6,7 +6,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from megatop.utils.metadata_manager import BBmeta, Timer
+from megatop.utils import BBmeta, Timer
 
 
 def plot_all_maps(meta, map_array, output, file_name):

@@ -8,8 +8,7 @@ import pymaster as nmt
 import scipy
 from matplotlib import gridspec
 
-from megatop.utils import utils
-from megatop.utils.metadata_manager import BBmeta, Timer
+from megatop.utils import BBmeta, Timer, utils
 
 
 def compute_auto_cross_cl_from_maps_list(

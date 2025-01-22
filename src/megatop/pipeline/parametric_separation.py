@@ -8,13 +8,15 @@ import numpy as np
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
 
-from megatop.utils.metadata_manager import BBmeta, Timer
+from megatop.utils import BBmeta
 
 
 def weighted_compsep(meta):
     meta.timer.start("compsep")
-    
-    fname_covmat = os.path.join(meta.covmat_directory, "pixel_noise_cov_preprocessed.npy") #TODO rename noise_cov -> noisecov ?
+
+    fname_covmat = os.path.join(
+        meta.covmat_directory, "pixel_noise_cov_preprocessed.npy"
+    )  # TODO rename noise_cov -> noisecov ?
     meta.logger.debug(f"Loading covmat from {fname_covmat}")
     noise_cov = np.load(fname_covmat)
 
@@ -25,10 +27,10 @@ def weighted_compsep(meta):
     instrument = {"frequency": meta.frequencies}
     if meta.parametric_sep_pars["DEBUG_UseSynchrotron"]:
         components = [CMB(), Dust(150.0, temp=20.0), Synchrotron(150.0)]
-        component_labels = ["CMB", "Dust", "Synchrotron"]  # This is only used for plotting
+        # component_labels = ["CMB", "Dust", "Synchrotron"]  # This is only used for plotting
     else:
         components = [CMB(), Dust(150.0, temp=20.0)]
-        component_labels = ["CMB", "Dust"]  # This is only used for plotting
+        # component_labels = ["CMB", "Dust"]  # This is only used for plotting
 
     options = meta.parametric_sep_pars["options"]
     tol = meta.parametric_sep_pars["tol"]
@@ -47,7 +49,7 @@ def weighted_compsep(meta):
         components,
         instrument,
         data=freq_maps_preprocessed_QU_masked,
-        cov=noise_cov_QU_masked, 
+        cov=noise_cov_QU_masked,
         options=options,
         tol=tol,
         method=method,
@@ -166,18 +168,19 @@ def components_results_plotting(
 
 
 def save_compsep_results(meta, res):
-    fname_res = os.path.join(meta.components_directory, 'compsep_results.npz')
+    fname_res = os.path.join(meta.components_directory, "compsep_results.npz")
     res_dict = {}
     for attr in dir(res):
-        if not attr.startswith('__'):
+        if not attr.startswith("__"):
             res_dict[attr] = getattr(res, attr)
     # Saving result dict
     meta.logger.info(f"Saving compsep results to {fname_res}")
     np.savez(fname_res, **res_dict)
     # Saving component maps
-    fname_compmaps = os.path.join(meta.components_directory, 'components_maps.npy')
+    fname_compmaps = os.path.join(meta.components_directory, "components_maps.npy")
     meta.logger.info(f"Saving component maps to {fname_compmaps}")
     np.save(fname_compmaps, res.s)
+
 
 def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ??
