@@ -109,6 +109,7 @@ def make_sims(meta, components="all"):
 def save_sims(meta, freq_maps_write):
     for i_f, map in enumerate(meta.maps_list):
         fname = os.path.join(meta.map_directory, meta.map_sets[map]["file_root"] + ".fits")
+        meta.logger.debug(f"Saving simulated sky to {fname}")
         hp.write_map(
             fname,
             freq_maps_write[i_f],
@@ -120,6 +121,7 @@ def save_sims(meta, freq_maps_write):
 def save_noise_sims(meta, noise_freq_maps_write, id_sim=0):
     for i_f, map in enumerate(meta.maps_list):
         fname = meta.get_noise_map_filename(map, id_sim=id_sim)
+        meta.logger.debug(f"Saving noise simulation to {fname}")
         hp.write_map(
             fname, 
             noise_freq_maps_write[i_f],

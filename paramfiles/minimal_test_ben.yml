@@ -41,30 +41,36 @@ fiducial_cmb:
 #   exp_tag: ...                 #
 ##################################
 map_sets:
-  SAT1_f027:
-    file_root: "cmb_sat4_f027"
+  SAT4_f027:
+    file_root: "sat4_f027"
     freq_tag: 27         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT4"      # Experiment tag (useful to get noise-bias free cross-split spectra)
-  SAT1_f039:
-    file_root: "cmb_sat4_f039"
+    noise_root: "noise_sat4_f027"   
+  SAT4_f039:
+    file_root: "sat4_f039"
     freq_tag: 39         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT4"      # Experiment tag (useful to get noise-bias free cross-split spectra)    
+    noise_root: "noise_sat4_f039"   
   SAT1_f093:
-    file_root: "cmb_sat1_f093"
+    file_root: "sat1_f093"
     freq_tag: 93         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT1"      # Experiment tag (useful to get noise-bias free cross-split spectra)
+    noise_root: "noise_sat1_f093"   
   SAT1_f145:
-    file_root: "cmb_sat1_f145"
+    file_root: "sat1_f145"
     freq_tag: 145
     exp_tag: "SAT1"
-  SAT2_f220:
-    file_root: "cmb_sat2_f220"
+    noise_root: "noise_sat1_f145"   
+  SAT3_f220:
+    file_root: "sat3_f220"
     freq_tag: 220         # Freq. tag (e.g. useful to coadd freqs)
-    exp_tag: "SAT2"      # Experiment tag (useful to get noise-bias free cross-split spectra)
-  SAT2_f280:
-    file_root: "cmb_sat2_f280"
+    exp_tag: "SAT3"      # Experiment tag (useful to get noise-bias free cross-split spectra)
+    noise_root: "noise_sat3_f220"   
+  SAT3_f280:
+    file_root: "sat3_f280"
     freq_tag: 280
-    exp_tag: "SAT2"
+    exp_tag: "SAT3"
+    noise_root: "noise_sat3_f280" 
 
 ####################
 # Masking metadata #
