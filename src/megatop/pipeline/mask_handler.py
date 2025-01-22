@@ -27,9 +27,11 @@ def mask_handler(meta):
     urlpref = "https://portal.nersc.gov/cfs/sobs/users/so_bb/"
     url = f"{urlpref}norm_nHits_SA_35FOV_ns512.fits"
     meta.logger.info(f"Downloading nominal hit map from {url}")
-    with urllib.request.urlopen(url, timeout=timeout_seconds) as response:
-        with open("temp.fits", "w+b") as f:
-            f.write(response.read())
+    with (
+        urllib.request.urlopen(url, timeout=timeout_seconds) as response,
+        open("temp.fits", "w+b") as f,
+    ):
+        f.write(response.read())
     nhits_nominal = hp.ud_grade(hp.read_map("temp.fits"), meta.nside, power=-2)
     os.remove("temp.fits")
 

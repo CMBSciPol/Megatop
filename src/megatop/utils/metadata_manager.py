@@ -53,7 +53,8 @@ class BBmeta:
 
         # Basic sanity checks #TODO is lmax used ?!
         if self.lmax > 3 * self.nside - 1:
-            raise ValueError(f"lmax should be lower or equal to 3*nside-1 = {3 * self.nside - 1}")
+            msg = f"lmax should be lower or equal to 3*nside-1 = {3 * self.nside - 1}"
+            raise ValueError(msg)
 
         # Initialize method to parse map_sets metadata
         map_sets_attributes = list(self.map_sets[next(iter(self.map_sets))].keys())
@@ -117,8 +118,7 @@ class BBmeta:
         List the different maps (including splits).
         Constructor for the map_list attribute.
         """
-        out_list = list(self.map_sets.keys())
-        return out_list
+        return list(self.map_sets.keys())
 
     def _init_getter_from_map_set(self, map_set_attribute):
         """
@@ -167,15 +167,13 @@ class BBmeta:
         if not self.use_input_nhits:
             # Not using custom nhits map
             return os.path.join(self.mask_directory, self.masks["nhits_map"])
-        else:
-            # Using custom nhits map
-            return self.masks["input_nhits_path"]
+        # Using custom nhits map
+        return self.masks["input_nhits_path"]
 
     def idx_from_list(self, frequencies):
         if not (set(self.frequencies) <= set(frequencies)):
-            raise Exception(
-                f"Some frequencies are not part of {frequencies} (can't compute noise for them). Check your yaml !"
-            )
+            msg = f"Some frequencies are not part of {frequencies} (can't compute noise for them). Check your yaml !"
+            raise Exception(msg)
         return [frequencies.index(fr) for fr in self.frequencies]
 
     def read_mask(self, mask_type):
@@ -305,7 +303,8 @@ class BBmeta:
 
         missing_keys = [key for key in keys if key not in self.masks]
         if missing_keys:
-            raise KeyError(f"Missing keys in masks: {missing_keys}")
+            msg = f"Missing keys in masks: {missing_keys}"
+            raise KeyError(msg)
 
     def _init_simulation_params(self):
         """
@@ -320,11 +319,13 @@ class BBmeta:
                 )
                 self.sky_model.remove(cmb)
         if not hasattr(self, "fiducial_cmb"):
-            raise AttributeError("The 'fiducial_cmb' field is missing from the config file.")
+            msg = "The 'fiducial_cmb' field is missing from the config file."
+            raise AttributeError(msg)
         keys = ["r_input", "A_lens_input"]
         missing_keys = [key for key in keys if key not in self.map_sim_pars]
         if missing_keys:
-            raise KeyError(f"Missing keys in map_sim_pars: {missing_keys}")
+            msg = f"Missing keys in map_sim_pars: {missing_keys}"
+            raise KeyError(msg)
 
         # noise checks
         if self.noise_sim_pars["noise_option"] not in [
@@ -333,20 +334,21 @@ class BBmeta:
             "noise_spectra",
             "MSS2",
         ]:
-            raise KeyError(
-                "Only no_noise, white_noise, noise_spectra and MSS2 noise options are supported for now ..."
-            )
+            msg = "Only no_noise, white_noise, noise_spectra and MSS2 noise options are supported for now ..."
+            raise KeyError(msg)
         if self.noise_sim_pars["experiment"] not in ["SO", "MSS2"]:
-            raise KeyError("Only SO simulations supported for now ")
+            msg = "Only SO simulations supported for now "
+            raise KeyError(msg)
         if self.noise_sim_pars["experiment"] == "SO":
             keys = ["sensitivity_mode", "SAC_yrs_LF"]
             missing_keys = [key for key in keys if key not in self.noise_sim_pars]
             if missing_keys:
-                raise KeyError(f"Missing keys in noise_sim_pars: {missing_keys}")
+                msg = f"Missing keys in noise_sim_pars: {missing_keys}"
+                raise KeyError(msg)
 
     def _init_beam_params(self):
         """ "Set the self.beam_FWHM_arcmin parameter and self.use_custom_beams flag."""
-        if "beams_FWHM_arcmin" in self.pre_proc_pars.keys():
+        if "beams_FWHM_arcmin" in self.pre_proc_pars:
             self.use_custom_beams = True
             try:
                 assert len(self.pre_proc_pars["beams_FWHM_arcmin"]) == len(self.frequencies)
@@ -443,11 +445,12 @@ class BBmeta:
         elif map_type == "point_source":
             fname = os.path.join(base_dir, self.masks["point_source_mask"])
         else:
-            raise ValueError(
+            msg = (
                 "The map_type chosen does not exits. "
                 "Choose between 'analysis', 'binary', "
                 "'point_source'."
             )
+            raise ValueError(msg)
         return fname
 
     def get_fname_cls_fiducial_cmb(self, cl_type="lensed"):
@@ -466,10 +469,11 @@ class BBmeta:
         elif cl_type == "unlensed_scalar_tensor_r1":
             fname = os.path.join(base_dir, self.fiducial_cmb["unlensed_scalar_tensor_r1"])
         else:
-            raise ValueError(
+            msg = (
                 "The cl_type chosen does not exits. "
                 "Choose between 'lensed', 'unlensed_scalar_tensor_r1'."
             )
+            raise ValueError(msg)
         return fname
 
     def get_map_filename(self, map_set, id_split, id_sim=None):
@@ -501,8 +505,8 @@ class BBmeta:
 
         if id_split is None:
             return os.path.join(path_to_maps, f"{map_set_root}.fits")
-        else:
-            return os.path.join(path_to_maps, f"{map_set_root}_split_{id_split}.fits")
+
+        return os.path.join(path_to_maps, f"{map_set_root}_split_{id_split}.fits")
 
     def read_map(self, map_set, id_split, id_sim=None, pol_only=False):
         """
@@ -591,7 +595,8 @@ class Timer:
             Label of the timer.
         """
         if timer_label in self.timers:
-            raise ValueError(f"Timer {timer_label} already exists.")
+            msg = f"Timer {timer_label} already exists."
+            raise ValueError(msg)
         self.timers[timer_label] = time.time()
 
     def stop(self, timer_label, logger, text_to_output=None):
@@ -612,7 +617,8 @@ class Timer:
             Defaults to True.
         """
         if timer_label not in self.timers:
-            raise ValueError(f"Timer {timer_label} does not exist.")
+            msg = f"Timer {timer_label} does not exist."
+            raise ValueError(msg)
 
         dt = time.time() - self.timers[timer_label]
         self.timers.pop(timer_label)

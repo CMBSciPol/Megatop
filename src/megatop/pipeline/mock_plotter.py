@@ -95,7 +95,7 @@ def plotTTEEBB_diff(
         ax[0][2].plot(
             ell,
             norm * Cl_data[f, 2],
-            label=legend_labels[0] + str(freqs[f]) * (Cl_data.shape[0] != 1),  #
+            label=legend_labels[0] + str(freqs[f]) * (Cl_data.shape[0] != 1),
             color="C" + str(f),
             ls="-",
             alpha=0.4,
@@ -105,7 +105,7 @@ def plotTTEEBB_diff(
         ax[0][2].plot(
             ell,
             norm * Cl_model[f, 2],
-            label=legend_labels[1] + str(freqs[f]) * (Cl_data.shape[0] != 1),  #
+            label=legend_labels[1] + str(freqs[f]) * (Cl_data.shape[0] != 1),
             color="C" + str(f),
             ls=":",
         )
@@ -195,7 +195,7 @@ def plotTTEEBB(
         ax[2].plot(
             ell,
             norm * Cl[f, 2],
-            label=legend_labels[0] + str(freqs[f]) * (Cl.shape[0] != 1),  #
+            label=legend_labels[0] + str(freqs[f]) * (Cl.shape[0] != 1),
             color="C" + str(f),
             ls="-",
             alpha=0.4,
@@ -283,17 +283,15 @@ def plot_cmb_sims(meta, maps=True, cls=True):
         vmin = {"I": -300, "Q": -5, "U": -5}
         vmax = {"I": 300, "Q": 5, "U": 5}
         plt.figure(figsize=(20, 7))
-        k = 0
-        for j_stokes, stokes in enumerate(["I", "Q", "U"]):
+        for j_stokes, stokes in enumerate("IQU"):
             hp.mollview(
                 cmb_map[j_stokes],
                 cmap=cmap,
                 title=f"CMB {stokes}",
                 min=vmin[stokes],
                 max=vmax[stokes],
-                sub=(1, 3, k + 1),
+                sub=(1, 3, j_stokes + 1),
             )
-            k += 1
         plot_dir = meta.plot_dir_from_output_dir("sims")
         plt.savefig(os.path.join(plot_dir, "cmb_maps.png"), bbox_inches="tight")
         plt.clf()

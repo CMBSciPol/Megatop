@@ -40,12 +40,13 @@ def generate_noise_map_white(nside, noise_rms_muKarcmin, ncomp=3):
     noise_rms_muK_T = noise_rms_muKarcmin / np.sqrt(pixel_area_arcmin)
 
     out_map = np.zeros((ncomp, size))
-    out_map[0, :] = np.random.randn(size) * noise_rms_muK_T
+    rng = np.random.default_rng()
+    out_map[0, :] = rng.normal(0, noise_rms_muK_T, size)
 
     if ncomp == 3:
         noise_rms_muK_P = np.sqrt(2) * noise_rms_muK_T
-        out_map[1, :] = np.random.randn(size) * noise_rms_muK_P
-        out_map[2, :] = np.random.randn(size) * noise_rms_muK_P
+        out_map[1, :] = rng.normal(0, noise_rms_muK_P, size)
+        out_map[2, :] = rng.normal(0, noise_rms_muK_P, size)
         return out_map
     return out_map
 
@@ -71,7 +72,8 @@ def random_src_mask(mask, nsrcs, mask_radius_arcmin):
     pspy.so_map
     """
     ps_mask = mask.copy()
-    src_ids = np.random.choice(np.where(mask == 1)[0], nsrcs)
+    rng = np.random.default_rng()
+    src_ids = rng.choice(np.where(mask == 1)[0], nsrcs)
     for src_id in src_ids:
         vec = hp.pix2vec(hp.get_nside(mask), src_id)
         disc = hp.query_disc(hp.get_nside(mask), vec, np.deg2rad(mask_radius_arcmin / 60))
@@ -148,10 +150,7 @@ def power_law_cl(ell, amp, delta_ell, power_law_index):
     """ """
     pl_ps = {}
     for spec in ["TT", "TE", "TB", "EE", "EB", "BB"]:
-        if isinstance(amp, dict):
-            A = amp[spec]
-        else:
-            A = amp
+        A = amp[spec] if isinstance(amp, dict) else amp
         # A is power spectrum amplitude at pivot ell == 1 - delta_ell
         pl_ps[spec] = A / (ell + delta_ell) ** power_law_index
 
@@ -510,7 +509,7 @@ def apply_lminlmax_to_dict(dict, bin_index_lminlmax):
 
     """
     new_dict = {}
-    for key in dict.keys():
+    for key in dict:
         new_dict[key] = dict[key][..., bin_index_lminlmax]
     return new_dict
 
@@ -571,7 +570,8 @@ def MakeNoiseMapsNhitsMSS2(meta, map_set, verbose=False):
         f"({meta.map_sets[map_set]['exp_tag']}, {meta.map_sets[map_set]['freq_tag']})"
     ] / hp.nside2resol(nside_nhits, arcmin=True)
     # TODO: Having to convert what should be a tuple key into a string for it to be undestood by the yaml parser is not ideal
-    map_noise = np.random.normal(0, noise_lvl_uk, (3, hp.nside2npix(nside_nhits)))
+    rng = np.random.default_rng()
+    map_noise = rng.normal(0, noise_lvl_uk, (3, hp.nside2npix(nside_nhits)))
 
     map_noise[..., binary_mask_nhits == 0] = hp.UNSEEN
 

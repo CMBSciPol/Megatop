@@ -1,11 +1,12 @@
 import argparse
 import os
+import sys
 
 import IPython
-import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pymaster as nmt
+from matplotlib import gridspec
 
 from megatop.utils import utils
 from megatop.utils.metadata_manager import BBmeta, Timer
@@ -120,12 +121,12 @@ def main_spectra_plotting(meta):
         os.path.join(meta.spectra_directory, "cross_components_Cls.npz"), allow_pickle=True
     )
     all_Clslminlmax = utils.apply_lminlmax_to_dict(all_Cls, bin_index_lminlmax)
-    for key in all_Clslminlmax.keys():
+    for key in all_Clslminlmax:
         all_Clslminlmax[key] = all_Clslminlmax[key] * fsky_mask
 
     Cls_noise = np.load(os.path.join(meta.spectra_directory, "noise_Cls.npz"), allow_pickle=True)
     Cls_noiselminlmax = utils.apply_lminlmax_to_dict(Cls_noise, bin_index_lminlmax)
-    for key in Cls_noiselminlmax.keys():
+    for key in Cls_noiselminlmax:
         Cls_noiselminlmax[key] = Cls_noiselminlmax[key] * fsky_mask
     # IPython.embed()
     # for key in Cls_noiselminlmax.keys():
@@ -135,7 +136,7 @@ def main_spectra_plotting(meta):
         os.path.join(meta.spectra_directory, "noise_Cls_offdiag.npz"), allow_pickle=True
     )
     Cls_noise_offdiaglminlmax = utils.apply_lminlmax_to_dict(Cls_noise_offdiag, bin_index_lminlmax)
-    for key in Cls_noise_offdiaglminlmax.keys():
+    for key in Cls_noise_offdiaglminlmax:
         Cls_noise_offdiaglminlmax[key] = Cls_noise_offdiaglminlmax[key] * fsky_mask
 
     plot_dir = meta.plot_dir_from_output_dir(meta.spectra_directory_rel)
@@ -196,8 +197,6 @@ def main_spectra_plotting(meta):
     )
     IPython.embed()
 
-    return
-
 
 def main():
     parser = argparse.ArgumentParser(description="simplistic simulator")  # TODO change name ??
@@ -207,7 +206,7 @@ def main():
     args = parser.parse_args()
 
     if not args.plots:
-        exit()
+        sys.exit()
 
     timer_plots = Timer()
     timer_plots.start("plots_spectra")

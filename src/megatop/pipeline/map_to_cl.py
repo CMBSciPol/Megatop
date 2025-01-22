@@ -2,11 +2,11 @@ import argparse
 import os
 
 import healpy as hp
-import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pymaster as nmt
 import scipy
+from matplotlib import gridspec
 
 from megatop.utils import utils
 from megatop.utils.metadata_manager import BBmeta, Timer
@@ -17,7 +17,7 @@ def compute_auto_cross_cl_from_maps_list(
 ):
     # Create the fields
     fields = []
-    for key in maps_dict.keys():
+    for key in maps_dict:
         fields.append(
             nmt.NmtField(
                 mask, maps_dict[key], beam=beam, purify_e=purify_e, purify_b=purify_b, n_iter=n_iter

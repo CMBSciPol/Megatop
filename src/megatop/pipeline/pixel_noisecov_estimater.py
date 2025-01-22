@@ -49,14 +49,10 @@ def pixel_noisecov_estimation(meta):
         rank = 0
         size = 1
 
-        pass
-
     MemoryUsage(meta, f"rank = {rank} ")
 
     meta.logger.info(f"rank = {rank}, size = {size}")
-    noise_cov_preprocessed = np.zeros(
-        [len(meta.frequencies), 3, hp.nside2npix(meta.nside)]
-    )
+    noise_cov_preprocessed = np.zeros([len(meta.frequencies), 3, hp.nside2npix(meta.nside)])
 
     # Importing noise maps
     maps_list = meta.maps_list
@@ -66,10 +62,7 @@ def pixel_noisecov_estimation(meta):
 
     # The None case of nreal is useful when calling get_noise_map_filename
     # so we need to handle it when creating the list of realisations to loop over
-    if nreal is None:
-        int_nreal = 1
-    else:
-        int_nreal = nreal
+    int_nreal = 1 if nreal is None else nreal
     realisation_list = np.arange(int_nreal)
 
     # splitting the list of simulation between the ranks of the process:
@@ -78,14 +71,13 @@ def pixel_noisecov_estimation(meta):
     for id_realisation in rank_realisation_list:
         noise_freq_maps = []
 
-        if nreal is None:
-            id_realisation = None
+        id_real = None if nreal is None else id_realisation
 
-        meta.logger.info(f"id_realisation = {id_realisation}")
+        meta.logger.info(f"id_realisation = {id_real}")
         meta.logger.info(f"in = {rank_realisation_list}")  # debug in logger
 
         for m in maps_list:
-            path_noise_map = meta.get_noise_map_filename(m, id_sim=id_realisation)
+            path_noise_map = meta.get_noise_map_filename(m, id_sim=id_real)
 
             meta.logger.info(f"Importing noise map: {path_noise_map}")
 
@@ -102,9 +94,9 @@ def pixel_noisecov_estimation(meta):
             meta.logger.info(
                 "WARNING: this is mostly for testing it might not actually represent the real noise"
             )
-            freq_noise_maps_array = np.array(
-                freq_noise_maps_array
-            )  # not using dtype=object to avoid issue with addition for noise_cov_preprocessed
+            # freq_noise_maps_array = np.array(
+            #     freq_noise_maps_array
+            # )  # not using dtype=object to avoid issue with addition for noise_cov_preprocessed
             noise_freq_maps_preprocessed = noise_freq_maps
 
         else:
@@ -114,16 +106,13 @@ def pixel_noisecov_estimation(meta):
         if meta.noise_cov_pars.get("save_preprocessed_noise_maps"):
             meta.logger.info("Saving pre-processed noise maps to disk")
 
-            if nreal is not None:
-                add_sim_id = f"_{id_realisation:04d}.npy"
-            else:
-                add_sim_id = ".npy"
+            add_sim_id = f"_{id_real:04d}.npy" if nreal is not None else ".npy"
             np.save(
                 os.path.join(meta.covmat_directory, "freq_noise_maps_preprocessed" + add_sim_id),
                 noise_freq_maps_preprocessed,
             )
 
-        MemoryUsage(meta, f"memory for id_realisation = {id_realisation} ")
+        MemoryUsage(meta, f"memory for id_realisation = {id_real} ")
 
         noise_cov_preprocessed += noise_freq_maps_preprocessed**2
 

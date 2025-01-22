@@ -1,3 +1,4 @@
+import contextlib
 from collections.abc import Callable
 from functools import wraps
 from importlib.util import find_spec
@@ -5,10 +6,8 @@ from typing import ParamSpec, TypeVar
 
 import numpy as np
 
-try:
+with contextlib.suppress(ImportError):
     from mpi4py import MPI
-except ImportError:
-    pass
 
 
 Param = ParamSpec("Param")
@@ -50,10 +49,7 @@ def MPISUM(array, comm, rank, root):
 
     """
 
-    if rank == root:
-        array_recvbuf = np.zeros_like(array)
-    else:
-        array_recvbuf = None
+    array_recvbuf = np.zeros_like(array) if rank == root else None
 
     array = np.ascontiguousarray(array)
 

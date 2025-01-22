@@ -21,7 +21,8 @@ def random_src_mask(mask, nsrcs, mask_radius_arcmin):
     ps_mask: array
     """
     ps_mask = mask.copy()
-    src_ids = np.random.choice(np.where(mask == 1)[0], nsrcs)
+    rng = np.random.default_rng()
+    src_ids = rng.choice(np.where(mask == 1)[0], nsrcs)
     for src_id in src_ids:
         vec = hp.pix2vec(hp.get_nside(mask), src_id)
         disc = hp.query_disc(hp.get_nside(mask), vec, np.deg2rad(mask_radius_arcmin / 60))

@@ -1,3 +1,4 @@
+import sys
 import warnings
 
 import healpy as hp
@@ -41,10 +42,9 @@ def get_Cl_CMB_model_from_meta(meta):
     Cl_TE = Cl_lens[3]
 
     Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
-    Cl_cmb_model = np.array(
-        [[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0.0, Cl_EE * 0.0]]
-    )  # setting TB and EB correlations to 0
-    return Cl_cmb_model
+
+    # setting TB and EB correlations to 0
+    return np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0]])
 
 
 def generate_map_cmb(meta, Cl_cmb_model):
@@ -68,10 +68,13 @@ def generate_map_cmb(meta, Cl_cmb_model):
     """
     lmax = 2 * meta.nside
     if meta.map_sim_pars["fixed_cmb"]:
-        np.random.seed(1234)  # Fixing seed so that the CMB is the same for all sims.
+        # Fixing seed so that the CMB is the same for all sims
+        # We need to do this because synfast uses the legacy numpy random number generator
+        np.random.seed(1234)  # noqa: NPY002
     map_CMB = hp.synfast(Cl_cmb_model[0], nside=meta.nside, lmax=lmax, new=True, pixwin=False)
     if meta.map_sim_pars["fixed_cmb"]:
-        np.random.seed(None)  # Resetting seed.
+        # Resetting seed
+        np.random.seed(None)  # noqa: NPY002
     return np.array(map_CMB)
 
 
@@ -134,10 +137,10 @@ def get_noise(meta, fsky_binary):
             f"Map white noise level (Q,U) {', '.join(f'{level:.2f}' for level in map_white_noise_levels)} muK-arcmin"
         )
         return n_ell, map_white_noise_levels
-    else:
-        meta.logger.error(
-            "NO other options yet"
-        )  # shouldn't enter this as checks are done in metadata_manager.
+
+    # shouldn't enter this as checks are done in metadata_manager.
+    meta.logger.error("NO other options yet")
+    return None
 
 
 def get_noise_map_from_white_noise(meta, map_white_noise_levels):
@@ -169,7 +172,8 @@ def get_noise_map_from_white_noise(meta, map_white_noise_levels):
             ]
         )[:, np.newaxis] * np.ones((3, hp.nside2npix(meta.nside)))
     nlev_map /= hp.nside2resol(meta.nside, arcmin=True)
-    noise_maps = np.random.normal(
+    rng = np.random.default_rng()
+    noise_maps = rng.normal(
         np.zeros_like(nlev_map), nlev_map, (len(meta.frequencies), 3, hp.nside2npix(meta.nside))
     )
     if meta.noise_sim_pars["include_nhits"]:
@@ -265,7 +269,7 @@ def include_hits_noise(meta, noise_maps, unseen=False, binary_only=False):
                 "Please check the mask_handling parameters; changing 'binary_mask_zero_threshold' can help."
             )
             meta.logger.error("Exiting...")
-            exit(1)
+            sys.exit(1)
         warnings.resetwarnings()
     if unseen:
         noise_maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN

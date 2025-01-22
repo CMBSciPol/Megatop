@@ -18,7 +18,8 @@ dependencies = [
     "healpy",
     "matplotlib",
     "numpy",
-    "pixell==0.26.0",  # TODO: remove when https://github.com/galsci/pysm/issues/205 is fixed
+    # TODO(simon): remove pixell when https://github.com/galsci/pysm/issues/205 is fixed
+    "pixell==0.26.0",
     "pymaster",
     "pysm3 @ git+https://github.com/galsci/pysm.git@3.4.1a1",
     "pyyaml",
@@ -47,30 +48,29 @@ exclude = ["scripts"]
 
 [tool.ruff.lint]
 extend-select = [
-    "ARG", # flake8-unused-arguments
-    "B",   # flake8-bugbear
-    # "C4",   # flake8-comprehensions
-    # "EM",   # flake8-errmsg
-    # "EXE",  # flake8-executable
-    # "FURB", # refurb
+    "ARG",  # flake8-unused-arguments
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "EM",   # flake8-errmsg
+    "EXE",  # flake8-executable
+    "FURB", # refurb
     # "G",    # flake8-logging-format
-    "I", # isort
-    # "ICN",  # flake8-import-conventions
-    # "NPY",  # NumPy specific rules
-    # "PD",   # pandas-vet
-    # "PGH",  # pygrep-hooks
-    # "PIE",  # flake8-pie
-    # "PL",   # pylint
-    # "PT",   # flake8-pytest-style
+    "I",   # isort
+    "ICN", # flake8-import-conventions
+    "NPY", # NumPy specific rules
+    "PGH", # pygrep-hooks
+    "PIE", # flake8-pie
+    "PL",  # pylint
+    "PT",  # flake8-pytest-style
     # "PTH",  # flake8-use-pathlib
-    # "PYI",  # flake8-pyi
-    # "RET",  # flake8-return
+    "PYI", # flake8-pyi
+    "RET", # flake8-return
     "RUF", # Ruff-specific
-    # "SIM",  # flake8-simplify
+    "SIM", # flake8-simplify
     "T10", # flake8-debugger
-    # "T20",  # flake8-print
-    "UP", # pyupgrade
-    # "YTT", # flake8-2020
+    # "T20", # flake8-print
+    "UP",  # pyupgrade
+    "YTT", # flake8-2020
 ]
 ignore = [
     "PLR09",   # Too many <...>

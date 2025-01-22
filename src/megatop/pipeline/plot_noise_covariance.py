@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -90,7 +91,7 @@ def main():
     args = parser.parse_args()
 
     if not args.plots:
-        exit()
+        sys.exit()
 
     timer_plots = Timer()
     timer_plots.start("plots_noise_cov")
