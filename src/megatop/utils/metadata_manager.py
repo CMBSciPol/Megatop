@@ -5,8 +5,8 @@ import healpy as hp
 import numpy as np
 import yaml
 
-from megatop.utils import Timer
-from megatop.utils import V3calc as V3
+from . import V3calc as V3
+from .timer import Timer
 
 
 class BBmeta:
