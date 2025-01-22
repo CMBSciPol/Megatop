@@ -16,7 +16,7 @@ from megatop.utils.utils import MemoryUsage
 # =================================================================================
 
 
-def GetNoiseCov(meta):
+def pixel_noisecov_estimation(meta):
     """
     Estimating the noise covariance matrix from noise map(s) saved on disk.
     Directly saves the noise covariance matrix on disk.
@@ -54,11 +54,8 @@ def GetNoiseCov(meta):
     MemoryUsage(meta, f"rank = {rank} ")
 
     meta.logger.info(f"rank = {rank}, size = {size}")
-
-    meta.logger.info(f"rank = {rank}, size = {size}")
-
     noise_cov_preprocessed = np.zeros(
-        [len(meta.frequencies), 3, hp.nside2npix(meta.general_pars["nside"])]
+        [len(meta.frequencies), 3, hp.nside2npix(meta.nside)]
     )
 
     # Importing noise maps
@@ -79,7 +76,7 @@ def GetNoiseCov(meta):
     rank_realisation_list = np.array_split(realisation_list, size)[rank]
 
     for id_realisation in rank_realisation_list:
-        freq_noise_maps_array = []
+        noise_freq_maps = []
 
         if nreal is None:
             id_realisation = None
@@ -92,8 +89,8 @@ def GetNoiseCov(meta):
 
             meta.logger.info(f"Importing noise map: {path_noise_map}")
 
-            freq_noise_maps_array.append(hp.read_map(path_noise_map, field=None).tolist())
-            nside_in_list.append(hp.get_nside(freq_noise_maps_array[-1][-1]))
+            noise_freq_maps.append(hp.read_map(path_noise_map, field=None).tolist())
+            nside_in_list.append(hp.get_nside(noise_freq_maps[-1][-1]))
 
         if np.all(
             np.array(meta.pre_proc_pars["common_beam_correction"])
@@ -108,11 +105,11 @@ def GetNoiseCov(meta):
             freq_noise_maps_array = np.array(
                 freq_noise_maps_array
             )  # not using dtype=object to avoid issue with addition for noise_cov_preprocessed
-            freq_noise_maps_pre_processed = freq_noise_maps_array
+            noise_freq_maps_preprocessed = noise_freq_maps
 
         else:
-            freq_noise_maps_array = np.array(freq_noise_maps_array, dtype=object)
-            freq_noise_maps_pre_processed = common_beam_and_nside(meta, freq_noise_maps_array)
+            noise_freq_maps = np.array(noise_freq_maps, dtype=object)
+            noise_freq_maps_preprocessed = common_beam_and_nside(meta, noise_freq_maps)
 
         if meta.noise_cov_pars.get("save_preprocessed_noise_maps"):
             meta.logger.info("Saving pre-processed noise maps to disk")
@@ -123,12 +120,12 @@ def GetNoiseCov(meta):
                 add_sim_id = ".npy"
             np.save(
                 os.path.join(meta.covmat_directory, "freq_noise_maps_preprocessed" + add_sim_id),
-                freq_noise_maps_pre_processed,
+                noise_freq_maps_preprocessed,
             )
 
         MemoryUsage(meta, f"memory for id_realisation = {id_realisation} ")
 
-        noise_cov_preprocessed += freq_noise_maps_pre_processed**2
+        noise_cov_preprocessed += noise_freq_maps_preprocessed**2
 
     noise_cov_preprocessed_recvbuf = MPISUM(noise_cov_preprocessed, comm, rank, root)
 
@@ -160,7 +157,7 @@ def main():
     args = parser.parse_args()
     meta = BBmeta(args.globals)
 
-    GetNoiseCov(meta)
+    pixel_noisecov_estimation(meta)
 
 
 if __name__ == "__main__":

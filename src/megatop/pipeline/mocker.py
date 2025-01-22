@@ -79,6 +79,11 @@ def make_sims(meta, components="all"):
     combined_freq_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
     combined_freq_maps_beamed = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
 
+    if components == ["noise"]:
+        noise_freq_maps[..., np.where(binary_mask == 0)[0]] = 0
+        meta.timer.stop("sim", meta.logger, "Simulating one sky (noise only)")
+        return noise_freq_maps, None
+
     meta.timer.start("beam")
     for i_f, _f in enumerate(meta.frequencies):
         combined_freq_maps[i_f] = cmb_map + fg_freq_maps[i_f] + noise_freq_maps[i_f]
@@ -92,7 +97,7 @@ def make_sims(meta, components="all"):
 
     meta.timer.start("mask")
 
-    # Applying binary mask to all products:
+    # Applying binary mask to all products: #TODO move to utils ?
     combined_freq_maps[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
     combined_freq_maps_beamed[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
     meta.timer.stop("mask", meta.logger, "Masking product with binary mask")
@@ -112,14 +117,15 @@ def save_sims(meta, freq_maps_write):
         )
 
 
-# def save_noise_maps(meta, noise_maps, id=0):
-#     for i_f, map in enumerate(meta.maps_list):
-#         fname = os.path.join(meta.mock_directory, meta.map_sets[map]["noise_root"] + ".fits")
-#         hp.write_map(
-#             fname, noise_maps[i_f], dtype=["float64", "float64", "float64"], overwrite=True
-#         )
-#     fname = os.path.join(meta.mock_directory, f"noise_sim_id_{id:04d}")
-#     np.save(fname, noise_maps)
+def save_noise_sims(meta, noise_freq_maps_write, id_sim=0):
+    for i_f, map in enumerate(meta.maps_list):
+        fname = meta.get_noise_map_filename(map, id_sim=id_sim)
+        hp.write_map(
+            fname, 
+            noise_freq_maps_write[i_f],
+            dtype=["float64", "float64", "float64"], 
+            overwrite=True
+        )
 
 
 def main():
@@ -128,16 +134,17 @@ def main():
     parser.add_argument(
         "--sim_id", type=int, help="Id of the simulation (useful fo noise covariance estimation)"
     )
+    parser.add_argument(
+        "--noise_only", action="store_true", help="Flag to generate noise_only sims and save them to disk."
+    )
     args = parser.parse_args()
     meta = BBmeta(args.globals)
-    combined_freq_maps, combined_freq_maps_beamed = make_sims(meta)
-    # if meta.noise_sim_pars["save_noise_sim"]:
-    #     if args.sim_id is not None:
-    #         save_noise_maps(meta, noise_maps, args.sim_id)
-    #     else:
-    #         save_noise_maps(meta, noise_maps)
-    save_sims(meta, combined_freq_maps_beamed)
-
+    if args.noise_only:
+        combined_freq_maps, _ = make_sims(meta, components=["noise"])
+        save_noise_sims(meta, combined_freq_maps, args.sim_id)
+    else:
+        combined_freq_maps, combined_freq_maps_beamed = make_sims(meta)
+        save_sims(meta, combined_freq_maps_beamed)
 
 if __name__ == "__main__":
     main()
