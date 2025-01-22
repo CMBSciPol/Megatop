@@ -6,7 +6,7 @@ import healpy as hp
 import numpy as np
 
 from megatop.utils import BBmeta
-from megatop.utils.mask_utils import (
+from megatop.utils.mask import (
     get_apodized_mask_from_nhits,
     get_binary_mask_from_nhits,
     get_spin_derivatives,

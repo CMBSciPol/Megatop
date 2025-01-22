@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 
 from megatop.utils import BBmeta
-from megatop.utils.mask_utils import get_spin_derivatives
+from megatop.utils.mask import get_spin_derivatives
 
 
 def plotter(meta):

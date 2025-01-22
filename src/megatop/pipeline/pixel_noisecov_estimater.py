@@ -8,7 +8,7 @@ from mpi4py import MPI
 
 from megatop.utils import BBmeta
 from megatop.utils.mpi import MPISUM
-from megatop.utils.preproc_utils import common_beam_and_nside
+from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.utils import MemoryUsage
 
 # =================================================================================

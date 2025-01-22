@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
 
-from megatop.utils import BBmeta, mock_utils
+from megatop.utils import BBmeta, mock
 
 
 def plot_fiducial_spectra(meta):
@@ -217,10 +217,10 @@ def plotTTEEBB(
 
 
 def plot_fg_sims(meta, maps=True, cls=True):
-    fg_freq_maps = mock_utils.generate_map_fgs_pysm(meta)
+    fg_freq_maps = mock.generate_map_fgs_pysm(meta)
     fg_freq_maps_beamed = np.zeros_like(fg_freq_maps)
     for i_f, _f in enumerate(meta.frequencies):
-        fg_freq_maps_beamed[i_f] = mock_utils.beam_winpix_correction(
+        fg_freq_maps_beamed[i_f] = mock.beam_winpix_correction(
             meta, fg_freq_maps[i_f], meta.beams_FWHM_arcmin[i_f]
         )
     binary_mask = meta.read_mask("binary")
@@ -275,8 +275,8 @@ def plot_fg_sims(meta, maps=True, cls=True):
 
 
 def plot_cmb_sims(meta, maps=True, cls=True):
-    Cl_cmb_model = mock_utils.get_Cl_CMB_model_from_meta(meta)
-    cmb_map = mock_utils.generate_map_cmb(meta, Cl_cmb_model)
+    Cl_cmb_model = mock.get_Cl_CMB_model_from_meta(meta)
+    cmb_map = mock.generate_map_cmb(meta, Cl_cmb_model)
     if maps:
         cmap = cm.RdBu
         cmap.set_under("w")
@@ -315,12 +315,12 @@ def plot_noise_sims(meta, maps=True, cls=True):
     nhits_map = meta.read_hitmap()
     nhits_map_rescaled = nhits_map / max(nhits_map)
     if meta.noise_sim_pars["noise_option"] == "white_noise":
-        n_ell, map_white_noise_levels = mock_utils.get_noise(meta, fsky_binary)
-        noise_freq_maps = mock_utils.get_noise_map_from_white_noise(meta, map_white_noise_levels)
+        n_ell, map_white_noise_levels = mock.get_noise(meta, fsky_binary)
+        noise_freq_maps = mock.get_noise_map_from_white_noise(meta, map_white_noise_levels)
 
     elif meta.noise_sim_pars["noise_option"] == "noise_spectra":
-        n_ell, map_white_noise_levels = mock_utils.get_noise(meta, fsky_binary)
-        noise_freq_maps = mock_utils.get_noise_map_from_noise_spectra(meta, n_ell)
+        n_ell, map_white_noise_levels = mock.get_noise(meta, fsky_binary)
+        noise_freq_maps = mock.get_noise_map_from_noise_spectra(meta, n_ell)
 
     if maps:
         cmap = cm.RdBu
