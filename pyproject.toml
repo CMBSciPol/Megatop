@@ -13,7 +13,9 @@ description = "A map-based CMB polarization data analysis pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "attrs",
     "camb",
+    "cattrs",
     "fgbuster @ git+https://github.com/fgbuster/fgbuster.git@std_inst_bandpass",
     "healpy",
     "matplotlib",
