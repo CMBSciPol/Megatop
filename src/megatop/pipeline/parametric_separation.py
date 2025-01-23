@@ -12,19 +12,27 @@ from megatop.utils import BBmeta
 from megatop.utils.logger import logger
 
 
-def weighted_compsep(meta):
-    meta.timer.start("compsep")
+def weighted_comp_sep(args):
+    meta = BBmeta(args.globals)
+
+    meta.timer.start("full_step")
+    meta.timer.start("loading_covmat")
 
     fname_covmat = os.path.join(
         meta.covmat_directory, "pixel_noise_cov_preprocessed.npy"
     )  # TODO rename noise_cov -> noisecov ?
     logger.debug(f"Loading covmat from {fname_covmat}")
     noise_cov = np.load(fname_covmat)
+    meta.timer.stop("loading_covmat", meta.logger, "Loading noise covariance")
 
+    meta.timer.start("loading_maps")
     fname_preproc_maps = os.path.join(meta.pre_process_directory, "freq_maps_preprocessed.npy")
     logger.debug(f"Loading input maps from {fname_preproc_maps}")
     freq_maps_preprocessed = np.load(fname_preproc_maps)
 
+    meta.timer.stop("loading_maps", meta.logger, "Loading pre-processed frequency maps")
+
+    meta.timer.start("compsep")
     instrument = {"frequency": meta.frequencies}
     if meta.parametric_sep_pars["DEBUG_UseSynchrotron"]:
         components = [CMB(), Dust(150.0, temp=20.0), Synchrotron(150.0)]
@@ -55,7 +63,15 @@ def weighted_compsep(meta):
         tol=tol,
         method=method,
     )
-    # Best fit mixing mastrix saved to res object
+
+    if args.verbose:
+        print("success: ", res.success)
+    if args.verbose:
+        print("results: ", res.x)
+    if args.verbose:
+        print("results: ", res)
+    meta.timer.stop("compsep", meta.logger, "Component separation")
+
     A = MixingMatrix(*components)
     A_ev = A.evaluator(np.array(instrument["frequency"]))
     A_maxL = A_ev(res.x)
@@ -103,15 +119,21 @@ def weighted_compsep(meta):
     #         res_dict[attr] = getattr(res, attr)
     # np.savez(os.path.join(meta.components_directory, "comp_sep_results.npz"), **res_dict)
 
-    # # res.s and res.invAtNA are saved twice, but they are the direct needed outputs for the next step
-    # # space could be saved by adding an if statement in the above dict construction (TODO?)
-    # np.save(os.path.join(meta.components_directory, "components_maps.npy"), res.s)
-    # np.save(os.path.join(meta.components_directory, "invAtNA.npy"), res.invAtNA)
-    # np.save(
-    #     os.path.join(meta.components_directory, "noise_map_after_compsep.npy"),
-    #     noise_map_after_compsep,
-    # )
+    # res.s and res.invAtNA are saved twice, but they are the direct needed outputs for the next step
+    # space could be saved by adding an if statement in the above dict construction (TODO?)
+    np.save(os.path.join(meta.components_directory, "components_maps.npy"), res.s)
+    np.save(os.path.join(meta.components_directory, "invAtNA.npy"), res.invAtNA)
+    np.save(
+        os.path.join(meta.components_directory, "noise_map_after_compsep.npy"),
+        noise_map_after_compsep,
+    )
 
+    if args.plots:
+        meta.timer.start("plotting")
+        components_results_plotting(res, meta, components_label_list, noise_map_after_compsep)
+        meta.timer.stop("plotting", meta.logger, "Plotting")
+
+    meta.timer.stop("full_step", meta.logger, "Full component separation step")
     return res
 
 
