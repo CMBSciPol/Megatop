@@ -38,11 +38,19 @@ Refer to the [mpi4py documentation](https://mpi4py.readthedocs.io/en/stable/inst
 
 ## Developing Megatop
 
-For installing, refer to the previous section.
-You may want to install in editable mode for development:
+After cloning, install in editable mode and with development dependencies:
 
 ```bash
-pip install -e .
+pip install -e .[dev]
+```
+
+For detailed installation instructions, refer to the previous section.
+
+We use [pytest](https://docs.pytest.org/en/stable/) for testing.
+You can run the tests with:
+
+```bash
+pytest
 ```
 
 To ensure that your code passes the quality checks,
