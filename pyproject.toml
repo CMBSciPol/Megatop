@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 mpi = ["mpi4py"]
+dev = ["pytest"]
 
 [project.scripts]
 "megatop-compsep" = "megatop.pipeline.parametric_separation:main"

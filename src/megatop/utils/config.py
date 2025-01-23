@@ -1,13 +1,15 @@
+# pyright: reportAssignmentType=false
+
 from enum import IntEnum, auto
 from pathlib import Path
 from typing import Any, Literal
 
-import attrs
 from attrs import Factory, field, frozen
 from cattrs.preconf.pyyaml import make_converter
 
 __all__ = [
     "Config",
+    "KneeMode",
     "SensitivityMode",
 ]
 
@@ -45,8 +47,8 @@ class _FiducialCMB:
 class _MapSet:
     freq_tag: int
     exp_tag: str
-    file_root: Path = field(converter=Path)
-    noise_root: Path = field(converter=Path)
+    file_root: Path
+    noise_root: Path
 
 
 ValidApoType = Literal["C1", "C2", "Smooth"]
@@ -54,12 +56,12 @@ ValidApoType = Literal["C1", "C2", "Smooth"]
 
 @frozen
 class _Masks:
-    input_nhits_map: Path | None = field(converter=attrs.converters.optional(Path), default=None)
+    input_nhits_map: Path | None = None
 
     analysis_mask: str = "analysis_mask.fits"
     nhits_map: str = "nhits_map.fits"
     binary_mask: str = "binary_mask.fits"
-    galactic_mask_root: str = "galactic_mask"  # TODO: this should be a Path?
+    galactic_mask_root: str = "galactic_mask"  # TODO: should this be a Path?
     point_source_mask: str = "point_source_mask.fits"
     mask_handler_binary_zero_threshold: float = 1e-3
 
@@ -74,9 +76,16 @@ class _Masks:
 class _GeneralPars:
     nside: int = 512
     lmin: int = 30
-    lmax: int = 1_000
+    lmax: int = field(default=1_000)
     ben_sims: bool = False
     id_sim: int = 0
+
+    # TODO: does this belong here?
+    @lmax.validator  # pyright: ignore[reportAttributeAccessIssue]
+    def check(self, attribute, value):
+        if value > (three_nside_minus_one := 3 * self.nside - 1):
+            msg = f"{attribute.name}={value} should be lower or equal to {three_nside_minus_one=}"
+            raise ValueError(msg)
 
 
 @frozen
@@ -191,15 +200,17 @@ class Config:
 
     def to_yaml(self, path: str | Path) -> None:
         """Serializes the Config to a yaml file"""
-        Path(path).write_text(_yaml_converter.dumps(self))
+        # enforce correct yaml suffix
+        filename = Path(path).with_suffix(".yml")
+        filename.write_text(_yaml_converter.dumps(self))
 
     @classmethod
     def get_default(cls) -> "Config":
         """Returns the default configuration"""
         return cls(
-            data_dirs=_DataDirs(root="<data>"),
-            output_dirs=_OutputDirs(root="<outputs>"),
-            fiducial_cmb=_FiducialCMB(root="<fiducial_cmb>"),
+            data_dirs=_DataDirs(root="<data_root>"),
+            output_dirs=_OutputDirs(root="<output_root>"),
+            fiducial_cmb=_FiducialCMB(root="<fiducial_cmb_root>"),
             map_sets={},
             masks=_Masks(),
             general_pars=_GeneralPars(),
