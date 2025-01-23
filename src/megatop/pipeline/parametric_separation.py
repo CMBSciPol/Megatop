@@ -193,6 +193,5 @@ def main():
     components_results_plotting(res, meta)
 
 
-
 if __name__ == "__main__":
     main()
