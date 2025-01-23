@@ -47,6 +47,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install namaster dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
+
       - name: Install the project
         run: uv pip install .[dev]
         env:
