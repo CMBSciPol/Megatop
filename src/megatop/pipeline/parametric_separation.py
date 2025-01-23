@@ -62,7 +62,7 @@ def weighted_compsep(meta):
 
     meta.logger.info(f"Success: {res.success} -> {res.message}")
     meta.logger.info(f"Spectral parameters {res.params} -> {res.x}")
-    meta.timer.stop("compsep", meta.logger, "Component separation (FGbuster weighted compsep)")
+    meta.timer.stop("compsep", "Component separation (FGbuster weighted compsep)")
 
     # test_invAtNA = np.linalg.inv(np.einsum('cf,fqp,fs->csqp', A_maxL.T, 1/noise_cov[:,1:], A_maxL).T).T
     # sanity_check = np.max(np.abs( ((test_invAtNA - res.invAtNA) / res.invAtNA * 100))[...,binary_mask])

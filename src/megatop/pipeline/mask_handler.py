@@ -53,7 +53,7 @@ def mask_handler(meta):
         nhits = meta.read_hitmap()
     meta.save_hitmap(nhits)
 
-    meta.timer.stop("nhits", meta.logger, "Getting hits map")
+    meta.timer.stop("nhits", "Getting hits map")
 
     # Generate binary survey mask from the hits map
     meta.timer.start("binary")
@@ -64,7 +64,7 @@ def mask_handler(meta):
         nhits, meta.nside, zero_threshold=meta.masks["binary_mask_zero_threshold"]
     )
     meta.save_mask("binary", binary_mask, overwrite=True)
-    meta.timer.stop("binary", meta.logger, "Computing binary mask")
+    meta.timer.stop("binary", "Computing binary mask")
 
     meta.timer.start("apodize")
     meta.logger.info(
@@ -80,7 +80,7 @@ def mask_handler(meta):
         apod_type=meta.masks["apod_type"],
     )
     first_nom, second_nom = get_spin_derivatives(nominal_mask)
-    meta.timer.stop("apodize", meta.logger, "Computing nominal apodized mask")
+    meta.timer.stop("apodize", "Computing nominal apodized mask")
 
     if not meta.use_input_nhits:
         # Make nominal apodized mask from the nominal hits map
@@ -137,7 +137,7 @@ def mask_handler(meta):
                 gal_mask_p15 = hp.ud_grade(gal_mask_p15, meta.nside)
                 gal_mask_p15 = np.where(gal_mask_p15 > 0.5, 1, 0)
                 hp.write_map(fname, gal_mask_p15, overwrite=True, dtype=np.int32)
-            meta.timer.stop("galactic", meta.logger, "Galactic mask projection")
+            meta.timer.stop("galactic", "Galactic mask projection")
 
         # Get point source mask
         if "point_source" in meta.masks["include_in_mask"]:
@@ -147,7 +147,7 @@ def mask_handler(meta):
                 ps_fname = meta.masks["input_point_source_path"]
                 meta.logger.info(f"Using point source mask from {meta.input_point_source_path}")
                 ps_mask = binary_mask * hp.ud_grade(hp.read_map(ps_fname), meta.nside)
-                meta.timer.stop("ps_mask", meta.logger, "Load point source mask from disk")
+                meta.timer.stop("ps_mask", "Load point source mask from disk")
             # Otherwise, generate random point source mask
             else:
                 meta.logger.info(
@@ -157,7 +157,7 @@ def mask_handler(meta):
                     binary_mask, meta.masks["mock_nsrcs"], meta.masks["mock_srcs_hole_radius"]
                 )
                 meta.save_mask("point_source", ps_mask, overwrite=True)
-                meta.timer.stop("ps_mask", meta.logger, "Generate mock point source mask")
+                meta.timer.stop("ps_mask", "Generate mock point source mask")
 
         # Add the masks
         galactic_mask = None
@@ -212,7 +212,7 @@ def mask_handler(meta):
                 "WARNING: Your analysis mask may not be smooth enough, "
                 "so B-mode purification could induce biases."
             )
-        meta.timer.stop("final_mask", meta.logger, "Assembling final analysis mask")
+        meta.timer.stop("final_mask", "Assembling final analysis mask")
 
     # Save analysis mask
     meta.save_mask("analysis", final_mask, overwrite=True)

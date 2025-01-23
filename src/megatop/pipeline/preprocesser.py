@@ -34,7 +34,7 @@ def preprocess_map(meta, binary_mask=True):
         freq_maps_convolved_masked = apply_binary_mask(meta, freq_maps_convolved)
     else:
         freq_maps_convolved_masked = None
-    meta.timer.stop("preproc", meta.logger, "Pre-processing input maps")
+    meta.timer.stop("preproc", "Pre-processing input maps")
     return freq_maps_convolved, freq_maps_convolved_masked
 
 

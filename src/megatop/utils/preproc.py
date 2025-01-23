@@ -32,7 +32,7 @@ def apply_binary_mask(meta, freq_maps, unseen=False):
         freq_maps_masked[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
     else:
         freq_maps_masked[..., np.where(binary_mask == 0)[0]] = 0.0
-    meta.timer.stop("masking", meta.logger, "Applying binary mask")
+    meta.timer.stop("masking", "Applying binary mask")
     return freq_maps_masked
 
 
@@ -124,7 +124,7 @@ def common_beam_and_nside(meta, freq_maps):
         # a priori all the options are set to there default, even lmax which is computed wrt input alms
         out_map = np.array([map_out_T, map_out_Q, map_out_U])
         freq_maps_out.append(out_map)
-    meta.timer.stop("common", meta.logger, "Common beam and nside")
+    meta.timer.stop("common", "Common beam and nside")
     return np.array(freq_maps_out)
 
 

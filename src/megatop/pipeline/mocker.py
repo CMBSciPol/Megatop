@@ -44,7 +44,7 @@ def make_sims(meta, components="all"):
         #     noise_maps = np.array(noise_maps, dtype=object)
 
         meta.logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
-        meta.timer.stop("noise", meta.logger, "Computing noise maps")
+        meta.timer.stop("noise", "Computing noise maps")
     else:
         noise_freq_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
 
@@ -57,7 +57,7 @@ def make_sims(meta, components="all"):
         cmb_map = mock.generate_map_cmb(meta, Cl_cmb_model)
 
         meta.logger.debug(f"CMB map has shape {cmb_map.shape}")
-        meta.timer.stop("cmb", meta.logger, "Computing CMB map")
+        meta.timer.stop("cmb", "Computing CMB map")
     else:
         cmb_map = np.zeros((3, hp.nside2npix(meta.nside)))
 
@@ -69,7 +69,7 @@ def make_sims(meta, components="all"):
         fg_freq_maps = mock.generate_map_fgs_pysm(meta)
 
         meta.logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
-        meta.timer.stop("fg", meta.logger, "Generating foreground map")
+        meta.timer.stop("fg", "Generating foreground map")
     else:
         fg_freq_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
 
@@ -78,7 +78,7 @@ def make_sims(meta, components="all"):
 
     if components == ["noise"]:
         noise_freq_maps[..., np.where(binary_mask == 0)[0]] = 0
-        meta.timer.stop("sim", meta.logger, "Simulating one sky (noise only)")
+        meta.timer.stop("sim", "Simulating one sky (noise only)")
         return noise_freq_maps, None
 
     meta.timer.start("beam")
@@ -90,15 +90,15 @@ def make_sims(meta, components="all"):
             )
             + noise_freq_maps[i_f]
         )
-    meta.timer.stop("beam", meta.logger, "Beaming frequency maps")
+    meta.timer.stop("beam", "Beaming frequency maps")
 
     meta.timer.start("mask")
 
     # Applying binary mask to all products: #TODO move to utils ?
     combined_freq_maps[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
     combined_freq_maps_beamed[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
-    meta.timer.stop("mask", meta.logger, "Masking product with binary mask")
-    meta.timer.stop("sim", meta.logger, "Simulating one sky")
+    meta.timer.stop("mask", "Masking product with binary mask")
+    meta.timer.stop("sim", "Simulating one sky")
 
     return combined_freq_maps, combined_freq_maps_beamed
 

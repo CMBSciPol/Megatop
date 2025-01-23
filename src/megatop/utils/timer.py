@@ -1,5 +1,7 @@
 import time
 
+from .logger import logger
+
 
 class Timer:
     """
@@ -28,7 +30,7 @@ class Timer:
             raise ValueError(msg)
         self.timers[timer_label] = time.time()
 
-    def stop(self, timer_label, logger, text_to_output=None):
+    def stop(self, timer_label, text_to_output=None):
         """
         Stop the timer with a given label.
         Allows to output a custom text different

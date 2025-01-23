@@ -2,11 +2,10 @@ from pathlib import Path
 
 import healpy as hp
 import numpy as np
-from attrs import define, field
+from attrs import define
 
 from .config import Config
 from .logger import logger
-from .timer import Timer
 
 SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
 SO_BEAMS_ARCMIN = {
@@ -27,13 +26,9 @@ class BBMeta:
     """Metadata manager for the megatop pipeline"""
 
     config: Config
-    timer: Timer = field(init=False)
 
     def __attrs_post_init__(self) -> None:
-        """Finalize initializaton, dump the config to a file, do consistency checks"""
-        # initialize timer
-        self.timer = Timer()
-
+        """Dump the config to a file and do consistency checks"""
         # dump the full config to a file
         logger.info(f"Dumping the config to {self.path_to_output}")
         self.path_to_output.mkdir(parents=True, exist_ok=True)
