@@ -13,12 +13,13 @@ __all__ = [
     "SensitivityMode",
 ]
 
-_yaml_converter = make_converter()
+# forbid extra keys in the yaml file to catch possible typos
+_yaml_converter = make_converter(forbid_extra_keys=True)
 
 
 @frozen
 class _DataDirs:
-    root: Path = field(converter=Path)
+    root: Path = field(converter=Path, default="data")
     maps: str = "maps"
     beams: str = "beams"
     bandpasses: str = "bandpasses"
@@ -27,7 +28,7 @@ class _DataDirs:
 
 @frozen
 class _OutputDirs:
-    root: Path = field(converter=Path)
+    root: Path = field(converter=Path, default="outputs")
     masks: str = "masks"
     preproc: str = "preproc"
     covmat: str = "covmat"
@@ -38,38 +39,48 @@ class _OutputDirs:
 
 @frozen
 class _FiducialCMB:
-    root: Path = field(converter=Path)
+    root: Path = field(converter=Path, default="fiducial_cmb")
     lensed_scalar: str = "lensed_scalar_cl"
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
 
 @frozen
 class _MapSet:
+    name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
     exp_tag: str
-    file_root: Path
-    noise_root: Path
+    file_prefix: str = ""
+    noise_prefix: str = "noise_"
+
+    def __attrs_post_init__(self) -> None:
+        object.__setattr__(self, "name", f"{self.exp_tag}_f{self.freq_tag:03d}")
 
 
 ValidApoType = Literal["C1", "C2", "Smooth"]
 
 
 @frozen
-class _Masks:
-    input_nhits_map: Path | None = None
+class _MasksPars:
+    input_nhits_map: Path | None = None  # TODO: move to inputs
+    input_point_source_mask: Path | None = None  # TODO: move to inputs
+
+    include: list[str] = Factory(list)
 
     analysis_mask: str = "analysis_mask.fits"
     nhits_map: str = "nhits_map.fits"
     binary_mask: str = "binary_mask.fits"
-    galactic_mask_root: str = "galactic_mask"  # TODO: should this be a Path?
     point_source_mask: str = "point_source_mask.fits"
-    mask_handler_binary_zero_threshold: float = 1e-3
+    binary_mask_zero_threshold: float = 1e-3
 
-    include_in_mask: list[str] = Factory(list)
+    galactic_mask_root: str = "galactic_mask"
     gal_mask_mode: str | None = None
+
     apod_radius: float = 10
     apod_radius_point_source: float = 4
     apod_type: ValidApoType = "C1"
+
+    mock_nsources: int = 100
+    mock_sources_hole_radius: float = 4
 
 
 @frozen
@@ -77,21 +88,22 @@ class _GeneralPars:
     nside: int = 512
     lmin: int = 30
     lmax: int = field(default=1_000)
-    ben_sims: bool = False
     id_sim: int = 0
 
-    # TODO: does this belong here?
+    ben_sims: bool = False
+
     @lmax.validator  # pyright: ignore[reportAttributeAccessIssue]
     def check(self, attribute, value):
+        """Check that lmax <= 3 * nside - 1"""
         if value > (three_nside_minus_one := 3 * self.nside - 1):
-            msg = f"{attribute.name}={value} should be lower or equal to {three_nside_minus_one=}"
+            msg = f"{attribute.name}={value} must be less than or equal to {three_nside_minus_one=}"
             raise ValueError(msg)
 
 
 @frozen
 class _PreProcPars:
     common_beam_correction: float = 0
-    fwhm: list[float] = Factory(list)
+    beam_fwhms: list[float] | None = None
 
 
 @frozen
@@ -133,11 +145,18 @@ class _PlotPars:
 
 @frozen
 class _MapSimPars:
-    sky_model: list[str] = Factory(lambda: ["d0", "s0"])
+    sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
     cmb_sim_no_pysm: bool = True
     r_input: float = 0
     A_lens: float = 1
     fixed_cmb: bool = False
+
+    @sky_model.validator  # pyright: ignore[reportAttributeAccessIssue]
+    def check(self, attribute, value):
+        """Check that the sky model only contains dust and/or synchrotron templates"""
+        if not all(template.startswith(("d", "s")) for template in value):
+            msg = f"{attribute.name} only supports 'd*' (dust) and 's*' (synchrotron) models"
+            raise ValueError(msg)
 
 
 ValidExperimentType = Literal["SO"]
@@ -147,6 +166,8 @@ ValidNoiseOptionType = Literal["white_noise", "no_noise", "noise_spectra"]
 class SensitivityMode(IntEnum):
     """Sensitivity assumption"""
 
+    # check V3calc for reference
+
     THRESHOLD = 0
     BASELINE = auto()
     GOAL = auto()
@@ -154,6 +175,8 @@ class SensitivityMode(IntEnum):
 
 class KneeMode(IntEnum):
     """Knee frequency assumption"""
+
+    # check V3calc for reference
 
     PESSIMISTIC = 0
     OPTIMISTIC = auto()
@@ -179,19 +202,19 @@ class _NoiseSimPars:
 class Config:
     """Configuration object for the megatop package"""
 
-    data_dirs: _DataDirs
-    output_dirs: _OutputDirs
-    fiducial_cmb: _FiducialCMB
-    map_sets: dict[str, _MapSet]
-    masks: _Masks
-    general_pars: _GeneralPars
-    pre_proc_pars: _PreProcPars
-    noise_cov_pars: _NoiseCovPars
-    parametric_sep_pars: _ParametricSepPars
-    map2cl_pars: _Map2ClPars
-    plot_pars: _PlotPars
-    map_sim_pars: _MapSimPars
-    noise_sim_pars: _NoiseSimPars
+    data_dirs: _DataDirs = Factory(_DataDirs)
+    output_dirs: _OutputDirs = Factory(_OutputDirs)
+    fiducial_cmb: _FiducialCMB = Factory(_FiducialCMB)
+    map_sets: list[_MapSet] = Factory(list)
+    masks_pars: _MasksPars = Factory(_MasksPars)
+    general_pars: _GeneralPars = Factory(_GeneralPars)
+    pre_proc_pars: _PreProcPars = Factory(_PreProcPars)
+    noise_cov_pars: _NoiseCovPars = Factory(_NoiseCovPars)
+    parametric_sep_pars: _ParametricSepPars = Factory(_ParametricSepPars)
+    map2cl_pars: _Map2ClPars = Factory(_Map2ClPars)
+    plot_pars: _PlotPars = Factory(_PlotPars)
+    map_sim_pars: _MapSimPars = Factory(_MapSimPars)
+    noise_sim_pars: _NoiseSimPars = Factory(_NoiseSimPars)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "Config":
@@ -204,21 +227,19 @@ class Config:
         filename = Path(path).with_suffix(".yml")
         filename.write_text(_yaml_converter.dumps(self))
 
+    def dump(self, filename: str | Path = "config_log") -> None:
+        """Serializes the Config to a yaml file.
+
+        If the filename is not a absolute path, it is assumed relative to the output root.
+        """
+        self.to_yaml(self.output_dirs.root / filename)
+
     @classmethod
-    def get_default(cls) -> "Config":
-        """Returns the default configuration"""
+    def get_example(cls) -> "Config":
+        """Returns an example configuration with one map set"""
         return cls(
             data_dirs=_DataDirs(root="<data_root>"),
             output_dirs=_OutputDirs(root="<output_root>"),
             fiducial_cmb=_FiducialCMB(root="<fiducial_cmb_root>"),
-            map_sets={},
-            masks=_Masks(),
-            general_pars=_GeneralPars(),
-            pre_proc_pars=_PreProcPars(),
-            noise_cov_pars=_NoiseCovPars(),
-            parametric_sep_pars=_ParametricSepPars(),
-            map2cl_pars=_Map2ClPars(),
-            plot_pars=_PlotPars(),
-            map_sim_pars=_MapSimPars(),
-            noise_sim_pars=_NoiseSimPars(),
+            map_sets=[_MapSet(freq_tag=93, exp_tag="SAT")],
         )
