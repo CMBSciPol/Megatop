@@ -41,7 +41,7 @@ python mask_handler.py --globals ${simparamfile} --plots --verbose
 echo "------------------------------------------------------------"
 echo "|                       PRE-PROCESSING                     |"
 echo "------------------------------------------------------------"
-srun -n 250 -c 2 --mpi=pmi2 --cpu_bind=cores python pre_processing.py --globals ${paramfile} --sims ${simparamfile} --plots --use_mpi 
+srun -n 250 -c 2 --mpi=pmi2 --cpu_bind=cores python pre_processing.py --globals ${paramfile} --sims ${simparamfile} --plots --use_mpi
 
 
 echo "------------------------------------------------------------"

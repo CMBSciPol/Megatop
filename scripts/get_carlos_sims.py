@@ -25,7 +25,7 @@ def apply_beam_correction(maps, beam_out, lmax):
     alm_out_B = hp.almxfl(almB,beam_out)
 
     outmap_T, outmap_Q, outmap_U = hp.alm2map([alm_out_T,alm_out_E,alm_out_B], hp.npix2nside(maps.shape[-1]),
-                                                lmax=lmax ,pixwin=False,fwhm=0.0,pol=True) 
+                                                lmax=lmax ,pixwin=False,fwhm=0.0,pol=True)
 
     return np.array([outmap_T, outmap_Q, outmap_U])
 
@@ -48,12 +48,12 @@ def plot_all_maps(map_dict, output, file_name):
     # ploting Q and U maps for all entries in dictionary
     line_number = len(map_dict.keys())
     stokes = ['T', 'Q', 'U']
-    j = 1  
+    j = 1
     plt.figure(figsize=(6,12))
     for key in map_dict.keys():
         for i in range(1,3):
             map_plot =  map_dict[key][i]
-            map_plot[map_plot==0] = hp.UNSEEN  
+            map_plot[map_plot==0] = hp.UNSEEN
             hp.mollview(map_plot, title=f'{key} {stokes[i]}', sub=(line_number,2,j)) #, norm='hist')
             j += 1
     os.makedirs(os.path.join(output, 'plots'), exist_ok=True)
@@ -78,7 +78,7 @@ def plot_all_spectra(spectra_dict, output, file_name):
     # ploting Q and U maps for all entries in dictionary
     line_number = len(spectra_dict.keys())
     stokes = ['TT', 'EE', 'BB', 'TE']
-    j = 1  
+    j = 1
 
     fig, ax = plt.subplots( line_number, figsize=(6,12))
     if line_number == 1:
@@ -90,7 +90,7 @@ def plot_all_spectra(spectra_dict, output, file_name):
             ax[i].set_xscale('log')
             ax[i].legend()
             ax[i].set_title(key)
-    
+
     os.makedirs(os.path.join(output, 'plots'), exist_ok=True)
     plt.savefig(os.path.join(output, 'plots',f'{file_name}.png'), dpi=400, bbox_inches='tight')
     plt.close()
@@ -141,7 +141,7 @@ def main():
         if '353' not in band:
             cmb_map_band = hp.read_map(root+f'Validation_for_paper/CMBl_pwf_beam/{sim_id:04}/filterbin_coadd-full_map.fits', field=(0,1,2), dtype=np.double)
             dust_map_band = hp.read_map(root+f'Foregrounds/{dust_model}/{sim_id:04}/filterbin_coadd-full_map.fits', field=(0,1,2), dtype=np.double)
-            if band == 'f090_full':        
+            if band == 'f090_full':
                 noise_map_band = hp.read_map(root+f'Noise_forpaper/Atm_10m-reso/{sim_id:04}/filterbin_coadd-full_map.fits', field=(0,1,2), dtype=np.double)
                 noise_map_band *= 1e6 # from K to uK
 
@@ -164,9 +164,9 @@ def main():
             mask_on_the_fly[cmb_map_band[0]==0] = 0
             mask_on_the_fly[dust_map_band[0]==0] = 0
             mask_on_the_fly[noise_map_band[0]==0] = 0
-            
+
             if band != 'f090_full':
-                dust_map_band = dust_map_band * sed_dust(freq_values[i], beta_dust, Tdust)            
+                dust_map_band = dust_map_band * sed_dust(freq_values[i], beta_dust, Tdust)
                 beam_correction = (beams_array[i][:,1]/beams_array[0][:,1])
                 if add_pixwin:
                     print('WARNING: Applying pixel window function to the beam correction (not sure if it makes sense...)')
@@ -178,10 +178,10 @@ def main():
                 corrected_maps = corrected_maps * mask_on_the_fly
             else:
                 corrected_maps = (cmb_map_band+dust_map_band)*mask_on_the_fly
-            
+
             # From K to uK:
             corrected_maps *= 1e6
-            
+
             total_maps = corrected_maps + noise_map_band*mask_on_the_fly
 
             if plot_maps or plot_spectra:
@@ -192,7 +192,7 @@ def main():
             list_CMBplusNoise_maps_planck_splits.append(cmb_map_band)
             dust_map_band  = hp.read_map(root+f'Foregrounds/{dust_model}/{sim_id:04}/filterbin_coadd-full_map.fits',field=(0,1,2), dtype=np.double)
             dust_map_band = dust_map_band * sed_dust(freq_values[i], beta_dust, Tdust)
-            
+
             mask_on_the_fly = np.ones(cmb_map_band.shape[-1])
             # We assume the mask is the same for T,Q,U
             mask_on_the_fly[cmb_map_band[0]==0] = 0
@@ -204,7 +204,7 @@ def main():
                 print('WARNING: Applying pixel window function to the beam correction (not sure if it makes sense...)')
                 pixwin = hp.pixwin(nside)[:lmax+1]
                 beam_correction *= pixwin
-            
+
             corrected_maps = apply_beam_correction(dust_map_band* mask_on_the_fly, beam_correction, lmax)
             corrected_maps = corrected_maps * mask_on_the_fly
             total_maps = corrected_maps + cmb_map_band * mask_on_the_fly
@@ -219,14 +219,14 @@ def main():
 
         hp.write_map(output+f'{band}_map.fits', total_maps, dtype=np.double, overwrite=True)
         print('Map written to:', output+f'{band}_map.fits')
-        
+
         if '353' not in band:
             hp.write_map(output+f'noise/{band}_noise_map.fits', noise_map_band, dtype=np.double, overwrite=True)
             print('Noise map written to:', output+f'noise/{band}_noise_map.fits')
 
         if plot_maps:
             plot_all_maps(map_dict, output, f'check_maps_{band}')
-        
+
         if plot_spectra:
             spectra_dict = {}
             for key in map_dict.keys():
@@ -235,22 +235,20 @@ def main():
 
     #  Computing noise map for Planck with the difference between the two splits
     noise_353 = list_CMBplusNoise_maps_planck_splits[1] - list_CMBplusNoise_maps_planck_splits[0]
-    noise_353 *= 1e6  # from K to uK 
+    noise_353 *= 1e6  # from K to uK
     noise_353 /= np.sqrt(2)  # and applying the sqrt(2) factor to get the noise of a single split
 
     hp.write_map(output+f'noise/f353_noise_map_diff_splits.fits', noise_353, dtype=np.double, overwrite=True)
     map_dict_noise_split = {'Noise diff split 353': noise_353}
     if plot_maps:
         plot_all_maps(map_dict_noise_split, output, 'check_maps_Noise_diff_split_353')
-    
+
     if plot_spectra:
         spectra_dict = {}
         for key in map_dict_noise_split.keys():
             spectra_dict[key] = hp.anafast(map_dict_noise_split[key]*mask_on_the_fly, lmax=lmax)
-        plot_all_spectra(spectra_dict, output, f'check_spectra_Noise_diff_split_353')    
+        plot_all_spectra(spectra_dict, output, f'check_spectra_Noise_diff_split_353')
 
 
 if __name__ == '__main__':
     main()
-
-

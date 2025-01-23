@@ -18,13 +18,13 @@ output_dirs:
   root: "/pscratch/sd/j/jost/SO_MEGATOP/Carlos/Test0000_samebeam30"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
-  covmat_directory: "covariances"  
+  covmat_directory: "covariances"
   plots_directory: "plots"
   components_directory: "components"
-  spectra_directory: "spectra"  
+  spectra_directory: "spectra"
 
 
-fiducial_cmb: 
+fiducial_cmb:
   cls_cmb_directory: "/global/homes/j/jost/Megatop/fiducial_cmb_spectra"
   lensed: "Cls_Planck2018_lensed_scalar.fits"
   unlensed_scalar_tensor_r1: "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
@@ -46,37 +46,37 @@ fiducial_cmb:
 map_sets:
   SAT_f090:
     file_root: "f090_full_map"
-    fg_root: 
-    cmb_root: 
+    fg_root:
+    cmb_root:
     noise_root: "f090_full_noise_map"
-    nhits_map_path: 
+    nhits_map_path:
     freq_tag: 93         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT1"      # Experiment tag (useful to get noise-bias free cross-split spectra)
     set_tag: CarlosSims
   SAT_f150:
     file_root: "f150_full_map"
-    fg_root: 
-    cmb_root: 
+    fg_root:
+    cmb_root:
     noise_root: "f150_full_noise_map"
-    nhits_map_path: 
+    nhits_map_path:
     freq_tag: 145
     exp_tag: "SAT1"
     set_tag: CarlosSims
   Planck_f353_A:
     file_root: "f353_A_full_map"
-    fg_root: 
-    cmb_root: 
+    fg_root:
+    cmb_root:
     noise_root: "f353_noise_map_diff_splits" # WARNING: This is a placeholder, the noise map is not used in the analysis
-    nhits_map_path: 
+    nhits_map_path:
     freq_tag: 353
     exp_tag: "Planck_A"
     set_tag: CarlosSims
   Planck_f353_B:
     file_root: "f353_B_full_map"
-    fg_root: 
-    cmb_root: 
+    fg_root:
+    cmb_root:
     noise_root: "f353_noise_map_diff_splits" # WARNING: This is a placeholder, the noise map is not used in the analysis
-    nhits_map_path: 
+    nhits_map_path:
     freq_tag: 353
     exp_tag: "Planck_B"
     set_tag: CarlosSims
@@ -123,7 +123,7 @@ pre_proc_pars:
 
 noise_cov_pars:
     noise_cov_method: 'load_sims' # tag for the simulations, can be ['sims_in_noisecov', 'load_sims'], sims_in_noisecov: will simulate the (white) noise maps with nhits during the noise cov step,
-                               #  load_sims: will load the noise maps from disk generated during the simulations step. 
+                               #  load_sims: will load the noise maps from disk generated during the simulations step.
 
     # nsims_noise_cov:  # number of simulations used to estimate the noise covariance matrix
     # include_nhits: True #Sim related parameter
@@ -148,7 +148,7 @@ map2cl_pars:
     n_iter_namaster: 3
 
 # noise_sim_pars:
-#     # noise_lvl_uKarcmin: [17.76741806032688, 21.207586012564423, 2.77243249663342, 2.798531403709892, 
+#     # noise_lvl_uKarcmin: [17.76741806032688, 21.207586012564423, 2.77243249663342, 2.798531403709892,
 #     #                      8.474221515572802, 21.861113346794266] # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
 #     # TODO: (?) each element could also be stored in map_sets, maybe more convenient? But less clear that it is for sims
 #     noise_lvl_uKarcmin:  # Computed in MSS2TestNoise.ipynb (see list_uk_arcmin_for_yml)
@@ -157,7 +157,7 @@ map2cl_pars:
 #       (SAT1, 90): 2.77243249663342
 #       (SAT1, 150): 2.798531403709892
 #       (SAT3, 230): 8.474221515572802
-#       (SAT3, 290): 21.861113346794266 
+#       (SAT3, 290): 21.861113346794266
 #     include_nhits: True
 
 
