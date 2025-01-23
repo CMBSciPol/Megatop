@@ -132,8 +132,8 @@ def components_results_plotting(
                 fig=fig,
                 cbar=True,
             )
-    plt.savefig(plot_dir + "/components_maps.png")
-    plt.close()
+    # plt.savefig(plot_dir + "/components_maps.png")
+    # plt.close()
 
     res.invAtNA[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
 
@@ -148,8 +148,9 @@ def components_results_plotting(
                 cbar=True,
                 norm="log",
             )
-    plt.savefig(plot_dir + "/noise_per_components_maps.png")
-    plt.close()
+    # plt.savefig(plot_dir + "/noise_per_components_maps.png")
+    # plt.close()
+    plt.show()
 
     if noise_map_after_compsep is not None:
         fig = plt.figure(figsize=(12, 12))
@@ -189,6 +190,8 @@ def main():
     meta = BBmeta(args.globals)
     res = weighted_compsep(meta)
     save_compsep_results(meta, res)
+    components_results_plotting(res, meta)
+
 
 
 if __name__ == "__main__":
