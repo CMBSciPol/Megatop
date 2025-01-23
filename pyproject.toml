@@ -20,10 +20,8 @@ dependencies = [
     "healpy",
     "matplotlib",
     "numpy",
-    # TODO(simon): remove pixell when https://github.com/galsci/pysm/issues/205 is fixed
-    "pixell==0.26.0",
     "pymaster",
-    "pysm3 @ git+https://github.com/galsci/pysm.git@3.4.1a1",
+    "pysm3 @ git+https://github.com/galsci/pysm.git@f9d1f1a",
     "pyyaml",
     "tqdm",
 ]
