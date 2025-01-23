@@ -4,7 +4,7 @@ import warnings
 import healpy as hp
 import numpy as np
 
-import megatop.utils.V3calc as V3
+from . import V3calc as V3
 
 
 def get_Cl_CMB_model_from_meta(meta):

@@ -4,8 +4,7 @@ import os
 import healpy as hp
 import numpy as np
 
-from megatop.utils import mock
-from megatop.utils.metadata_manager import BBmeta
+from megatop.utils import BBmeta, mock
 
 
 def make_sims(meta, components="all"):

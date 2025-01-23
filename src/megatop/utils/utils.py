@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
 
-from megatop.utils.mask import get_binary_mask_from_nhits
+from .mask import get_binary_mask_from_nhits
 
 
 def get_theory_cls(cosmo_params, lmax, lmin=0):

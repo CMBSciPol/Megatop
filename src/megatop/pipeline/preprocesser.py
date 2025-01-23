@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 
-from megatop.utils.metadata_manager import BBmeta
+from megatop.utils import BBmeta
 from megatop.utils.preproc import (
     apply_binary_mask,
     common_beam_and_nside,

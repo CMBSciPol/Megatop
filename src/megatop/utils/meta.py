@@ -4,7 +4,9 @@ import healpy as hp
 import numpy as np
 from attrs import define, field
 
-from megatop.utils import Config, Timer, logger
+from .config import Config
+from .logger import logger
+from .timer import Timer
 
 SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
 SO_BEAMS_ARCMIN = {
