@@ -5,7 +5,7 @@ import healpy as hp
 import numpy as np
 
 from megatop.utils import BBmeta, mock
-from megatop.utils.logger import logger 
+from megatop.utils.logger import logger
 
 
 def make_sims(meta, components="all"):

@@ -5,8 +5,8 @@ import urllib.request
 import healpy as hp
 import numpy as np
 
-from megatop.utils.logger import logger
 from megatop.utils import BBmeta
+from megatop.utils.logger import logger
 from megatop.utils.mask import (
     get_apodized_mask_from_nhits,
     get_binary_mask_from_nhits,
@@ -48,9 +48,7 @@ def mask_handler(meta):
             # else:
             logger.error(f"Cannot find nhits file {meta.masks['input_nhits_path']}")
             raise FileNotFoundError
-        logger.info(
-            f"Using custom hit mask for analysis from {meta.masks['input_nhits_path']}"
-        )
+        logger.info(f"Using custom hit mask for analysis from {meta.masks['input_nhits_path']}")
         nhits = meta.read_hitmap()
     meta.save_hitmap(nhits)
 
@@ -58,9 +56,7 @@ def mask_handler(meta):
 
     # Generate binary survey mask from the hits map
     meta.timer.start("binary")
-    logger.info(
-        f"Thresholding hit map with threshold {meta.masks['binary_mask_zero_threshold']}"
-    )
+    logger.info(f"Thresholding hit map with threshold {meta.masks['binary_mask_zero_threshold']}")
     binary_mask = get_binary_mask_from_nhits(
         nhits, meta.nside, zero_threshold=meta.masks["binary_mask_zero_threshold"]
     )
@@ -93,9 +89,7 @@ def mask_handler(meta):
         # Assemble custom analysis mask from hits map and point source mask
         # stored at disk, and Planck Galactic masks downloaded in-place.
 
-        logger.info(
-            f"Assembling custom analysis mask using: {(*meta.masks['include_in_mask'],)}"
-        )
+        logger.info(f"Assembling custom analysis mask using: {(*meta.masks['include_in_mask'],)}")
         # Download Galactic mask
         if "galactic" in meta.masks["include_in_mask"]:
             meta.timer.start("galactic")

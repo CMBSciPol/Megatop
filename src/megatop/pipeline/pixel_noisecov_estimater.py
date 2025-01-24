@@ -7,10 +7,10 @@ import numpy as np
 from mpi4py import MPI
 
 from megatop.utils import BBmeta
+from megatop.utils.logger import logger
 from megatop.utils.mpi import MPISUM
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.utils import MemoryUsage
-from megatop.utils.logger import logger
 
 # =================================================================================
 # =                     Main function, calling the wrappers etc                   =

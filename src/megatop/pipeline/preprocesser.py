@@ -3,8 +3,8 @@ import os
 
 import numpy as np
 
-from megatop.utils.logger import logger
 from megatop.utils import BBmeta
+from megatop.utils.logger import logger
 from megatop.utils.preproc import (
     apply_binary_mask,
     common_beam_and_nside,
@@ -21,12 +21,8 @@ def preprocess_map(meta, binary_mask=True):
     if np.all(
         np.array(meta.pre_proc_pars["common_beam_correction"]) == np.array(meta.beams_FWHM_arcmin)
     ):
-        logger.info(
-            "Common beam correction is the same as the input beam, no need to apply it."
-        )
-        logger.warning(
-            "This is mostly for testing it might not actually represent the real noise"
-        )
+        logger.info("Common beam correction is the same as the input beam, no need to apply it.")
+        logger.warning("This is mostly for testing it might not actually represent the real noise")
         freq_maps_convolved = input_maps.astype("float64")
     else:
         freq_maps_convolved = common_beam_and_nside(meta, input_maps)
