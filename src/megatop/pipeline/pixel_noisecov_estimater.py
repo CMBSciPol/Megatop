@@ -10,6 +10,7 @@ from megatop.utils import BBmeta
 from megatop.utils.mpi import MPISUM
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.utils import MemoryUsage
+from megatop.utils.logger import logger
 
 # =================================================================================
 # =                     Main function, calling the wrappers etc                   =
@@ -42,8 +43,8 @@ def pixel_noisecov_estimation(meta):
 
     except (ModuleNotFoundError, ImportError) as e:
         # Error handling
-        meta.logger.info(f"ERROR IN MPI:{e}")
-        meta.logger.info("Proceeding without MPI\n")
+        logger.info(f"ERROR IN MPI:{e}")
+        logger.info("Proceeding without MPI\n")
 
         root = 0
         rank = 0
@@ -51,7 +52,7 @@ def pixel_noisecov_estimation(meta):
 
     MemoryUsage(meta, f"rank = {rank} ")
 
-    meta.logger.info(f"rank = {rank}, size = {size}")
+    logger.info(f"rank = {rank}, size = {size}")
     noise_cov_preprocessed = np.zeros([len(meta.frequencies), 3, hp.nside2npix(meta.nside)])
 
     # Importing noise maps
@@ -73,13 +74,13 @@ def pixel_noisecov_estimation(meta):
 
         id_real = None if nreal is None else id_realisation
 
-        meta.logger.info(f"id_realisation = {id_real}")
-        meta.logger.info(f"in = {rank_realisation_list}")  # debug in logger
+        logger.info(f"id_realisation = {id_real}")
+        logger.info(f"in = {rank_realisation_list}")  # debug in logger
 
         for m in maps_list:
             path_noise_map = meta.get_noise_map_filename(m, id_sim=id_real)
 
-            meta.logger.debug(f"Importing noise map: {path_noise_map}")
+            logger.debug(f"Importing noise map: {path_noise_map}")
 
             noise_freq_maps.append(hp.read_map(path_noise_map, field=None).tolist())
             nside_in_list.append(hp.get_nside(noise_freq_maps[-1][-1]))
@@ -88,10 +89,10 @@ def pixel_noisecov_estimation(meta):
             np.array(meta.pre_proc_pars["common_beam_correction"])
             == np.array(meta.beams_FWHM_arcmin)
         ):
-            meta.logger.info(
+            logger.info(
                 "Common beam correction is the same as the input beam, no need to apply it."
             )
-            meta.logger.info(
+            logger.info(
                 "WARNING: this is mostly for testing it might not actually represent the real noise"
             )
             # freq_noise_maps_array = np.array(
@@ -104,7 +105,7 @@ def pixel_noisecov_estimation(meta):
             noise_freq_maps_preprocessed = common_beam_and_nside(meta, noise_freq_maps)
 
         if meta.noise_cov_pars.get("save_preprocessed_noise_maps"):
-            meta.logger.info("Saving pre-processed noise maps to disk")
+            logger.info("Saving pre-processed noise maps to disk")
 
             add_sim_id = f"_{id_real:04d}.npy" if nreal is not None else ".npy"
             np.save(
@@ -131,7 +132,7 @@ def pixel_noisecov_estimation(meta):
         )
 
     if rank == root:
-        meta.logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
+        logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
 
 
 # ==================================================================================================

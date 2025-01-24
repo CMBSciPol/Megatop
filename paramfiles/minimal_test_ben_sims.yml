@@ -5,7 +5,7 @@
 # Define the directories
 ## Let's start with directories of data products
 data_dirs:
-  root: "/Users/benjaminberingue/Documents/Research/BB/data/test_filtering/inputs"
+  root: "/Users/benjaminberingue/Documents/Research/BB/data/test_filtering_mock/inputs"
   map_directory: "maps"
   beam_directory: "beams"
   bandpasses_directory: "bandpasses"
@@ -13,7 +13,7 @@ data_dirs:
 
 ## Then directories in which we will store outputs
 output_dirs:
-  root: "/Users/benjaminberingue/Documents/Research/BB/data/test_filtering/outputs"
+  root: "/Users/benjaminberingue/Documents/Research/BB/data/test_filtering_mock/outputs"
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"

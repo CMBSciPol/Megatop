@@ -5,6 +5,7 @@ import urllib.request
 import healpy as hp
 import numpy as np
 
+from megatop.utils.logger import logger
 from megatop.utils import BBmeta
 from megatop.utils.mask import (
     get_apodized_mask_from_nhits,
@@ -26,7 +27,7 @@ def mask_handler(meta):
     meta.timer.start("nhits")
     urlpref = "https://portal.nersc.gov/cfs/sobs/users/so_bb/"
     url = f"{urlpref}norm_nHits_SA_35FOV_ns512.fits"
-    meta.logger.info(f"Downloading nominal hit map from {url}")
+    logger.info(f"Downloading nominal hit map from {url}")
     with (
         urllib.request.urlopen(url, timeout=timeout_seconds) as response,
         open("temp.fits", "w+b") as f,
@@ -36,18 +37,18 @@ def mask_handler(meta):
     os.remove("temp.fits")
 
     if not meta.use_input_nhits:
-        meta.logger.info("Using nominal hit map for analysis")
+        logger.info("Using nominal hit map for analysis")
         nhits = nhits_nominal
     else:
         if not os.path.exists(meta.masks["input_nhits_path"]):
-            meta.logger.info("Could not find input nhits map.")
+            logger.info("Could not find input nhits map.")
             # if meta.filtering_type == "toast": #TODO not implemented yet
             #     print("Get nhits map from provided TOAST schedule.")
             #     meta.get_nhits_map_from_toast_schedule()
             # else:
-            meta.logger.error(f"Cannot find nhits file {meta.masks['input_nhits_path']}")
+            logger.error(f"Cannot find nhits file {meta.masks['input_nhits_path']}")
             raise FileNotFoundError
-        meta.logger.info(
+        logger.info(
             f"Using custom hit mask for analysis from {meta.masks['input_nhits_path']}"
         )
         nhits = meta.read_hitmap()
@@ -57,7 +58,7 @@ def mask_handler(meta):
 
     # Generate binary survey mask from the hits map
     meta.timer.start("binary")
-    meta.logger.info(
+    logger.info(
         f"Thresholding hit map with threshold {meta.masks['binary_mask_zero_threshold']}"
     )
     binary_mask = get_binary_mask_from_nhits(
@@ -67,7 +68,7 @@ def mask_handler(meta):
     meta.timer.stop("binary", "Computing binary mask")
 
     meta.timer.start("apodize")
-    meta.logger.info(
+    logger.info(
         f"Apodizing nominal mask to {meta.masks['apod_radius']}arcmin with {meta.masks['apod_type']} scheme."
     )
     nominal_mask = get_apodized_mask_from_nhits(
@@ -84,7 +85,7 @@ def mask_handler(meta):
 
     if not meta.use_input_nhits:
         # Make nominal apodized mask from the nominal hits map
-        meta.logger.info("Using nominal mask as final analysis one.")
+        logger.info("Using nominal mask as final analysis one.")
         final_mask = nominal_mask
         first = first_nom
         second = second_nom
@@ -92,13 +93,13 @@ def mask_handler(meta):
         # Assemble custom analysis mask from hits map and point source mask
         # stored at disk, and Planck Galactic masks downloaded in-place.
 
-        meta.logger.info(
+        logger.info(
             f"Assembling custom analysis mask using: {(*meta.masks['include_in_mask'],)}"
         )
         # Download Galactic mask
         if "galactic" in meta.masks["include_in_mask"]:
             meta.timer.start("galactic")
-            meta.logger.info(f"Using planck {meta.masks['galactic_mask_mode']} galactic mask")
+            logger.info(f"Using planck {meta.masks['galactic_mask_mode']} galactic mask")
             # mask_p15_file = f"{mask_dir}/mask_planck2015.fits"
             mask_p15_file = (
                 "/Users/benjaminberingue/Downloads/HFI_Mask_GalPlane-apo2_2048_R2.00.fits"
@@ -107,11 +108,11 @@ def mask_handler(meta):
                 urlpref = "http://pla.esac.esa.int/pla/aio/"
                 urlpref = f"{urlpref}product-action?MAP.MAP_ID="
                 url = f"{urlpref}HFI_Mask_GalPlane-apo0_2048_R2.00.fits"
-                meta.logger.info(f"Downloading from {url}")
+                logger.info(f"Downloading from {url}")
                 with urllib.request.urlopen(url, timeout=timeout_seconds):
                     urllib.request.urlretrieve(url, filename=mask_p15_file)
             else:
-                meta.logger.info(f"Read from {mask_p15_file}")
+                logger.info(f"Read from {mask_p15_file}")
 
             # Save different galactic masks
             gal_keys = [
@@ -145,12 +146,12 @@ def mask_handler(meta):
             # Load from disk if file exists
             if meta.use_input_point_source:
                 ps_fname = meta.masks["input_point_source_path"]
-                meta.logger.info(f"Using point source mask from {meta.input_point_source_path}")
+                logger.info(f"Using point source mask from {meta.input_point_source_path}")
                 ps_mask = binary_mask * hp.ud_grade(hp.read_map(ps_fname), meta.nside)
                 meta.timer.stop("ps_mask", "Load point source mask from disk")
             # Otherwise, generate random point source mask
             else:
-                meta.logger.info(
+                logger.info(
                     f"Generating random point source mask: {meta.masks['mock_nsrcs']} sources, {meta.masks['mock_srcs_hole_radius']} arcmin radius"
                 )
                 ps_mask = random_src_mask(
@@ -170,11 +171,11 @@ def mask_handler(meta):
         # Combine, apodize, and hits-weight the masks
         meta.timer.start("final_mask")
         if "point_source" in meta.masks["include_in_mask"]:
-            meta.logger.info(
+            logger.info(
                 f"Apodizing final analysis mask to {meta.masks['apod_radius']}arcmin, {meta.masks['apod_radius_point_source']}arcmin around point sources, with {meta.masks['apod_type']} scheme."
             )
         else:
-            meta.logger.info(
+            logger.info(
                 f"Apodizing final analysis mask to {meta.masks['apod_radius']}arcmin with {meta.masks['apod_type']} scheme."
             )
         final_mask = get_apodized_mask_from_nhits(
@@ -193,10 +194,10 @@ def mask_handler(meta):
         # If not, issue warning.
         first, second = get_spin_derivatives(final_mask)
 
-        meta.logger.info(
+        logger.info(
             f"Using custom mask. Its spin derivatives have global min and max of: {np.amin(first)}, {np.amax(first)} (first), {np.amin(second)}, {np.amax(second)} (second)"
         )
-        meta.logger.info(
+        logger.info(
             f"For comparison, the nominal mask has: {np.amin(first_nom)}, {np.amax(first_nom)} (first nominal), {np.amin(second_nom)}, {np.amax(second_nom)} (second nominal)"
         )
 
@@ -208,7 +209,7 @@ def mask_handler(meta):
         ) > 2 * np.amin(second_nom)
 
         if not (first_is_bounded and second_is_bounded):
-            meta.logger.info(
+            logger.info(
                 "WARNING: Your analysis mask may not be smooth enough, "
                 "so B-mode purification could induce biases."
             )

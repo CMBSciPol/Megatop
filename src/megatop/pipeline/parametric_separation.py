@@ -9,6 +9,7 @@ from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
 
 from megatop.utils import BBmeta
+from megatop.utils.logger import logger
 
 
 def weighted_compsep(meta):
@@ -17,11 +18,11 @@ def weighted_compsep(meta):
     fname_covmat = os.path.join(
         meta.covmat_directory, "pixel_noise_cov_preprocessed.npy"
     )  # TODO rename noise_cov -> noisecov ?
-    meta.logger.debug(f"Loading covmat from {fname_covmat}")
+    logger.debug(f"Loading covmat from {fname_covmat}")
     noise_cov = np.load(fname_covmat)
 
     fname_preproc_maps = os.path.join(meta.pre_process_directory, "freq_maps_preprocessed.npy")
-    meta.logger.debug(f"Loading input maps from {fname_preproc_maps}")
+    logger.debug(f"Loading input maps from {fname_preproc_maps}")
     freq_maps_preprocessed = np.load(fname_preproc_maps)
 
     instrument = {"frequency": meta.frequencies}
@@ -60,8 +61,8 @@ def weighted_compsep(meta):
     A_maxL = A_ev(res.x)
     res.A_maxL = A_maxL
 
-    meta.logger.info(f"Success: {res.success} -> {res.message}")
-    meta.logger.info(f"Spectral parameters {res.params} -> {res.x}")
+    logger.info(f"Success: {res.success} -> {res.message}")
+    logger.info(f"Spectral parameters {res.params} -> {res.x}")
     meta.timer.stop("compsep", "Component separation (FGbuster weighted compsep)")
 
     # test_invAtNA = np.linalg.inv(np.einsum('cf,fqp,fs->csqp', A_maxL.T, 1/noise_cov[:,1:], A_maxL).T).T
@@ -175,11 +176,11 @@ def save_compsep_results(meta, res):
         if not attr.startswith("__"):
             res_dict[attr] = getattr(res, attr)
     # Saving result dict
-    meta.logger.info(f"Saving compsep results to {fname_res}")
+    logger.info(f"Saving compsep results to {fname_res}")
     np.savez(fname_res, **res_dict)
     # Saving component maps
     fname_compmaps = os.path.join(meta.components_directory, "components_maps.npy")
-    meta.logger.info(f"Saving component maps to {fname_compmaps}")
+    logger.info(f"Saving component maps to {fname_compmaps}")
     np.save(fname_compmaps, res.s)
 
 

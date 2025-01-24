@@ -5,6 +5,7 @@ import healpy as hp
 import numpy as np
 
 from megatop.utils import BBmeta, mock
+from megatop.utils.logger import logger 
 
 
 def make_sims(meta, components="all"):
@@ -21,16 +22,16 @@ def make_sims(meta, components="all"):
         meta.timer.start("noise")
 
         if meta.noise_sim_pars["noise_option"] == "white_noise":
-            meta.logger.info("Simulation has white noise only")
+            logger.info("Simulation has white noise only")
             _, map_white_noise_levels = mock.get_noise(meta, fsky_binary)
             noise_freq_maps = mock.get_noise_map_from_white_noise(meta, map_white_noise_levels)
 
         elif meta.noise_sim_pars["noise_option"] == "no_noise":
-            meta.logger.info("Simulation has NO NOISE")
+            logger.info("Simulation has NO NOISE")
             noise_freq_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
 
         elif meta.noise_sim_pars["noise_option"] == "noise_spectra":
-            meta.logger.info("Simulation has noise from full spectra")
+            logger.info("Simulation has noise from full spectra")
             n_ell, _ = mock.get_noise(meta, fsky_binary)
             noise_freq_maps = mock.get_noise_map_from_noise_spectra(meta, n_ell)
         # elif meta.noise_sim_pars["noise_option"] == "MSS2":
@@ -43,7 +44,7 @@ def make_sims(meta, components="all"):
         #         noise_maps.append(MakeNoiseMapsNhitsMSS2(meta, map_name, verbose=args.verbose).tolist())
         #     noise_maps = np.array(noise_maps, dtype=object)
 
-        meta.logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
+        logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
         meta.timer.stop("noise", "Computing noise maps")
     else:
         noise_freq_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
@@ -51,12 +52,12 @@ def make_sims(meta, components="all"):
     if "cmb" in components:
         # Performing the CMB simulation with synfast
         meta.timer.start("cmb")
-        meta.logger.info("Computing CMB map from fiducial spectra")
+        logger.info("Computing CMB map from fiducial spectra")
 
         Cl_cmb_model = mock.get_Cl_CMB_model_from_meta(meta)
         cmb_map = mock.generate_map_cmb(meta, Cl_cmb_model)
 
-        meta.logger.debug(f"CMB map has shape {cmb_map.shape}")
+        logger.debug(f"CMB map has shape {cmb_map.shape}")
         meta.timer.stop("cmb", "Computing CMB map")
     else:
         cmb_map = np.zeros((3, hp.nside2npix(meta.nside)))
@@ -64,11 +65,11 @@ def make_sims(meta, components="all"):
     if "fg" in components:
         # Generating pysm foreground simulations
         meta.timer.start("fg")
-        meta.logger.info(f"Generating pysm sky {(*meta.sky_model,)}")
+        logger.info(f"Generating pysm sky {(*meta.sky_model,)}")
 
         fg_freq_maps = mock.generate_map_fgs_pysm(meta)
 
-        meta.logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
+        logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
         meta.timer.stop("fg", "Generating foreground map")
     else:
         fg_freq_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
@@ -106,7 +107,7 @@ def make_sims(meta, components="all"):
 def save_sims(meta, freq_maps_write):
     for i_f, map in enumerate(meta.maps_list):
         fname = os.path.join(meta.map_directory, meta.map_sets[map]["file_root"] + ".fits")
-        meta.logger.debug(f"Saving simulated sky to {fname}")
+        logger.debug(f"Saving simulated sky to {fname}")
         hp.write_map(
             fname,
             freq_maps_write[i_f],
@@ -118,7 +119,7 @@ def save_sims(meta, freq_maps_write):
 def save_noise_sims(meta, noise_freq_maps_write, id_sim=0):
     for i_f, map in enumerate(meta.maps_list):
         fname = meta.get_noise_map_filename(map, id_sim=id_sim)
-        meta.logger.debug(f"Saving noise simulation to {fname}")
+        logger.debug(f"Saving noise simulation to {fname}")
         hp.write_map(
             fname,
             noise_freq_maps_write[i_f],
