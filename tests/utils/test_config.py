@@ -1,6 +1,6 @@
 import pytest
 
-from megatop.utils.config import _GeneralPars
+from megatop.config import _GeneralPars
 
 
 def test_lmax_validator():
