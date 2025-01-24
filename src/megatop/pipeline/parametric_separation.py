@@ -69,8 +69,8 @@ def weighted_compsep(meta):
 
     # test_invAtNA_U = np.dot(A_maxL.T, np.dot(1/noise_cov[:,2], A_maxL))
     # sanity_check = np.linalg.inv(A_maxL.T @ noise_cov @ A_maxL) - res.invAtNA
-    W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noise_cov[:, 1:])
-    res.W_maxL = W_maxL
+    # W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noise_cov[:, 1:])
+    # res.W_maxL = W_maxL
 
     # # Apply W to noise simulation:
 
@@ -190,7 +190,7 @@ def main():
     meta = BBmeta(args.globals)
     res = weighted_compsep(meta)
     save_compsep_results(meta, res)
-    components_results_plotting(res, meta)
+    # components_results_plotting(res, meta)
 
 
 if __name__ == "__main__":
