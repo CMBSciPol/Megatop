@@ -12,8 +12,8 @@ from megatop.utils import BBmeta
 from megatop.utils.logger import logger
 
 
-def weighted_comp_sep(args):
-    meta = BBmeta(args.globals)
+def weighted_comp_sep(meta):
+    # meta = BBmeta(args.globals)
 
     meta.timer.start("full_step")
     meta.timer.start("loading_covmat")
@@ -64,12 +64,12 @@ def weighted_comp_sep(args):
         method=method,
     )
 
-    if args.verbose:
-        print("success: ", res.success)
-    if args.verbose:
-        print("results: ", res.x)
-    if args.verbose:
-        print("results: ", res)
+    # if args.verbose:
+    #     print("success: ", res.success)
+    # if args.verbose:
+    #     print("results: ", res.x)
+    # if args.verbose:
+    #     print("results: ", res)
     meta.timer.stop("compsep", meta.logger, "Component separation")
 
     A = MixingMatrix(*components)
@@ -123,15 +123,15 @@ def weighted_comp_sep(args):
     # space could be saved by adding an if statement in the above dict construction (TODO?)
     np.save(os.path.join(meta.components_directory, "components_maps.npy"), res.s)
     np.save(os.path.join(meta.components_directory, "invAtNA.npy"), res.invAtNA)
-    np.save(
-        os.path.join(meta.components_directory, "noise_map_after_compsep.npy"),
-        noise_map_after_compsep,
-    )
+    # np.save(
+    #     os.path.join(meta.components_directory, "noise_map_after_compsep.npy"),
+    #     noise_map_after_compsep,
+    # )
 
-    if args.plots:
-        meta.timer.start("plotting")
-        components_results_plotting(res, meta, components_label_list, noise_map_after_compsep)
-        meta.timer.stop("plotting", meta.logger, "Plotting")
+    # if args.plots:
+    #     meta.timer.start("plotting")
+    #     components_results_plotting(res, meta, components_label_list, noise_map_after_compsep)
+    #     meta.timer.stop("plotting", meta.logger, "Plotting")
 
     meta.timer.stop("full_step", meta.logger, "Full component separation step")
     return res
@@ -211,7 +211,7 @@ def main():
     parser.add_argument("--globals", type=str, help="Path to yaml with global parameters")
     args = parser.parse_args()
     meta = BBmeta(args.globals)
-    res = weighted_compsep(meta)
+    res = weighted_comp_sep(meta)
     save_compsep_results(meta, res)
     # components_results_plotting(res, meta)
 
