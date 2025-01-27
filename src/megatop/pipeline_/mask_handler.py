@@ -43,6 +43,7 @@ def mask_handler(config: Config):
     logger.info("Using nominal hit map for analysis")
     logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
     nominal_hitmap = hp.read_map(SO_NOMINAL_HITMAP_URL)
+    nominal_hitmap = hp.ud_grade(nominal_hitmap, config.nside, power=-2)
 
     if config.use_input_nhits:
         # TODO: write test that confirms that the input path can not be None in this branch
@@ -52,7 +53,6 @@ def mask_handler(config: Config):
     else:
         hitmap = nominal_hitmap
 
-    hitmap = hp.ud_grade(hitmap, config.nside, power=-2)
     hp.write_map(config.path_to_nhits_map, hitmap, dtype=np.float32, overwrite=True)
     timer.stop("hitmap", "Getting hits map")
 
@@ -118,7 +118,7 @@ def mask_handler(config: Config):
     apod_type = config.masks_pars.apod_type
 
     timer.start("apodize")
-    logger.info(f"Apodizing nominal mask to {apod_radius =} arcmin with {apod_type = }")
+    logger.info(f"Apodizing nominal mask to {apod_radius = } arcmin with {apod_type = }")
 
     nominal_mask = get_apodized_mask_from_nhits(
         nominal_hitmap,
