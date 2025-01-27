@@ -373,25 +373,25 @@ class Config:
     @property
     def path_to_nhits_map(self) -> Path:
         fname = self.path_to_masks / self.masks_pars.nhits_map_name
-        return fname.with_suffix("fits")
+        return fname.with_suffix(".fits")
 
     @property
     def path_to_binary_mask(self) -> Path:
         fname = self.path_to_masks / self.masks_pars.binary_mask_name
-        return fname.with_suffix("fits")
+        return fname.with_suffix(".fits")
 
     @property
     def path_to_analysis_mask(self) -> Path:
         fname = self.path_to_masks / self.masks_pars.analysis_mask_name
-        return fname.with_suffix("fits")
+        return fname.with_suffix(".fits")
 
     @property
     def path_to_galactic_mask(self) -> Path:
         fname = f"{(p := self.masks_pars).galactic_mask_name}_{p.gal_key}"
         fname = self.path_to_masks / fname
-        return fname.with_suffix("fits")
+        return fname.with_suffix(".fits")
 
     @property
     def path_to_sources_mask(self) -> Path:
         fname = self.path_to_masks / self.masks_pars.sources_mask_name
-        return fname.with_suffix("fits")
+        return fname.with_suffix(".fits")
