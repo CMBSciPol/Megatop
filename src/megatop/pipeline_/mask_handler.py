@@ -40,7 +40,6 @@ def mask_handler(config: Config):
     # TODO: just write the values of the first and second derivatives somewhere
 
     # healpy can read directly from the URL
-    logger.info("Using nominal hit map for analysis")
     logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
     nominal_hitmap = hp.read_map(SO_NOMINAL_HITMAP_URL)
     nominal_hitmap = hp.ud_grade(nominal_hitmap, config.nside, power=-2)
@@ -51,6 +50,7 @@ def mask_handler(config: Config):
         hitmap = hp.read_map(config.masks_pars.input_nhits_map)
         hitmap = hp.ud_grade(hitmap, config.nside, power=-2)
     else:
+        logger.info("Using nominal hit map for analysis")
         hitmap = nominal_hitmap
 
     hp.write_map(config.path_to_nhits_map, hitmap, dtype=np.float32, overwrite=True)
@@ -69,17 +69,17 @@ def mask_handler(config: Config):
 
     galactic_mask = None
 
-    if not config.use_input_nhits and config.masks_pars.include_galactic:
+    if config.use_input_nhits and config.masks_pars.include_galactic:
         timer.start("galactic")
 
         # Download Planck galactic mask
         gal_key = config.masks_pars.gal_key
-        logger.info(f"Using Planck {gal_key!r} galactic mask")
-        logger.info(f"Downloading mask from {PLANCK_MASK_GALPLANE_URL}")
         index = get_args(ValidPlanckGalKey).index(gal_key)
+        logger.info(f"Using Planck {gal_key!r} galactic mask ({index = })")
+        logger.info(f"Downloading mask from {PLANCK_MASK_GALPLANE_URL}")
         galactic_mask = hp.read_map(PLANCK_MASK_GALPLANE_URL, field=index)
 
-        # Rotate in equatorial coordinates
+        # Rotate from galactic to equatorial coordinates
         r = hp.Rotator(coord=["G", "C"])
         galactic_mask = r.rotate_map_pixel(galactic_mask)
         galactic_mask = hp.ud_grade(galactic_mask, config.nside)
@@ -92,7 +92,7 @@ def mask_handler(config: Config):
 
     ps_mask = None
 
-    if not config.use_input_nhits and config.masks_pars.include_sources:
+    if config.use_input_nhits and config.masks_pars.include_sources:
         timer.start("point_sources")
         if config.use_input_point_sources:
             # Load from disk
