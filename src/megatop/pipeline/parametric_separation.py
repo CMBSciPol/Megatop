@@ -23,14 +23,14 @@ def weighted_comp_sep(meta):
     )  # TODO rename noise_cov -> noisecov ?
     logger.debug(f"Loading covmat from {fname_covmat}")
     noise_cov = np.load(fname_covmat)
-    meta.timer.stop("loading_covmat", meta.logger, "Loading noise covariance")
+    meta.timer.stop("loading_covmat", "Loading noise covariance")
 
     meta.timer.start("loading_maps")
     fname_preproc_maps = os.path.join(meta.pre_process_directory, "freq_maps_preprocessed.npy")
     logger.debug(f"Loading input maps from {fname_preproc_maps}")
     freq_maps_preprocessed = np.load(fname_preproc_maps)
 
-    meta.timer.stop("loading_maps", meta.logger, "Loading pre-processed frequency maps")
+    meta.timer.stop("loading_maps", "Loading pre-processed frequency maps")
 
     meta.timer.start("compsep")
     instrument = {"frequency": meta.frequencies}
@@ -70,7 +70,7 @@ def weighted_comp_sep(meta):
     #     print("results: ", res.x)
     # if args.verbose:
     #     print("results: ", res)
-    meta.timer.stop("compsep", meta.logger, "Component separation")
+    meta.timer.stop("compsep", "Component separation")
 
     A = MixingMatrix(*components)
     A_ev = A.evaluator(np.array(instrument["frequency"]))
@@ -131,9 +131,9 @@ def weighted_comp_sep(meta):
     # if args.plots:
     #     meta.timer.start("plotting")
     #     components_results_plotting(res, meta, components_label_list, noise_map_after_compsep)
-    #     meta.timer.stop("plotting", meta.logger, "Plotting")
+    #     meta.timer.stop("plotting", "Plotting")
 
-    meta.timer.stop("full_step", meta.logger, "Full component separation step")
+    meta.timer.stop("full_step", "Full component separation step")
     return res
 
 

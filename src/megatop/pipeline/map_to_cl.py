@@ -19,7 +19,7 @@ def spectra_estimation(meta):
     comp_maps = np.load(fname_comp_maps)
     # fname_invAtNA = os.path.join(meta.components_directory, "invAtNA.npy")
     # invAtNA = np.load(fname_invAtNA)
-    meta.timer.stop("loading_comp_maps", meta.logger, "Loading component maps")
+    meta.timer.stop("loading_comp_maps", "Loading component maps")
 
     # Creating/loading bins
 
@@ -83,7 +83,7 @@ def spectra_estimation(meta):
     # workspace_cc.compute_coupling_matrix(
     #     fields_init_wsp, fields_init_wsp, nmt_bins, n_iter=meta.map2cl_pars["n_iter_namaster"]
     # )
-    meta.timer.stop("initializing_workspace", meta.logger, "Initializing workspace")
+    meta.timer.stop("initializing_workspace", "Initializing workspace")
     # TODO: update namaster and test from_fields for workspace (see SOOPERCOOL)
     # IPython.embed()
 
@@ -112,7 +112,7 @@ def spectra_estimation(meta):
             continue
         for stokes in range(invAtNA.shape[-2]):
             sqrt_invAtNA[..., stokes, p] = scipy.linalg.sqrtm(invAtNA[..., stokes, p])
-    meta.timer.stop("sqrtm_invAtNA", meta.logger, "Computing matrix sqrt of invAtNA")
+    meta.timer.stop("sqrtm_invAtNA", "Computing matrix sqrt of invAtNA")
     """
     # IPython.embed()
     comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1], "Synch": comp_maps[2]}
@@ -155,7 +155,7 @@ def spectra_estimation(meta):
 
     np.savez(os.path.join(meta.spectra_directory, "cross_components_Cls.npz"), **all_Cls)
 
-    meta.timer.stop("spectra_estimation", meta.logger, "Spectra estimation")
+    meta.timer.stop("spectra_estimation", "Spectra estimation")
 
     """
 
@@ -185,7 +185,7 @@ def spectra_estimation(meta):
     )
     np.savez(os.path.join(meta.spectra_directory, "noise_Cls_offdiag.npz"), **Cls_noise_offdiag)
 
-    meta.timer.stop("noise_spectra_estimation", meta.logger, "Noise spectra estimation")
+    meta.timer.stop("noise_spectra_estimation", "Noise spectra estimation")
     """
 
     return 0

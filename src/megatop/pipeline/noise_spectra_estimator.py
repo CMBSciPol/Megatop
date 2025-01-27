@@ -78,7 +78,7 @@ def noise_spectra_estimator(meta):
         meta.map2cl_pars["purify_b"],
         meta.map2cl_pars["n_iter_namaster"],
     )
-    meta.timer.stop("initializing_workspace", meta.logger, "Initializing workspace")
+    meta.timer.stop("initializing_workspace", "Initializing workspace")
 
     sum_noise_spectra = None
 
