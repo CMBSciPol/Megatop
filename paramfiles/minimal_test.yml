@@ -19,13 +19,11 @@ output_dirs:
   mask_directory: "masks"
   pre_process_directory: "pre_processing"
   covmat_directory: "covariances"
-  covmat_directory: "covariances"
   plots_directory: "plots"
   components_directory: "components"
   spectra_directory: "spectra"
 
 
-fiducial_cmb:
 fiducial_cmb:
   cls_cmb_directory: "/global/homes/j/jost/Megatop/fiducial_cmb_spectra"
   lensed: "Cls_Planck2018_lensed_scalar.fits"
@@ -50,12 +48,9 @@ map_sets:
     freq_tag: 27         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT4"      # Experiment tag (useful to get noise-bias free cross-split spectra)
     noise_root: "noise_sat4_f027"
-    noise_root: "noise_sat4_f027"
   SAT4_f039:
     file_root: "sat4_f039"
     freq_tag: 39         # Freq. tag (e.g. useful to coadd freqs)
-    exp_tag: "SAT4"      # Experiment tag (useful to get noise-bias free cross-split spectra)
-    noise_root: "noise_sat4_f039"
     exp_tag: "SAT4"      # Experiment tag (useful to get noise-bias free cross-split spectra)
     noise_root: "noise_sat4_f039"
   SAT1_f093:
@@ -63,24 +58,20 @@ map_sets:
     freq_tag: 93         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT1"      # Experiment tag (useful to get noise-bias free cross-split spectra)
     noise_root: "noise_sat1_f093"
-    noise_root: "noise_sat1_f093"
   SAT1_f145:
     file_root: "sat1_f145"
     freq_tag: 145
     exp_tag: "SAT1"
-    noise_root: "noise_sat1_f145"
     noise_root: "noise_sat1_f145"
   SAT3_f220:
     file_root: "sat3_f220"
     freq_tag: 220         # Freq. tag (e.g. useful to coadd freqs)
     exp_tag: "SAT3"      # Experiment tag (useful to get noise-bias free cross-split spectra)
     noise_root: "noise_sat3_f220"
-    noise_root: "noise_sat3_f220"
   SAT3_f280:
     file_root: "sat3_f280"
     freq_tag: 280
     exp_tag: "SAT3"
-    noise_root: "noise_sat3_f280"
     noise_root: "noise_sat3_f280"
 
 
@@ -187,7 +178,6 @@ noise_sim_pars:
     noise_option: 'white_noise'
     sensitivity_mode: 2
     SAC_yrs_LF: 1
-    knee_mode: 1
     knee_mode: 1
     include_nhits: False
     save_noise_sim: True
