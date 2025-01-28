@@ -7,8 +7,6 @@ from typing import Any, Literal
 from attrs import Factory, asdict, field, frozen
 from cattrs.preconf.pyyaml import make_converter
 
-from megatop.utils import logger
-
 __all__ = [
     "CompSepConfig",
     "Config",
@@ -286,18 +284,9 @@ class Config:
 
     def to_yaml(self, path: str | Path) -> None:
         """Serialize the Config to a yaml file."""
-        # enforce correct yaml suffix
-        filename = Path(path).with_suffix(".yml")
+        filename = Path(path).with_suffix(".yaml")
+        filename.parent.mkdir(parents=True, exist_ok=True)
         filename.write_text(_yaml_converter.dumps(self))
-
-    def dump(self, filename: str | Path = "config_log") -> None:
-        """Serialize the Config to a yaml file.
-
-        If the filename is not a absolute path, it is assumed relative to the output root.
-        """
-        (dest := self.output_dirs.root).mkdir(parents=True, exist_ok=True)
-        logger.info(f"Dumping the config in {dest}")
-        self.to_yaml(dest / filename)
 
     @classmethod
     def get_example(cls) -> "Config":

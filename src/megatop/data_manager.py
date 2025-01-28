@@ -3,6 +3,7 @@ from pathlib import Path
 from attrs import define
 
 from .config import Config
+from .utils import logger
 
 __all__ = [
     "DataManager",
@@ -14,6 +15,14 @@ class DataManager:
     """Class for managing data products for Megatop."""
 
     _config: Config
+
+    def dump_config(self, filename: str | Path = "config_log") -> None:
+        """Serialize the DataManager's Config to a yaml file.
+
+        If the filename is not a absolute path, it is assumed relative to the output root.
+        """
+        logger.info(f"Dumping the config in {self.path_to_output}")
+        self._config.to_yaml(self.path_to_output / filename)
 
     # Paths to the data/input directories
     # -----------------------------------

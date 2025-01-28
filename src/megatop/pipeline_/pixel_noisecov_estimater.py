@@ -112,8 +112,8 @@ def main():
     parser.add_argument("--config", type=Path, help="config file")
     args = parser.parse_args()
     config = Config.from_yaml(args.config)
-    config.dump()
     manager = DataManager(config)
+    manager.dump_config()
     pixel_noisecov_estimation(manager, config)
 
 

@@ -144,8 +144,8 @@ def main():
     )
     args = parser.parse_args()
     config = Config.from_yaml(args.config)
-    config.dump()
     manager = DataManager(config)
+    manager.dump_config()
     if args.noise_only:
         combined_freq_maps, _ = make_sims(manager, config, components=["noise"])
         save_noise_sims(manager, combined_freq_maps, args.sim_id)
