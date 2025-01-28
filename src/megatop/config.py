@@ -452,3 +452,7 @@ class Config:
         dest = self.get_path_to_noise_maps_sub(sub) if sub is not None else self.path_to_noise_maps
         names = [dest / map_set.noise_map_filename for map_set in self.map_sets]
         return [name.with_suffix(".fits") for name in names]
+
+    def get_path_to_preprocessed_maps(self) -> Path:
+        fname = self.path_to_preproc / "freq_maps_preprocessed"
+        return fname.with_suffix(".npy")

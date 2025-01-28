@@ -31,12 +31,10 @@ def preprocess_map(config: Config, binary_mask=True):
 
 
 def save_preprocessed_maps(config: Config, freq_maps):
-    # TODO: should this name be a parameter in the config?
-    # TODO: why use npy format?
     config.path_to_preproc.mkdir(exist_ok=True, parents=True)
-    fname = config.path_to_preproc / "freq_maps_preprocessed.npy"
+    fname = config.get_path_to_preprocessed_maps()
+    logger.info(f"Saving pre-processed maps to {fname}")
     np.save(fname, freq_maps)
-    logger.info(f"Pre-processed maps saved to {fname}")
 
 
 def main():
