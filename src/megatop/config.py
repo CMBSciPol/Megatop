@@ -76,7 +76,7 @@ class _OutputDirs:
     root: Path = field(converter=Path, default="outputs")
     masks: str = "masks"
     preproc: str = "preproc"
-    covmat: str = "covmat"
+    covar: str = "covar"
     plots: str = "plots"
     components: str = "components"
     spectra: str = "spectra"
@@ -380,8 +380,8 @@ class Config:
         return self.output_dirs.root / self.output_dirs.preproc
 
     @property
-    def path_to_covmat(self) -> Path:
-        return self.output_dirs.root / self.output_dirs.covmat
+    def path_to_covar(self) -> Path:
+        return self.output_dirs.root / self.output_dirs.covar
 
     @property
     def path_to_plots(self) -> Path:
@@ -455,4 +455,16 @@ class Config:
 
     def get_path_to_preprocessed_maps(self) -> Path:
         fname = self.path_to_preproc / "freq_maps_preprocessed"
+        return fname.with_suffix(".npy")
+
+    def get_path_to_preprocessed_noise_maps(self, sub: int | None = None) -> Path:
+        fname = "noise_maps_preprocessed"
+        if sub is not None:
+            fname += f"_{sub:04d}"
+        fname = self.path_to_preproc / fname
+        return fname.with_suffix(".npy")
+
+    @property
+    def path_to_pixel_covmat(self) -> Path:
+        fname = self.path_to_covar / "noise_covmat_preprocessed"
         return fname.with_suffix(".npy")
