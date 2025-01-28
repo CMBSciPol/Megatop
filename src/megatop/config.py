@@ -4,7 +4,7 @@ from enum import IntEnum, auto
 from pathlib import Path
 from typing import Any, Literal
 
-from attrs import Factory, field, frozen
+from attrs import Factory, asdict, field, frozen
 from cattrs.preconf.pyyaml import make_converter
 
 from megatop.utils import logger
@@ -171,20 +171,30 @@ class _NoiseCovPars:
 
 
 @frozen
+class _MinimizeOptions:
+    disp: bool = False
+    gtol: float = 1e-12
+    eps: float = 1e-12
+    maxiter: int = 100
+    ftol: float = 1e-12
+
+
+@frozen
 class _ParametricSepPars:
-    components: list[str] = Factory(lambda: ["cmb", "dust", "synch"])
-    spectral_params: list[str] = Factory(lambda: ["beta_d", "T_d", "beta_s"])
+    include_synchrotron: bool = False
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
-    minimize_options: dict[str, Any] = Factory(
-        lambda: {
-            "disp": False,
-            "gtol": 1e-12,
-            "eps": 1e-12,
-            "maxiter": 100,
-            "ftol": 1e-12,
-        }
-    )
+    minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
+
+    def get_minimize_options_as_dict(self) -> dict[str, Any]:
+        """Return the minimize options as a dictionary.
+
+        If the minimize method is 'TNC', rename 'maxiter' to 'maxfun'.
+        """
+        options = asdict(self.minimize_options)
+        if self.minimize_method == "TNC":
+            options["maxfun"] = options.pop("maxiter")
+        return options
 
 
 @frozen
@@ -395,6 +405,13 @@ class Config:
     def path_to_spectra(self) -> Path:
         return self.output_dirs.root / self.output_dirs.spectra
 
+    # Paths to specific output plot directories
+    # -----------------------------------------
+
+    @property
+    def path_to_components_plots(self) -> Path:
+        return self.path_to_plots / self.output_dirs.components
+
     # Paths to fiducial CMB files
     # ---------------------------
 
@@ -453,8 +470,11 @@ class Config:
         names = [dest / map_set.noise_map_filename for map_set in self.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
-    def get_path_to_preprocessed_maps(self) -> Path:
-        fname = self.path_to_preproc / "freq_maps_preprocessed"
+    def get_path_to_preprocessed_maps(self, sub: int | None = None) -> Path:
+        fname = "freq_maps_preprocessed"
+        if sub is not None:
+            fname += f"_{sub:04d}"
+        fname = self.path_to_preproc / fname
         return fname.with_suffix(".npy")
 
     def get_path_to_preprocessed_noise_maps(self, sub: int | None = None) -> Path:
@@ -468,3 +488,20 @@ class Config:
     def path_to_pixel_noisecov(self) -> Path:
         fname = self.path_to_covar / "pixel_noisecov_preprocessed"
         return fname.with_suffix(".npy")
+
+    @property
+    def path_to_components_maps(self) -> Path:
+        fname = self.path_to_components / "components_maps"
+        return fname.with_suffix(".npy")
+
+    @property
+    def path_to_invAtNA(self) -> Path:
+        # TODO: more understandable name?
+        # NB: originally saved to 'path_to_components' but it is a covariance after all...
+        fname = self.path_to_covar / "invAtNA"
+        return fname.with_suffix(".npy")
+
+    @property
+    def path_to_compsep_results(self) -> Path:
+        fname = self.path_to_components / "compsep_results"
+        return fname.with_suffix(".npz")
