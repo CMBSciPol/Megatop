@@ -465,6 +465,6 @@ class Config:
         return fname.with_suffix(".npy")
 
     @property
-    def path_to_pixel_covmat(self) -> Path:
-        fname = self.path_to_covar / "noise_covmat_preprocessed"
+    def path_to_pixel_noisecov(self) -> Path:
+        fname = self.path_to_covar / "pixel_noisecov_preprocessed"
         return fname.with_suffix(".npy")

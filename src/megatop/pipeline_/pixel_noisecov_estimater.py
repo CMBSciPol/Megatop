@@ -101,7 +101,7 @@ def pixel_noisecov_estimation(config: Config):
 
     if rank == root:
         config.path_to_covar.mkdir(exist_ok=True, parents=True)
-        np.save(config.path_to_pixel_covmat, noise_cov_preprocessed_mean)
+        np.save(config.path_to_pixel_noisecov, noise_cov_preprocessed_mean)
 
     if rank == root:
         logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
