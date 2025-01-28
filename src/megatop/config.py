@@ -100,6 +100,20 @@ class _MapSet:
     def __attrs_post_init__(self) -> None:
         object.__setattr__(self, "name", f"{self.exp_tag}_f{self.freq_tag:03d}")
 
+    def get_map_filename(self, id: int | None = None) -> str:
+        """Get the map filename"""
+        name = self.file_prefix + self.name
+        if id is not None:
+            name += f"_{id:04d}"
+        return name
+
+    def get_noise_map_filename(self, id: int | None = None) -> str:
+        """Get the noise map filename"""
+        name = self.noise_prefix + self.name
+        if id is not None:
+            name += f"_{id:04d}"
+        return name
+
 
 @frozen
 class _MasksPars:
@@ -259,17 +273,17 @@ class Config:
         filename.write_text(_yaml_converter.dumps(self))
 
     def dump(self, filename: str | Path = "config_log") -> None:
-        """Serializs the Config to a yaml file.
+        """Serialize the Config to a yaml file.
 
         If the filename is not a absolute path, it is assumed relative to the output root.
         """
-        self.path_to_output.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Dumping the config in {self.path_to_output}")
-        self.to_yaml(self.output_dirs.root / filename)
+        (dest := self.path_to_output).mkdir(parents=True, exist_ok=True)
+        logger.info(f"Dumping the config in {dest}")
+        self.to_yaml(dest / filename)
 
     @classmethod
     def get_example(cls) -> "Config":
-        """Returns an example configuration with one map set"""
+        """Return an example configuration with one map set"""
         return cls(
             data_dirs=_DataDirs(root="<data_root>"),
             output_dirs=_OutputDirs(root="<output_root>"),
@@ -282,24 +296,30 @@ class Config:
 
     @property
     def nside(self) -> int:
+        """The HEALPix nside parameter"""
         return self.general_pars.nside
 
     @property
     def frequencies(self) -> list[int]:
-        """Returns the list of frequencies (from smallest to largest)"""
+        """The list of frequencies (in GHz)"""
         return [map_set.freq_tag for map_set in self.map_sets]
 
     @property
     def beams(self) -> list[float]:
-        """Returns the list of beam FWHMs (in arcminutes)"""
+        """The list of beam FWHMs (in arcminutes)"""
         if self.use_custom_beams:
             return self.pre_proc_pars.beam_fwhms  # pyright: ignore[reportReturnType]
         return [SO_BEAMS_ARCMIN[freq] for freq in self.frequencies]
 
     @property
     def maps(self) -> list[str]:
-        """Returns the list of maps"""
+        """The list of maps"""
         return [map_set.name for map_set in self.map_sets]
+
+    @property
+    def sky_model(self) -> list[str]:
+        """The list of components in the sky model"""
+        return self.map_sim_pars.sky_model
 
     @property
     def use_input_nhits(self) -> bool:
@@ -312,6 +332,14 @@ class Config:
     @property
     def use_custom_beams(self) -> bool:
         return self.pre_proc_pars.beam_fwhms is not None
+
+    @property
+    def indexes_into_SO_freqs(self) -> list[int]:
+        try:
+            return [SO_FREQUENCIES_GHZ.index(freq) for freq in self.frequencies]
+        except ValueError as exc:
+            msg = f"Invalid frequency in map_sets (expected subset of {SO_FREQUENCIES_GHZ})"
+            raise RuntimeError(msg) from exc
 
     # Paths to the data directories
     # -----------------------------
@@ -367,6 +395,17 @@ class Config:
     def path_to_spectra(self) -> Path:
         return self.output_dirs.root / self.output_dirs.spectra
 
+    # Paths to fiducial CMB files
+    # ---------------------------
+
+    @property
+    def path_to_lensed_scalar(self) -> Path:
+        return self.fiducial_cmb.root / self.fiducial_cmb.lensed_scalar
+
+    @property
+    def path_to_unlensed_scalar_tensor_r1(self) -> Path:
+        return self.fiducial_cmb.root / self.fiducial_cmb.unlensed_scalar_tensor_r1
+
     # Paths to the output files
     # -------------------------
 
@@ -395,3 +434,15 @@ class Config:
     def path_to_sources_mask(self) -> Path:
         fname = self.path_to_masks / self.masks_pars.sources_mask_name
         return fname.with_suffix(".fits")
+
+    def get_maps_filenames(self, id: int | None = None) -> list[Path]:
+        """Get the list of filenames for the maps"""
+        names = [self.path_to_maps / map_set.get_map_filename(id) for map_set in self.map_sets]
+        return [name.with_suffix(".fits") for name in names]
+
+    def get_noise_maps_filenames(self, id: int | None = None) -> list[Path]:
+        """Get the list of filenames for the noise maps"""
+        names = [
+            self.path_to_maps / map_set.get_noise_map_filename(id) for map_set in self.map_sets
+        ]
+        return [name.with_suffix(".fits") for name in names]
