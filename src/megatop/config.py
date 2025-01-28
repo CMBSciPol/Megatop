@@ -100,19 +100,13 @@ class _MapSet:
     def __attrs_post_init__(self) -> None:
         object.__setattr__(self, "name", f"{self.exp_tag}_f{self.freq_tag:03d}")
 
-    def get_map_filename(self, id: int | None = None) -> str:
-        """Get the map filename"""
-        name = self.file_prefix + self.name
-        if id is not None:
-            name += f"_{id:04d}"
-        return name
+    @property
+    def map_filename(self) -> str:
+        return self.file_prefix + self.name
 
-    def get_noise_map_filename(self, id: int | None = None) -> str:
-        """Get the noise map filename"""
-        name = self.noise_prefix + self.name
-        if id is not None:
-            name += f"_{id:04d}"
-        return name
+    @property
+    def noise_map_filename(self) -> str:
+        return self.noise_prefix + self.name
 
 
 @frozen
@@ -352,6 +346,9 @@ class Config:
     def path_to_maps(self) -> Path:
         return self.data_dirs.root / self.data_dirs.maps
 
+    def get_path_to_maps_sub(self, sub: int) -> Path:
+        return self.path_to_maps / f"{sub:04d}"
+
     @property
     def path_to_beams(self) -> Path:
         return self.data_dirs.root / self.data_dirs.beams
@@ -363,6 +360,9 @@ class Config:
     @property
     def path_to_noise_maps(self) -> Path:
         return self.data_dirs.root / self.data_dirs.noise_maps
+
+    def get_path_to_noise_maps_sub(self, sub: int) -> Path:
+        return self.path_to_noise_maps / f"{sub:04d}"
 
     # Paths to the output directories
     # -------------------------------
@@ -435,14 +435,20 @@ class Config:
         fname = self.path_to_masks / self.masks_pars.sources_mask_name
         return fname.with_suffix(".fits")
 
-    def get_maps_filenames(self, id: int | None = None) -> list[Path]:
-        """Get the list of filenames for the maps"""
-        names = [self.path_to_maps / map_set.get_map_filename(id) for map_set in self.map_sets]
+    def get_maps_filenames(self, sub: int | None = None) -> list[Path]:
+        """Get the list of filenames for the maps.
+
+        Different realizations (identified by an index) are put in separate subdirectories.
+        """
+        dest = self.get_path_to_maps_sub(sub) if sub is not None else self.path_to_maps
+        names = [dest / map_set.map_filename for map_set in self.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
-    def get_noise_maps_filenames(self, id: int | None = None) -> list[Path]:
-        """Get the list of filenames for the noise maps"""
-        names = [
-            self.path_to_maps / map_set.get_noise_map_filename(id) for map_set in self.map_sets
-        ]
+    def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
+        """Get the list of filenames for the noise maps.
+
+        Different realizations (identified by an index) are put in separate subdirectories.
+        """
+        dest = self.get_path_to_noise_maps_sub(sub) if sub is not None else self.path_to_noise_maps
+        names = [dest / map_set.noise_map_filename for map_set in self.map_sets]
         return [name.with_suffix(".fits") for name in names]

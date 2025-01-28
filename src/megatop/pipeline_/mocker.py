@@ -119,7 +119,11 @@ def save_sims(config: Config, freq_maps_write):
 
 
 def save_noise_sims(config: Config, noise_freq_maps_write, id_sim=0):
-    for i, fname in enumerate(config.get_noise_maps_filenames(id=id_sim)):
+    # create the subdirectory for this realization
+    config.get_path_to_noise_maps_sub(id_sim).mkdir(parents=True, exist_ok=True)
+
+    # save the maps
+    for i, fname in enumerate(config.get_noise_maps_filenames(sub=id_sim)):
         logger.debug(f"Saving noise simulation to {fname}")
         hp.write_map(
             fname,
