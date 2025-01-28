@@ -6,6 +6,7 @@ import numpy as np
 from pysm3 import Sky, units
 
 from ..config import Config
+from ..data_manager import DataManager
 from . import V3calc as V3
 from .logger import logger
 
@@ -50,15 +51,16 @@ def get_Cl_CMB_model_from_meta(meta):
     return np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0]])
 
 
-def _get_Cl_CMB_model_from_config(config: Config):
-    logger.debug(f"Lensing B-mode path: {config.path_to_lensed_scalar}")
-    logger.debug(f"Primordial B-mode (r=1): {config.path_to_unlensed_scalar_tensor_r1}")
+def _get_Cl_CMB_model_from_manager(manager: DataManager):
+    # TODO make this a method of DataManager
+    logger.debug(f"Lensing B-mode path: {manager.path_to_lensed_scalar}")
+    logger.debug(f"Primordial B-mode (r=1): {manager.path_to_unlensed_scalar_tensor_r1}")
 
-    r_input = config.map_sim_pars.r_input
-    A_lens = config.map_sim_pars.A_lens
+    r_input = manager._config.map_sim_pars.r_input
+    A_lens = manager._config.map_sim_pars.A_lens
     logger.info(f"CMB simulation has r={r_input} and A_lens={A_lens}")
-    Cl_lens = hp.read_cl(config.path_to_lensed_scalar)
-    Cl_BB_prim = r_input * hp.read_cl(config.path_to_unlensed_scalar_tensor_r1)[2]
+    Cl_lens = hp.read_cl(manager.path_to_lensed_scalar)
+    Cl_BB_prim = r_input * hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2]
 
     l_max_lens = len(Cl_lens[0])
     Cl_BB_lens = A_lens * Cl_lens[2]
@@ -264,25 +266,26 @@ def get_noise_map_from_white_noise(meta, map_white_noise_levels):
     return noise_maps
 
 
-def _get_noise_map_from_white_noise(config: Config, map_white_noise_levels):
-    nlev_map = np.zeros((len(config.frequencies), 3, hp.nside2npix(config.nside)))
-    for i_f, _ in enumerate(config.frequencies):
+def _get_noise_map_from_white_noise(manager: DataManager, map_white_noise_levels):
+    freqs = manager._config.frequencies
+    nside = manager._config.nside
+    npix = hp.nside2npix(nside)
+    nlev_map = np.zeros((len(freqs), 3, npix))
+    for i_f, _ in enumerate(freqs):
         nlev_map[i_f] = np.array(
             [
                 map_white_noise_levels[i_f] / np.sqrt(2),
                 map_white_noise_levels[i_f],
                 map_white_noise_levels[i_f],
             ]
-        )[:, np.newaxis] * np.ones((3, hp.nside2npix(config.nside)))
-    nlev_map /= hp.nside2resol(config.nside, arcmin=True)
+        )[:, np.newaxis] * np.ones((3, npix))
+    nlev_map /= hp.nside2resol(nside, arcmin=True)
     rng = np.random.default_rng()
-    noise_maps = rng.normal(
-        np.zeros_like(nlev_map), nlev_map, (len(config.frequencies), 3, hp.nside2npix(config.nside))
-    )
-    if config.noise_sim_pars.include_nhits:
-        noise_maps = _include_hits_noise(config, noise_maps)
+    noise_maps = rng.normal(np.zeros_like(nlev_map), nlev_map, (len(freqs), 3, npix))
+    if manager._config.noise_sim_pars.include_nhits:
+        noise_maps = _include_hits_noise(manager, noise_maps)
     else:
-        noise_maps = _include_hits_noise(config, noise_maps, binary_only=True)
+        noise_maps = _include_hits_noise(manager, noise_maps, binary_only=True)
     return noise_maps
 
 
@@ -330,14 +333,16 @@ def get_noise_map_from_noise_spectra(meta, n_ell):
     return noise_maps
 
 
-def _get_noise_map_from_noise_spectra(config: Config, n_ell):
+def _get_noise_map_from_noise_spectra(manager: DataManager, n_ell):
+    nside = manager._config.nside
+    freqs = manager._config.frequencies
     logger.warning("NOT TESTED YET !!!!")  # TODO TEST THIS !!!!
-    noise_maps = np.zeros((len(config.frequencies), 3, hp.nside2npix(config.nside)))
-    noise_spectra = np.zeros((len(config.frequencies), 3, 3 * config.nside - 1))
+    noise_maps = np.zeros((len(freqs), 3, hp.nside2npix(nside)))
+    noise_spectra = np.zeros((len(freqs), 3, 3 * nside - 1))
     noise_spectra[:, 0, 2:] = n_ell / 2
     noise_spectra[:, 1, 2:] = n_ell
     noise_spectra[:, 2, 2:] = n_ell
-    for i_f, _ in enumerate(config.frequencies):
+    for i_f, _ in enumerate(freqs):
         noise_maps[i_f] = hp.synfast(
             (
                 noise_spectra[i_f, 0],
@@ -347,12 +352,12 @@ def _get_noise_map_from_noise_spectra(config: Config, n_ell):
             ),
             new=True,
             pixwin=False,
-            nside=config.nside,
+            nside=nside,
         )
-    if config.noise_sim_pars.include_nhits:
-        noise_maps = _include_hits_noise(config, noise_maps)
+    if manager._config.noise_sim_pars.include_nhits:
+        noise_maps = _include_hits_noise(manager, noise_maps)
     else:
-        noise_maps = _include_hits_noise(config, noise_maps, binary_only=True)
+        noise_maps = _include_hits_noise(manager, noise_maps, binary_only=True)
     return noise_maps
 
 
@@ -407,11 +412,11 @@ def include_hits_noise(meta, noise_maps, unseen=False, binary_only=False):
     return noise_maps
 
 
-def _include_hits_noise(config: Config, noise_maps, unseen=False, binary_only=False):
-    binary_mask = hp.read_map(config.path_to_binary_mask)
+def _include_hits_noise(manager: DataManager, noise_maps, unseen=False, binary_only=False):
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
     if not binary_only:
         logger.info("Rescaling the noise maps by the hits count")
-        nhits_map = hp.read_map(config.path_to_nhits_map)
+        nhits_map = hp.read_map(manager.path_to_nhits_map)
         nhits_map_rescaled = nhits_map / max(nhits_map)
         warnings.filterwarnings("error")
         try:
@@ -468,6 +473,7 @@ def beam_winpix_correction(meta, freq_map, beam_FWHM):
 
 
 def _beam_winpix_correction(config: Config, freq_map, beam_FWHM):
+    # TODO: do not take the entire Config as argument but only the necessary parameters
     lmax_convolution = 3 * config.nside  # here lmax seems to play an important role
     logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
     alms_T, alms_Q, alms_U = hp.map2alm(freq_map, lmax=lmax_convolution, pol=True)

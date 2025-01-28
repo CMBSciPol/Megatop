@@ -8,22 +8,22 @@ import numpy as np
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
 
-from megatop import Config
+from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 
 
-def weighted_comp_sep(config: Config):
+def weighted_comp_sep(manager: DataManager, config: Config):
     timer = Timer()
     timer.start("full_step")
 
     timer.start("loading_covmat")
-    noisecov_fname = config.path_to_pixel_noisecov
+    noisecov_fname = manager.path_to_pixel_noisecov
     logger.debug(f"Loading covmat from {noisecov_fname}")
     noisecov = np.load(noisecov_fname)
     timer.stop("loading_covmat", "Loading noise covariance")
 
     timer.start("loading_maps")
-    preproc_maps_fname = config.get_path_to_preprocessed_maps()
+    preproc_maps_fname = manager.get_path_to_preprocessed_maps()
     logger.debug(f"Loading input maps from {preproc_maps_fname}")
     freq_maps_preprocessed = np.load(preproc_maps_fname)
     timer.stop("loading_maps", "Loading pre-processed frequency maps")
@@ -44,7 +44,7 @@ def weighted_comp_sep(config: Config):
 
     # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
-    binary_mask = hp.read_map(config.path_to_binary_mask).astype(bool)
+    binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
     freq_maps_preprocessed_QU_masked = freq_maps_preprocessed[:, 1:]
     freq_maps_preprocessed_QU_masked[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
 
@@ -118,10 +118,10 @@ def weighted_comp_sep(config: Config):
 
     # res.s and res.invAtNA are saved twice, but they are the direct needed outputs for the next step
     # space could be saved by adding an if statement in the above dict construction (TODO?)
-    config.path_to_components.mkdir(parents=True, exist_ok=True)
-    config.path_to_covar.mkdir(parents=True, exist_ok=True)
-    np.save(config.path_to_components_maps, res.s)
-    np.save(config.path_to_invAtNA, res.invAtNA)
+    manager.path_to_components.mkdir(parents=True, exist_ok=True)
+    manager.path_to_covar.mkdir(parents=True, exist_ok=True)
+    np.save(manager.path_to_components_maps, res.s)
+    np.save(manager.path_to_invAtNA, res.invAtNA)
 
     # np.save(
     #     os.path.join(meta.components_directory, "noise_map_after_compsep.npy"),
@@ -139,14 +139,14 @@ def weighted_comp_sep(config: Config):
 
 def components_results_plotting(
     res,
-    config: Config,
+    manager: DataManager,
     component_labels=("CMB", "Dust", "Synchrotron"),
     noise_map_after_compsep=None,
 ):
-    binary_mask = hp.read_map(config.path_to_binary_mask).astype(bool)
+    binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
     res.s[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
 
-    plot_dir = config.path_to_components_plots
+    plot_dir = manager.path_to_components_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     fig = plt.figure(figsize=(12, 12))
@@ -195,8 +195,8 @@ def components_results_plotting(
         plt.close()
 
 
-def save_compsep_results(config: Config, res):
-    fname_results = config.path_to_compsep_results
+def save_compsep_results(manager: DataManager, res):
+    fname_results = manager.path_to_compsep_results
     res_dict = {}
     for attr in dir(res):
         if not attr.startswith("__"):
@@ -205,7 +205,7 @@ def save_compsep_results(config: Config, res):
     logger.info(f"Saving compsep results to {fname_results}")
     np.savez(fname_results, **res_dict)
     # Saving component maps
-    fname_compmaps = config.path_to_components_maps
+    fname_compmaps = manager.path_to_components_maps
     logger.info(f"Saving component maps to {fname_compmaps}")
     np.save(fname_compmaps, res.s)
 
@@ -216,9 +216,10 @@ def main():
     args = parser.parse_args()
     config = Config.from_yaml(args.config)
     config.dump()
-    res = weighted_comp_sep(config)
-    save_compsep_results(config, res)
-    # components_results_plotting(res, meta)
+    manager = DataManager(config)
+    res = weighted_comp_sep(manager, config)
+    save_compsep_results(manager, res)
+    # components_results_plotting(res, manager)
 
 
 if __name__ == "__main__":

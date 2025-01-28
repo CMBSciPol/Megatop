@@ -5,6 +5,7 @@ import healpy as hp
 import numpy as np
 
 from ..config import Config
+from ..data_manager import DataManager
 from .logger import logger
 from .timer import Timer
 
@@ -40,10 +41,10 @@ def apply_binary_mask(meta, freq_maps, unseen=False):
     return freq_maps_masked
 
 
-def _apply_binary_mask(config: Config, freq_maps, unseen=False):
+def _apply_binary_mask(manager: DataManager, freq_maps, unseen=False):
     timer = Timer()
     timer.start("masking")
-    binary_mask = hp.read_map(config.path_to_binary_mask)
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
     freq_maps_masked = copy.deepcopy(freq_maps)
     if unseen:
         freq_maps_masked[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
@@ -240,9 +241,9 @@ def read_input_maps(meta):
     return np.array(freq_maps_input, dtype=object)
 
 
-def _read_input_maps(config: Config):
+def _read_input_maps(manager: DataManager):
     freq_maps_input = []
-    for mapname in config.get_maps_filenames():
+    for mapname in manager.get_maps_filenames():
         logger.debug(f"Reading map from {mapname}")
         # TODO: just return a list of arrays with different sizes
         freq_maps_input.append(hp.read_map(mapname, field=None).tolist())

@@ -4,18 +4,18 @@ from pathlib import Path
 import healpy as hp
 import numpy as np
 
-from megatop import Config
+from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mock
 
 
-def make_sims(config: Config, components: str | list[str] = "all"):
+def make_sims(manager: DataManager, config: Config, components: str | list[str] = "all"):
     timer = Timer()
 
     # create the directory for the maps
-    config.path_to_maps.mkdir(parents=True, exist_ok=True)
+    manager.path_to_maps.mkdir(parents=True, exist_ok=True)
 
     timer.start("sim")
-    binary_mask = hp.read_map(config.path_to_binary_mask)
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
     fsky_binary = sum(binary_mask) / len(binary_mask)
 
     if components == "all":
@@ -29,7 +29,7 @@ def make_sims(config: Config, components: str | list[str] = "all"):
             logger.info("Simulation has white noise only")
             # TODO: refactor to use config (requires changes in utils/mock.py)
             _, map_white_noise_levels = mock._get_noise(config, fsky_binary)
-            noise_freq_maps = mock._get_noise_map_from_white_noise(config, map_white_noise_levels)
+            noise_freq_maps = mock._get_noise_map_from_white_noise(manager, map_white_noise_levels)
 
         elif config.noise_sim_pars.noise_option == "no_noise":
             logger.info("Simulation has NO NOISE")
@@ -38,7 +38,7 @@ def make_sims(config: Config, components: str | list[str] = "all"):
         elif config.noise_sim_pars.noise_option == "noise_spectra":
             logger.info("Simulation has noise from full spectra")
             n_ell, _ = mock._get_noise(config, fsky_binary)
-            noise_freq_maps = mock._get_noise_map_from_noise_spectra(config, n_ell)
+            noise_freq_maps = mock._get_noise_map_from_noise_spectra(manager, n_ell)
         # elif meta.noise_sim_pars["noise_option"] == "MSS2":
         #     noise_maps = []
         #     print(
@@ -59,7 +59,7 @@ def make_sims(config: Config, components: str | list[str] = "all"):
         timer.start("cmb")
         logger.info("Computing CMB map from fiducial spectra")
 
-        Cl_cmb_model = mock._get_Cl_CMB_model_from_config(config)
+        Cl_cmb_model = mock._get_Cl_CMB_model_from_manager(manager)
         cmb_map = mock._generate_map_cmb(config, Cl_cmb_model)
 
         logger.debug(f"CMB map has shape {cmb_map.shape}")
@@ -107,8 +107,8 @@ def make_sims(config: Config, components: str | list[str] = "all"):
     return combined_freq_maps, combined_freq_maps_beamed
 
 
-def save_sims(config: Config, freq_maps_write):
-    for i, fname in enumerate(config.get_maps_filenames()):
+def save_sims(manager: DataManager, freq_maps_write):
+    for i, fname in enumerate(manager.get_maps_filenames()):
         logger.debug(f"Saving simulated sky to {fname}")
         hp.write_map(
             fname,
@@ -118,12 +118,12 @@ def save_sims(config: Config, freq_maps_write):
         )
 
 
-def save_noise_sims(config: Config, noise_freq_maps_write, id_sim=0):
+def save_noise_sims(manager: DataManager, noise_freq_maps_write, id_sim=0):
     # create the subdirectory for this realization
-    config.get_path_to_noise_maps_sub(id_sim).mkdir(parents=True, exist_ok=True)
+    manager.get_path_to_noise_maps_sub(id_sim).mkdir(parents=True, exist_ok=True)
 
     # save the maps
-    for i, fname in enumerate(config.get_noise_maps_filenames(sub=id_sim)):
+    for i, fname in enumerate(manager.get_noise_maps_filenames(sub=id_sim)):
         logger.debug(f"Saving noise simulation to {fname}")
         hp.write_map(
             fname,
@@ -145,12 +145,13 @@ def main():
     args = parser.parse_args()
     config = Config.from_yaml(args.config)
     config.dump()
+    manager = DataManager(config)
     if args.noise_only:
-        combined_freq_maps, _ = make_sims(config, components=["noise"])
-        save_noise_sims(config, combined_freq_maps, args.sim_id)
+        combined_freq_maps, _ = make_sims(manager, config, components=["noise"])
+        save_noise_sims(manager, combined_freq_maps, args.sim_id)
     else:
-        combined_freq_maps, combined_freq_maps_beamed = make_sims(config)
-        save_sims(config, combined_freq_maps_beamed)
+        combined_freq_maps, combined_freq_maps_beamed = make_sims(manager, config)
+        save_sims(manager, combined_freq_maps_beamed)
 
 
 if __name__ == "__main__":

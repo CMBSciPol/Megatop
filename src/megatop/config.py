@@ -10,8 +10,21 @@ from cattrs.preconf.pyyaml import make_converter
 from megatop.utils import logger
 
 __all__ = [
+    "CompSepConfig",
     "Config",
+    "DataDirsConfig",
+    "FiducialCMBConfig",
+    "GeneralConfig",
     "KneeMode",
+    "Map2ClConfig",
+    "MapSetConfig",
+    "MapSimConfig",
+    "MasksConfig",
+    "NoiseCovmatConfig",
+    "NoiseSimConfig",
+    "OutputDirsConfig",
+    "PlotsConfig",
+    "PreProcessingConfig",
     "SensitivityMode",
     "ValidApoType",
     "ValidExperimentType",
@@ -63,7 +76,7 @@ _yaml_converter = make_converter(forbid_extra_keys=True)
 
 
 @frozen
-class _DataDirs:
+class DataDirsConfig:
     root: Path = field(converter=Path, default="data")
     maps: str = "maps"
     beams: str = "beams"
@@ -72,7 +85,7 @@ class _DataDirs:
 
 
 @frozen
-class _OutputDirs:
+class OutputDirsConfig:
     root: Path = field(converter=Path, default="outputs")
     masks: str = "masks"
     preproc: str = "preproc"
@@ -83,14 +96,14 @@ class _OutputDirs:
 
 
 @frozen
-class _FiducialCMB:
+class FiducialCMBConfig:
     root: Path = field(converter=Path, default="fiducial_cmb")
     lensed_scalar: str = "lensed_scalar_cl"
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
 
 @frozen
-class _MapSet:
+class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
     exp_tag: str
@@ -110,7 +123,7 @@ class _MapSet:
 
 
 @frozen
-class _MasksPars:
+class MasksConfig:
     input_nhits_map: Path | None = None  # TODO: move to inputs
 
     nhits_map_name: str = "nhits_map"
@@ -142,7 +155,7 @@ class _MasksPars:
 
 
 @frozen
-class _GeneralPars:
+class GeneralConfig:
     nside: int = 512
     lmin: int = 30
     lmax: int = field(default=1_000)
@@ -159,13 +172,13 @@ class _GeneralPars:
 
 
 @frozen
-class _PreProcPars:
+class PreProcessingConfig:
     common_beam_correction: float = 0
     beam_fwhms: list[float] | None = None
 
 
 @frozen
-class _NoiseCovPars:
+class NoiseCovmatConfig:
     nrealizations: int | None = None  # TODO: depends on mocker?
     save_preprocessed_noise_maps: bool = False
 
@@ -180,7 +193,7 @@ class _MinimizeOptions:
 
 
 @frozen
-class _ParametricSepPars:
+class CompSepConfig:
     include_synchrotron: bool = False
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
@@ -198,7 +211,7 @@ class _ParametricSepPars:
 
 
 @frozen
-class _Map2ClPars:
+class Map2ClConfig:
     delta_ell: int | list[int] = 10
     purify_e: bool = True
     purify_b: bool = True
@@ -206,13 +219,13 @@ class _Map2ClPars:
 
 
 @frozen
-class _PlotPars:
+class PlotsConfig:
     lmin_plot: int = 30
     lmax_plot: int = 1_000
 
 
 @frozen
-class _MapSimPars:
+class MapSimConfig:
     sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
     cmb_sim_no_pysm: bool = True
     r_input: float = 0
@@ -228,7 +241,7 @@ class _MapSimPars:
 
 
 @frozen
-class _NoiseSimPars:
+class NoiseSimConfig:
     experiment: ValidExperimentType = "SO"
     noise_option: ValidNoiseOptionType = "white_noise"  # TODO: check default value
 
@@ -245,22 +258,23 @@ class _NoiseSimPars:
 class Config:
     """Class holding the global configuration for Megatop."""
 
-    data_dirs: _DataDirs = Factory(_DataDirs)
-    output_dirs: _OutputDirs = Factory(_OutputDirs)
-    fiducial_cmb: _FiducialCMB = Factory(_FiducialCMB)
-    map_sets: list[_MapSet] = Factory(list)
-    masks_pars: _MasksPars = Factory(_MasksPars)
-    general_pars: _GeneralPars = Factory(_GeneralPars)
-    pre_proc_pars: _PreProcPars = Factory(_PreProcPars)
-    noise_cov_pars: _NoiseCovPars = Factory(_NoiseCovPars)
-    parametric_sep_pars: _ParametricSepPars = Factory(_ParametricSepPars)
-    map2cl_pars: _Map2ClPars = Factory(_Map2ClPars)
-    plot_pars: _PlotPars = Factory(_PlotPars)
-    map_sim_pars: _MapSimPars = Factory(_MapSimPars)
-    noise_sim_pars: _NoiseSimPars = Factory(_NoiseSimPars)
+    data_dirs: DataDirsConfig = Factory(DataDirsConfig)
+    output_dirs: OutputDirsConfig = Factory(OutputDirsConfig)
+    fiducial_cmb: FiducialCMBConfig = Factory(FiducialCMBConfig)
+    map_sets: list[MapSetConfig] = Factory(list)
+    masks_pars: MasksConfig = Factory(MasksConfig)
+    general_pars: GeneralConfig = Factory(GeneralConfig)
+    pre_proc_pars: PreProcessingConfig = Factory(PreProcessingConfig)
+    noise_cov_pars: NoiseCovmatConfig = Factory(NoiseCovmatConfig)
+    parametric_sep_pars: CompSepConfig = Factory(CompSepConfig)
+    map2cl_pars: Map2ClConfig = Factory(Map2ClConfig)
+    plot_pars: PlotsConfig = Factory(PlotsConfig)
+    map_sim_pars: MapSimConfig = Factory(MapSimConfig)
+    noise_sim_pars: NoiseSimConfig = Factory(NoiseSimConfig)
 
     def __attrs_post_init(self) -> None:
         """Perform consistency checks after initialization."""
+        # TODO: use validators
         if len(self.frequencies) != len(self.beams):
             msg = "Not the same number of frequencies and beam sizes"
             raise ValueError(msg)
@@ -281,7 +295,7 @@ class Config:
 
         If the filename is not a absolute path, it is assumed relative to the output root.
         """
-        (dest := self.path_to_output).mkdir(parents=True, exist_ok=True)
+        (dest := self.output_dirs.root).mkdir(parents=True, exist_ok=True)
         logger.info(f"Dumping the config in {dest}")
         self.to_yaml(dest / filename)
 
@@ -289,14 +303,11 @@ class Config:
     def get_example(cls) -> "Config":
         """Return an example configuration with one map set"""
         return cls(
-            data_dirs=_DataDirs(root="<data_root>"),
-            output_dirs=_OutputDirs(root="<output_root>"),
-            fiducial_cmb=_FiducialCMB(root="<fiducial_cmb_root>"),
-            map_sets=[_MapSet(freq_tag=93, exp_tag="SAT")],
+            data_dirs=DataDirsConfig(root="<data_root>"),
+            output_dirs=OutputDirsConfig(root="<output_root>"),
+            fiducial_cmb=FiducialCMBConfig(root="<fiducial_cmb_root>"),
+            map_sets=[MapSetConfig(freq_tag=93, exp_tag="SAT")],
         )
-
-    # General shortcuts
-    # -----------------
 
     @property
     def nside(self) -> int:
@@ -344,164 +355,3 @@ class Config:
         except ValueError as exc:
             msg = f"Invalid frequency in map_sets (expected subset of {SO_FREQUENCIES_GHZ})"
             raise RuntimeError(msg) from exc
-
-    # Paths to the data directories
-    # -----------------------------
-
-    @property
-    def path_to_root(self) -> Path:
-        return self.data_dirs.root
-
-    @property
-    def path_to_maps(self) -> Path:
-        return self.data_dirs.root / self.data_dirs.maps
-
-    def get_path_to_maps_sub(self, sub: int) -> Path:
-        return self.path_to_maps / f"{sub:04d}"
-
-    @property
-    def path_to_beams(self) -> Path:
-        return self.data_dirs.root / self.data_dirs.beams
-
-    @property
-    def path_to_bandpasses(self) -> Path:
-        return self.data_dirs.root / self.data_dirs.bandpasses
-
-    @property
-    def path_to_noise_maps(self) -> Path:
-        return self.data_dirs.root / self.data_dirs.noise_maps
-
-    def get_path_to_noise_maps_sub(self, sub: int) -> Path:
-        return self.path_to_noise_maps / f"{sub:04d}"
-
-    # Paths to the output directories
-    # -------------------------------
-
-    @property
-    def path_to_output(self) -> Path:
-        return self.output_dirs.root
-
-    @property
-    def path_to_masks(self) -> Path:
-        return self.output_dirs.root / self.output_dirs.masks
-
-    @property
-    def path_to_preproc(self) -> Path:
-        return self.output_dirs.root / self.output_dirs.preproc
-
-    @property
-    def path_to_covar(self) -> Path:
-        return self.output_dirs.root / self.output_dirs.covar
-
-    @property
-    def path_to_plots(self) -> Path:
-        return self.output_dirs.root / self.output_dirs.plots
-
-    @property
-    def path_to_components(self) -> Path:
-        return self.output_dirs.root / self.output_dirs.components
-
-    @property
-    def path_to_spectra(self) -> Path:
-        return self.output_dirs.root / self.output_dirs.spectra
-
-    # Paths to specific output plot directories
-    # -----------------------------------------
-
-    @property
-    def path_to_components_plots(self) -> Path:
-        return self.path_to_plots / self.output_dirs.components
-
-    # Paths to fiducial CMB files
-    # ---------------------------
-
-    @property
-    def path_to_lensed_scalar(self) -> Path:
-        return self.fiducial_cmb.root / self.fiducial_cmb.lensed_scalar
-
-    @property
-    def path_to_unlensed_scalar_tensor_r1(self) -> Path:
-        return self.fiducial_cmb.root / self.fiducial_cmb.unlensed_scalar_tensor_r1
-
-    # Paths to the output files
-    # -------------------------
-
-    @property
-    def path_to_nhits_map(self) -> Path:
-        fname = self.path_to_masks / self.masks_pars.nhits_map_name
-        return fname.with_suffix(".fits")
-
-    @property
-    def path_to_binary_mask(self) -> Path:
-        fname = self.path_to_masks / self.masks_pars.binary_mask_name
-        return fname.with_suffix(".fits")
-
-    @property
-    def path_to_analysis_mask(self) -> Path:
-        fname = self.path_to_masks / self.masks_pars.analysis_mask_name
-        return fname.with_suffix(".fits")
-
-    @property
-    def path_to_galactic_mask(self) -> Path:
-        fname = f"{(p := self.masks_pars).galactic_mask_name}_{p.gal_key}"
-        fname = self.path_to_masks / fname
-        return fname.with_suffix(".fits")
-
-    @property
-    def path_to_sources_mask(self) -> Path:
-        fname = self.path_to_masks / self.masks_pars.sources_mask_name
-        return fname.with_suffix(".fits")
-
-    def get_maps_filenames(self, sub: int | None = None) -> list[Path]:
-        """Get the list of filenames for the maps.
-
-        Different realizations (identified by an index) are put in separate subdirectories.
-        """
-        dest = self.get_path_to_maps_sub(sub) if sub is not None else self.path_to_maps
-        names = [dest / map_set.map_filename for map_set in self.map_sets]
-        return [name.with_suffix(".fits") for name in names]
-
-    def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
-        """Get the list of filenames for the noise maps.
-
-        Different realizations (identified by an index) are put in separate subdirectories.
-        """
-        dest = self.get_path_to_noise_maps_sub(sub) if sub is not None else self.path_to_noise_maps
-        names = [dest / map_set.noise_map_filename for map_set in self.map_sets]
-        return [name.with_suffix(".fits") for name in names]
-
-    def get_path_to_preprocessed_maps(self, sub: int | None = None) -> Path:
-        fname = "freq_maps_preprocessed"
-        if sub is not None:
-            fname += f"_{sub:04d}"
-        fname = self.path_to_preproc / fname
-        return fname.with_suffix(".npy")
-
-    def get_path_to_preprocessed_noise_maps(self, sub: int | None = None) -> Path:
-        fname = "noise_maps_preprocessed"
-        if sub is not None:
-            fname += f"_{sub:04d}"
-        fname = self.path_to_preproc / fname
-        return fname.with_suffix(".npy")
-
-    @property
-    def path_to_pixel_noisecov(self) -> Path:
-        fname = self.path_to_covar / "pixel_noisecov_preprocessed"
-        return fname.with_suffix(".npy")
-
-    @property
-    def path_to_components_maps(self) -> Path:
-        fname = self.path_to_components / "components_maps"
-        return fname.with_suffix(".npy")
-
-    @property
-    def path_to_invAtNA(self) -> Path:
-        # TODO: more understandable name?
-        # NB: originally saved to 'path_to_components' but it is a covariance after all...
-        fname = self.path_to_covar / "invAtNA"
-        return fname.with_suffix(".npy")
-
-    @property
-    def path_to_compsep_results(self) -> Path:
-        fname = self.path_to_components / "compsep_results"
-        return fname.with_suffix(".npz")

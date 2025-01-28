@@ -5,13 +5,13 @@ from pathlib import Path
 import healpy as hp
 import numpy as np
 
-from megatop import Config
+from megatop import Config, DataManager
 from megatop.utils import logger
 from megatop.utils.mpi import MPISUM
 from megatop.utils.preproc import _common_beam_and_nside
 
 
-def pixel_noisecov_estimation(config: Config):
+def pixel_noisecov_estimation(manager: DataManager, config: Config):
     tracemalloc.start()
 
     try:
@@ -56,7 +56,7 @@ def pixel_noisecov_estimation(config: Config):
         logger.info(f"id_realisation = {id_real}")
         logger.info(f"in = {rank_realisation_list}")  # debug in logger
 
-        for noise_filename in config.get_noise_maps_filenames(id_real):
+        for noise_filename in manager.get_noise_maps_filenames(id_real):
             logger.debug(f"Importing noise map: {noise_filename}")
             noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
             nside_in_list.append(hp.get_nside(noise_freq_maps[-1][-1]))
@@ -80,7 +80,7 @@ def pixel_noisecov_estimation(config: Config):
         if config.noise_cov_pars.save_preprocessed_noise_maps:
             logger.info("Saving pre-processed noise maps to disk")
             np.save(
-                config.get_path_to_preprocessed_noise_maps(sub=id_real),
+                manager.get_path_to_preprocessed_noise_maps(sub=id_real),
                 noise_freq_maps_preprocessed,
             )
 
@@ -100,8 +100,8 @@ def pixel_noisecov_estimation(config: Config):
         noise_cov_preprocessed_mean = None
 
     if rank == root:
-        config.path_to_covar.mkdir(exist_ok=True, parents=True)
-        np.save(config.path_to_pixel_noisecov, noise_cov_preprocessed_mean)
+        manager.path_to_covar.mkdir(exist_ok=True, parents=True)
+        np.save(manager.path_to_pixel_noisecov, noise_cov_preprocessed_mean)
 
     if rank == root:
         logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
@@ -113,7 +113,8 @@ def main():
     args = parser.parse_args()
     config = Config.from_yaml(args.config)
     config.dump()
-    pixel_noisecov_estimation(config)
+    manager = DataManager(config)
+    pixel_noisecov_estimation(manager, config)
 
 
 if __name__ == "__main__":
