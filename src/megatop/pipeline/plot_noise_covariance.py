@@ -1,6 +1,5 @@
 import argparse
 import os
-import sys
 
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -89,19 +88,17 @@ def main():
 
     args = parser.parse_args()
 
-
     meta = BBmeta(args.globals)
-    
+
     meta.timer.start("plots_noise_cov")
 
     logger.info("\n\nPlotting Noise Covariance outputs\n\n")
-
 
     fname = os.path.join(meta.covmat_directory, "pixel_noise_cov_preprocessed.npy")
     noise_cov_maps = np.load(fname)
 
     plot_dir = meta.plot_dir_from_output_dir(meta.covmat_directory_rel)
-    
+
     # Plotting the maps
     plot_all_maps(meta, noise_cov_maps, plot_dir, "noise_cov_maps")
 
@@ -118,5 +115,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

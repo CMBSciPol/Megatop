@@ -17,8 +17,6 @@ dependencies = [
     "camb",
     "cattrs",
     "fgbuster @ git+https://github.com/fgbuster/fgbuster.git@std_inst_bandpass",
-    # fgbuster needs an old version of sympy to work
-    "sympy==1.11.1",
     "healpy",
     "matplotlib",
     "numpy",
