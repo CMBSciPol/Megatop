@@ -6,7 +6,7 @@ import numpy as np
 import pymaster as nmt
 
 from megatop import Config, DataManager
-from megatop.utils import Timer, utils
+from megatop.utils import Timer, logger, utils
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
@@ -193,7 +193,11 @@ def main():
     parser = argparse.ArgumentParser(description="Map to CLs")
     parser.add_argument("--config", type=Path, help="config file")
     args = parser.parse_args()
-    config = Config.from_yaml(args.config)
+    if args.config is None:
+        logger.warning("No config file provided, using example config")
+        config = Config.get_example()
+    else:
+        config = Config.from_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
     spectra_estimation(manager, config)

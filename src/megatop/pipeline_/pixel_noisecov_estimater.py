@@ -111,7 +111,11 @@ def main():
     parser = argparse.ArgumentParser(description="Pixel noise covariance estimater")
     parser.add_argument("--config", type=Path, help="config file")
     args = parser.parse_args()
-    config = Config.from_yaml(args.config)
+    if args.config is None:
+        logger.warning("No config file provided, using example config")
+        config = Config.get_example()
+    else:
+        config = Config.from_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
     pixel_noisecov_estimation(manager, config)

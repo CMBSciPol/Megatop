@@ -143,7 +143,11 @@ def main():
         "--noise-only", action="store_true", help="generate noise-only sims and save them to disk"
     )
     args = parser.parse_args()
-    config = Config.from_yaml(args.config)
+    if args.config is None:
+        logger.warning("No config file provided, using example config")
+        config = Config.get_example()
+    else:
+        config = Config.from_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
     if args.noise_only:
