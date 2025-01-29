@@ -22,9 +22,8 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         rank = comm.rank
         root = 0
 
-    except (ModuleNotFoundError, ImportError):
-        # Error handling
-        logger.info("Could not find MPI. Proceeding without")
+    except ImportError:
+        logger.info("Could not find MPI. Proceeding without.")
 
         comm = None
         root = 0
