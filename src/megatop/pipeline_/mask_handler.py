@@ -5,6 +5,7 @@ from typing import get_args
 import healpy as hp
 import numpy as np
 
+from megatop import DataManager
 from megatop.config import Config, ValidPlanckGalKey
 from megatop.utils import Timer, logger
 from megatop.utils.mask import (
@@ -27,9 +28,9 @@ PLANCK_MASK_GALPLANE_URL = (
 # TODO: check the dtypes of products
 
 
-def mask_handler(config: Config):
+def mask_handler(manager: DataManager, config: Config):
     timer = Timer()
-    mask_dir = config.path_to_masks
+    mask_dir = manager.path_to_masks
     mask_dir.mkdir(parents=True, exist_ok=True)
 
     # Get nhits map
@@ -53,7 +54,7 @@ def mask_handler(config: Config):
         logger.info("Using nominal hit map for analysis")
         hitmap = nominal_hitmap
 
-    hp.write_map(config.path_to_nhits_map, hitmap, dtype=np.float32, overwrite=True)
+    hp.write_map(manager.path_to_nhits_map, hitmap, dtype=np.float32, overwrite=True)
     timer.stop("hitmap", "Getting hits map")
 
     # Generate binary survey mask from the hits map
@@ -62,7 +63,7 @@ def mask_handler(config: Config):
     threshold = config.masks_pars.binary_mask_zero_threshold
     logger.info(f"Thresholding hit map with {threshold = }")
     binary_mask = get_binary_mask_from_nhits(hitmap, config.nside, zero_threshold=threshold)
-    hp.write_map(config.path_to_binary_mask, binary_mask, dtype=np.float32, overwrite=True)
+    hp.write_map(manager.path_to_binary_mask, binary_mask, dtype=np.float32, overwrite=True)
     timer.stop("binary", "Binary mask")
 
     # Get the galactic mask
@@ -85,7 +86,7 @@ def mask_handler(config: Config):
         galactic_mask = hp.ud_grade(galactic_mask, config.nside)
         galactic_mask = np.where(galactic_mask > 0.5, 1, 0)
 
-        hp.write_map(config.path_to_galactic_mask, galactic_mask, dtype=np.float32, overwrite=True)
+        hp.write_map(manager.path_to_galactic_mask, galactic_mask, dtype=np.float32, overwrite=True)
         timer.stop("galactic", "Galactic mask")
 
     # Get the point sources mask
@@ -108,7 +109,7 @@ def mask_handler(config: Config):
             logger.info(f"Generating mock sources mask with {n_sources = }, {hole_radius =} arcmin")
             ps_mask = random_src_mask(binary_mask, n_sources, hole_radius)
 
-        hp.write_map(config.path_to_sources_mask, ps_mask, dtype=np.float32, overwrite=True)
+        hp.write_map(manager.path_to_sources_mask, ps_mask, dtype=np.float32, overwrite=True)
         timer.stop("point_sources", "Point sources mask")
 
     # Apodize the updated mask
@@ -191,7 +192,7 @@ def mask_handler(config: Config):
         timer.stop("apodize_custom", "Apodize custom mask")
 
     # Save final mask
-    hp.write_map(config.path_to_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True)
+    hp.write_map(manager.path_to_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True)
 
 
 def main():
@@ -199,8 +200,9 @@ def main():
     parser.add_argument("--config", type=Path, help="config file")
     args = parser.parse_args()
     config = Config.from_yaml(args.config)
-    config.dump()
-    mask_handler(config)
+    manager = DataManager(config)
+    manager.dump_config()
+    mask_handler(manager, config)
 
 
 if __name__ == "__main__":
