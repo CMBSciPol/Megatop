@@ -83,8 +83,8 @@ def weighted_comp_sep(manager: DataManager, config: Config):
 
     # test_invAtNA_U = np.dot(A_maxL.T, np.dot(1/noise_cov[:,2], A_maxL))
     # sanity_check = np.linalg.inv(A_maxL.T @ noise_cov @ A_maxL) - res.invAtNA
-    # W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noise_cov[:, 1:])
-    # res.W_maxL = W_maxL
+    W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
+    res.W_maxL = W_maxL
 
     # # Apply W to noise simulation:
 
