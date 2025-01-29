@@ -19,22 +19,22 @@ conda activate megatop
 echo "------------------------------------------------------------"
 echo "|                       MASK-HANDLING                      |"
 echo "------------------------------------------------------------"
-megatop-mask-run --globals ${paramfile} 
-megatop-mask-plot --globals ${paramfile} 
+megatop-mask-run --globals ${paramfile}
+megatop-mask-plot --globals ${paramfile}
 
 
 echo "------------------------------------------------------------"
 echo "|                        ON FLY Sims                       |"
 echo "------------------------------------------------------------"
-megatop-mock-run --globals ${paramfile} 
+megatop-mock-run --globals ${paramfile}
 megatop-mock-run --globals ${paramfile} --noise_only
-megatop-mock-plot --globals ${paramfile} 
+megatop-mock-plot --globals ${paramfile}
 
 echo "------------------------------------------------------------"
 echo "|                       PRE-PROCESSING                     |"
 echo "------------------------------------------------------------"
-megatop-preproc-run --globals ${paramfile} 
-megatop-preproc-plot --globals ${paramfile} 
+megatop-preproc-run --globals ${paramfile}
+megatop-preproc-plot --globals ${paramfile}
 
 echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"

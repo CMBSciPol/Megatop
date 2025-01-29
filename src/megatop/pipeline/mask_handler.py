@@ -1,11 +1,11 @@
 import argparse
 import os
+import sys
 import urllib.request
+from urllib.error import HTTPError
 
 import healpy as hp
 import numpy as np
-
-from urllib.error import HTTPError
 
 from megatop.utils import BBmeta
 from megatop.utils.logger import logger
@@ -35,22 +35,20 @@ def mask_handler(meta):
         with (
             urllib.request.urlopen(url, timeout=timeout_seconds) as response,
             open("temp.fits", "w+b") as f,
-            ):
+        ):
             f.write(response.read())
         nhits_nominal = hp.ud_grade(hp.read_map("temp.fits"), meta.nside, power=-2)
         os.remove("temp.fits")
     except HTTPError:
         logger.warning(f"Downloading nominal hit map from {url} not possible")
-        logger.warning(f"Using nhits_nominal = 1.")
+        logger.warning("Using nhits_nominal = 1.")
 
         nhits_nominal = np.ones(hp.nside2npix(meta.nside))
-        
+
         if not meta.use_input_nhits:
-            logger.error('no nhits provided and nominal_nhits could\'t be downladed ')
-            logger.error('Exiting mask_handler without creating a mask')
-            exit()
-
-
+            logger.error("no nhits provided and nominal_nhits could't be downladed ")
+            logger.error("Exiting mask_handler without creating a mask")
+            sys.exit()
 
     if not meta.use_input_nhits:
         logger.info("Using nominal hit map for analysis")

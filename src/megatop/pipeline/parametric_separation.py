@@ -16,7 +16,7 @@ def weighted_comp_sep(meta):
     # meta = BBmeta(args.globals)
 
     meta.timer.start("full_step")
-    
+
     meta.timer.start("loading_covmat")
 
     fname_covmat = os.path.join(
