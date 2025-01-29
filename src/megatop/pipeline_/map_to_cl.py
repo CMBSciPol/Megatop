@@ -30,6 +30,7 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
 
     bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
 
+    manager.path_to_binning.parent.mkdir(parents=True, exist_ok=True)
     np.savez(
         manager.path_to_binning,
         bin_low=bin_low,
@@ -153,6 +154,7 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
         n_iter=config.map2cl_pars.n_iter_namaster,
     )
 
+    manager.path_to_cross_components_spectra.parent.mkdir(parents=True, exist_ok=True)
     np.savez(manager.path_to_cross_components_spectra, **all_Cls)
 
     timer.stop("spectra_estimation", "Spectra estimation")
