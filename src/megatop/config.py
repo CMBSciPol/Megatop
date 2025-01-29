@@ -304,6 +304,16 @@ class Config:
         return self.general_pars.nside
 
     @property
+    def lmin(self) -> int:
+        """The minimum multipole ell"""
+        return self.general_pars.lmin
+
+    @property
+    def lmax(self) -> int:
+        """The maximum multipole ell"""
+        return self.general_pars.lmax
+
+    @property
     def frequencies(self) -> list[int]:
         """The list of frequencies (in GHz)"""
         return [map_set.freq_tag for map_set in self.map_sets]

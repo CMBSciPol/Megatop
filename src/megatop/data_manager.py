@@ -185,3 +185,13 @@ class DataManager:
     def path_to_compsep_results(self) -> Path:
         fname = self.path_to_components / "compsep_results"
         return fname.with_suffix(".npz")
+
+    @property
+    def path_to_binning(self) -> Path:
+        fname = self.path_to_spectra / "binning"
+        return fname.with_suffix(".npz")
+
+    @property
+    def path_to_cross_components_spectra(self) -> Path:
+        fname = self.path_to_spectra / "cross_components_Cls"
+        return fname.with_suffix(".npz")
