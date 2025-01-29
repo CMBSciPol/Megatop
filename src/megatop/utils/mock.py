@@ -26,8 +26,8 @@ def get_Cl_CMB_model_from_meta(meta):
     """
     path_Cl_BB_lens = meta.get_fname_cls_fiducial_cmb("lensed")
     path_Cl_BB_prim_r1 = meta.get_fname_cls_fiducial_cmb("unlensed_scalar_tensor_r1")
-    meta.logger.debug(f"Lensing B-mode path: {path_Cl_BB_lens}")
-    meta.logger.debug(f"Primordial B-mode (r=1): {path_Cl_BB_prim_r1}")
+    logger.debug(f"Lensing B-mode path: {path_Cl_BB_lens}")
+    logger.debug(f"Primordial B-mode (r=1): {path_Cl_BB_prim_r1}")
 
     if meta.map_sim_pars is not None:
         r_input = meta.map_sim_pars["r_input"]
@@ -35,7 +35,7 @@ def get_Cl_CMB_model_from_meta(meta):
     else:
         r_input = 0.0
         A_lens = 1.0
-    meta.logger.info(f"CMB simulation has r={r_input} and A_lens={A_lens}")
+    logger.info(f"CMB simulation has r={r_input} and A_lens={A_lens}")
     Cl_BB_prim = r_input * hp.read_cl(path_Cl_BB_prim_r1)[2]
     Cl_lens = hp.read_cl(path_Cl_BB_lens)
 
@@ -119,7 +119,7 @@ def _generate_map_cmb(config: Config, Cl_cmb_model):
 
 
 def generate_map_fgs_pysm(meta, input_coord="G", output_coord="E"):
-    meta.logger.info(f"Generating FG maps for {(*meta.frequencies,)}GHz")
+    logger.info(f"Generating FG maps for {(*meta.frequencies,)}GHz")
     from pysm3 import Sky, units
 
     sky = Sky(nside=meta.nside, preset_strings=meta.sky_model)
@@ -131,7 +131,7 @@ def generate_map_fgs_pysm(meta, input_coord="G", output_coord="E"):
             .value
         )
         if input_coord != output_coord:
-            meta.logger.info(
+            logger.info(
                 f"Rotating {fr}GHz foreground map from {input_coord} to {output_coord}"
             )
             r = hp.Rotator(coord=[input_coord, output_coord])
@@ -178,7 +178,7 @@ def get_noise(meta, fsky_binary):
     """
     SO_FREQS = [27, 39, 93, 145, 220, 280]  # Set to match V3 calc
     if meta.noise_sim_pars["experiment"] == "SO":
-        meta.logger.info("Using SO V3calc to get white noise levels.")
+        logger.info("Using SO V3calc to get white noise levels.")
         idx_freqs = meta.idx_from_list(SO_FREQS)
         _, n_ell, map_white_noise_levels = V3.so_V3_SA_noise(
             sensitivity_mode=meta.noise_sim_pars["sensitivity_mode"],
@@ -192,13 +192,13 @@ def get_noise(meta, fsky_binary):
         )
         map_white_noise_levels = map_white_noise_levels[idx_freqs]
         n_ell = n_ell[idx_freqs]
-        meta.logger.info(
+        logger.info(
             f"Map white noise level (Q,U) {', '.join(f'{level:.2f}' for level in map_white_noise_levels)} muK-arcmin"
         )
         return n_ell, map_white_noise_levels
 
     # shouldn't enter this as checks are done in metadata_manager.
-    meta.logger.error("NO other options yet")
+    logger.error("NO other options yet")
     return None
 
 
@@ -308,7 +308,7 @@ def get_noise_map_from_noise_spectra(meta, n_ell):
     -----
     * If option include_nhits is True, the noise maps are rescaled by the hit counts.
     """
-    meta.logger.warning("NOT TESTED YET !!!!")  # TODO TEST THIS !!!!
+    logger.warning("NOT TESTED YET !!!!")  # TODO TEST THIS !!!!
     noise_maps = np.zeros((len(meta.frequencies), 3, hp.nside2npix(meta.nside)))
     noise_spectra = np.zeros((len(meta.frequencies), 3, 3 * meta.nside - 1))
     noise_spectra[:, 0, 2:] = n_ell / 2
@@ -385,7 +385,7 @@ def include_hits_noise(meta, noise_maps, unseen=False, binary_only=False):
     """
     binary_mask = meta.read_mask("binary")
     if not binary_only:
-        meta.logger.info("Rescaling the noise maps by the hits count")
+        logger.info("Rescaling the noise maps by the hits count")
         nhits_map = meta.read_hitmap()
         nhits_map_rescaled = nhits_map / max(nhits_map)
         warnings.filterwarnings("error")
@@ -395,14 +395,14 @@ def include_hits_noise(meta, noise_maps, unseen=False, binary_only=False):
             )
             # This avoids dividing by 0 in the noise maps
         except RuntimeWarning:
-            meta.logger.error("Division by 0 in noise map nhit rescaling.")
-            meta.logger.error(
+            logger.error("Division by 0 in noise map nhit rescaling.")
+            logger.error(
                 "This means the binary mask is not covering all the parts where nhits = 0."
             )
-            meta.logger.error(
+            logger.error(
                 "Please check the mask_handling parameters; changing 'binary_mask_zero_threshold' can help."
             )
-            meta.logger.error("Exiting...")
+            logger.error("Exiting...")
             sys.exit(1)
         warnings.resetwarnings()
     if unseen:
@@ -444,7 +444,7 @@ def _include_hits_noise(manager: DataManager, noise_maps, unseen=False, binary_o
 
 def beam_winpix_correction(meta, freq_map, beam_FWHM):
     lmax_convolution = 3 * meta.nside  # here lmax seems to play an important role
-    meta.logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
+    logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
     alms_T, alms_Q, alms_U = hp.map2alm(freq_map, lmax=lmax_convolution, pol=True)
     Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam_FWHM / 60), lmax=lmax_convolution, pol=True)
     wpix_in = hp.pixwin(

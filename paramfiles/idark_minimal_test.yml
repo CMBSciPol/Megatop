@@ -81,7 +81,7 @@ map_sets:
 masks:
   # Load nhits map from disk? Give absolute location here.
   # If left blank, the mask handler will download the nominal nhits map.
-  input_nhits_path: "/home/jost/code/Megatop/data/masks/rorated_G_to_E_norm_nHits_SA_35FOV_G_nside512_binary.fits"
+  input_nhits_path: "/home/jost/code/Megatop/data/masks/nhits_test_mss2.fits"
 
   # Copies of all masks are stored under these names inside mask_directory
   # analysis_mask: "analysis_mask.fits"
@@ -128,10 +128,10 @@ general_pars:
 
 
 pre_proc_pars:
-    common_beam_correction: 10.0 # In arcmin. If 0 the common beam step will be skipped
-    # fwhm: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
-    fwhm: [5., 5., 5., 5., 5., 5.] # In arcmin for each frequency. TODO: replace with path to import from file?
-    # fwhm: [30., 30., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
+    common_beam_correction: 100.0 # In arcmin. If 0 the common beam step will be skipped
+    # beams_FWHM_arcmin: [91., 63., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
+    # beams_FWHM_arcmin: [5., 5., 5., 5., 5., 5.] # In arcmin for each frequency. TODO: replace with path to import from file?
+    # beams_FWHM_arcmin: [30., 30., 30., 17., 11.,  9.] # In arcmin for each frequency. TODO: replace with path to import from file?
 
 
 noise_cov_pars:
@@ -179,5 +179,5 @@ noise_sim_pars:
     sensitivity_mode: 2
     SAC_yrs_LF: 1
     knee_mode: 1
-    include_nhits: False
+    include_nhits: True
     save_noise_sim: True

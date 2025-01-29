@@ -78,10 +78,10 @@ def common_beam_and_nside(meta, freq_maps):
 
     meta.timer.start("common")
     freq_maps_out = []
-    meta.logger.info(
+    logger.info(
         f"Common beam correction -> {meta.pre_proc_pars['common_beam_correction']} arcmin and NSIDE -> {meta.nside}"
     )
-    meta.logger.info(
+    logger.info(
         "Correcting for frequency-dependent beams, convolving with a common beam, modifying NSIDE and including effect of pixel window function."
     )
     lmax_convolution = 3 * meta.nside
@@ -96,7 +96,7 @@ def common_beam_and_nside(meta, freq_maps):
 
     for i_f, freq in enumerate(meta.frequencies):
         # Input window function. WARNING: Must be done in the loop, as input map don't necessarily have the same nside (e.g. MSS2)
-        meta.logger.info(
+        logger.info(
             f"Pre-processing {freq} GHz (input beam FWHM {meta.beams_FWHM_arcmin[i_f]} arcmin)"
         )
         wpix_in = hp.pixwin(
@@ -236,7 +236,7 @@ def read_input_maps(meta):
     freq_maps_input = []
     for map in meta.maps_list:
         fname = os.path.join(meta.map_directory, meta.map_sets[map]["file_root"] + ".fits")
-        meta.logger.debug(f"Reading map from {fname}")
+        logger.debug(f"Reading map from {fname}")
         freq_maps_input.append(hp.read_map(fname, field=None).tolist())
     return np.array(freq_maps_input, dtype=object)
 

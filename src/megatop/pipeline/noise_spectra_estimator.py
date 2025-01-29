@@ -54,7 +54,7 @@ def noise_spectra_estimator(meta):
 
     # Loading component separation operator
     W_maxL = np.load(
-        os.path.join(meta.components_directory, "comp_sep_results.npz"), allow_pickle=True
+        os.path.join(meta.components_directory, "compsep_results.npz"), allow_pickle=True
     )["W_maxL"]
 
     # Loading bin info from map2cl step:
