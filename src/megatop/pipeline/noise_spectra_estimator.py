@@ -36,7 +36,7 @@ def noise_spectra_estimator(meta):
         rank = 0
         size = 1
 
-    MemoryUsage(meta, f"rank = {rank} ")
+    MemoryUsage(f"rank = {rank} ")
 
     nreal = meta.noise_cov_pars["nrealisation_noise_cov"]
 

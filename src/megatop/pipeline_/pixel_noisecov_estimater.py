@@ -9,6 +9,7 @@ from megatop import Config, DataManager
 from megatop.utils import logger
 from megatop.utils.mpi import MPISUM
 from megatop.utils.preproc import _common_beam_and_nside
+from megatop.utils.utils import MemoryUsage
 
 
 def pixel_noisecov_estimation(manager: DataManager, config: Config):
@@ -30,7 +31,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         rank = 0
         size = 1
 
-    # MemoryUsage(meta, f"rank = {rank} ")
+    MemoryUsage(f"rank = {rank} ")
 
     logger.info(f"rank = {rank}, size = {size}")
     noise_cov_preprocessed = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
@@ -83,7 +84,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 noise_freq_maps_preprocessed,
             )
 
-        # MemoryUsage(meta, f"memory for id_realisation = {id_real} ")
+        MemoryUsage(f"memory for id_realisation = {id_real} ")
 
         noise_cov_preprocessed += noise_freq_maps_preprocessed**2
 

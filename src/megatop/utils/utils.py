@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
 
+from .logger import logger
 from .mask import get_binary_mask_from_nhits
 
 
@@ -445,7 +446,7 @@ def plot_transfer_validation(
         plt.savefig(f"{plot_dir}/decoupled_{val_type}{plot_suffix}.pdf", bbox_inches="tight")
 
 
-def debuginfo(meta, message):
+def debuginfo(message: str) -> None:
     """
     prints the filename and line number of the caller function as well as the message
 
@@ -460,10 +461,10 @@ def debuginfo(meta, message):
 
     """
     caller = getframeinfo(stack()[2][0])
-    meta.logger.info(f"{caller.filename}:{caller.lineno} - {message}")
+    logger.info(f"{caller.filename}:{caller.lineno} - {message}")
 
 
-def MemoryUsage(meta, message=""):
+def MemoryUsage(message: str = "") -> None:
     """'
     Prints the memory usage of the current process.
 
@@ -485,7 +486,7 @@ def MemoryUsage(meta, message=""):
     message_all = (
         message + f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB"
     )
-    debuginfo(meta, message_all)
+    debuginfo(message_all)
 
 
 def apply_lminlmax_to_dict(dict, bin_index_lminlmax):
