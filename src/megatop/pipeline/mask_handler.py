@@ -5,6 +5,8 @@ import urllib.request
 import healpy as hp
 import numpy as np
 
+from urllib.error import HTTPError
+
 from megatop.utils import BBmeta
 from megatop.utils.logger import logger
 from megatop.utils.mask import (
@@ -25,16 +27,30 @@ def mask_handler(meta):
     ### Get nhits map
     # If we don't use a custom nhits map, work with the nominal nhits map downloaded nominal hits map from URL
     meta.timer.start("nhits")
-    urlpref = "https://portal.nersc.gov/cfs/sobs/users/so_bb/"
-    url = f"{urlpref}norm_nHits_SA_35FOV_ns512.fits"
-    logger.info(f"Downloading nominal hit map from {url}")
-    with (
-        urllib.request.urlopen(url, timeout=timeout_seconds) as response,
-        open("temp.fits", "w+b") as f,
-    ):
-        f.write(response.read())
-    nhits_nominal = hp.ud_grade(hp.read_map("temp.fits"), meta.nside, power=-2)
-    os.remove("temp.fits")
+
+    try:
+        urlpref = "https://portal.nersc.gov/cfs/sobs/users/so_bb/"
+        url = f"{urlpref}norm_nHits_SA_35FOV_ns512.fits"
+        logger.info(f"Downloading nominal hit map from {url}")
+        with (
+            urllib.request.urlopen(url, timeout=timeout_seconds) as response,
+            open("temp.fits", "w+b") as f,
+            ):
+            f.write(response.read())
+        nhits_nominal = hp.ud_grade(hp.read_map("temp.fits"), meta.nside, power=-2)
+        os.remove("temp.fits")
+    except HTTPError:
+        logger.warning(f"Downloading nominal hit map from {url} not possible")
+        logger.warning(f"Using nhits_nominal = 1.")
+
+        nhits_nominal = np.ones(hp.nside2npix(meta.nside))
+        
+        if not meta.use_input_nhits:
+            logger.error('no nhits provided and nominal_nhits could\'t be downladed ')
+            logger.error('Exiting mask_handler without creating a mask')
+            exit()
+
+
 
     if not meta.use_input_nhits:
         logger.info("Using nominal hit map for analysis")

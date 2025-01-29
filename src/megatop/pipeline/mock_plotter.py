@@ -57,8 +57,7 @@ def plotTTEEBB_diff(
     legend_labels=(r"label data $C_\ell$ $\nu=$", r"label model $C_\ell$ $\nu=$"),
     axis_labels=("y_axis_row0", "y_axis_row1"),
     use_D_ell=True,
-    lims_x=(2, 2000),
-    lims_y=(1e-2, 1e7),
+    lims={"x": (2, 2000), "y": (1e-2, 1e7)}
 ):
     """
     This function plots the difference between the data and the model Cls. It directly saves the plot directly.
@@ -162,8 +161,8 @@ def plotTTEEBB_diff(
     ax[1][0].grid(axis="y", c="k", alpha=0.5, ls="dashed")
     ax[1][1].grid(axis="y", c="k", alpha=0.5, ls="dashed")
     ax[1][2].grid(axis="y", c="k", alpha=0.5, ls="dashed")
-    ax[0][0].set_xlim(lims_x)
-    ax[0][0].set_ylim(lims_y)
+    ax[0][0].set_xlim(lims['x'])
+    ax[0][0].set_ylim(lims['y'])
     # ax[1][0].set_ylim(-1,1)
     plt.subplots_adjust(wspace=0, hspace=0)
     plt.savefig(os.path.join(plot_dir, save_name), bbox_inches="tight")
@@ -177,8 +176,7 @@ def plotTTEEBB(
     save_name,
     legend_labels=(r"fg $C_\ell$ $\nu=$",),
     use_D_ell=True,
-    lims_x=(2, 2000),
-    lims_y=(1e-2, 1e7),
+    lims={'x':(2, 2000),'y':(1e-2, 1e7)}
 ):
     """ """
 
@@ -204,8 +202,8 @@ def plotTTEEBB(
     ax[0].set_title("TT")
     ax[1].set_title("EE")
     ax[2].set_title("BB")
-    ax[0].set_xlim(lims_x)
-    ax[0].set_ylim(lims_y)
+    ax[0].set_xlim(lims['x'])
+    ax[0].set_ylim(lims['y'])
 
     ax[2].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
     ax[0].loglog()
@@ -261,16 +259,14 @@ def plot_fg_sims(meta, maps=True, cls=True):
             freqs=meta.frequencies,
             Cl=cls,
             save_name="fg_cls_unbeamed.png",
-            lims_x=(2, 200),
-            lims_y=(1e-3, 1e5),
+            lims={'x':(2, 200),'y':(1e-3, 1e5)}
         )
         plotTTEEBB(
             plot_dir=plot_dir,
             freqs=meta.frequencies,
             Cl=cls_beamed,
             save_name="fg_cls_beamed.png",
-            lims_x=(2, 200),
-            lims_y=(1e-3, 1e5),
+            lims={'x':(2, 200),'y':(1e-3, 1e5)}
         )
 
 

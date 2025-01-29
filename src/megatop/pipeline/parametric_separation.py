@@ -16,6 +16,7 @@ def weighted_comp_sep(meta):
     # meta = BBmeta(args.globals)
 
     meta.timer.start("full_step")
+    
     meta.timer.start("loading_covmat")
 
     fname_covmat = os.path.join(
@@ -70,7 +71,7 @@ def weighted_comp_sep(meta):
     #     print("results: ", res.x)
     # if args.verbose:
     #     print("results: ", res)
-    meta.timer.stop("compsep", "Component separation")
+    # meta.timer.stop("compsep", "Component separation")
 
     A = MixingMatrix(*components)
     A_ev = A.evaluator(np.array(instrument["frequency"]))
