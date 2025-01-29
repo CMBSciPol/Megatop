@@ -131,9 +131,7 @@ def generate_map_fgs_pysm(meta, input_coord="G", output_coord="E"):
             .value
         )
         if input_coord != output_coord:
-            logger.info(
-                f"Rotating {fr}GHz foreground map from {input_coord} to {output_coord}"
-            )
+            logger.info(f"Rotating {fr}GHz foreground map from {input_coord} to {output_coord}")
             r = hp.Rotator(coord=[input_coord, output_coord])
             m = r.rotate_map_pixel(m)
         maps_fgs.append(m)
