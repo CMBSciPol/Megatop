@@ -1,6 +1,9 @@
 import argparse
+import sys
 from pathlib import Path
 from typing import get_args
+from urllib.error import URLError
+from urllib.request import urlopen
 
 import healpy as hp
 import numpy as np
@@ -40,10 +43,20 @@ def mask_handler(manager: DataManager, config: Config):
     # we always download the nominal hit map for reference
     # TODO: just write the values of the first and second derivatives somewhere
 
-    # healpy can read directly from the URL
-    logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
-    nominal_hitmap = hp.read_map(SO_NOMINAL_HITMAP_URL)
-    nominal_hitmap = hp.ud_grade(nominal_hitmap, config.nside, power=-2)
+    try:
+        logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
+        with urlopen(SO_NOMINAL_HITMAP_URL) as _:
+            # healpy can read directly from the URL
+            nominal_hitmap = hp.read_map(SO_NOMINAL_HITMAP_URL)
+            nominal_hitmap = hp.ud_grade(nominal_hitmap, config.nside, power=-2)
+    except URLError:
+        logger.warning("Failed to access URL, setting nominal hitmap = 1")
+        nominal_hitmap = np.ones(hp.nside2npix(config.nside))
+
+        if not config.use_input_nhits:
+            logger.error("No custom hitmap provided and nominal hitmap download failed")
+            logger.error("Exiting mask_handler without creating a mask")
+            sys.exit()
 
     if config.use_input_nhits:
         # TODO: write test that confirms that the input path can not be None in this branch
@@ -77,9 +90,15 @@ def mask_handler(manager: DataManager, config: Config):
         gal_key = config.masks_pars.gal_key
         index = get_args(ValidPlanckGalKey).index(gal_key)
         logger.info(f"Using Planck {gal_key!r} galactic mask ({index = })")
-        logger.info(f"Downloading mask from {PLANCK_MASK_GALPLANE_URL}")
-        galactic_mask = hp.read_map(PLANCK_MASK_GALPLANE_URL, field=index)
-
+        try:
+            logger.info(f"Downloading mask from {PLANCK_MASK_GALPLANE_URL}")
+            with urlopen(PLANCK_MASK_GALPLANE_URL) as _:
+                # read only the requested field
+                galactic_mask = hp.read_map(PLANCK_MASK_GALPLANE_URL, field=index)
+        except URLError as e:
+            msg = "Failed to acess URL for Planck galactic mask"
+            logger.error(msg)
+            raise RuntimeError(msg) from e
         # Rotate from galactic to equatorial coordinates
         r = hp.Rotator(coord=["G", "C"])
         galactic_mask = r.rotate_map_pixel(galactic_mask)
