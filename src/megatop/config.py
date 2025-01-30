@@ -96,8 +96,8 @@ class OutputDirsConfig:
 @frozen
 class FiducialCMBConfig:
     root: Path = field(converter=Path, default="fiducial_cmb")
-    lensed_scalar: str = "lensed_scalar_cl"
-    unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
+    lensed_scalar: str = "lensed_scalar_cl.fits"
+    unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl.fits"
 
 
 @frozen
@@ -171,7 +171,7 @@ class GeneralConfig:
 
 @frozen
 class PreProcessingConfig:
-    common_beam_correction: float = 0
+    common_beam_correction: float = 100
     beam_fwhms: list[float] | None = None
 
 
@@ -192,7 +192,7 @@ class _MinimizeOptions:
 
 @frozen
 class CompSepConfig:
-    include_synchrotron: bool = False
+    include_synchrotron: bool = True
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
