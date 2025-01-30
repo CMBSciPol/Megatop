@@ -295,7 +295,13 @@ class Config:
             data_dirs=DataDirsConfig(root="<data_root>"),
             output_dirs=OutputDirsConfig(root="<output_root>"),
             fiducial_cmb=FiducialCMBConfig(root="<fiducial_cmb_root>"),
-            map_sets=[MapSetConfig(freq_tag=93, exp_tag="SAT")],
+            map_sets=[MapSetConfig(freq_tag=27, exp_tag="SAT4"),
+                      MapSetConfig(freq_tag=39, exp_tag="SAT4"),
+                      MapSetConfig(freq_tag=93, exp_tag="SAT1"),
+                      MapSetConfig(freq_tag=145, exp_tag="SAT1"),
+                      MapSetConfig(freq_tag=225, exp_tag="SAT3"),
+                      MapSetConfig(freq_tag=280, exp_tag="SAT3"),
+                      ],
         )
 
     @property
