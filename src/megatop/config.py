@@ -96,8 +96,8 @@ class OutputDirsConfig:
 @frozen
 class FiducialCMBConfig:
     root: Path = field(converter=Path, default="fiducial_cmb")
-    lensed_scalar: str = "lensed_scalar_cl.fits"
-    unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl.fits"
+    lensed_scalar: str = "lensed_scalar_cl"
+    unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
 
 @frozen
@@ -295,13 +295,14 @@ class Config:
             data_dirs=DataDirsConfig(root="<data_root>"),
             output_dirs=OutputDirsConfig(root="<output_root>"),
             fiducial_cmb=FiducialCMBConfig(root="<fiducial_cmb_root>"),
-            map_sets=[MapSetConfig(freq_tag=27, exp_tag="SAT4"),
-                      MapSetConfig(freq_tag=39, exp_tag="SAT4"),
-                      MapSetConfig(freq_tag=93, exp_tag="SAT1"),
-                      MapSetConfig(freq_tag=145, exp_tag="SAT1"),
-                      MapSetConfig(freq_tag=225, exp_tag="SAT3"),
-                      MapSetConfig(freq_tag=280, exp_tag="SAT3"),
-                      ],
+            map_sets=[
+                MapSetConfig(freq_tag=27, exp_tag="SAT4"),
+                MapSetConfig(freq_tag=39, exp_tag="SAT4"),
+                MapSetConfig(freq_tag=93, exp_tag="SAT1"),
+                MapSetConfig(freq_tag=145, exp_tag="SAT1"),
+                MapSetConfig(freq_tag=225, exp_tag="SAT3"),
+                MapSetConfig(freq_tag=280, exp_tag="SAT3"),
+            ],
         )
 
     @property

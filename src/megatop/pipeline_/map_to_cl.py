@@ -71,7 +71,6 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
     comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1], "Synch": comp_maps[2]}
     # TODO: when components will be added in .yml for the comp-sep steps the keys of the dictionary should adapt to that
 
-
     all_Cls = compute_auto_cross_cl_from_maps_list(
         comp_dict,
         mask_analysis,

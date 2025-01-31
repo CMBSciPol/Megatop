@@ -44,6 +44,8 @@ dev = ["pytest"]
 "megatop-spectra-plot" = "megatop.pipeline.plot_spectra:main"
 
 [tool.ruff]
+fix = true            # autofix issues when possible
+force-exclude = true  # useful with ruff-pre-commit plugin
 line-length = 100
 exclude = ["scripts"]
 
@@ -53,6 +55,7 @@ extend-select = [
     "B",   # flake8-bugbear
     "C4",  # flake8-comprehensions
     # "D",    # pydocstyle
+    "E1",   # pycodestyle-indentation
     "EM",   # flake8-errmsg
     "EXE",  # flake8-executable
     "FURB", # refurb
