@@ -92,6 +92,10 @@ class DataManager:
         return self.path_to_plots / self._config.output_dirs.masks
 
     @property
+    def path_to_mock_plots(self) -> Path:
+        return self.path_to_plots / Path("mocks/")
+
+    @property
     def path_to_preproc_plots(self) -> Path:
         return self.path_to_plots / self._config.output_dirs.preproc
 
