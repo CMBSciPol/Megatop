@@ -80,13 +80,32 @@ class DataManager:
     def path_to_spectra(self) -> Path:
         return self.path_to_output / self._config.output_dirs.spectra
 
+    # Paths to the plot directories (in output)
+    # -----------------------------------------
+
     @property
     def path_to_plots(self) -> Path:
         return self.path_to_output / self._config.output_dirs.plots
 
     @property
+    def path_to_masks_plots(self) -> Path:
+        return self.path_to_plots / self._config.output_dirs.masks
+
+    @property
+    def path_to_preproc_plots(self) -> Path:
+        return self.path_to_plots / self._config.output_dirs.preproc
+
+    @property
+    def path_to_covar_plots(self) -> Path:
+        return self.path_to_plots / self._config.output_dirs.covar
+
+    @property
     def path_to_components_plots(self) -> Path:
         return self.path_to_plots / self._config.output_dirs.components
+
+    @property
+    def path_to_spectra_plots(self) -> Path:
+        return self.path_to_plots / self._config.output_dirs.spectra
 
     # Paths to fiducial CMB files
     # ---------------------------
