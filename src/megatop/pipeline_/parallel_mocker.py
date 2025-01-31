@@ -8,7 +8,12 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mock
 
 
-def make_sims(manager: DataManager, config: Config, components: str | list[str] = "all"):
+def make_sims(
+    manager: DataManager,
+    config: Config,
+    components: str | list[str] = "all",
+    dict_obsmats_func=None,
+):
     timer = Timer()
 
     # create the directory for the maps
@@ -96,6 +101,15 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
         )
     timer.stop("beam", "Beaming frequency maps")
 
+    if dict_obsmats_func is not None:
+        timer.start("filtering")
+        for i_f, map_set_name in enumerate(dict_obsmats_func.keys()):
+            logger.info(f"Filtering {config.frequencies[i_f]} channel")
+            combined_freq_maps_beamed[i_f] = mock.filter_obsmat(
+                dict_obsmats_func[map_set_name], combined_freq_maps_beamed[i_f]
+            )
+        timer.stop("filtering", "Filtering frequency maps")
+
     timer.start("mask")
 
     # Applying binary mask to all products: #TODO move to utils ?
@@ -142,6 +156,7 @@ def main():
     parser.add_argument(
         "--noise-only", action="store_true", help="generate noise-only sims and save them to disk"
     )
+    parser.add_argument("--obsmat", action="store_true", help="filter the simulated maps")
     args = parser.parse_args()
     try:
         from mpi4py import MPI
@@ -159,6 +174,13 @@ def main():
         rank = 0
         size = 1
 
+    if args.obsmat:
+        logger.info("Not using MPI with obsmat")
+        comm = None
+        # root = 0
+        rank = 0
+        size = 1
+
     # MemoryUsage(f"rank = {rank} ")
 
     logger.info(f"rank = {rank}, size = {size}")
@@ -168,6 +190,18 @@ def main():
 
     # splitting the list of simulation between the ranks of the process:
     rank_realisation_list = np.array_split(realisation_list, size)[rank]
+
+    if args.obsmat:
+        fname_config = args.config_root.with_name(args.config_root.name + "_0000.yml")
+        config = Config.from_yaml(fname_config)
+        manager = DataManager(config)
+        manager.dump_config()
+        timer = Timer()
+        timer.start("loading obsmat")
+        dict_obsmats_func = mock.load_obsmat(config, manager)
+        timer.stop("loading obsmat", "Loading the obsernation matrices")
+    else:
+        dict_obsmats_func = None
 
     for id_realisation in rank_realisation_list:
         fname_config = args.config_root.with_name(
@@ -181,7 +215,9 @@ def main():
             noise_freq_maps, _, _ = make_sims(manager, config, components=["noise"])
             save_noise_sims(manager, noise_freq_maps, id_realisation)
         else:
-            noise_freq_maps, _, combined_freq_maps_beamed = make_sims(manager, config)
+            noise_freq_maps, _, combined_freq_maps_beamed = make_sims(
+                manager, config, components=["cmb", "noise"], dict_obsmats_func=dict_obsmats_func
+            )
             save_sims(manager, combined_freq_maps_beamed)
             save_noise_sims(manager, noise_freq_maps, id_realisation)
 
