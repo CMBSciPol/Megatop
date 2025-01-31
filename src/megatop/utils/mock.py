@@ -3,6 +3,7 @@ import warnings
 
 import healpy as hp
 import numpy as np
+import scipy as sp
 from pysm3 import Sky, units
 
 from ..config import Config
@@ -499,3 +500,20 @@ def _beam_winpix_correction(config: Config, freq_map, beam_FWHM):
     )
     freq_map_beamed = [alms_out_T, alms_out_Q, alms_out_U]
     return np.array(freq_map_beamed)
+
+
+def load_obsmat(config: Config, manager: DataManager):
+    dict_obsmats_func = {}
+    for map_set, fname in zip(
+        manager._config.map_sets, manager.get_osbmats_filenames(), strict=False
+    ):
+        logger.info(f"Loading obsmat for {map_set.name}")
+        obsmat = sp.sparse.load_npz(fname)
+        dict_obsmats_func[map_set.name] = lambda map_, obs_mat=obsmat: obs_mat.dot(
+            map_.ravel()
+        ).reshape(3, hp.nside2npix(config.nside))
+    return dict_obsmats_func
+
+
+def filter_obsmat(obsmat_func, map_freq):
+    return hp.reorder(obsmat_func(hp.reorder(map_freq, r2n=True)), n2r=True)
