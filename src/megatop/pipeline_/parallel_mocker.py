@@ -94,10 +94,9 @@ def make_sims(
 
     timer.start("beam")
     for i_f, _f in enumerate(config.frequencies):
-        combined_freq_maps[i_f] = cmb_map + fg_freq_maps[i_f] + noise_freq_maps[i_f]
-        combined_freq_maps_beamed[i_f] = (
-            mock._beam_winpix_correction(config, cmb_map + fg_freq_maps[i_f], config.beams[i_f])
-            + noise_freq_maps[i_f]
+        combined_freq_maps[i_f] = cmb_map + fg_freq_maps[i_f]
+        combined_freq_maps_beamed[i_f] = mock._beam_winpix_correction(
+            config, cmb_map + fg_freq_maps[i_f], config.beams[i_f]
         )
     timer.stop("beam", "Beaming frequency maps")
 
@@ -112,6 +111,9 @@ def make_sims(
 
     timer.start("mask")
 
+    for i_f, _f in enumerate(config.frequencies):
+        combined_freq_maps[i_f] += noise_freq_maps[i_f]
+        combined_freq_maps_beamed[i_f] += noise_freq_maps[i_f]
     # Applying binary mask to all products: #TODO move to utils ?
     combined_freq_maps[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
     combined_freq_maps_beamed[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
