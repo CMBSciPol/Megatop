@@ -2,14 +2,13 @@ import argparse
 from pathlib import Path
 
 import healpy as hp
-import IPython
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import cm
 
 from megatop import DataManager
 from megatop.config import Config
 from megatop.utils import Timer, logger, mock
+from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
 from megatop.utils.preproc import _apply_binary_mask, _read_input_maps
 
 
@@ -53,187 +52,6 @@ def plot_fiducial_spectra(manager):
     plt.clf()
 
 
-def plotTTEEBB_diff(
-    plot_dir,
-    freqs,
-    Cl_data,
-    Cl_model,
-    save_name,
-    legend_labels=(r"label data $C_\ell$ $\nu=$", r"label model $C_\ell$ $\nu=$"),
-    axis_labels=("y_axis_row0", "y_axis_row1"),
-    use_D_ell=True,
-    lims_x=(2, 2000),
-    lims_y=(1e-2, 1e7),
-):
-    """
-    This function plots the difference between the data and the model Cls. It directly saves the plot directly.
-
-    Args:
-        args: The parser arguments, containing the path to the global parameters file to set up metadata manager.
-        Cl_data (ndarray): The data Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
-        Cl_model (ndarray): The model Cls, with shape (num_freq, num_spectra [TT,EE,BB], num_ell).
-        save_name (str): The name of the file to save the plot. It will save the plot in the plots directory of the simulation output directory.
-                         OR complete save path if you want to save it elsewhere.
-        legend_labels (list): The labels for the legend of the plot.
-        axis_labels (list): The labels for the x and y axes of the plot.
-
-    Returns:
-        None
-    """
-
-    ell = np.arange(0, Cl_data.shape[-1])
-    norm = ell * (ell + 1) / 2 / np.pi
-
-    if Cl_data.ndim == 2:
-        Cl_data = Cl_data[np.newaxis, ...]
-    if Cl_model.ndim == 2:
-        Cl_model = Cl_model[np.newaxis, ...]
-    Cl_model = Cl_model[..., ell]
-
-    if not use_D_ell:
-        norm = 1
-
-    fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(15, 15))
-    for f in range(Cl_data.shape[0]):
-        ax[0][0].plot(ell, norm * Cl_data[f, 0], color="C" + str(f), ls="-", alpha=0.4)
-        ax[0][1].plot(ell, norm * Cl_data[f, 1], color="C" + str(f), ls="-", alpha=0.4)
-        ax[0][2].plot(
-            ell,
-            norm * Cl_data[f, 2],
-            label=legend_labels[0] + str(freqs[f]) * (Cl_data.shape[0] != 1),
-            color="C" + str(f),
-            ls="-",
-            alpha=0.4,
-        )
-        ax[0][0].plot(ell, norm * Cl_model[f, 0], color="C" + str(f), ls=":")
-        ax[0][1].plot(ell, norm * Cl_model[f, 1], color="C" + str(f), ls=":")
-        ax[0][2].plot(
-            ell,
-            norm * Cl_model[f, 2],
-            label=legend_labels[1] + str(freqs[f]) * (Cl_data.shape[0] != 1),
-            color="C" + str(f),
-            ls=":",
-        )
-
-        zero_index_model0 = np.where(Cl_model[f, 0] != 0)[0]
-        zero_index_model1 = np.where(Cl_model[f, 1] != 0)[0]
-        zero_index_model2 = np.where(Cl_model[f, 2] != 0)[0]
-        ax[1][0].plot(
-            ell[zero_index_model0],
-            (
-                (Cl_data[f, 0] - Cl_model[f, 0])[zero_index_model0]
-                / Cl_model[f, 0, zero_index_model0]
-            ),
-            color="C" + str(f),
-            ls="-",
-            alpha=0.4,
-        )
-        ax[1][1].plot(
-            ell[zero_index_model1],
-            (
-                (Cl_data[f, 1] - Cl_model[f, 1])[zero_index_model1]
-                / Cl_model[f, 1, zero_index_model1]
-            ),
-            color="C" + str(f),
-            ls="-",
-            alpha=0.4,
-        )
-        ax[1][2].plot(
-            ell[zero_index_model2],
-            (
-                (Cl_data[f, 2] - Cl_model[f, 2])[zero_index_model2]
-                / Cl_model[f, 2, zero_index_model2]
-            ),
-            color="C" + str(f),
-            ls="-",
-            alpha=0.4,
-        )
-
-    ax[0][0].set_title("TT")
-    ax[0][1].set_title("EE")
-    ax[0][2].set_title("BB")
-    ax[1][0].set_xlabel(r"$\ell$")
-    ax[1][1].set_xlabel(r"$\ell$")
-    ax[1][2].set_xlabel(r"$\ell$")
-    ax[0][0].set_ylabel(axis_labels[0])
-    ax[1][0].set_ylabel(axis_labels[1])
-    ax[0][2].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
-    ax[0][0].loglog()
-    ax[0][1].loglog()
-    ax[0][2].loglog()
-    ax[1][0].set_xscale("log")
-    ax[1][1].set_xscale("log")
-    ax[1][2].set_xscale("log")
-    ax[1][0].grid(axis="y", c="k", alpha=0.5, ls="dashed")
-    ax[1][1].grid(axis="y", c="k", alpha=0.5, ls="dashed")
-    ax[1][2].grid(axis="y", c="k", alpha=0.5, ls="dashed")
-    if lims_x is None:
-        lims_x = (2, ell[-1])
-        # ell[-1] allows to avoid empty space on the right,
-        # 2 is to avoid the first 2 ell that are ill-defined
-    ax[0][0].set_xlim(lims_x)
-    ax[0][0].set_ylim(lims_y)
-
-    plt.subplots_adjust(wspace=0, hspace=0)
-    plt.savefig(plot_dir / save_name, bbox_inches="tight")
-    plt.close()
-
-
-def plotTTEEBB(
-    plot_dir,
-    freqs,
-    Cl,
-    save_name,
-    legend_labels=(r"fg $C_\ell$ $\nu=$",),
-    y_axis_label="y_axis",
-    use_D_ell=True,
-    lims_x=(2, 2000),
-    lims_y=(1e-2, 1e7),
-):
-    """ """
-
-    ell = np.arange(0, Cl.shape[-1])
-    norm = ell * (ell + 1) / 2 / np.pi
-
-    if not use_D_ell:
-        norm = 1
-
-    fig, ax = plt.subplots(1, 3, sharex=True, sharey="row", figsize=(16, 9))
-    for f in range(Cl.shape[0]):
-        ax[0].plot(ell, norm * Cl[f, 0], color="C" + str(f), ls="-", alpha=0.4)
-        ax[1].plot(ell, norm * Cl[f, 1], color="C" + str(f), ls="-", alpha=0.4)
-        ax[2].plot(
-            ell,
-            norm * Cl[f, 2],
-            label=legend_labels[0] + str(freqs[f]) * (Cl.shape[0] != 1),
-            color="C" + str(f),
-            ls="-",
-            alpha=0.4,
-        )
-
-    ax[0].set_title("TT")
-    ax[1].set_title("EE")
-    ax[2].set_title("BB")
-    if lims_x is None:
-        lims_x = (2, ell[-1])
-    ax[0].set_xlim(lims_x)
-    ax[0].set_ylim(lims_y)
-
-    ax[0].set_xlabel(r"$\ell$")
-    ax[1].set_xlabel(r"$\ell$")
-    ax[2].set_xlabel(r"$\ell$")
-
-    ax[0].set_ylabel(y_axis_label)
-
-    ax[2].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
-    ax[0].loglog()
-    ax[1].loglog()
-    ax[2].loglog()
-    plt.subplots_adjust(wspace=0, hspace=0)
-    plt.savefig(plot_dir / save_name, bbox_inches="tight")
-    plt.close()
-
-
 def plot_fg_sims(manager, config, maps=True, cls=True):
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
@@ -246,32 +64,19 @@ def plot_fg_sims(manager, config, maps=True, cls=True):
             config, fg_freq_maps[i_f], config.beams[i_f]
         )
 
-    # binary_mask = hp.read_map(manager.path_to_binary_mask)
-    # fg_freq_maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-    # fg_freq_maps_beamed[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-
     fg_freq_maps = _apply_binary_mask(manager, fg_freq_maps, unseen=True)
     fg_freq_maps_beamed = _apply_binary_mask(manager, fg_freq_maps_beamed, unseen=True)
+
     if maps:
-        cmap = cm.RdBu
-        cmap.set_under("w")
-        vmin = {"I": -300, "Q": -10, "U": -10}
-        vmax = {"I": 300, "Q": 10, "U": 10}
-        plt.figure(figsize=(20, 7))
-        k = 0
-        for j_stokes, stokes in enumerate(["I", "Q", "U"]):
-            for i_f, fr in enumerate(config.frequencies):
-                hp.mollview(
-                    fg_freq_maps_beamed[i_f, j_stokes],
-                    cmap=cmap,
-                    title=f"{fr} GHz {stokes}",
-                    min=vmin[stokes],
-                    max=vmax[stokes],
-                    sub=(3, len(config.frequencies), k + 1),
-                )
-                k += 1
-        plt.savefig(plot_dir / "fg_freqs_unbeamed.png", bbox_inches="tight")
-        plt.clf()
+        freq_maps_plotter(
+            config,
+            fg_freq_maps_beamed,
+            plot_dir,
+            "fg_freqs_unbeamed.png",
+            vmin={"I": -300, "Q": -10, "U": -10},
+            vmax={"I": 300, "Q": 10, "U": 10},
+        )
+
     if cls:
         cls = []
         cls_beamed = []
@@ -280,7 +85,7 @@ def plot_fg_sims(manager, config, maps=True, cls=True):
             cls_beamed.append(hp.anafast(fg_freq_maps_beamed[i_f]))
         cls = np.array(cls)
         cls_beamed = np.array(cls_beamed)
-        IPython.embed()
+
         plotTTEEBB(
             plot_dir=plot_dir,
             freqs=config.frequencies,
@@ -311,22 +116,16 @@ def plot_cmb_sims(manager, config, maps=True, cls=True):
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     if maps:
-        cmap = cm.RdBu
-        cmap.set_under("w")
-        vmin = {"I": -300, "Q": -5, "U": -5}
-        vmax = {"I": 300, "Q": 5, "U": 5}
-        plt.figure(figsize=(20, 7))
-        for j_stokes, stokes in enumerate("IQU"):
-            hp.mollview(
-                cmb_map[j_stokes],
-                cmap=cmap,
-                title=f"CMB {stokes}",
-                min=vmin[stokes],
-                max=vmax[stokes],
-                sub=(1, 3, j_stokes + 1),
-            )
-        plt.savefig(plot_dir / "cmb_maps.png", bbox_inches="tight")
-        plt.clf()
+        freq_maps_plotter(
+            config,
+            np.array([cmb_map]),
+            plot_dir,
+            "cmb_maps.png",
+            vmin={"I": -300, "Q": -5, "U": -5},
+            vmax={"I": 300, "Q": 5, "U": 5},
+            component="CMB",
+        )
+
     if cls:
         cls = hp.anafast(cmb_map)
         cls = np.array(cls)
@@ -363,27 +162,18 @@ def plot_noise_sims(manager, config, maps=True, cls=True):
         n_ell, map_white_noise_levels = mock._get_noise(config, fsky_binary)
         noise_freq_maps = mock._get_noise_map_from_noise_spectra(manager, n_ell)
 
-    if maps:
-        cmap = cm.RdBu
-        cmap.set_under("w")
-        vmin = {"I": -2, "Q": -0.5, "U": -0.5}
-        vmax = {"I": 2, "Q": 0.5, "U": 0.5}
-        plt.figure(figsize=(20, 7))
-        k = 0
-        for j_stokes, stokes in enumerate(["I", "Q", "U"]):
-            for i_f, fr in enumerate(config.frequencies):
-                hp.mollview(
-                    noise_freq_maps[i_f, j_stokes],
-                    cmap=cmap,
-                    title=f"{fr} GHz {stokes}",
-                    min=vmin[stokes],
-                    max=vmax[stokes],
-                    sub=(3, len(config.frequencies), k + 1),
-                )
-                k += 1
+    noise_freq_maps = _apply_binary_mask(manager, noise_freq_maps, unseen=True)
 
-        plt.savefig(plot_dir / "noise_freq_maps.png", bbox_inches="tight")
-        plt.clf()
+    if maps:
+        freq_maps_plotter(
+            config,
+            noise_freq_maps,
+            plot_dir,
+            "noise_freq_maps.png",
+            vmin={"I": -2, "Q": -0.5, "U": -0.5},
+            vmax={"I": 2, "Q": 0.5, "U": 0.5},
+        )
+
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
@@ -418,6 +208,7 @@ def plot_noise_sims(manager, config, maps=True, cls=True):
             cl_model = np.zeros_like(cls)
             cl_model[:, 1, 2:-1] = n_ell * fsky_binary / fsky_correction
             cl_model[:, 2, 2:-1] = n_ell * fsky_binary / fsky_correction
+
         plotTTEEBB_diff(
             plot_dir=plot_dir,
             freqs=config.frequencies,
@@ -440,26 +231,15 @@ def plot_saved_sims(manager, config, maps=True, cls=True):
     combined_maps = _apply_binary_mask(manager, combined_maps, unseen=True)
 
     if maps:
-        cmap = cm.RdBu
-        cmap.set_under("w")
-        vmin = {"I": -300, "Q": -10, "U": -10}
-        vmax = {"I": 300, "Q": 10, "U": 10}
-        plt.figure(figsize=(20, 7))
-        k = 0
-        for j_stokes, stokes in enumerate(["I", "Q", "U"]):
-            for i_f, fr in enumerate(config.frequencies):
-                hp.mollview(
-                    combined_maps[i_f, j_stokes],
-                    cmap=cmap,
-                    title=f"{fr} GHz {stokes}",
-                    min=vmin[stokes],
-                    max=vmax[stokes],
-                    sub=(3, len(config.frequencies), k + 1),
-                )
-                k += 1
+        freq_maps_plotter(
+            config,
+            combined_maps,
+            plot_dir,
+            "combined_map.png",
+            vmin={"I": -300, "Q": -10, "U": -10},
+            vmax={"I": 300, "Q": 10, "U": 10},
+        )
 
-        plt.savefig(plot_dir / "combined_map.png", bbox_inches="tight")
-        plt.clf()
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
