@@ -94,7 +94,7 @@ def generate_map_cmb(meta, Cl_cmb_model):
     -----
     * If option fixed_cmb is set to true, the random seed is set to `1234' before synfast at reset to None after.
     """
-    lmax = 2 * meta.nside
+    lmax = 3 * meta.nside
     if meta.map_sim_pars["fixed_cmb"]:
         # Fixing seed so that the CMB is the same for all sims
         # We need to do this because synfast uses the legacy numpy random number generator
@@ -107,7 +107,7 @@ def generate_map_cmb(meta, Cl_cmb_model):
 
 
 def _generate_map_cmb(config: Config, Cl_cmb_model):
-    lmax = 2 * config.nside
+    lmax = 3 * config.nside
     if config.map_sim_pars.fixed_cmb:
         # Fixing seed so that the CMB is the same for all sims
         # We need to do this because synfast uses the legacy numpy random number generator
