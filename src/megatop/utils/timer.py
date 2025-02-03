@@ -13,7 +13,7 @@ __all__ = [
 
 
 class _SingletonReInit(type):
-    """Thread-safe singleton implementation with reinitialization."""
+    """Thread-safe singleton with reinitialization."""
 
     _instances: ClassVar = {}
     _lock: ClassVar[Lock] = Lock()
@@ -31,7 +31,23 @@ class _SingletonReInit(type):
 
 
 class Timer(metaclass=_SingletonReInit):
-    """Timer class to measure elapsed time."""
+    """Timer class to measure elapsed time.
+
+    A thread-safe singleton class that provides functionality to measure and log elapsed time.
+    Can be used either as a context manager or with explicit start/stop calls.
+
+    Example:
+        Using as context manager:
+        >>> with Timer(thread="my_operation"):
+        >>>     # code to time
+        >>>     ...
+
+        Using with explicit start/stop:
+        >>> timer = Timer(thread="my_operation")
+        >>> timer.start()
+        >>> # code to time
+        >>> timer.stop()
+    """
 
     __slots__ = [
         "__dict__",
@@ -42,37 +58,69 @@ class Timer(metaclass=_SingletonReInit):
 
     _lock_init: bool = False
 
-    def __init__(self, thread: str | None = None):
+    def __init__(self, thread: str = "default") -> None:
+        """Initialize a new Timer instance.
+
+        Args:
+            thread: Name to identify this timer instance.
+        """
         if not self._lock_init:
             # initialize dict and queue only once
             self._thread_starts: dict[str, int] = {}
             self._context_threads: LifoQueue[str] = LifoQueue()
             self._lock_init = True
-        self._context_latest_thread = self._normalize_thread(thread)
+        self._context_latest_thread = thread
 
     def __enter__(self) -> "Timer":
+        """Enter the Timer context manager and start timing.
+
+        This method is automatically called when entering a context manager block ('with' statement).
+        It adds the current thread to the context threads queue and starts timing.
+
+        Returns:
+            The Timer instance for use in the context.
+        """
         self._context_threads.put(self._context_latest_thread)
         self.start(self._context_latest_thread)
         return self
 
     def __exit__(self, *_exc_info) -> None:
+        """Exit the Timer context manager and stop timing.
+
+        This method is automatically called when exiting a context manager block ('with' statement).
+        It stops the timer for the current thread and logs the elapsed time.
+        """
         last_context_manager_thread = self._context_threads.get()
         self.stop(last_context_manager_thread)
 
-    def start(self, thread: str | None = None) -> None:
-        """Start the Timer. Should always be followed by a stop() call later in the code."""
-        thread = self._normalize_thread(thread)
+    def start(self, thread: str = "default") -> None:
+        """Start the Timer with given name.
+
+        Should always be followed by a stop() call later in the code.
+
+        Args:
+            thread: Name of the timer to start.
+
+        Raises:
+            ValueError: when timer with given name already exists.
+        """
         if thread in self._thread_starts:
-            msg = f"Timer {thread} already exists."
+            msg = f"timer {thread!r} already exists"
             raise ValueError(msg)
 
         self._thread_starts[thread] = time.perf_counter_ns()
 
-    def stop(self, thread: str | None = None) -> None:
-        """Stop the Timer and log the time elapsed since the start() call."""
-        thread = self._normalize_thread(thread)
+    def stop(self, thread: str = "default") -> None:
+        """Stop the Timer with given name and log the time elapsed since the start() call.
+
+        Args:
+            thread: Name of the timer to stop.
+
+        Raises:
+            ValueError: when timer with given name does not exist.
+        """
         if thread not in self._thread_starts:
-            msg = f"Timer {thread} does not exist."
+            msg = f"timer {thread!r} does not exist"
             raise ValueError(msg)
 
         start_time_ns = self._thread_starts.pop(thread)
@@ -106,9 +154,6 @@ class Timer(metaclass=_SingletonReInit):
         # sub-microsecond, just print nanoseconds
         return f"{ns} ns"
 
-    def _normalize_thread(self, thread: str | None) -> str:
-        return thread or "default"
-
 
 def _get_function_with_arguments_as_thread_name(func, args, kwargs) -> str:
     thread_name = func.__name__
@@ -122,7 +167,17 @@ def _get_function_with_arguments_as_thread_name(func, args, kwargs) -> str:
 
 
 def function_timer(thread: str | None = None):
-    """Function decorator to measure the performance of a function."""
+    """Function decorator to time a function.
+
+    Wraps a function with a Timer context manager to measure and log its execution time.
+
+    Args:
+        thread (str | None): Optional thread name to distinguish timer.
+            If None, uses function name with arguments as thread name.
+
+    Returns:
+        Callable: A wrapped function that logs timing information when called.
+    """
 
     def decorator(func):
         @functools.wraps(func)
