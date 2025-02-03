@@ -257,7 +257,7 @@ def plot_saved_sims(manager, config, maps=True, cls=True):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Plotter for mask_hanlder output")
+    parser = argparse.ArgumentParser(description="Plotter for mocker output")
     parser.add_argument("--config", type=Path, help="config file")
     args = parser.parse_args()
     if args.config is None:

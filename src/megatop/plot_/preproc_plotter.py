@@ -48,7 +48,7 @@ def plot_preprocessed_maps(manager, config, maps=True, cls=True):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Plotter for mask_hanlder output")
+    parser = argparse.ArgumentParser(description="Plotter for preprocessing output")
     parser.add_argument("--config", type=Path, help="config file")
     args = parser.parse_args()
     if args.config is None:
@@ -59,11 +59,13 @@ def main():
     manager = DataManager(config)
     manager.dump_config()
 
-    logger.info("Plotting mocker outputs...")
+    logger.info("Plotting preprocessing outputs...")
     timer = Timer()
-    timer.start("mock_plotter")
+    timer.start("preproc_plotter")
 
     plot_preprocessed_maps(manager, config)
+
+    timer.stop("preproc_plotter", "Plotting preprocessing outputs")
 
 
 if __name__ == "__main__":
