@@ -101,10 +101,8 @@ def main():
     manager.dump_config()
 
     logger.info("Plotting mask outputs...")
-    timer = Timer()
-    timer.start("mask_plotter")
-    plotter(manager, config)
-    timer.stop("mask_plotter", "Plotting mask outputs")
+    with Timer("mask-plotter"):
+        plotter(manager, config)
 
 
 if __name__ == "__main__":

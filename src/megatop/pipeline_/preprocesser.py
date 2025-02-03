@@ -9,8 +9,6 @@ from megatop.utils.preproc import _apply_binary_mask, _common_beam_and_nside, _r
 
 
 def preprocess_map(manager: DataManager, config: Config, binary_mask=True):
-    timer = Timer()
-    timer.start("preproc")
     input_maps = _read_input_maps(manager)
     logger.info(
         f"Input maps have shapes: {[input_maps[i].shape for i, _ in enumerate(config.frequencies)]}"
@@ -26,7 +24,6 @@ def preprocess_map(manager: DataManager, config: Config, binary_mask=True):
         freq_maps_convolved_masked = _apply_binary_mask(manager, freq_maps_convolved)
     else:
         freq_maps_convolved_masked = None
-    timer.stop("preproc", "Pre-processing input maps")
     return freq_maps_convolved, freq_maps_convolved_masked
 
 
@@ -48,7 +45,10 @@ def main():
         config = Config.from_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
-    _, freq_maps_convolved_masked = preprocess_map(manager, config)
+
+    with Timer("preprocesser"):
+        _, freq_maps_convolved_masked = preprocess_map(manager, config)
+
     save_preprocessed_maps(manager, freq_maps_convolved_masked)
 
 

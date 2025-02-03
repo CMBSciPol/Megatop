@@ -7,7 +7,7 @@ import numpy as np
 from ..config import Config
 from ..data_manager import DataManager
 from .logger import logger
-from .timer import Timer
+from .timer import function_timer
 
 
 def apply_binary_mask(meta, freq_maps, unseen=False):
@@ -41,16 +41,14 @@ def apply_binary_mask(meta, freq_maps, unseen=False):
     return freq_maps_masked
 
 
+@function_timer("apply-binary-mask")
 def _apply_binary_mask(manager: DataManager, freq_maps, unseen=False):
-    timer = Timer()
-    timer.start("masking")
     binary_mask = hp.read_map(manager.path_to_binary_mask)
     freq_maps_masked = copy.deepcopy(freq_maps)
     if unseen:
         freq_maps_masked[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
     else:
         freq_maps_masked[..., np.where(binary_mask == 0)[0]] = 0.0
-    timer.stop("masking", "Applying binary mask")
     return freq_maps_masked
 
 
@@ -146,9 +144,8 @@ def common_beam_and_nside(meta, freq_maps):
     return np.array(freq_maps_out)
 
 
+@function_timer("common-beam-and-nside")
 def _common_beam_and_nside(config: Config, freq_maps):
-    timer = Timer()
-    timer.start("common")
     freq_maps_out = []
     logger.info(
         f"Common beam correction -> {config.pre_proc_pars.common_beam_correction} arcmin and NSIDE -> {config.nside}"
@@ -212,7 +209,6 @@ def _common_beam_and_nside(config: Config, freq_maps):
         # a priori all the options are set to there default, even lmax which is computed wrt input alms
         out_map = np.array([map_out_T, map_out_Q, map_out_U])
         freq_maps_out.append(out_map)
-    timer.stop("common", "Common beam and nside")
     return np.array(freq_maps_out)
 
 

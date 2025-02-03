@@ -269,16 +269,13 @@ def main():
     manager.dump_config()
 
     logger.info("Plotting mocker outputs...")
-    timer = Timer()
-    timer.start("mock_plotter")
 
-    plot_fiducial_spectra(manager)
-    plot_fg_sims(manager, config)
-    plot_cmb_sims(manager, config)
-    plot_noise_sims(manager, config)
-    plot_saved_sims(manager, config)
-
-    timer.stop("mock_plotter", "Plotting mock outputs")
+    with Timer("mock-plotter"):
+        plot_fiducial_spectra(manager)
+        plot_fg_sims(manager, config)
+        plot_cmb_sims(manager, config)
+        plot_noise_sims(manager, config)
+        plot_saved_sims(manager, config)
 
 
 if __name__ == "__main__":

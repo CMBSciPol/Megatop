@@ -12,18 +12,16 @@ from megatop.utils.preproc import _apply_binary_mask
 
 
 def plot_preprocessed_maps(manager, config, maps=True, cls=True):
-    timer = Timer()
     plot_dir = manager.path_to_preproc_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Plotting pre-processing outputs")
 
-    timer.start("loading_maps")
-    preproc_maps_fname = manager.get_path_to_preprocessed_maps()
-    logger.debug(f"Loading input maps from {preproc_maps_fname}")
-    freq_maps_preprocessed = np.load(preproc_maps_fname)
-    timer.stop("loading_maps", "Loading pre-processed frequency maps")
-    freq_maps_preprocessed = _apply_binary_mask(manager, freq_maps_preprocessed, unseen=True)
+    with Timer("load-freq-maps"):
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps()
+        logger.debug(f"Loading input maps from {preproc_maps_fname}")
+        freq_maps_preprocessed = np.load(preproc_maps_fname)
+        freq_maps_preprocessed = _apply_binary_mask(manager, freq_maps_preprocessed, unseen=True)
 
     if maps:  # Plotting the maps
         freq_maps_plotter(config, freq_maps_preprocessed, plot_dir, "pre_processed_maps")
@@ -60,12 +58,9 @@ def main():
     manager.dump_config()
 
     logger.info("Plotting preprocessing outputs...")
-    timer = Timer()
-    timer.start("preproc_plotter")
 
-    plot_preprocessed_maps(manager, config)
-
-    timer.stop("preproc_plotter", "Plotting preprocessing outputs")
+    with Timer("preproc-plotter"):
+        plot_preprocessed_maps(manager, config)
 
 
 if __name__ == "__main__":

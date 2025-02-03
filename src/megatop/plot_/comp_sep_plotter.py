@@ -53,12 +53,8 @@ def main():
     manager.dump_config()
 
     logger.info("Plotting comp sep outputs...")
-    timer = Timer()
-    timer.start("compsep_plotter")
-
-    plot_compsep(manager, config)
-
-    timer.stop("compsep_plotter", "Plotting comp sep outputs")
+    with Timer("comp-sep-plotter"):
+        plot_compsep(manager, config)
 
 
 if __name__ == "__main__":

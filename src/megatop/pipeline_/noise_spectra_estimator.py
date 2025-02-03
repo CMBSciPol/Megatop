@@ -39,8 +39,6 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
 
     MemoryUsage(f"rank = {rank} ")
 
-    timer = Timer()
-
     nreal = config.noise_cov_pars.nrealizations
 
     # The None case of nreal is useful when calling get_noise_map_filename
@@ -66,19 +64,17 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
     effective_beam = get_common_beam_wpix(config.pre_proc_pars.common_beam_correction, config.nside)
 
     # Initializing workspace
-    timer.start("initializing_workspace")
-
-    workspaceff = initialize_nmt_workspace(
-        nmt_bins,
-        manager.path_to_lensed_scalar,
-        config.nside,
-        mask_analysis,
-        effective_beam[:-1],
-        config.map2cl_pars.purify_e,
-        config.map2cl_pars.purify_b,
-        config.map2cl_pars.n_iter_namaster,
-    )
-    timer.stop("initializing_workspace", "Initializing workspace")
+    with Timer("init-namaster-workspace"):
+        workspaceff = initialize_nmt_workspace(
+            nmt_bins,
+            manager.path_to_lensed_scalar,
+            config.nside,
+            mask_analysis,
+            effective_beam[:-1],
+            config.map2cl_pars.purify_e,
+            config.map2cl_pars.purify_b,
+            config.map2cl_pars.n_iter_namaster,
+        )
 
     sum_noise_spectra = {}
 
@@ -187,7 +183,9 @@ def main():
         config = Config.from_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
-    noise_spectra_estimator(manager, config)
+
+    with Timer("noise-spectra-estimator"):
+        noise_spectra_estimator(manager, config)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import numpy as np
 import yaml
 
 from . import V3calc as V3
-from .timer import Timer
+from .old_timer import Timer
 
 
 class BBmeta:

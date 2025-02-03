@@ -38,53 +38,50 @@ def mask_handler(manager: DataManager, config: Config):
 
     # Get nhits map
 
-    timer.start("hitmap")
+    with Timer("hitmap"):
+        # we always download the nominal hit map for reference
+        # TODO: just write the values of the first and second derivatives somewhere
 
-    # we always download the nominal hit map for reference
-    # TODO: just write the values of the first and second derivatives somewhere
+        try:
+            logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
+            with urlopen(SO_NOMINAL_HITMAP_URL) as _:
+                # healpy can read directly from the URL
+                nominal_hitmap = hp.read_map(SO_NOMINAL_HITMAP_URL)
+                nominal_hitmap = hp.ud_grade(nominal_hitmap, config.nside, power=-2)
+        except URLError:
+            logger.warning("Failed to access URL, setting nominal hitmap = 1")
+            nominal_hitmap = np.ones(hp.nside2npix(config.nside))
 
-    try:
-        logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
-        with urlopen(SO_NOMINAL_HITMAP_URL) as _:
-            # healpy can read directly from the URL
-            nominal_hitmap = hp.read_map(SO_NOMINAL_HITMAP_URL)
-            nominal_hitmap = hp.ud_grade(nominal_hitmap, config.nside, power=-2)
-    except URLError:
-        logger.warning("Failed to access URL, setting nominal hitmap = 1")
-        nominal_hitmap = np.ones(hp.nside2npix(config.nside))
+            if not config.use_input_nhits:
+                logger.error("No custom hitmap provided and nominal hitmap download failed")
+                logger.error("Exiting mask_handler without creating a mask")
+                sys.exit()
 
-        if not config.use_input_nhits:
-            logger.error("No custom hitmap provided and nominal hitmap download failed")
-            logger.error("Exiting mask_handler without creating a mask")
-            sys.exit()
+        if config.use_input_nhits:
+            # TODO: write test that confirms that the input path can not be None in this branch
+            logger.info("Using custom hit mask for analysis")
+            hitmap = hp.read_map(config.masks_pars.input_nhits_map)
+            hitmap = hp.ud_grade(hitmap, config.nside, power=-2)
+        else:
+            logger.info("Using nominal hit map for analysis")
+            hitmap = nominal_hitmap
 
-    if config.use_input_nhits:
-        # TODO: write test that confirms that the input path can not be None in this branch
-        logger.info("Using custom hit mask for analysis")
-        hitmap = hp.read_map(config.masks_pars.input_nhits_map)
-        hitmap = hp.ud_grade(hitmap, config.nside, power=-2)
-    else:
-        logger.info("Using nominal hit map for analysis")
-        hitmap = nominal_hitmap
-
-    hp.write_map(manager.path_to_nhits_map, hitmap, dtype=np.float32, overwrite=True)
-    timer.stop("hitmap", "Getting hits map")
+        hp.write_map(manager.path_to_nhits_map, hitmap, dtype=np.float32, overwrite=True)
 
     # Generate binary survey mask from the hits map
 
-    timer.start("binary")
-    threshold = config.masks_pars.binary_mask_zero_threshold
-    logger.info(f"Thresholding hit map with {threshold = }")
-    binary_mask = get_binary_mask_from_nhits(hitmap, config.nside, zero_threshold=threshold)
-    hp.write_map(manager.path_to_binary_mask, binary_mask, dtype=np.float32, overwrite=True)
-    timer.stop("binary", "Binary mask")
+    with Timer("binary-mask"):
+        threshold = config.masks_pars.binary_mask_zero_threshold
+        logger.info(f"Thresholding hit map with {threshold = }")
+        binary_mask = get_binary_mask_from_nhits(hitmap, config.nside, zero_threshold=threshold)
+        hp.write_map(manager.path_to_binary_mask, binary_mask, dtype=np.float32, overwrite=True)
 
     # Get the galactic mask
 
     galactic_mask = None
 
     if config.use_input_nhits and config.masks_pars.include_galactic:
-        timer.start("galactic")
+        timer.start("galactic-mask")
 
         # Download Planck galactic mask
         gal_key = config.masks_pars.gal_key
@@ -106,14 +103,14 @@ def mask_handler(manager: DataManager, config: Config):
         galactic_mask = np.where(galactic_mask > 0.5, 1, 0)
 
         hp.write_map(manager.path_to_galactic_mask, galactic_mask, dtype=np.float32, overwrite=True)
-        timer.stop("galactic", "Galactic mask")
+        timer.stop("galactic-mask")
 
     # Get the point sources mask
 
     ps_mask = None
 
     if config.use_input_nhits and config.masks_pars.include_sources:
-        timer.start("point_sources")
+        timer.start("point-sources")
         if config.use_input_point_sources:
             # Load from disk
             mask_path: Path = config.masks_pars.input_sources_mask  # pyright: ignore[reportAssignmentType]
@@ -129,7 +126,7 @@ def mask_handler(manager: DataManager, config: Config):
             ps_mask = random_src_mask(binary_mask, n_sources, hole_radius)
 
         hp.write_map(manager.path_to_sources_mask, ps_mask, dtype=np.float32, overwrite=True)
-        timer.stop("point_sources", "Point sources mask")
+        timer.stop("point-sources")
 
     # Apodize the updated mask
     # TODO: why is the hitmap still needed?
@@ -137,23 +134,21 @@ def mask_handler(manager: DataManager, config: Config):
     apod_radius = config.masks_pars.apod_radius
     apod_type = config.masks_pars.apod_type
 
-    timer.start("apodize")
-    logger.info(f"Apodizing nominal mask to {apod_radius = } arcmin with {apod_type = }")
+    with Timer("apodize-nominal"):
+        logger.info(f"Apodizing nominal mask to {apod_radius = } arcmin with {apod_type = }")
 
-    nominal_mask = get_apodized_mask_from_nhits(
-        nominal_hitmap,
-        config.nside,
-        galactic_mask=None,
-        point_source_mask=None,
-        zero_threshold=threshold,
-        apod_radius=apod_radius,
-        apod_type=apod_type,
-    )
-    first_nom, second_nom = get_spin_derivatives(nominal_mask)
-    first_min_nom, first_max_nom = np.min(first_nom), np.max(first_nom)
-    second_min_nom, second_max_nom = np.min(second_nom), np.max(second_nom)
-
-    timer.stop("apodize", "Apodized nominal mask")
+        nominal_mask = get_apodized_mask_from_nhits(
+            nominal_hitmap,
+            config.nside,
+            galactic_mask=None,
+            point_source_mask=None,
+            zero_threshold=threshold,
+            apod_radius=apod_radius,
+            apod_type=apod_type,
+        )
+        first_nom, second_nom = get_spin_derivatives(nominal_mask)
+        first_min_nom, first_max_nom = np.min(first_nom), np.max(first_nom)
+        second_min_nom, second_max_nom = np.min(second_nom), np.max(second_nom)
 
     # --------------------------------------
     # TODO: from here
@@ -163,7 +158,7 @@ def mask_handler(manager: DataManager, config: Config):
         logger.info("Using nominal mask as final analysis one.")
         apodized_mask = nominal_mask
     else:
-        timer.start("apodize_custom")
+        timer.start("apodize-custom")
 
         # Make custom apodized mask from input hitmap, galactic mask and point sources mask
         apodized_mask = get_apodized_mask_from_nhits(
@@ -208,7 +203,7 @@ def mask_handler(manager: DataManager, config: Config):
             )
             logger.warning(logmsg)
 
-        timer.stop("apodize_custom", "Apodize custom mask")
+        timer.stop("apodize-custom")
 
     # Save final mask
     hp.write_map(manager.path_to_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True)

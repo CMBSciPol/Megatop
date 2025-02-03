@@ -15,10 +15,8 @@ from megatop.utils.spectra import (
 
 
 def spectra_estimation(manager: DataManager, config: Config) -> None:
-    timer = Timer()
-    timer.start("loading_comp_maps")
-    comp_maps = np.load(manager.path_to_components_maps)
-    timer.stop("loading_comp_maps", "Loading component maps")
+    with Timer("load-component-maps"):
+        comp_maps = np.load(manager.path_to_components_maps)
 
     # Creating/loading bins
     bin_low, bin_high, bin_centre = utils.create_binning(
@@ -46,45 +44,40 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
 
     effective_beam = get_common_beam_wpix(config.pre_proc_pars.common_beam_correction, config.nside)
 
-    # Initializin workspace
-    timer.start("initializing_workspace")
-
-    workspaceff = initialize_nmt_workspace(
-        nmt_bins,
-        manager.path_to_lensed_scalar,
-        config.nside,
-        mask_analysis,
-        effective_beam[:-1],
-        config.map2cl_pars.purify_e,
-        config.map2cl_pars.purify_b,
-        config.map2cl_pars.n_iter_namaster,
-    )
-
-    timer.stop("initializing_workspace", "Initializing workspace")
+    # Initializing workspace
+    with Timer("init-namaster-workspace"):
+        workspaceff = initialize_nmt_workspace(
+            nmt_bins,
+            manager.path_to_lensed_scalar,
+            config.nside,
+            mask_analysis,
+            effective_beam[:-1],
+            config.map2cl_pars.purify_e,
+            config.map2cl_pars.purify_b,
+            config.map2cl_pars.n_iter_namaster,
+        )
 
     # Testing the function
-    timer.start("spectra_estimation")
 
-    # if hp.UNSEEN is used in comp-sep, the comp-maps will use it as well which will be a problem for namaster, we regularize it here
-    comp_maps *= binary_mask
+    with Timer("estimate-spectra"):
+        # if hp.UNSEEN is used in comp-sep, the comp-maps will use it as well which will be a problem for namaster, we regularize it here
+        comp_maps *= binary_mask
 
-    comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1], "Synch": comp_maps[2]}
-    # TODO: when components will be added in .yml for the comp-sep steps the keys of the dictionary should adapt to that
+        comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1], "Synch": comp_maps[2]}
+        # TODO: when components will be added in .yml for the comp-sep steps the keys of the dictionary should adapt to that
 
-    all_Cls = compute_auto_cross_cl_from_maps_list(
-        comp_dict,
-        mask_analysis,
-        effective_beam,
-        workspaceff,
-        purify_e=config.map2cl_pars.purify_e,
-        purify_b=config.map2cl_pars.purify_b,
-        n_iter=config.map2cl_pars.n_iter_namaster,
-    )
+        all_Cls = compute_auto_cross_cl_from_maps_list(
+            comp_dict,
+            mask_analysis,
+            effective_beam,
+            workspaceff,
+            purify_e=config.map2cl_pars.purify_e,
+            purify_b=config.map2cl_pars.purify_b,
+            n_iter=config.map2cl_pars.n_iter_namaster,
+        )
 
-    manager.path_to_cross_components_spectra.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(manager.path_to_cross_components_spectra, **all_Cls)
-
-    timer.stop("spectra_estimation", "Spectra estimation")
+        manager.path_to_cross_components_spectra.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(manager.path_to_cross_components_spectra, **all_Cls)
 
 
 def main():

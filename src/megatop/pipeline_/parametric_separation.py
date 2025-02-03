@@ -13,22 +13,18 @@ from megatop.utils import Timer, logger
 
 
 def weighted_comp_sep(manager: DataManager, config: Config):
+    with Timer("load-covmat"):
+        noisecov_fname = manager.path_to_pixel_noisecov
+        logger.debug(f"Loading covmat from {noisecov_fname}")
+        noisecov = np.load(noisecov_fname)
+
+    with Timer("load-maps"):
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps()
+        logger.debug(f"Loading input maps from {preproc_maps_fname}")
+        freq_maps_preprocessed = np.load(preproc_maps_fname)
+
     timer = Timer()
-    timer.start("full_step")
-
-    timer.start("loading_covmat")
-    noisecov_fname = manager.path_to_pixel_noisecov
-    logger.debug(f"Loading covmat from {noisecov_fname}")
-    noisecov = np.load(noisecov_fname)
-    timer.stop("loading_covmat", "Loading noise covariance")
-
-    timer.start("loading_maps")
-    preproc_maps_fname = manager.get_path_to_preprocessed_maps()
-    logger.debug(f"Loading input maps from {preproc_maps_fname}")
-    freq_maps_preprocessed = np.load(preproc_maps_fname)
-    timer.stop("loading_maps", "Loading pre-processed frequency maps")
-
-    timer.start("compsep")
+    timer.start("do-compsep")
     instrument = {"frequency": config.frequencies}
     if config.parametric_sep_pars.include_synchrotron:
         components = [CMB(), Dust(150.0, temp=20.0), Synchrotron(150.0)]
@@ -76,7 +72,7 @@ def weighted_comp_sep(manager: DataManager, config: Config):
 
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
-    timer.stop("compsep", "Component separation (FGbuster weighted compsep)")
+    timer.stop("do-compsep")
 
     # test_invAtNA = np.linalg.inv(np.einsum('cf,fqp,fs->csqp', A_maxL.T, 1/noise_cov[:,1:], A_maxL).T).T
     # sanity_check = np.max(np.abs( ((test_invAtNA - res.invAtNA) / res.invAtNA * 100))[...,binary_mask])
@@ -133,7 +129,6 @@ def weighted_comp_sep(manager: DataManager, config: Config):
     #     components_results_plotting(res, meta, components_label_list, noise_map_after_compsep)
     #     timer.stop("plotting", "Plotting")
 
-    timer.stop("full_step", "Full component separation step")
     return res
 
 
@@ -221,7 +216,10 @@ def main():
         config = Config.from_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
-    res = weighted_comp_sep(manager, config)
+
+    with Timer("weighted-compsep"):
+        res = weighted_comp_sep(manager, config)
+
     save_compsep_results(manager, res)
     # components_results_plotting(res, manager)
 

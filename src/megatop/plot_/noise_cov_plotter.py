@@ -55,12 +55,9 @@ def main():
     manager.dump_config()
 
     logger.info("Plotting noise cov outputs...")
-    timer = Timer()
-    timer.start("noisecov_plotter")
 
-    plot_noisecov(manager, config)
-
-    timer.stop("noisecov_plotter", "Plotting noise cov outputs")
+    with Timer("noisecov-plotter"):
+        plot_noisecov(manager, config)
 
 
 if __name__ == "__main__":

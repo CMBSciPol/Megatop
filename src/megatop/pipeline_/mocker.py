@@ -14,7 +14,7 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
     # create the directory for the maps
     manager.path_to_maps.mkdir(parents=True, exist_ok=True)
 
-    timer.start("sim")
+    timer.start("simulate-one-sky-map")
     binary_mask = hp.read_map(manager.path_to_binary_mask)
     fsky_binary = sum(binary_mask) / len(binary_mask)
 
@@ -23,7 +23,7 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
 
     if "noise" in components:
         # Creating noise maps
-        timer.start("noise")
+        timer.start("compute-noise-maps")
 
         if config.noise_sim_pars.noise_option == "white_noise":
             logger.info("Simulation has white noise only")
@@ -50,32 +50,32 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
         #     noise_maps = np.array(noise_maps, dtype=object)
 
         logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
-        timer.stop("noise", "Computing noise maps")
+        timer.stop("compute-noise-maps")
     else:
         noise_freq_maps = np.zeros((len(config.frequencies), 3, hp.nside2npix(config.nside)))
 
     if "cmb" in components:
         # Performing the CMB simulation with synfast
-        timer.start("cmb")
+        timer.start("compute-cmb-map")
         logger.info("Computing CMB map from fiducial spectra")
 
         Cl_cmb_model = mock._get_Cl_CMB_model_from_manager(manager)
         cmb_map = mock._generate_map_cmb(config, Cl_cmb_model)
 
         logger.debug(f"CMB map has shape {cmb_map.shape}")
-        timer.stop("cmb", "Computing CMB map")
+        timer.stop("compute-cmb-map")
     else:
         cmb_map = np.zeros((3, hp.nside2npix(config.nside)))
 
     if "fg" in components:
         # Generating pysm foreground simulations
-        timer.start("fg")
+        timer.start("generate-foregrounds-map")
         logger.info(f"Generating pysm sky {config.sky_model}")
 
         fg_freq_maps = mock._generate_map_fgs_pysm(config)
 
         logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
-        timer.stop("fg", "Generating foreground map")
+        timer.stop("generate-foregrounds-map")
     else:
         fg_freq_maps = np.zeros((len(config.frequencies), 3, hp.nside2npix(config.nside)))
 
@@ -84,25 +84,24 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
 
     if components == ["noise"]:
         noise_freq_maps[..., np.where(binary_mask == 0)[0]] = 0
-        timer.stop("sim", "Simulating one sky (noise only)")
+        logger.info("Only noise maps generated")
+        timer.stop("simulate-one-sky-map")
         return noise_freq_maps, None
 
-    timer.start("beam")
-    for i_f, _f in enumerate(config.frequencies):
-        combined_freq_maps[i_f] = cmb_map + fg_freq_maps[i_f] + noise_freq_maps[i_f]
-        combined_freq_maps_beamed[i_f] = (
-            mock._beam_winpix_correction(config, cmb_map + fg_freq_maps[i_f], config.beams[i_f])
-            + noise_freq_maps[i_f]
-        )
-    timer.stop("beam", "Beaming frequency maps")
+    with Timer("beam-freq-maps"):
+        for i_f, _f in enumerate(config.frequencies):
+            combined_freq_maps[i_f] = cmb_map + fg_freq_maps[i_f] + noise_freq_maps[i_f]
+            combined_freq_maps_beamed[i_f] = (
+                mock._beam_winpix_correction(config, cmb_map + fg_freq_maps[i_f], config.beams[i_f])
+                + noise_freq_maps[i_f]
+            )
 
-    timer.start("mask")
+    with Timer("apply-binary-mask"):
+        # Applying binary mask to all products: #TODO move to utils ?
+        combined_freq_maps[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
+        combined_freq_maps_beamed[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
 
-    # Applying binary mask to all products: #TODO move to utils ?
-    combined_freq_maps[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
-    combined_freq_maps_beamed[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
-    timer.stop("mask", "Masking product with binary mask")
-    timer.stop("sim", "Simulating one sky")
+    timer.stop("simulate-one-sky-map")
 
     return combined_freq_maps, combined_freq_maps_beamed
 
