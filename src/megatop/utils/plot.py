@@ -47,13 +47,17 @@ def freq_maps_plotter(
     plt.figure(figsize=(20, 7))
     k = 0
 
-    if map_set.shape == (1, 3, map_set.shape[-1]):
+    if map_set.shape == (1, 3, map_set.shape[-1]) or map_set.shape == (1, 2, map_set.shape[-1]):
         enum_freq = [0]
         row = 1
-        column = 3
-    elif map_set.shape == (len(config.frequencies), 3, map_set.shape[-1]):
+        column = map_set.shape[1]
+    elif map_set.shape == (len(config.frequencies), 3, map_set.shape[-1]) or map_set.shape == (
+        len(config.frequencies),
+        2,
+        map_set.shape[-1],
+    ):
         enum_freq = config.frequencies
-        row = 3
+        row = map_set.shape[1]
         column = len(config.frequencies)
     else:
         logger.error(
@@ -62,7 +66,9 @@ def freq_maps_plotter(
         msg = "Bad map set shape"
         raise TypeError(msg)
 
-    for j_stokes, stokes in enumerate(["I", "Q", "U"]):
+    stokes_list = ["I", "Q", "U"] if map_set.shape[1] == 3 else ["Q", "U"]
+
+    for j_stokes, stokes in enumerate(stokes_list):
         for i_f, fr in enumerate(enum_freq):
             title_map = f"{component} {stokes}" if enum_freq == [0] else f"{fr} GHz {stokes}"
 
