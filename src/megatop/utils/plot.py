@@ -284,3 +284,132 @@ def plotTTEEBB_diff(
     plt.subplots_adjust(wspace=0, hspace=0)
     plt.savefig(plot_dir / save_name, bbox_inches="tight")
     plt.close()
+
+
+def plot_all_Cls(all_Cls, bin_centre, plot_dir, plot_name, use_D_ell=True, y_axis_label="y_axis"):
+    """
+    This function plots the Cls outputed from map_to_cl or noise_spectra_estimator.
+    It directly saves the plot directly.
+
+    Args:
+        all_Cls (dict): Each entry correspond to auto or cross correlation between
+                        component maps (e.g "CMBxCMB", "CMBxDust" etc)
+                        in the shape of (num_spectra, num_ell) where num_spectra=4 : [EE,EB,BE,BB]
+        bin_centre (ndarray): The bin centres.
+        plot_dir (str): The path to the directory where the plot will be saved.
+        plot_name (str): The name of the file to save the plot.
+        use_D_ell (bool): If True, the Cls are multiplied by ell*(ell+1)/2/pi.
+        y_axis_label (str): The label for the y axis of the plot.
+
+    Returns:
+        None
+    """
+    norm = bin_centre * (bin_centre + 1) / 2 / np.pi
+    if not use_D_ell:
+        norm = 1
+    # Define the labels
+    labels = ["EE", "EB", "BE", "BB"]
+
+    # Create the figure
+    fig, ax = plt.subplots(1, 4, sharex=True, sharey="row", figsize=(16, 9))
+
+    ax = ax.flatten()
+
+    # Loop over the different power spectra
+    for i, label in enumerate(labels):
+        # Loop over the different components
+        for j, key in enumerate(all_Cls.keys()):
+            alpha = 0.4 if key not in ("CMBxCMB", "Noise_CMBxNoise_CMB") else 1
+            color = "C" + str(j) if key not in ("CMBxCMB", "Noise_CMBxNoise_CMB") else "black"
+            ax[i].scatter(
+                bin_centre, norm * all_Cls[key][i], marker=".", label=key, color=color, alpha=alpha
+            )
+            ax[i].scatter(
+                bin_centre,
+                -norm * all_Cls[key][i],
+                marker="x",
+                label="-" + key,
+                color=color,
+                alpha=alpha,
+            )
+
+        ax[i].set_title(label)
+
+        ax[i].set_yscale("log")
+        ax[i].set_xscale("log")
+        ax[i].set_xlabel(r"$\ell$")
+    ax[0].set_ylabel(y_axis_label)
+    ax[3].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
+
+    plt.subplots_adjust(wspace=0, hspace=0)
+
+    plt.savefig(plot_dir / plot_name, bbox_inches="tight")
+    plt.close()
+
+
+def plot_all_Cls_diff(
+    all_Cls, bin_centre, cls_model, plot_dir, plot_name, use_D_ell=True, y_axis_label="y_axis"
+):
+    norm = bin_centre * (bin_centre + 1) / 2 / np.pi
+    if not use_D_ell:
+        norm = 1
+    # Define the labels
+    labels = ["EE", "EB", "BE", "BB"]
+
+    # Create the figure
+    fig, ax = plt.subplots(2, 4, sharex=True, sharey="row", figsize=(16, 9))
+
+    ax = ax.flatten()
+
+    # Loop over the different power spectra
+    for i, label in enumerate(labels):
+        # Loop over the different components
+        for j, key in enumerate(all_Cls.keys()):
+            alpha = 0.4 if key not in ("CMBxCMB", "Noise_CMBxNoise_CMB") else 1
+            color = "C" + str(j) if key not in ("CMBxCMB", "Noise_CMBxNoise_CMB") else "black"
+            ax[i].scatter(
+                bin_centre, norm * all_Cls[key][i], marker=".", label=key, color=color, alpha=alpha
+            )
+            ax[i].scatter(
+                bin_centre,
+                -norm * all_Cls[key][i],
+                marker="x",
+                label="-" + key,
+                color=color,
+                alpha=alpha,
+            )
+
+            ax[i].plot(bin_centre, norm * cls_model[key][i], color=color, ls="--", alpha=alpha)
+
+            ax[i + 4].scatter(
+                bin_centre,
+                (all_Cls[key][i] - cls_model[key][i]),
+                marker=".",
+                color=color,
+                alpha=alpha,
+            )
+            ax[i + 4].scatter(
+                bin_centre,
+                -(all_Cls[key][i] - cls_model[key][i]),
+                marker="x",
+                color=color,
+                alpha=alpha,
+            )
+
+        ax[i].set_title(label)
+
+        ax[i].set_yscale("log")
+        ax[i].set_xscale("log")
+
+        ax[i + 4].set_yscale("log")
+        ax[i + 4].set_xscale("log")
+
+        ax[i].set_xlabel(r"$\ell$")
+    ax[0].set_ylabel(y_axis_label)
+    ax[4].set_ylabel(r"$\Delta C_\ell$")
+    ax[3].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
+
+    plt.subplots_adjust(wspace=0, hspace=0)
+
+    plt.savefig(plot_dir / plot_name, bbox_inches="tight")
+    plt.close()
