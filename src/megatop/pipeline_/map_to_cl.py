@@ -11,6 +11,7 @@ from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
     initialize_nmt_workspace,
+    limit_namaster_output,
 )
 
 
@@ -32,6 +33,7 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
         bin_high=bin_high,
         bin_centre=bin_centre,
         bin_index_lminlmax=bin_index_lminlmax,
+        bin_centre_lminlmax=bin_centre[bin_index_lminlmax],
     )
     nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
 
@@ -75,6 +77,9 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
         )
+
+        # Limiting the output to the desired l range
+        all_Cls = limit_namaster_output(all_Cls, bin_index_lminlmax)
 
         manager.path_to_cross_components_spectra.parent.mkdir(parents=True, exist_ok=True)
         np.savez(manager.path_to_cross_components_spectra, **all_Cls)

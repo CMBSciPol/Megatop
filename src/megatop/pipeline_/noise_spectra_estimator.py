@@ -14,6 +14,7 @@ from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
     initialize_nmt_workspace,
+    limit_namaster_output,
 )
 from megatop.utils.utils import MemoryUsage
 
@@ -160,6 +161,9 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
         mean_noise_spectra = {}
         for key in sum_noise_spectra:
             mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_nreal
+        mean_noise_spectra = limit_namaster_output(
+            mean_noise_spectra, binning_info["bin_index_lminlmax"]
+        )
 
     else:
         mean_noise_spectra = None

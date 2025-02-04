@@ -59,3 +59,20 @@ def initialize_nmt_workspace(
     )
 
     return nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
+
+
+def limit_namaster_output(all_Cls, bin_index_lminlmax):
+    """
+    This function limits the output of namaster to the desired l range.
+
+    Args:
+        all_Cls (dict): The dictionary containing the Cls computed by namaster.
+        bin_index_lminlmax (ndarray): The indices of the bins corresponding to the desired l range.
+
+    Returns:
+        dict: The dictionary containing the Cls computed by namaster, limited to the desired l range.
+    """
+    all_Cls_limited = {}
+    for key, value in all_Cls.items():
+        all_Cls_limited[key] = value[..., bin_index_lminlmax]
+    return all_Cls_limited
