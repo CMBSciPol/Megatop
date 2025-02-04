@@ -214,7 +214,7 @@ def main():
             save_noise_sims(manager, noise_freq_maps, id_realisation)
         else:
             noise_freq_maps, _, combined_freq_maps_beamed = make_sims(
-                manager, config, components=["cmb", "noise"], dict_obsmats_func=dict_obsmats_func
+                manager, config, dict_obsmats_func=dict_obsmats_func
             )
             save_sims(manager, combined_freq_maps_beamed)
             save_noise_sims(manager, noise_freq_maps, id_realisation)
