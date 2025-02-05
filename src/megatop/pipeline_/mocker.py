@@ -1,21 +1,24 @@
 import argparse
+import multiprocessing as mp
 from pathlib import Path
 
 import healpy as hp
 import numpy as np
 
 from megatop import Config, DataManager
-from megatop.utils import Timer, logger, mock
+from megatop.utils import Timer, logger, mask, mock
 
 
 def make_sims(manager: DataManager, config: Config, components: str | list[str] = "all"):
+    global obsmats_loaded  # noqa: PLW0602
+    global dict_obsmats_func  # noqa: PLW0602
     timer = Timer()
 
     # create the directory for the maps
     manager.path_to_maps.mkdir(parents=True, exist_ok=True)
 
     timer.start("simulate-one-sky-map")
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    binary_mask = hp.read_map(manager.path_to_binary_mask)  # TODO read_binary in manager ?
     fsky_binary = sum(binary_mask) / len(binary_mask)
 
     if components == "all":
@@ -28,8 +31,8 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
         if config.noise_sim_pars.noise_option == "white_noise":
             logger.info("Simulation has white noise only")
             # TODO: refactor to use config (requires changes in utils/mock.py)
-            _, map_white_noise_levels = mock._get_noise(config, fsky_binary)
-            noise_freq_maps = mock._get_noise_map_from_white_noise(manager, map_white_noise_levels)
+            _, map_white_noise_levels = mock.get_noise(config, fsky_binary)
+            noise_freq_maps = mock.get_noise_map_from_white_noise(manager, map_white_noise_levels)
 
         elif config.noise_sim_pars.noise_option == "no_noise":
             logger.info("Simulation has NO NOISE")
@@ -37,30 +40,27 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
 
         elif config.noise_sim_pars.noise_option == "noise_spectra":
             logger.info("Simulation has noise from full spectra")
-            n_ell, _ = mock._get_noise(config, fsky_binary)
-            noise_freq_maps = mock._get_noise_map_from_noise_spectra(manager, n_ell)
-        # elif meta.noise_sim_pars["noise_option"] == "MSS2":
-        #     noise_maps = []
-        #     print(
-        #         "WARNING: When using MSS2 as noise_option, the nhits option and noise lvl will come from the noise_cov_pars. \n\
-        #           noise_sims_pars.include_nhits should be put to FALSE. Otherwise the nhits will be applied twce and the noise std might be wrong."
-        #     )
-        #     for map_name in meta.maps_list:
-        #         noise_maps.append(MakeNoiseMapsNhitsMSS2(meta, map_name, verbose=args.verbose).tolist())
-        #     noise_maps = np.array(noise_maps, dtype=object)
+            n_ell, _ = mock.get_noise(config, fsky_binary)
+            noise_freq_maps = mock.get_noise_map_from_noise_spectra(manager, n_ell)
 
         logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
         timer.stop("compute-noise-maps")
     else:
         noise_freq_maps = np.zeros((len(config.frequencies), 3, hp.nside2npix(config.nside)))
+    if config.noise_sim_pars.include_nhits:
+        noise_freq_maps = mock.include_hits_noise(
+            noise_freq_maps, hp.read_map(manager.path_to_nhits_map), binary_mask
+        )  # TODO move reading of maps to manager
 
     if "cmb" in components:
         # Performing the CMB simulation with synfast
         timer.start("compute-cmb-map")
         logger.info("Computing CMB map from fiducial spectra")
 
-        Cl_cmb_model = mock._get_Cl_CMB_model_from_manager(manager)
-        cmb_map = mock._generate_map_cmb(config, Cl_cmb_model)
+        Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
+        cmb_map = mock.generate_map_cmb(
+            Cl_cmb_model, config.nside, fixed_cmb=config.map_sim_pars.fixed_cmb
+        )
 
         logger.debug(f"CMB map has shape {cmb_map.shape}")
         timer.stop("compute-cmb-map")
@@ -71,8 +71,9 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
         # Generating pysm foreground simulations
         timer.start("generate-foregrounds-map")
         logger.info(f"Generating pysm sky {config.sky_model}")
-
-        fg_freq_maps = mock._generate_map_fgs_pysm(config)
+        fg_freq_maps = mock.generate_map_fgs_pysm(
+            config.frequencies, config.nside, config.map_sim_pars.sky_model
+        )
 
         logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
         timer.stop("generate-foregrounds-map")
@@ -86,24 +87,45 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
         noise_freq_maps[..., np.where(binary_mask == 0)[0]] = 0
         logger.info("Only noise maps generated")
         timer.stop("simulate-one-sky-map")
-        return noise_freq_maps, None
+        return noise_freq_maps, None, None
 
     with Timer("beam-freq-maps"):
         for i_f, _f in enumerate(config.frequencies):
-            combined_freq_maps[i_f] = cmb_map + fg_freq_maps[i_f] + noise_freq_maps[i_f]
-            combined_freq_maps_beamed[i_f] = (
-                mock._beam_winpix_correction(config, cmb_map + fg_freq_maps[i_f], config.beams[i_f])
-                + noise_freq_maps[i_f]
+            combined_freq_maps[i_f] = cmb_map + fg_freq_maps[i_f]
+            combined_freq_maps_beamed[i_f] = mock.beam_winpix_correction(
+                config.nside, cmb_map + fg_freq_maps[i_f], config.beams[i_f]
             )
+    load_obsmat(config, manager)
+    if dict_obsmats_func is not None:
+        with Timer("filter-freq-maps"):
+            for i_f, map_set_name in enumerate(dict_obsmats_func.keys()):
+                logger.info(f"Filtering {config.frequencies[i_f]} channel")
+                combined_freq_maps_beamed[i_f] = mock.apply_observation_matrix(
+                    dict_obsmats_func[map_set_name], combined_freq_maps_beamed[i_f]
+                )
 
     with Timer("apply-binary-mask"):
-        # Applying binary mask to all products: #TODO move to utils ?
-        combined_freq_maps[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
-        combined_freq_maps_beamed[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
+        for i_f, _f in enumerate(config.frequencies):
+            combined_freq_maps[i_f] += noise_freq_maps[i_f]
+            combined_freq_maps_beamed[i_f] += noise_freq_maps[i_f]
+        combined_freq_maps = mask.mask(combined_freq_maps, binary_mask, unseen=False)
+        combined_freq_maps_beamed = mask.mask(combined_freq_maps_beamed, binary_mask, unseen=False)
 
     timer.stop("simulate-one-sky-map")
 
-    return combined_freq_maps, combined_freq_maps_beamed
+    return noise_freq_maps, combined_freq_maps, combined_freq_maps_beamed
+
+
+def load_obsmat(config: Config, manager: DataManager):
+    global obsmats_loaded  # noqa: PLW0603
+    global dict_obsmats_func  # noqa: PLW0603
+    if not obsmats_loaded and config.map_sim_pars.filter_sims:
+        logger.info("Loading observation matrices")
+        with Timer(thread="load-obsmat"):
+            dict_obsmats_func = mock.load_obseration_matrix(
+                config.nside, config.map_sets, manager.get_osbmats_filenames()
+            )
+            obsmats_loaded = True
 
 
 def save_sims(manager: DataManager, freq_maps_write):
@@ -132,29 +154,81 @@ def save_noise_sims(manager: DataManager, noise_freq_maps_write, id_sim=0):
         )
 
 
-def main():
-    parser = argparse.ArgumentParser(description="simplistic simulator")
-    parser.add_argument("--config", type=Path, help="config file")
-    parser.add_argument(
-        "--sim-id", type=int, help="Id of the simulation (useful fo noise covariance estimation)"
-    )
-    parser.add_argument(
-        "--noise-only", action="store_true", help="generate noise-only sims and save them to disk"
-    )
-    args = parser.parse_args()
-    if args.config is None:
-        logger.warning("No config file provided, using example config")
-        config = Config.get_example()
+def run_sim(args, id_sim=None):
+    if id_sim is None:  # Running only one simulation
+        if args.config is None:
+            logger.warning("No config file provided, using example config")
+            config = Config.get_example()
+        else:
+            config = Config.from_yaml(args.config)
     else:
-        config = Config.from_yaml(args.config)
+        if not args.config_root:
+            logger.warning("No config root provided, required for multiple simulations. exiting")
+            raise AttributeError
+        fname_config = args.config_root.with_name(f"{args.config_root.name}_{id_sim:04d}.yml")
+        config = Config.from_yaml(fname_config)
     manager = DataManager(config)
     manager.dump_config()
     if args.noise_only:
-        combined_freq_maps, _ = make_sims(manager, config, components=["noise"])
-        save_noise_sims(manager, combined_freq_maps, args.sim_id)
+        noise_freq_maps, _, _ = make_sims(manager, config, components=["noise"])
+        save_noise_sims(manager, noise_freq_maps, id_sim or 0)  # TODO check this
     else:
-        combined_freq_maps, combined_freq_maps_beamed = make_sims(manager, config)
+        noise_freq_maps, _, combined_freq_maps_beamed = make_sims(manager, config)
         save_sims(manager, combined_freq_maps_beamed)
+        save_noise_sims(manager, noise_freq_maps, id_sim or 0)  # TODO check this
+
+
+def main():
+    global obsmats_loaded  # noqa: PLW0603
+    global dict_obsmats_func  # noqa: PLW0603
+
+    parser = argparse.ArgumentParser(description="simplistic simulator")
+    parser.add_argument("--config", type=Path, help="config file")
+    parser.add_argument(
+        "--config_root", type=Path, help="config file root (will be appended  by {id_sim:04d})"
+    )
+    parser.add_argument("--Nsims", type=int, help="Number of simulations performed")
+    parser.add_argument(
+        "--noise-only", action="store_true", help="generate noise-only sims and save them to disk"
+    )
+    parser.add_argument(
+        "--nomultiproc", action="store_true", help="don't use multprocessing parallelisation"
+    )
+    args = parser.parse_args()
+
+    obsmats_loaded = False
+    dict_obsmats_func = None
+    if args.config:  # Prioritize --config if provided
+        run_sim(args)
+        return
+
+    if args.config_root:  # Multiple simulations mode
+        if not args.Nsims:
+            logger.warning("Nsims not specified, will only run one ")
+            Nsims = 1
+        else:
+            Nsims = args.Nsims
+
+        num_workers = 1 if args.nomultiproc else min(mp.cpu_count(), Nsims)
+        run_sim(args, 0)  # run the first iteration to load obsmat if required
+        if obsmats_loaded:
+            num_workers = (
+                1  # if obsmats loaded, we don't parallelize #TODO find a way to parallelize ?
+            )
+        logger.info(f"Using {num_workers} worker processes")
+        if num_workers > 1:
+            mp.set_start_method("spawn", force=True)  # Ensure a clean multiprocessing start
+            with mp.Pool(num_workers) as pool:
+                pool.starmap(
+                    run_sim,
+                    [(args, id_sim) for id_sim in range(Nsims)],
+                )
+        else:
+            for id_sim in range(Nsims):
+                run_sim(args, id_sim)
+    else:
+        # Default case: no arguments provided, run single simulation with example config
+        run_sim(args)
 
 
 if __name__ == "__main__":
