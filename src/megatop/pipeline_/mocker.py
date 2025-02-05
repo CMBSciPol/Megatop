@@ -155,7 +155,9 @@ def save_noise_sims(manager: DataManager, noise_freq_maps_write, id_sim=0):
 
 
 def run_sim(args, id_sim=None):
-    if id_sim is None:  # Running only one simulation
+    if id_sim is None or (
+        args.config and args.noise_only and args.Nsims
+    ):  # Running only one simulation or multiple noise only simulaiton from 1 config
         if args.config is None:
             logger.warning("No config file provided, using example config")
             config = Config.get_example()
@@ -198,11 +200,13 @@ def main():
 
     obsmats_loaded = False
     dict_obsmats_func = None
-    if args.config:  # Prioritize --config if provided
+    if args.config and not args.noise_only and not args.Nsims:  # Prioritize --config if provided
         run_sim(args)
         return
 
-    if args.config_root:  # Multiple simulations mode
+    if args.config_root or (
+        args.config and args.noise_only and args.Nsims
+    ):  # Multiple simulations mode
         if not args.Nsims:
             logger.warning("Nsims not specified, will only run one ")
             Nsims = 1
