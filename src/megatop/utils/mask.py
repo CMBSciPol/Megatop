@@ -143,3 +143,11 @@ def get_spin_derivatives(map):
     second = hp.alm2map(hp.almxfl(hp.map2alm(map), alpha2i), nside=nside)
 
     return first, second
+
+
+def mask(maps, binary_mask, unseen=False):
+    if unseen:
+        maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
+    else:
+        maps[..., np.where(binary_mask == 0)[0]] = 0.0
+    return maps
