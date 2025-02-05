@@ -107,7 +107,7 @@ class MapSetConfig:
     exp_tag: str
     file_prefix: str = ""
     noise_prefix: str = "noise_"
-    obsmat_prefix: str = "obsmat_"
+    obsmat_path: Path = ""
 
     def __attrs_post_init__(self) -> None:
         object.__setattr__(self, "name", f"{self.exp_tag}_f{self.freq_tag:03d}")
@@ -122,7 +122,7 @@ class MapSetConfig:
 
     @property
     def obsmat_filename(self) -> str:
-        return self.obsmat_prefix + self.name
+        return self.obsmat_path
 
 
 @frozen
@@ -234,7 +234,7 @@ class MapSimConfig:
     r_input: float = 0
     A_lens: float = 1
     fixed_cmb: bool = False
-    obsmat_path: Path = ""
+    filter_sims: bool = False
 
     @sky_model.validator  # pyright: ignore[reportAttributeAccessIssue]
     def check(self, attribute, value):

@@ -172,8 +172,7 @@ class DataManager:
 
     def get_osbmats_filenames(self) -> list[Path]:
         """Get the list of filenames for the observation matrices."""
-        dest = self.path_to_obsmats
-        names = [dest / map_set.obsmat_filename for map_set in self._config.map_sets]
+        names = [map_set.obsmat_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".npz") for name in names]
 
     def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
