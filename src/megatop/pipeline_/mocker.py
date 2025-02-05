@@ -32,7 +32,9 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
             logger.info("Simulation has white noise only")
             # TODO: refactor to use config (requires changes in utils/mock.py)
             _, map_white_noise_levels = mock.get_noise(config, fsky_binary)
-            noise_freq_maps = mock.get_noise_map_from_white_noise(manager, map_white_noise_levels)
+            noise_freq_maps = mock.get_noise_map_from_white_noise(
+                config.frequencies, config.nside, map_white_noise_levels
+            )
 
         elif config.noise_sim_pars.noise_option == "no_noise":
             logger.info("Simulation has NO NOISE")
@@ -41,7 +43,9 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
         elif config.noise_sim_pars.noise_option == "noise_spectra":
             logger.info("Simulation has noise from full spectra")
             n_ell, _ = mock.get_noise(config, fsky_binary)
-            noise_freq_maps = mock.get_noise_map_from_noise_spectra(manager, n_ell)
+            noise_freq_maps = mock.get_noise_map_from_noise_spectra(
+                config.frequencies, config.nside, n_ell
+            )
 
         logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
         timer.stop("compute-noise-maps")

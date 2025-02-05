@@ -35,7 +35,7 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     return np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0]])
 
 
-def generate_map_cmb(Cl_cmb_model, nside, fixed_cmb):
+def generate_map_cmb(Cl_cmb_model, nside: int, fixed_cmb: bool):
     # TODO write tests
     lmax = 3 * nside
     if fixed_cmb:
@@ -94,7 +94,7 @@ def get_noise(config: Config, fsky_binary):
     return n_ell, white_noise_levels
 
 
-def get_noise_map_from_white_noise(frequencies, nside, map_white_noise_levels):
+def get_noise_map_from_white_noise(frequencies, nside: int, map_white_noise_levels):
     npix = hp.nside2npix(nside)
     nlev_map = np.zeros((len(frequencies), 3, npix))
     for i_f, _ in enumerate(frequencies):
@@ -110,7 +110,7 @@ def get_noise_map_from_white_noise(frequencies, nside, map_white_noise_levels):
     return rng.normal(np.zeros_like(nlev_map), nlev_map, (len(frequencies), 3, npix))
 
 
-def get_noise_map_from_noise_spectra(frequencies, nside, n_ell):
+def get_noise_map_from_noise_spectra(frequencies, nside: int, n_ell):
     noise_maps = np.zeros((len(frequencies), 3, hp.nside2npix(nside)))
     noise_spectra = np.zeros((len(frequencies), 3, 3 * nside - 1))
     noise_spectra[:, 0, 2:] = n_ell / 2
@@ -153,7 +153,7 @@ def include_hits_noise(noise_maps, nhits_map, binary_mask):
     return noise_maps
 
 
-def beam_winpix_correction(nside, freq_map, beam_FWHM):
+def beam_winpix_correction(nside: int, freq_map, beam_FWHM):
     # TODO: add tests
     lmax_convolution = 3 * nside  # here lmax seems to play an important role
     logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
