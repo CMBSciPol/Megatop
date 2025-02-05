@@ -44,7 +44,14 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
     # Generating effective beam
     # TODO: If input maps are used instead of preprocessed ones, the effective beam after compsep must be computed.
 
-    effective_beam = get_common_beam_wpix(config.pre_proc_pars.common_beam_correction, config.nside)
+    effective_beam_CMB = get_common_beam_wpix(
+        config.pre_proc_pars.common_beam_correction, config.nside
+    )
+    # effective_beam_CMB = None
+    # A_maxL = np.load(manager.path_to_compsep_results, allow_pickle=True)["A_maxL"]
+    # effective_beam = get_effective_common_beam(config, A_maxL)
+
+    # effective_beam_CMB = effective_beam[0,0] / np.max(effective_beam[0,0])
 
     # Initializing workspace
     with Timer("init-namaster-workspace"):
@@ -53,7 +60,7 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
             manager.path_to_lensed_scalar,
             config.nside,
             mask_analysis,
-            effective_beam[:-1],
+            effective_beam_CMB[:-1],
             config.map2cl_pars.purify_e,
             config.map2cl_pars.purify_b,
             config.map2cl_pars.n_iter_namaster,
@@ -71,7 +78,7 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
         all_Cls = compute_auto_cross_cl_from_maps_list(
             comp_dict,
             mask_analysis,
-            effective_beam,
+            effective_beam_CMB[:-1],
             workspaceff,
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,

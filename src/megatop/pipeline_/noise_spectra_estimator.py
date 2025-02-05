@@ -62,8 +62,22 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
     nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
 
     # Getting effective beam TODO: add case for input maps (no preproc)
-    effective_beam = get_common_beam_wpix(config.pre_proc_pars.common_beam_correction, config.nside)
+    effective_beam_CMB = get_common_beam_wpix(
+        config.pre_proc_pars.common_beam_correction, config.nside
+    )
+    # effective_beam_CMB = None
+    # A_maxL = np.load(manager.path_to_compsep_results, allow_pickle=True)["A_maxL"]
+    # W might be more appropriate but it's last dimension is a map, which makes things ill defined
+    # effective_beam_all = get_effective_beam_noise_preproc(config, A_maxL)
+    # effective_beam_CMB = effective_beam_all[0,0]
 
+    # effective_beam = get_effective_common_beam(config, A_maxL)
+    # effective_beam_CMB = effective_beam[0,0] #/ np.max(effective_beam[0,0])
+    # import IPython
+    # IPython.embed()
+    logger.warning(
+        "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
+    )
     # Initializing workspace
     with Timer("init-namaster-workspace"):
         workspaceff = initialize_nmt_workspace(
@@ -71,7 +85,7 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
             manager.path_to_lensed_scalar,
             config.nside,
             mask_analysis,
-            effective_beam[:-1],
+            effective_beam_CMB[:-1],
             config.map2cl_pars.purify_e,
             config.map2cl_pars.purify_b,
             config.map2cl_pars.n_iter_namaster,
@@ -135,7 +149,7 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
         noise_Cls = compute_auto_cross_cl_from_maps_list(
             noise_comp_dict,
             mask_analysis,
-            effective_beam,
+            effective_beam_CMB[:-1],
             workspaceff,
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,

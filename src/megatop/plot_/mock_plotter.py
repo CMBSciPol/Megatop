@@ -91,8 +91,8 @@ def plot_fg_sims(manager, config, maps=True, cls=True):
             freqs=config.frequencies,
             Cl=cls,
             save_name="fg_cls_unbeamed.png",
-            use_D_ell=True,
-            y_axis_label=r"$D_\ell$ fg unbeamed",
+            use_D_ell=False,
+            y_axis_label=r"$C_\ell$ fg unbeamed",
             lims_x=None,
             lims_y=None,
         )
@@ -101,8 +101,8 @@ def plot_fg_sims(manager, config, maps=True, cls=True):
             freqs=config.frequencies,
             Cl=cls_beamed,
             save_name="fg_cls_beamed.png",
-            use_D_ell=True,
-            y_axis_label=r"$D_\ell$ fg beamed",
+            use_D_ell=False,
+            y_axis_label=r"$C_\ell$ fg beamed",
             lims_x=None,
             lims_y=None,
         )
@@ -137,8 +137,8 @@ def plot_cmb_sims(manager, config, maps=True, cls=True):
             Cl_model=Cl_cmb_model,
             save_name="cmb.png",
             legend_labels=(r"CMB SIMS $DS_\ell$ $\nu=$", r"CMB INPUT $DS_\ell$ $\nu=$"),
-            axis_labels=[r"$D_\ell^{\rm CMB}$", "Relative diff"],
-            use_D_ell=True,
+            axis_labels=[r"$C_\ell^{\rm CMB}$", "Relative diff"],
+            use_D_ell=False,
             lims_x=None,
             lims_y=None,
         )
@@ -251,8 +251,11 @@ def plot_saved_sims(manager, config, maps=True, cls=True):
             freqs=config.frequencies,
             Cl=cls,
             save_name="combined_cls.png",
-            lims_x=(2, 200),
-            lims_y=(1e-3, 1e5),
+            lims_x=None,
+            lims_y=None,
+            legend_labels=(r"combined $C_\ell$ $\nu=$",),
+            y_axis_label=r"$C_\ell$ fg unbeamed",
+            use_D_ell=False,
         )
 
 

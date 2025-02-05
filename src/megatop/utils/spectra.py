@@ -2,6 +2,8 @@ import healpy as hp
 import numpy as np
 import pymaster as nmt
 
+from megatop import Config
+
 
 def compute_auto_cross_cl_from_maps_list(
     maps_dict, mask, beam, workspace, purify_e=True, purify_b=True, n_iter=3
@@ -41,6 +43,46 @@ def get_common_beam_wpix(common_beam_fwhm_arcmin, nside):
     )
 
     return Bl_gauss_common[:, 1] * wpix_out[1]
+
+
+def get_effective_beam_noise_preproc(config: Config, A):
+    lmax_convolution = 3 * config.nside
+    wpix_out = hp.pixwin(
+        config.nside, pol=True, lmax=lmax_convolution
+    )  # Pixel window function of output maps
+    Bl_gauss_common = 1
+
+    beam_correction = []
+    for i_f in range(len(config.frequencies)):
+        Bl_gauss_fwhm = hp.gauss_beam(
+            np.radians(config.beams[i_f] / 60), lmax=lmax_convolution, pol=True
+        )
+        bl_correction = Bl_gauss_common / Bl_gauss_fwhm
+
+        sm_corr_P = bl_correction[:, 1] * wpix_out[1]  # Ignoring T
+        beam_correction.append(sm_corr_P)
+    beam_correction = np.array(beam_correction)
+
+    # Would probably be better to use W but it's last dimension is a map, which makes things ill defined
+    return np.einsum("fc, fl, fk->ckl", A, beam_correction, A)
+
+
+def get_effective_common_beam(config: Config, A):
+    lmax_convolution = 3 * config.nside
+    wpix_out = hp.pixwin(
+        config.nside, pol=True, lmax=lmax_convolution
+    )  # Pixel window function of output maps
+    Bl_gauss_common = hp.gauss_beam(
+        np.radians(config.pre_proc_pars.common_beam_correction / 60),
+        lmax=lmax_convolution,
+        pol=True,
+    )
+
+    beam_P = Bl_gauss_common[:, 1] * wpix_out[1]  # Ignoring T
+
+    beam_P_freq_array = np.array([beam_P for i in range(len(config.frequencies))])
+    # Would probably be better to use W but it's last dimension is a map, which makes things ill defined
+    return np.einsum("fc, fl, fk->ckl", A, beam_P_freq_array, A)
 
 
 def initialize_nmt_workspace(

@@ -348,7 +348,14 @@ def plot_all_Cls(all_Cls, bin_centre, plot_dir, plot_name, use_D_ell=True, y_axi
 
 
 def plot_all_Cls_diff(
-    all_Cls, bin_centre, cls_model, plot_dir, plot_name, use_D_ell=True, y_axis_label="y_axis"
+    all_Cls,
+    bin_centre,
+    cls_model,
+    plot_dir,
+    plot_name,
+    use_D_ell=True,
+    y_axis_label="y_axis",
+    # , beam_dict=None
 ):
     norm = bin_centre * (bin_centre + 1) / 2 / np.pi
     if not use_D_ell:
@@ -357,7 +364,8 @@ def plot_all_Cls_diff(
     labels = ["EE", "EB", "BE", "BB"]
 
     # Create the figure
-    fig, ax = plt.subplots(2, 4, sharex=True, sharey="row", figsize=(16, 9))
+    # beam_key = "eff_all"
+    fig, ax = plt.subplots(3, 4, sharex=True, sharey="row", figsize=(16, 9))
 
     ax = ax.flatten()
 
@@ -396,6 +404,25 @@ def plot_all_Cls_diff(
                 alpha=alpha,
             )
 
+            ax[i + 8].scatter(
+                bin_centre,
+                all_Cls[key][i] / cls_model[key][i],
+                color=color,
+                marker="o",
+                alpha=alpha,
+            )
+
+            ell_beam = np.arange(30, 300)
+            beam_100arcmin = hp.gauss_beam(np.radians(100 / 60), lmax=3 * 128, pol=True)[30:300, 1]
+            ax[i + 8].plot(
+                ell_beam,
+                1 / beam_100arcmin,
+                linestyle="--",
+                color="blue",
+                alpha=0.4,
+                label="1/ (100 arcmin beam)",
+            )
+
         ax[i].set_title(label)
 
         ax[i].set_yscale("log")
@@ -404,12 +431,40 @@ def plot_all_Cls_diff(
         ax[i + 4].set_yscale("log")
         ax[i + 4].set_xscale("log")
 
+        ax[i + 8].set_yscale("log")
+        ax[i + 8].set_xscale("log")
+
         ax[i].set_xlabel(r"$\ell$")
     ax[0].set_ylabel(y_axis_label)
     ax[4].set_ylabel(r"$\Delta C_\ell$")
+    ax[8].set_ylabel(r"$C_\ell^{\rm{data}} / C_\ell^{\rm{model}}$")
     ax[3].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
+    ax[11].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
 
     plt.subplots_adjust(wspace=0, hspace=0)
 
+    # nside = 128
+    # common_beam_fwhm_arcmin = 100
+    # wpix_out = hp.pixwin(nside, pol=True, lmax=3 * nside)  # Pixel window function of output maps
+    # Bl_gauss_common = hp.gauss_beam(
+    #     np.radians(common_beam_fwhm_arcmin / 60), lmax=3 * nside, pol=True
+    # )
+    # beam = (Bl_gauss_common[:, 1] * wpix_out[1])[30:300]
+    # ell_beam = np.arange(3 * nside+1)[30:300]
+
+    # for i in range(4):
+    #     print(all_Cls[key][i] / (cls_model[key][i]/beam_dict['common']))
+    #     ax[i+4].scatter(bin_centre,
+    #                     all_Cls[key][i] / (cls_model[key][i]/beam_dict['common']),
+    #                     marker="o", color="blue", alpha=0.4)
+    #     ax[i+4].plot(bin_centre,
+    #                     1/beam_dict['common'],
+    #                     linestyle='--', color="blue", alpha=0.4)
+
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")
     plt.close()
+
+    # import IPython
+    # IPython.embed()
+
+    # plt.close()

@@ -38,8 +38,8 @@ def plot_preprocessed_maps(manager, config, maps=True, cls=True):
             freqs=config.frequencies,
             Cl=spectra_array,
             save_name="spectra_pre_processed_anafast",
-            y_axis_label=r"$D_\ell$ pre-processed",
-            use_D_ell=True,
+            y_axis_label=r"$C_\ell$ pre-processed",
+            use_D_ell=False,
             lims_x=None,
             lims_y=None,
         )

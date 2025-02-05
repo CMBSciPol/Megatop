@@ -22,8 +22,8 @@ def plot_map2cl(manager):
         bin_centre_lminlmax,
         plot_dir,
         "component_spectra",
-        use_D_ell=True,
-        y_axis_label=r"$D_{\ell}$",
+        use_D_ell=False,
+        y_axis_label=r"$C_{\ell}$",
     )
 
 
@@ -43,7 +43,7 @@ def main():
     timer = Timer()
     timer.start("map2cl_plotter")
 
-    plot_map2cl(manager, config)
+    plot_map2cl(manager)
 
     timer.stop("map2cl_plotter")
 

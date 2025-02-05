@@ -35,8 +35,8 @@ def plot_noisecov(manager, config, maps=True, cls=True):
             freqs=config.frequencies,
             Cl=spectra_array,
             save_name="spectra_noise_cov_anafast",
-            y_axis_label=r"$D_\ell$ noise covariance",
-            use_D_ell=True,
+            y_axis_label=r"$C_\ell$ noise covariance",
+            use_D_ell=False,
             lims_x=None,
             lims_y=None,
         )
