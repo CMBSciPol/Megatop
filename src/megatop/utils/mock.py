@@ -1,6 +1,3 @@
-import sys
-import warnings
-
 import healpy as hp
 import numpy as np
 import scipy as sp
@@ -132,29 +129,23 @@ def get_noise_map_from_noise_spectra(frequencies, nside: int, n_ell):
 
 
 def include_hits_noise(noise_maps, nhits_map, binary_mask):
-    # TODO add test
     logger.info("Rescaling the noise maps by the hits count")
     nhits_map_rescaled = nhits_map / max(nhits_map)
-    warnings.filterwarnings("error")
-    try:
-        noise_maps[..., np.where(binary_mask == 1)[0]] /= np.sqrt(
-            nhits_map_rescaled[np.where(binary_mask == 1)[0]]
-        )
-        # This avoids dividing by 0 in the noise maps
-    except RuntimeWarning:
+    mask_indices = np.where(binary_mask == 1)[0]
+    if np.any(nhits_map_rescaled[mask_indices] == 0):
         logger.error("Division by 0 in noise map nhit rescaling.")
-        logger.error("This means the binary mask is not covering all the parts where nhits = 0.")
+        logger.error("The binary mask does not cover all areas where nhits = 0.")
         logger.error(
-            "Please check the mask_handling parameters; changing 'binary_mask_zero_threshold' can help."
+            "Check the 'mask_handling' parameters; adjusting 'binary_mask_zero_threshold' may help."
         )
         logger.error("Exiting...")
-        sys.exit(1)
-    warnings.resetwarnings()
+    with np.errstate(divide="raise", invalid="raise"):
+        noise_maps[..., mask_indices] /= np.sqrt(nhits_map_rescaled[mask_indices])
+
     return noise_maps
 
 
-def beam_winpix_correction(nside: int, freq_map, beam_FWHM):
-    # TODO: add tests
+def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float):
     lmax_convolution = 3 * nside  # here lmax seems to play an important role
     logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
     alms_T, alms_Q, alms_U = hp.map2alm(freq_map, lmax=lmax_convolution, pol=True)
@@ -184,8 +175,7 @@ def beam_winpix_correction(nside: int, freq_map, beam_FWHM):
     return np.array(freq_map_beamed)
 
 
-def load_obseration_matrix(nside, map_sets, obsmats_filenames):
-    # TODO add tests
+def load_obseration_matrix(nside: int, map_sets, obsmats_filenames) -> dict:
     dict_obsmats_func = {}
     for map_set, fname in zip(map_sets, obsmats_filenames, strict=False):
         logger.info(f"Loading obsmat for {map_set.name} from {fname}")
@@ -196,6 +186,5 @@ def load_obseration_matrix(nside, map_sets, obsmats_filenames):
     return dict_obsmats_func
 
 
-def apply_observation_matrix(obsmat_func, map_freq):
-    # TODO add tests
-    return hp.reorder(obsmat_func(hp.reorder(map_freq, r2n=True)), n2r=True)
+def apply_observation_matrix(obsmat_func, freq_map):
+    return hp.reorder(obsmat_func(hp.reorder(freq_map, r2n=True)), n2r=True)
