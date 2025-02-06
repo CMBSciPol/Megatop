@@ -107,7 +107,7 @@ class MapSetConfig:
     exp_tag: str
     file_prefix: str = ""
     noise_prefix: str = "noise_"
-    obsmat_path: Path = ""
+    obsmat_path: Path = field(converter=Path, default="")
 
     def __attrs_post_init__(self) -> None:
         object.__setattr__(self, "name", f"{self.exp_tag}_f{self.freq_tag:03d}")
