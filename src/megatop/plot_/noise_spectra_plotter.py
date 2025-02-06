@@ -7,7 +7,7 @@ import pymaster as nmt
 from megatop import DataManager
 from megatop.config import Config
 from megatop.utils import Timer, logger
-from megatop.utils.mock import _get_Cl_CMB_model_from_manager
+from megatop.utils.mock import get_Cl_CMB_model_from_manager
 from megatop.utils.plot import plot_all_Cls, plot_all_Cls_diff
 
 
@@ -43,7 +43,7 @@ def plot_noise_spectra(manager, config):
         y_axis_label=r"$C_{\ell}$",
     )
 
-    Cl_cmb_model = _get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
     nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, binning_info["bin_index_lminlmax"]]
