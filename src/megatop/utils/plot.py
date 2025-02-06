@@ -86,6 +86,59 @@ def freq_maps_plotter(
     plt.clf()
 
 
+def freq_maps_plotter_one_stoke(
+    config,
+    map_set,
+    plot_dir,
+    plot_name,
+    vmin=None,
+    vmax=None,
+    cmap=cm.RdBu,
+    cmap_set_under="w",
+    title_prefix="",
+):
+    """
+    This function plots the frequency maps. It directly saves the plot directly.
+
+    Args:
+        config: The configuration object.
+        map_set (ndarray): The frequency maps, with shape (num_freq, 1, num_pixels).
+        plot_dir (str): The path to the directory where the plot will be saved.
+        plot_name (str): The name of the file to save the plot.
+        vmin (dict): The minimum values for the colorbar of the plots.
+        vmax (dict): The maximum values for the colorbar of the plots.
+        cmap (colormap): The colormap to use for the plots.
+        cmap_set_under (str): The color to set for the values under vmin.
+
+
+    Returns:
+        None
+    """
+
+    cmap.set_under(cmap_set_under)
+
+    plt.figure(figsize=(20, 7))
+
+    # TODO: it nfreq>6 this might get a bit busy...
+    row = 1
+    column = len(config.frequencies)
+
+    for i_f, fr in enumerate(config.frequencies):
+        title_map = f"{title_prefix} {fr} GHz"
+
+        hp.mollview(
+            map_set[i_f],
+            cmap=cmap,
+            title=title_map,
+            min=vmin,
+            max=vmax,
+            sub=(row, column, i_f + 1),
+        )
+
+    plt.savefig(plot_dir / plot_name, bbox_inches="tight")
+    plt.clf()
+
+
 def plotTTEEBB(
     plot_dir,
     freqs,
@@ -365,7 +418,7 @@ def plot_all_Cls_diff(
 
     # Create the figure
     # beam_key = "eff_all"
-    fig, ax = plt.subplots(3, 4, sharex=True, sharey="row", figsize=(16, 9))
+    fig, ax = plt.subplots(4, 4, sharex=True, sharey="row", figsize=(16, 9))
 
     ax = ax.flatten()
 
@@ -412,15 +465,19 @@ def plot_all_Cls_diff(
                 alpha=alpha,
             )
 
-            ell_beam = np.arange(30, 300)
-            beam_100arcmin = hp.gauss_beam(np.radians(100 / 60), lmax=3 * 128, pol=True)[30:300, 1]
-            ax[i + 8].plot(
-                ell_beam,
-                1 / beam_100arcmin,
-                linestyle="--",
-                color="blue",
-                alpha=0.4,
-                label="1/ (100 arcmin beam)",
+            ax[i + 12].scatter(
+                bin_centre,
+                (all_Cls[key][i] - cls_model[key][i]) / cls_model[key][i],
+                color=color,
+                marker=".",
+                alpha=alpha,
+            )
+            ax[i + 12].scatter(
+                bin_centre,
+                -(all_Cls[key][i] - cls_model[key][i]) / cls_model[key][i],
+                color=color,
+                marker="+",
+                alpha=alpha,
             )
 
         ax[i].set_title(label)
@@ -434,37 +491,16 @@ def plot_all_Cls_diff(
         ax[i + 8].set_yscale("log")
         ax[i + 8].set_xscale("log")
 
+        ax[i + 12].set_yscale("log")
+        ax[i + 12].set_xscale("log")
+
         ax[i].set_xlabel(r"$\ell$")
     ax[0].set_ylabel(y_axis_label)
     ax[4].set_ylabel(r"$\Delta C_\ell$")
     ax[8].set_ylabel(r"$C_\ell^{\rm{data}} / C_\ell^{\rm{model}}$")
+    ax[12].set_ylabel(r"$\Delta C_\ell / C_\ell^{\rm{model}}$")
     ax[3].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
-    ax[11].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
 
     plt.subplots_adjust(wspace=0, hspace=0)
-
-    # nside = 128
-    # common_beam_fwhm_arcmin = 100
-    # wpix_out = hp.pixwin(nside, pol=True, lmax=3 * nside)  # Pixel window function of output maps
-    # Bl_gauss_common = hp.gauss_beam(
-    #     np.radians(common_beam_fwhm_arcmin / 60), lmax=3 * nside, pol=True
-    # )
-    # beam = (Bl_gauss_common[:, 1] * wpix_out[1])[30:300]
-    # ell_beam = np.arange(3 * nside+1)[30:300]
-
-    # for i in range(4):
-    #     print(all_Cls[key][i] / (cls_model[key][i]/beam_dict['common']))
-    #     ax[i+4].scatter(bin_centre,
-    #                     all_Cls[key][i] / (cls_model[key][i]/beam_dict['common']),
-    #                     marker="o", color="blue", alpha=0.4)
-    #     ax[i+4].plot(bin_centre,
-    #                     1/beam_dict['common'],
-    #                     linestyle='--', color="blue", alpha=0.4)
-
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")
     plt.close()
-
-    # import IPython
-    # IPython.embed()
-
-    # plt.close()

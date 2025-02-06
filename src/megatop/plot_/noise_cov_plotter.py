@@ -7,7 +7,7 @@ import numpy as np
 from megatop import DataManager
 from megatop.config import Config
 from megatop.utils import Timer, logger
-from megatop.utils.plot import freq_maps_plotter, plotTTEEBB
+from megatop.utils.plot import freq_maps_plotter, freq_maps_plotter_one_stoke, plotTTEEBB
 from megatop.utils.preproc import _apply_binary_mask
 
 
@@ -22,6 +22,17 @@ def plot_noisecov(manager, config, maps=True, cls=True):
 
     if maps:
         freq_maps_plotter(config, noise_cov_maps, plot_dir, "noise_cov_maps")
+
+        diff_Q_U_maps = noise_cov_maps[:, 1] - noise_cov_maps[:, 2]
+        diff_Q_U_maps = _apply_binary_mask(manager, diff_Q_U_maps, unseen=True)
+
+        freq_maps_plotter_one_stoke(
+            config,
+            diff_Q_U_maps,
+            plot_dir,
+            "diff_Q_U_noise_cov",
+            title_prefix="Q-U noise cov",
+        )
 
     if cls:
         lmax = 3 * config.nside
