@@ -65,16 +65,7 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
     effective_beam_CMB = get_common_beam_wpix(
         config.pre_proc_pars.common_beam_correction, config.nside
     )
-    # effective_beam_CMB = None
-    # A_maxL = np.load(manager.path_to_compsep_results, allow_pickle=True)["A_maxL"]
-    # W might be more appropriate but it's last dimension is a map, which makes things ill defined
-    # effective_beam_all = get_effective_beam_noise_preproc(config, A_maxL)
-    # effective_beam_CMB = effective_beam_all[0,0]
 
-    # effective_beam = get_effective_common_beam(config, A_maxL)
-    # effective_beam_CMB = effective_beam[0,0] #/ np.max(effective_beam[0,0])
-    # import IPython
-    # IPython.embed()
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
     )

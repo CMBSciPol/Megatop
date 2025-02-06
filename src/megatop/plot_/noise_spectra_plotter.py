@@ -57,28 +57,6 @@ def plot_noise_spectra(manager, config):
         ]
     }
     diabiased_cls_CMB_only = {"CMBxCMB": debiased_cls["CMBxCMB"]}
-    cls_CMB_only = {"CMBxCMB": all_Cls["CMBxCMB"]}
-
-    bined_biased_cl_cmb_model = {
-        "CMBxCMB": bined_Cl_cmb_model_dict["CMBxCMB"] + all_noise_Cls["Noise_CMBxNoise_CMB"]
-    }
-
-    # effective_beam_CMB = get_common_beam_wpix(config.pre_proc_pars.common_beam_correction, config.nside)
-    # bined_effective_beam_CMB = nmt_bins.bin_cell(effective_beam_CMB[:-1])[binning_info["bin_index_lminlmax"]]
-    # import healpy as hp
-    # wpix_out = hp.pixwin(config.nside, pol=True, lmax=3 * config.nside)[1]  # Pixel window function of output maps
-    # bined_wpix = nmt_bins.bin_cell(wpix_out[:-1])[binning_info["bin_index_lminlmax"]]
-
-    # Bl_gauss_common = hp.gauss_beam(
-    # np.radians(config.pre_proc_pars.common_beam_correction / 60), lmax=3 * config.nside, pol=True
-    # )[:, 1]
-    # bined_common = nmt_bins.bin_cell(Bl_gauss_common[:-1])[binning_info["bin_index_lminlmax"]]
-
-    # A_maxL = np.load(manager.path_to_compsep_results, allow_pickle=True)["A_maxL"]
-    # # W might be more appropriate but it's last dimension is a map, which makes things ill defined
-    # effective_beam_all = get_effective_beam_noise_preproc(config, A_maxL)[0, 0, :-1]
-    # effective_beam_all /= np.max(effective_beam_all)
-    # bined_effective_beam_all = nmt_bins.bin_cell(effective_beam_all)[binning_info["bin_index_lminlmax"]]
 
     plot_all_Cls_diff(
         diabiased_cls_CMB_only,
@@ -88,8 +66,12 @@ def plot_noise_spectra(manager, config):
         "diff_debiased_CMB_spectra_vs_model",
         use_D_ell=False,
         y_axis_label=r"$C_{\ell}$",
-        # beam_dict={'eff':bined_effective_beam_CMB, 'wpix':bined_wpix, 'common':bined_common, 'eff_all':bined_effective_beam_all}
     )
+
+    cls_CMB_only = {"CMBxCMB": all_Cls["CMBxCMB"]}
+    bined_biased_cl_cmb_model = {
+        "CMBxCMB": bined_Cl_cmb_model_dict["CMBxCMB"] + all_noise_Cls["Noise_CMBxNoise_CMB"]
+    }
 
     plot_all_Cls_diff(
         cls_CMB_only,
@@ -99,7 +81,6 @@ def plot_noise_spectra(manager, config):
         "diff_CMB_spectra_vs_biased_model",
         use_D_ell=False,
         y_axis_label=r"$C_{\ell}$",
-        # beam_dict={'eff':bined_effective_beam_CMB, 'wpix':bined_wpix, 'common':bined_common, 'eff_all':bined_effective_beam_all}
     )
 
 

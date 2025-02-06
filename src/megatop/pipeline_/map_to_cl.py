@@ -47,11 +47,6 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
     effective_beam_CMB = get_common_beam_wpix(
         config.pre_proc_pars.common_beam_correction, config.nside
     )
-    # effective_beam_CMB = None
-    # A_maxL = np.load(manager.path_to_compsep_results, allow_pickle=True)["A_maxL"]
-    # effective_beam = get_effective_common_beam(config, A_maxL)
-
-    # effective_beam_CMB = effective_beam[0,0] / np.max(effective_beam[0,0])
 
     # Initializing workspace
     with Timer("init-namaster-workspace"):
