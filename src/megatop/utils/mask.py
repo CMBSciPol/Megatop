@@ -2,6 +2,8 @@ import healpy as hp
 import numpy as np
 import pymaster as nmt
 
+from .timer import function_timer
+
 
 def random_src_mask(mask, nsrcs, mask_radius_arcmin):
     """
@@ -145,7 +147,9 @@ def get_spin_derivatives(map):
     return first, second
 
 
-def mask(maps, binary_mask, unseen=False):
+@function_timer("apply-binary-mask")
+def apply_binary_mask(maps, binary_mask, unseen=False):
+    # TODO the masking is done in place, needed or could be done differently ?
     if unseen:
         maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
     else:

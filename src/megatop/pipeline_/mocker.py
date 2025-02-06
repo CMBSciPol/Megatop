@@ -112,8 +112,10 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
         for i_f, _f in enumerate(config.frequencies):
             combined_freq_maps[i_f] += noise_freq_maps[i_f]
             combined_freq_maps_beamed[i_f] += noise_freq_maps[i_f]
-        combined_freq_maps = mask.mask(combined_freq_maps, binary_mask, unseen=False)
-        combined_freq_maps_beamed = mask.mask(combined_freq_maps_beamed, binary_mask, unseen=False)
+        combined_freq_maps = mask.apply_binary_mask(combined_freq_maps, binary_mask, unseen=False)
+        combined_freq_maps_beamed = mask.apply_binary_mask(
+            combined_freq_maps_beamed, binary_mask, unseen=False
+        )
 
     timer.stop("simulate-one-sky-map")
 
@@ -229,10 +231,10 @@ def main():
             with mp.Pool(num_workers) as pool:
                 pool.starmap(
                     run_sim,
-                    [(args, id_sim) for id_sim in range(Nsims)],
+                    [(args, id_sim) for id_sim in range(1, Nsims)],
                 )
         else:
-            for id_sim in range(Nsims):
+            for id_sim in range(1, Nsims):
                 run_sim(args, id_sim)
     else:
         # Default case: no arguments provided, run single simulation with example config
