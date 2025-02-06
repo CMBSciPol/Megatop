@@ -8,8 +8,9 @@ import numpy as np
 from megatop import DataManager
 from megatop.config import Config
 from megatop.utils import Timer, logger, mock
+from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
-from megatop.utils.preproc import _apply_binary_mask, _read_input_maps
+from megatop.utils.preproc import read_input_maps
 
 
 def plot_fiducial_spectra(manager):
@@ -56,16 +57,19 @@ def plot_fg_sims(manager, config, maps=True, cls=True):
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    fg_freq_maps = mock._generate_map_fgs_pysm(config)
+    fg_freq_maps = mock.generate_map_fgs_pysm(
+        config.frequencies, config.nside, config.map_sim_pars.sky_model
+    )
     fg_freq_maps_beamed = np.zeros_like(fg_freq_maps)
 
     for i_f, _f in enumerate(config.frequencies):
-        fg_freq_maps_beamed[i_f] = mock._beam_winpix_correction(
-            config, fg_freq_maps[i_f], config.beams[i_f]
+        fg_freq_maps_beamed[i_f] = mock.beam_winpix_correction(
+            config.nside, fg_freq_maps[i_f], config.beams[i_f]
         )
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
 
-    fg_freq_maps = _apply_binary_mask(manager, fg_freq_maps, unseen=True)
-    fg_freq_maps_beamed = _apply_binary_mask(manager, fg_freq_maps_beamed, unseen=True)
+    fg_freq_maps = apply_binary_mask(fg_freq_maps, binary_mask, unseen=True)
+    fg_freq_maps_beamed = apply_binary_mask(fg_freq_maps_beamed, binary_mask, unseen=True)
 
     if maps:
         freq_maps_plotter(
@@ -109,8 +113,10 @@ def plot_fg_sims(manager, config, maps=True, cls=True):
 
 
 def plot_cmb_sims(manager, config, maps=True, cls=True):
-    Cl_cmb_model = mock._get_Cl_CMB_model_from_manager(manager)
-    cmb_map = mock._generate_map_cmb(config, Cl_cmb_model)
+    Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
+    cmb_map = mock.generate_map_cmb(
+        Cl_cmb_model, config.nside, fixed_cmb=config.map_sim_pars.fixed_cmb
+    )
 
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
@@ -155,14 +161,18 @@ def plot_noise_sims(manager, config, maps=True, cls=True):
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     if config.noise_sim_pars.noise_option == "white_noise":
-        n_ell, map_white_noise_levels = mock._get_noise(config, fsky_binary)
-        noise_freq_maps = mock._get_noise_map_from_white_noise(manager, map_white_noise_levels)
+        n_ell, map_white_noise_levels = mock.get_noise(config, fsky_binary)
+        noise_freq_maps = mock.get_noise_map_from_white_noise(
+            config.frequencies, config.nside, map_white_noise_levels
+        )
 
     elif config.noise_sim_pars.noise_option == "noise_spectra":
-        n_ell, map_white_noise_levels = mock._get_noise(config, fsky_binary)
-        noise_freq_maps = mock._get_noise_map_from_noise_spectra(manager, n_ell)
+        n_ell, map_white_noise_levels = mock.get_noise(config, fsky_binary)
+        noise_freq_maps = mock.get_noise_map_from_noise_spectra(
+            config.frequencies, config.nside, n_ell
+        )
 
-    noise_freq_maps = _apply_binary_mask(manager, noise_freq_maps, unseen=True)
+    noise_freq_maps = apply_binary_mask(noise_freq_maps, binary_mask, unseen=True)
 
     if maps:
         freq_maps_plotter(
@@ -227,8 +237,10 @@ def plot_saved_sims(manager, config, maps=True, cls=True):
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    combined_maps = _read_input_maps(manager)
-    combined_maps = _apply_binary_mask(manager, combined_maps, unseen=True)
+    combined_maps = np.array(read_input_maps(manager.get_maps_filenames()))
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+
+    combined_maps = apply_binary_mask(combined_maps, binary_mask, unseen=True)
 
     if maps:
         freq_maps_plotter(
