@@ -1,15 +1,15 @@
 import argparse
+import multiprocessing as mp
 from pathlib import Path
 
 import fgbuster as fg
 import healpy as hp
-import matplotlib.pyplot as plt
 import numpy as np
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
 
 from megatop import Config, DataManager
-from megatop.utils import Timer, logger
+from megatop.utils import Timer, logger, mask
 
 
 def weighted_comp_sep(manager: DataManager, config: Config):
@@ -27,11 +27,13 @@ def weighted_comp_sep(manager: DataManager, config: Config):
     timer.start("do-compsep")
     instrument = {"frequency": config.frequencies}
     if config.parametric_sep_pars.include_synchrotron:
-        components = [CMB(), Dust(150.0, temp=20.0), Synchrotron(150.0)]
-        # component_labels = ["CMB", "Dust", "Synchrotron"]  # This is only used for plotting
+        components = [
+            CMB(),
+            Dust(150.0, temp=20.0),
+            Synchrotron(150.0),
+        ]  # TODO move default to config
     else:
-        components = [CMB(), Dust(150.0, temp=20.0)]
-        # component_labels = ["CMB", "Dust"]  # This is only used for plotting
+        components = [CMB(), Dust(150.0, temp=20.0)]  # TODO move default to config
 
     # get the 'options' through the appropriate method which returns a dict
     options = config.parametric_sep_pars.get_minimize_options_as_dict()
@@ -40,12 +42,11 @@ def weighted_comp_sep(manager: DataManager, config: Config):
 
     # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
-    binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
-    freq_maps_preprocessed_QU_masked = freq_maps_preprocessed[:, 1:]
-    freq_maps_preprocessed_QU_masked[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-
-    noisecov_QU_masked = noisecov[:, 1:]
-    noisecov_QU_masked[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
+    binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
+    freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
+        freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
+    )
+    noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
 
     res = fg.separation_recipes.weighted_comp_sep(
         components,
@@ -57,171 +58,100 @@ def weighted_comp_sep(manager: DataManager, config: Config):
         method=method,
     )
 
-    # if args.verbose:
-    #     print("success: ", res.success)
-    # if args.verbose:
-    #     print("results: ", res.x)
-    # if args.verbose:
-    #     print("results: ", res)
-    # timer.stop("compsep", "Component separation")
-
     A = MixingMatrix(*components)
     A_ev = A.evaluator(np.array(instrument["frequency"]))
     A_maxL = A_ev(res.x)  # pyright: ignore[reportCallIssue]
     res.A_maxL = A_maxL
 
+    W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
+    res.W_maxL = W_maxL
+
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
     timer.stop("do-compsep")
 
-    # test_invAtNA = np.linalg.inv(np.einsum('cf,fqp,fs->csqp', A_maxL.T, 1/noise_cov[:,1:], A_maxL).T).T
-    # sanity_check = np.max(np.abs( ((test_invAtNA - res.invAtNA) / res.invAtNA * 100))[...,binary_mask])
-
-    # test_invAtNA_U = np.dot(A_maxL.T, np.dot(1/noise_cov[:,2], A_maxL))
-    # sanity_check = np.linalg.inv(A_maxL.T @ noise_cov @ A_maxL) - res.invAtNA
-    W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
-    res.W_maxL = W_maxL
-
-    # # Apply W to noise simulation:
-
-    # print("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
-    # print("WARNING: THE APPLICATION OF W TO THE NOISE MAP IS A TEST")
-    # print("IT SHOULD BE APPLIED TO NOISE MAPS AFTER PRE-PROCESSING")
-    # print("FOR THE TEST THE PREPOCESSING DOESN'T CHANGE ANYTHING")
-    # print("DO NOT USE IT FOR ESTIMATING NOISE Cls IN GENERAL (FOR NOW)")
-    # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
-    # freq_noise_maps_array = []
-
-    # # maps_list = meta.maps_list
-    # # for m in maps_list:
-    # #     if args.verbose: print('Importing map: ', m)
-    # #     path_noise_map = meta.get_noise_map_filename(m)
-    # #     freq_noise_maps_array.append(hp.read_map(path_noise_map, field=None).tolist())
-    # # freq_noise_maps_array = np.array(freq_noise_maps_array)
-    # freq_noise_maps_array = np.load(
-    #     os.path.join(meta.covmat_directory, "freq_noise_maps_preprocessed.npy")
-    # )
-
-    # freq_noise_maps_array = freq_noise_maps_array[:, 1:]
-    # noise_map_after_compsep = np.einsum("ifsp,fsp->isp", W_maxL, freq_noise_maps_array)
-    # noise_map_after_compsep[..., np.where(binary_mask == 0)[0]] = 0  # hp.UNSEEN
-
-    # res_dict = {}
-    # for attr in dir(res):
-    #     if not attr.startswith("__"):
-    #         res_dict[attr] = getattr(res, attr)
-    # np.savez(os.path.join(meta.components_directory, "comp_sep_results.npz"), **res_dict)
-
-    # res.s and res.invAtNA are saved twice, but they are the direct needed outputs for the next step
-    # space could be saved by adding an if statement in the above dict construction (TODO?)
-    manager.path_to_components.mkdir(parents=True, exist_ok=True)
-    manager.path_to_covar.mkdir(parents=True, exist_ok=True)
-    np.save(manager.path_to_components_maps, res.s)
-    np.save(manager.path_to_invAtNA, res.invAtNA)
-
-    # np.save(
-    #     os.path.join(meta.components_directory, "noise_map_after_compsep.npy"),
-    #     noise_map_after_compsep,
-    # )
-
-    # if args.plots:
-    #     timer.start("plotting")
-    #     components_results_plotting(res, meta, components_label_list, noise_map_after_compsep)
-    #     timer.stop("plotting", "Plotting")
-
     return res
 
 
-def components_results_plotting(
-    res,
-    manager: DataManager,
-    component_labels=("CMB", "Dust", "Synchrotron"),
-    noise_map_after_compsep=None,
-):
-    binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
-    res.s[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-
-    plot_dir = manager.path_to_components_plots
-    plot_dir.mkdir(parents=True, exist_ok=True)
-
-    fig = plt.figure(figsize=(12, 12))
-    for i, component_label in enumerate(component_labels):
-        for j, stokes_label in enumerate("QU"):
-            hp.mollview(
-                res.s[i, j],
-                title=component_label + " " + stokes_label,
-                sub=(3, 2, (2 * i + j) + 1),
-                fig=fig,
-                cbar=True,
-            )
-    # plt.savefig(plot_dir / "components_maps.png")
-    # plt.close()
-
-    res.invAtNA[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-
-    fig = plt.figure(figsize=(12, 12))
-    for i, component_label in enumerate(component_labels):
-        for j, stokes_label in enumerate("QU"):
-            hp.mollview(
-                res.invAtNA[i, i, j],
-                title="Noise " + component_label + "--" + stokes_label + " -- norm = log",
-                sub=(3, 2, (2 * i + j) + 1),
-                fig=fig,
-                cbar=True,
-                norm="log",
-            )
-    # plt.savefig(plot_dir / "noise_per_components_maps.png")
-    # plt.close()
-    plt.show()
-
-    if noise_map_after_compsep is not None:
-        fig = plt.figure(figsize=(12, 12))
-        noise_map_after_compsep[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-        for i, component_label in enumerate(component_labels):
-            for j, stokes_label in enumerate("QU"):
-                hp.mollview(
-                    noise_map_after_compsep[i, j],
-                    title="Noise " + component_label + "--" + stokes_label,
-                    sub=(3, 2, (2 * i + j) + 1),
-                    fig=fig,
-                    cbar=True,
-                )
-        plt.savefig(plot_dir / "noise_maps_after_compsep.png")
-        plt.close()
-
-
 def save_compsep_results(manager: DataManager, res):
+    manager.path_to_components.mkdir(parents=True, exist_ok=True)
     fname_results = manager.path_to_compsep_results
+    fname_compmaps = manager.path_to_components_maps
     res_dict = {}
     for attr in dir(res):
-        if not attr.startswith("__"):
+        if (
+            not attr.startswith("__") and attr != "s"
+        ):  # remove component maps to avoid saving twice.
             res_dict[attr] = getattr(res, attr)
     # Saving result dict
     logger.info(f"Saving compsep results to {fname_results}")
     np.savez(fname_results, **res_dict)
     # Saving component maps
-    fname_compmaps = manager.path_to_components_maps
     logger.info(f"Saving component maps to {fname_compmaps}")
     np.save(fname_compmaps, res.s)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Perform the component separation")
-    parser.add_argument("--config", type=Path, help="config file")
-    args = parser.parse_args()
-    if args.config is None:
-        logger.warning("No config file provided, using example config")
-        config = Config.get_example()
+def compsep_and_save(args, id_sim=None):
+    if id_sim is None:  # Running only one simulation
+        if args.config is None:
+            logger.warning("No config file provided, using example config")
+            config = Config.get_example()
+        else:
+            config = Config.from_yaml(args.config)
     else:
-        config = Config.from_yaml(args.config)
+        if not args.config_root:
+            logger.warning("No config root provided, required for multiple simulations. exiting")
+            raise AttributeError
+        fname_config = args.config_root.with_name(f"{args.config_root.name}_{id_sim:04d}.yml")
+        config = Config.from_yaml(fname_config)
     manager = DataManager(config)
     manager.dump_config()
-
     with Timer("weighted-compsep"):
         res = weighted_comp_sep(manager, config)
-
     save_compsep_results(manager, res)
-    # components_results_plotting(res, manager)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Component separation")
+    parser.add_argument("--config", type=Path, help="config file")
+    parser.add_argument(
+        "--config_root", type=Path, help="config file root (will be appended  by {id_sim:04d})"
+    )
+    parser.add_argument("--Nsims", type=int, help="Number of simulations performed")
+    parser.add_argument(
+        "--noise-only", action="store_true", help="generate noise-only sims and save them to disk"
+    )
+    parser.add_argument(
+        "--nomultiproc", action="store_true", help="don't use multprocessing parallelisation"
+    )
+    args = parser.parse_args()
+
+    if args.config and not args.noise_only and not args.Nsims:  # Prioritize --config if provided
+        compsep_and_save(args)
+        return
+
+    if args.config_root:  # Multiple simulations mode
+        if not args.Nsims:
+            logger.warning("Nsims not specified, will only run one ")
+            Nsims = 1
+        else:
+            Nsims = args.Nsims
+
+        num_workers = 1 if args.nomultiproc else min(mp.cpu_count(), Nsims)
+        logger.info(f"Using {num_workers} worker processes")
+        if num_workers > 1:
+            mp.set_start_method("spawn", force=True)  # Ensure a clean multiprocessing start
+            with mp.Pool(num_workers) as pool:
+                pool.starmap(
+                    compsep_and_save,
+                    [(args, id_sim) for id_sim in range(Nsims)],
+                )
+        else:
+            for id_sim in range(Nsims):
+                compsep_and_save(args, id_sim)
+    else:
+        # Default case: no arguments provided, run single simulation with example config
+        compsep_and_save(args)
 
 
 if __name__ == "__main__":

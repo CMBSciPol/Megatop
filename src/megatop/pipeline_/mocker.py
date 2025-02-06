@@ -9,9 +9,13 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask, mock
 
 
-def make_sims(manager: DataManager, config: Config, components: str | list[str] = "all"):
-    global obsmats_loaded  # noqa: PLW0602
-    global dict_obsmats_func  # noqa: PLW0602
+def make_sims(
+    manager: DataManager,
+    config: Config,
+    obsmats_loaded: bool = False,
+    dict_obsmats_func: dict | None = None,
+    components: str | list[str] = "all",
+):
     timer = Timer()
 
     # create the directory for the maps
@@ -99,8 +103,8 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
             combined_freq_maps_beamed[i_f] = mock.beam_winpix_correction(
                 config.nside, cmb_map + fg_freq_maps[i_f], config.beams[i_f]
             )
-    load_obsmat(config, manager)
-    if dict_obsmats_func is not None:
+
+    if obsmats_loaded and dict_obsmats_func is not None:
         with Timer("filter-freq-maps"):
             for i_f, map_set_name in enumerate(dict_obsmats_func.keys()):
                 logger.info(f"Filtering {config.frequencies[i_f]} channel")
@@ -108,30 +112,36 @@ def make_sims(manager: DataManager, config: Config, components: str | list[str] 
                     dict_obsmats_func[map_set_name], combined_freq_maps_beamed[i_f]
                 )
 
-    with Timer("apply-binary-mask"):
-        for i_f, _f in enumerate(config.frequencies):
-            combined_freq_maps[i_f] += noise_freq_maps[i_f]
-            combined_freq_maps_beamed[i_f] += noise_freq_maps[i_f]
-        combined_freq_maps = mask.apply_binary_mask(combined_freq_maps, binary_mask, unseen=False)
-        combined_freq_maps_beamed = mask.apply_binary_mask(
-            combined_freq_maps_beamed, binary_mask, unseen=False
-        )
+    for i_f in range(len(config.frequencies)):
+        combined_freq_maps[i_f] += noise_freq_maps[i_f]
+        combined_freq_maps_beamed[i_f] += noise_freq_maps[i_f]
+
+    combined_freq_maps = mask.apply_binary_mask(combined_freq_maps, binary_mask, unseen=False)
+    combined_freq_maps_beamed = mask.apply_binary_mask(
+        combined_freq_maps_beamed, binary_mask, unseen=False
+    )
 
     timer.stop("simulate-one-sky-map")
 
     return noise_freq_maps, combined_freq_maps, combined_freq_maps_beamed
 
 
-def load_obsmat(config: Config, manager: DataManager):
-    global obsmats_loaded  # noqa: PLW0603
-    global dict_obsmats_func  # noqa: PLW0603
-    if not obsmats_loaded and config.map_sim_pars.filter_sims:
+def load_obsmat(
+    manager: DataManager,
+    config: Config,
+    obsmats_loaded: bool = False,
+    dict_obsmats_func: dict | None = None,
+):
+    if config.map_sim_pars.filter_sims and not obsmats_loaded:
         logger.info("Loading observation matrices")
         with Timer(thread="load-obsmat"):
             dict_obsmats_func = mock.load_obseration_matrix(
                 config.nside, config.map_sets, manager.get_osbmats_filenames()
             )
-            obsmats_loaded = True
+            return True, dict_obsmats_func
+    elif obsmats_loaded:
+        return True, dict_obsmats_func
+    return False, None  # No obsmats needed
 
 
 def save_sims(manager: DataManager, freq_maps_write):
@@ -160,7 +170,7 @@ def save_noise_sims(manager: DataManager, noise_freq_maps_write, id_sim=0):
         )
 
 
-def run_sim(args, id_sim=None):
+def run_sim(args, id_sim=None, obsmats_loaded=False, dict_obsmats_func=None):
     if id_sim is None or (
         args.config and args.noise_only and args.Nsims
     ):  # Running only one simulation or multiple noise only simulaiton from 1 config
@@ -180,16 +190,19 @@ def run_sim(args, id_sim=None):
     if args.noise_only:
         noise_freq_maps, _, _ = make_sims(manager, config, components=["noise"])
         save_noise_sims(manager, noise_freq_maps, id_sim or 0)  # TODO check this
-    else:
-        noise_freq_maps, _, combined_freq_maps_beamed = make_sims(manager, config)
-        save_sims(manager, combined_freq_maps_beamed)
-        save_noise_sims(manager, noise_freq_maps, id_sim or 0)  # TODO check this
+        return obsmats_loaded, dict_obsmats_func
+    obsmats_loaded, dict_obsmats_func = load_obsmat(
+        manager, config, obsmats_loaded, dict_obsmats_func
+    )
+    noise_freq_maps, _, combined_freq_maps_beamed = make_sims(
+        manager, config, obsmats_loaded, dict_obsmats_func
+    )
+    save_sims(manager, combined_freq_maps_beamed)
+    save_noise_sims(manager, noise_freq_maps, id_sim or 0)  # TODO check this
+    return obsmats_loaded, dict_obsmats_func
 
 
 def main():
-    global obsmats_loaded  # noqa: PLW0603
-    global dict_obsmats_func  # noqa: PLW0603
-
     parser = argparse.ArgumentParser(description="simplistic simulator")
     parser.add_argument("--config", type=Path, help="config file")
     parser.add_argument(
@@ -204,8 +217,6 @@ def main():
     )
     args = parser.parse_args()
 
-    obsmats_loaded = False
-    dict_obsmats_func = None
     if args.config and not args.noise_only and not args.Nsims:  # Prioritize --config if provided
         run_sim(args)
         return
@@ -220,7 +231,9 @@ def main():
             Nsims = args.Nsims
 
         num_workers = 1 if args.nomultiproc else min(mp.cpu_count(), Nsims)
-        run_sim(args, 0)  # run the first iteration to load obsmat if required
+        obsmats_loaded, dict_obsmats_func = run_sim(
+            args, 0
+        )  # run the first iteration to load obsmat if required
         if obsmats_loaded:
             num_workers = (
                 1  # if obsmats loaded, we don't parallelize #TODO find a way to parallelize ?
@@ -231,11 +244,14 @@ def main():
             with mp.Pool(num_workers) as pool:
                 pool.starmap(
                     run_sim,
-                    [(args, id_sim) for id_sim in range(1, Nsims)],
+                    [
+                        (args, id_sim, obsmats_loaded, dict_obsmats_func)
+                        for id_sim in range(1, Nsims)
+                    ],
                 )
         else:
             for id_sim in range(1, Nsims):
-                run_sim(args, id_sim)
+                run_sim(args, id_sim, obsmats_loaded, dict_obsmats_func)
     else:
         # Default case: no arguments provided, run single simulation with example config
         run_sim(args)

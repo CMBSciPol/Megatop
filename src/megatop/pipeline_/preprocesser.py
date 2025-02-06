@@ -13,18 +13,6 @@ from megatop.utils.preproc import common_beam_and_nside, read_input_maps
 
 def preprocess_map(manager: DataManager, config: Config, mask_output=True):
     input_maps = read_input_maps(manager.get_maps_filenames())
-    nside_input_maps = [
-        hp.npix2nside(input_maps[i].shape[-1]) for i in range(len(config.frequencies))
-    ]
-    idx_nside_small = np.argwhere(np.array(nside_input_maps) < config.nside)
-    if idx_nside_small.size > 0:
-        logger.error(
-            f"Input maps {[manager.get_maps_filenames()[i] for i in idx_nside_small[0]]} have too small nsides"
-        )
-        logger.error("Check your yaml !")
-        logger.error("Exiting")
-        msg = "Some of input maps have too small nside."
-        raise ValueError(msg)  # TODO better error handling ?
     logger.info(
         f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
     )

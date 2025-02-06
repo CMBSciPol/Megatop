@@ -19,5 +19,5 @@ def test_common_nside():
 def test_nside_too_small():
     map_1 = RNG.random(size=(3, hp.nside2npix(8)))
     map_2 = RNG.random(size=(3, hp.nside2npix(4)))
-    with pytest.raises(ValueError, match="Some of input maps have too small nside."):
+    with pytest.raises(ValueError, match="too small nside"):
         _ = preproc.common_beam_and_nside(NSIDE, 1, np.ones(2), [map_1, map_2])

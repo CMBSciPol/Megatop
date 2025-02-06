@@ -14,6 +14,15 @@ def common_beam_and_nside(
     frequency_beams: list[float],
     freq_maps: list[np.typing.ArrayLike],
 ):
+    nside_input_maps = [hp.npix2nside(freq_maps[i].shape[-1]) for i in range(len(frequency_beams))]
+    idx_nside_small = np.argwhere(np.array(nside_input_maps) < nside)
+    if idx_nside_small.size > 0:
+        logger.error("Some input maps have too small nsides")
+        logger.error("Check your yaml !")
+        logger.error("Exiting")
+        msg = "Some of input maps have too small nside."
+        raise ValueError(msg)  # TODO better error handling ?
+
     freq_maps_out = []
     logger.info(f"Common beam correction -> {common_beam} arcmin and NSIDE -> {nside}")
     lmax_convolution = 3 * nside

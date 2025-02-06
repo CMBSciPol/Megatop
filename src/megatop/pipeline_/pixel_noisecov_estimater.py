@@ -8,7 +8,7 @@ import numpy as np
 from megatop import Config, DataManager
 from megatop.utils import logger
 from megatop.utils.mpi import MPISUM
-from megatop.utils.preproc import _common_beam_and_nside
+from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.utils import MemoryUsage
 
 
@@ -37,7 +37,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
     noise_cov_preprocessed = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
 
     # Importing noise maps
-    nside_in_list = []
     nreal = config.noise_cov_pars.nrealizations
 
     # The None case of nreal is useful when calling get_noise_map_filename
@@ -59,7 +58,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         for noise_filename in manager.get_noise_maps_filenames(id_real):
             logger.debug(f"Importing noise map: {noise_filename}")
             noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
-            nside_in_list.append(hp.get_nside(noise_freq_maps[-1][-1]))
 
         if np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams)):
             logger.info(
@@ -75,7 +73,12 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         else:
             noise_freq_maps = np.array(noise_freq_maps, dtype=object)
-            noise_freq_maps_preprocessed = _common_beam_and_nside(config, noise_freq_maps)
+            noise_freq_maps_preprocessed = common_beam_and_nside(
+                nside=config.nside,
+                common_beam=config.pre_proc_pars.common_beam_correction,
+                frequency_beams=config.beams,
+                freq_maps=noise_freq_maps,
+            )
 
         if config.noise_cov_pars.save_preprocessed_noise_maps:
             logger.info("Saving pre-processed noise maps to disk")
