@@ -174,6 +174,11 @@ def plot_noise_sims(manager, config, maps=True, cls=True):
 
     noise_freq_maps = apply_binary_mask(noise_freq_maps, binary_mask, unseen=True)
 
+    if config.noise_sim_pars.include_nhits:
+        noise_freq_maps = mock.include_hits_noise(
+            noise_freq_maps, hp.read_map(manager.path_to_nhits_map), binary_mask
+        )  # TODO move reading of maps to manager
+
     if maps:
         freq_maps_plotter(
             config,
