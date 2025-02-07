@@ -31,17 +31,21 @@ mpi = ["mpi4py"]
 dev = ["pytest"]
 
 [project.scripts]
-"megatop-compsep" = "megatop.pipeline.parametric_separation:main"
-"megatop-map2cl" = "megatop.pipeline.map_to_cl:main"
+"megatop-compsep-run" = "megatop.pipeline.parametric_separater:main"
+"megatop-compsep-plot" = "megatop.plot.comp_sep_plotter:main"
+"megatop-map2cl-run" = "megatop.pipeline.map_to_cler:main"
+"megatop-map2cl-plot" = "megatop.plot.map2cl_plotter:main"
 "megatop-mask-run" = "megatop.pipeline.mask_handler:main"
 "megatop-mask-plot" = "megatop.pipeline.mask_plotter:main"
 "megatop-mock-run" = "megatop.pipeline.mocker:main"
 "megatop-mock-plot" = "megatop.pipeline.mock_plotter:main"
 "megatop-noisecov-run" = "megatop.pipeline.pixel_noisecov_estimater:main"
-"megatop-noisecov-plot" = "megatop.pipeline.plot_noise_covariance:main"
+"megatop-noisecov-plot" = "megatop.plot.noise_cov_plotter:main"
 "megatop-preproc-run" = "megatop.pipeline.preprocesser:main"
-"megatop-preproc-plot" = "megatop.pipeline.preproc_plotter:main"
-"megatop-spectra-plot" = "megatop.pipeline.plot_spectra:main"
+"megatop-preproc-plot" = "megatop.plot.preproc_plotter:main"
+"megatop-noisespectra-run" = "megatop.pipeline.noise_spectra_estimater:main"
+"megatop-noisespectra-plot" = "megatop.plot.noise_spectra_plotter:main"
+
 
 [tool.ruff]
 fix = true            # autofix issues when possible
