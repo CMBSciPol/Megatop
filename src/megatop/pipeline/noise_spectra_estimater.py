@@ -9,7 +9,7 @@ import pymaster as nmt
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mpi import MPISUM
-from megatop.utils.preproc import _common_beam_and_nside
+from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
@@ -121,7 +121,12 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
 
             else:
                 noise_freq_maps = np.array(noise_freq_maps, dtype=object)
-                noise_freq_maps_preprocessed = _common_beam_and_nside(config, noise_freq_maps)
+                noise_freq_maps_preprocessed = common_beam_and_nside(
+                    nside=config.nside,
+                    common_beam=config.pre_proc_pars.common_beam_correction,
+                    frequency_beams=config.beams,
+                    freq_maps=noise_freq_maps,
+                )
 
         # Applying component-separation operator
         noise_map_post_compsep = np.einsum(
