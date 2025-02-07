@@ -1,4 +1,5 @@
 import argparse
+import multiprocessing as mp
 from pathlib import Path
 
 import healpy as hp
@@ -6,7 +7,7 @@ import numpy as np
 import pymaster as nmt
 
 from megatop import Config, DataManager
-from megatop.utils import Timer, logger
+from megatop.utils import Timer, logger, mask
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     create_binning,
@@ -16,7 +17,7 @@ from megatop.utils.spectra import (
 )
 
 
-def spectra_estimation(manager: DataManager, config: Config) -> None:
+def spectra_estimation(manager: DataManager, config: Config):
     with Timer("load-component-maps"):
         comp_maps = np.load(manager.path_to_components_maps)
 
@@ -65,8 +66,7 @@ def spectra_estimation(manager: DataManager, config: Config) -> None:
     # Testing the function
 
     with Timer("estimate-spectra"):
-        # if hp.UNSEEN is used in comp-sep, the comp-maps will use it as well which will be a problem for namaster, we regularize it here
-        comp_maps *= binary_mask  # TODO more readable to use mask.apply_binary_mask
+        comp_maps = mask.apply_binary_mask(comp_maps, binary_mask)
 
         comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1], "Synch": comp_maps[2]}
         # TODO: when components will be added in .yml for the comp-sep steps the keys of the dictionary should adapt to that
@@ -91,19 +91,64 @@ def save_spectra(manager: DataManager, all_Cls: dict):
     np.savez(manager.path_to_cross_components_spectra, **all_Cls)
 
 
+def map2cl_and_save(args, id_sim=None):
+    if id_sim is None:  # Running only one simulation
+        if args.config is None:
+            logger.warning("No config file provided, using example config")
+            config = Config.get_example()
+        else:
+            config = Config.from_yaml(args.config)
+    else:
+        if not args.config_root:
+            logger.warning("No config root provided, required for multiple simulations. exiting")
+            raise AttributeError
+        fname_config = args.config_root.with_name(f"{args.config_root.name}_{id_sim:04d}.yml")
+        config = Config.from_yaml(fname_config)
+    manager = DataManager(config)
+    manager.dump_config()
+    with Timer("spectra-estimation"):
+        all_Cls = spectra_estimation(manager, config)
+    save_spectra(manager, all_Cls=all_Cls)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Map to CLs")
     parser.add_argument("--config", type=Path, help="config file")
+    parser.add_argument(
+        "--config_root", type=Path, help="config file root (will be appended  by {id_sim:04d})"
+    )
+    parser.add_argument("--Nsims", type=int, help="Number of simulations performed")
+    parser.add_argument(
+        "--nomultiproc", action="store_true", help="don't use multprocessing parallelisation"
+    )
     args = parser.parse_args()
-    if args.config is None:
-        logger.warning("No config file provided, using example config")
-        config = Config.get_example()
+
+    if args.config:  # Prioritize --config if provided
+        map2cl_and_save(args)
+        return
+
+    if args.config_root:  # Multiple simulations mode
+        if not args.Nsims:
+            logger.warning("Nsims not specified, will only run one ")
+            Nsims = 1
+        else:
+            Nsims = args.Nsims
+
+        num_workers = 1 if args.nomultiproc else min(mp.cpu_count(), Nsims)
+        logger.info(f"Using {num_workers} worker processes")
+        if num_workers > 1:
+            mp.set_start_method("spawn", force=True)  # Ensure a clean multiprocessing start
+            with mp.Pool(num_workers) as pool:
+                pool.starmap(
+                    map2cl_and_save,
+                    [(args, id_sim) for id_sim in range(Nsims)],
+                )
+        else:
+            for id_sim in range(Nsims):
+                map2cl_and_save(args, id_sim)
     else:
-        config = Config.from_yaml(args.config)
-    manager = DataManager(config)
-    manager.dump_config()
-    all_Cls = spectra_estimation(manager, config)
-    save_spectra(manager, all_Cls=all_Cls)
+        # Default case: no arguments provided, run single simulation with example config
+        map2cl_and_save(args)
 
 
 if __name__ == "__main__":

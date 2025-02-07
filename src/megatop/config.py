@@ -91,6 +91,7 @@ class OutputDirsConfig:
     plots: str = "plots"
     components: str = "components"
     spectra: str = "spectra"
+    noise_spectra: str = "noise_spectra"
 
 
 @frozen

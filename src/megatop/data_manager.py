@@ -84,6 +84,10 @@ class DataManager:
     def path_to_spectra(self) -> Path:
         return self.path_to_output / self._config.output_dirs.spectra
 
+    @property
+    def path_to_noise_spectra(self) -> Path:
+        return self.path_to_output / self._config.output_dirs.noise_spectra
+
     # Paths to the plot directories (in output)
     # -----------------------------------------
 
@@ -232,5 +236,5 @@ class DataManager:
 
     @property
     def path_to_noise_cross_components_spectra(self) -> Path:
-        fname = self.path_to_spectra / "noise_cross_components_Cls"
+        fname = self.path_to_noise_spectra / "noise_cross_components_Cls"
         return fname.with_suffix(".npz")
