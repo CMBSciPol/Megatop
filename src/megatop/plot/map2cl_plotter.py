@@ -3,8 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from megatop import DataManager
-from megatop.config import Config
+from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.plot import plot_all_Cls
 

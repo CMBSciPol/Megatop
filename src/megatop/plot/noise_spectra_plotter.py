@@ -4,8 +4,7 @@ from pathlib import Path
 import numpy as np
 import pymaster as nmt
 
-from megatop import DataManager
-from megatop.config import Config
+from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mock import get_Cl_CMB_model_from_manager
 from megatop.utils.plot import plot_all_Cls, plot_all_Cls_diff

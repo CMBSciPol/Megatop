@@ -5,8 +5,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-from megatop import DataManager
-from megatop.config import Config
+from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mask import (
     get_spin_derivatives,

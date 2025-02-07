@@ -5,8 +5,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from megatop import DataManager
-from megatop.config import Config
+from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mock
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
