@@ -2,6 +2,7 @@ from pathlib import Path
 
 import healpy as hp
 import numpy as np
+import numpy.typing as npt
 
 from .logger import logger
 from .timer import function_timer
@@ -12,7 +13,7 @@ def common_beam_and_nside(
     nside: int,
     common_beam: float,
     frequency_beams: list[float],
-    freq_maps: list[np.typing.ArrayLike],
+    freq_maps: list[npt.ArrayLike],
 ):
     nside_input_maps = [hp.npix2nside(freq_maps[i].shape[-1]) for i in range(len(frequency_beams))]
     idx_nside_small = np.argwhere(np.array(nside_input_maps) < nside)
@@ -82,7 +83,7 @@ def common_beam_and_nside(
     return np.array(freq_maps_out)
 
 
-def read_input_maps(list_mapnames: list[Path]) -> list[np.typing.ArrayLike]:
+def read_input_maps(list_mapnames: list[Path]) -> list[npt.ArrayLike]:
     """
     This function reads the frequency maps from the files and returns them as an array.
 
