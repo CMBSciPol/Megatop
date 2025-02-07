@@ -7,8 +7,8 @@ import numpy as np
 from megatop import DataManager
 from megatop.config import Config
 from megatop.utils import Timer, logger
+from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB
-from megatop.utils.preproc import _apply_binary_mask
 
 
 def plot_preprocessed_maps(manager, config, maps=True, cls=True):
@@ -21,7 +21,11 @@ def plot_preprocessed_maps(manager, config, maps=True, cls=True):
         preproc_maps_fname = manager.get_path_to_preprocessed_maps()
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
-        freq_maps_preprocessed = _apply_binary_mask(manager, freq_maps_preprocessed, unseen=True)
+        binary_mask = hp.read_map(manager.path_to_binary_mask)
+
+        freq_maps_preprocessed = apply_binary_mask(
+            freq_maps_preprocessed, binary_mask=binary_mask, unseen=True
+        )
 
     if maps:  # Plotting the maps
         freq_maps_plotter(config, freq_maps_preprocessed, plot_dir, "pre_processed_maps")
