@@ -1,13 +1,14 @@
 import argparse
 from pathlib import Path
 
+import healpy as hp
 import numpy as np
 
 from megatop import DataManager
 from megatop.config import Config
 from megatop.utils import Timer, logger
+from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter
-from megatop.utils.preproc import _apply_binary_mask
 
 
 def plot_compsep(manager, config):
@@ -15,7 +16,9 @@ def plot_compsep(manager, config):
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     comp_maps = np.load(manager.path_to_components_maps)
-    comp_maps = _apply_binary_mask(manager, comp_maps, unseen=True)
+
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    comp_maps = apply_binary_mask(comp_maps, binary_mask, unseen=True)
 
     freq_maps_plotter(
         config,
