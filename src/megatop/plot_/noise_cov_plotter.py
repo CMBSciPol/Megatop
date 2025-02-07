@@ -7,8 +7,8 @@ import numpy as np
 from megatop import DataManager
 from megatop.config import Config
 from megatop.utils import Timer, logger
+from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, freq_maps_plotter_one_stoke, plotTTEEBB
-from megatop.utils.preproc import _apply_binary_mask
 
 
 def plot_noisecov(manager, config, maps=True, cls=True):
@@ -17,14 +17,15 @@ def plot_noisecov(manager, config, maps=True, cls=True):
 
     fname_noise_cov_maps = manager.path_to_pixel_noisecov
     noise_cov_maps = np.load(fname_noise_cov_maps)
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
 
-    noise_cov_maps = _apply_binary_mask(manager, noise_cov_maps, unseen=True)
+    noise_cov_maps = apply_binary_mask(noise_cov_maps, binary_mask, unseen=True)
 
     if maps:
         freq_maps_plotter(config, noise_cov_maps, plot_dir, "noise_cov_maps")
 
         diff_Q_U_maps = noise_cov_maps[:, 1] - noise_cov_maps[:, 2]
-        diff_Q_U_maps = _apply_binary_mask(manager, diff_Q_U_maps, unseen=True)
+        diff_Q_U_maps = apply_binary_mask(diff_Q_U_maps, binary_mask, unseen=True)
 
         freq_maps_plotter_one_stoke(
             config,
@@ -32,6 +33,17 @@ def plot_noisecov(manager, config, maps=True, cls=True):
             plot_dir,
             "diff_Q_U_noise_cov",
             title_prefix="Q-U noise cov",
+        )
+
+        relat_diff_Q_U_maps = diff_Q_U_maps / noise_cov_maps[:, 1]
+        relat_diff_Q_U_maps = apply_binary_mask(relat_diff_Q_U_maps, binary_mask, unseen=True)
+
+        freq_maps_plotter_one_stoke(
+            config,
+            relat_diff_Q_U_maps,
+            plot_dir,
+            "relat_diff_Q_U_noise_cov",
+            title_prefix="(Q-U)/Q noise cov",
         )
 
     if cls:
