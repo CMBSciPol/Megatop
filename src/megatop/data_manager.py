@@ -199,7 +199,7 @@ class DataManager:
         fname = "noise_maps_preprocessed"
         if sub is not None:
             fname += f"_{sub:04d}"
-        fname = self.path_to_preproc / fname
+        fname = self.path_to_covar / fname
         return fname.with_suffix(".npy")
 
     @property
