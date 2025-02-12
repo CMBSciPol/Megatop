@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - v1-refactor # TODO: switch to master once merged
+      - master
   pull_request:
     branches:
       - master
