@@ -1,5 +1,6 @@
 import argparse
 import multiprocessing as mp
+import sys
 from pathlib import Path
 
 import healpy as hp
@@ -187,7 +188,25 @@ def run_sim(args, id_sim=None, obsmats_loaded=False, dict_obsmats_func=None):
         config = Config.from_yaml(fname_config)
     manager = DataManager(config)
     manager.dump_config()
+
     if args.noise_only:
+        # Handling noise Nsims vs nrealizations for noise_cov_pixel
+        if args.Nsims is not None:
+            if args.Nsims < config.noise_cov_pars.nrealizations:
+                logger.error(
+                    f"Number of noise only sims Nsims = {args.Nsims} is smaller than the expected number of noise realization for the noise covariance estimation config.noise_cov_pars.nrealizations = {config.noise_cov_pars.nrealizations} in config. This will ead to an error later on. Exiting mocker..."
+                )
+                sys.exit()
+            elif args.Nsims > config.noise_cov_pars.nrealizations:
+                logger.warning(
+                    f"Nsims = {args.Nsims} > config.noise_cov_pars.nrealizations = {config.noise_cov_pars.nrealizations}, will generate extra noise only sims"
+                )
+        elif config.noise_cov_pars.nrealizations > 1:
+            logger.warning(
+                f"Nims=1 by default and config.noise_cov_pars.nrealizations = {config.noise_cov_pars.nrealizations} is bigger. Not enough noise only sims will be generated for the noise covariance estimation. Exiting mocker..."
+            )
+            sys.exit()
+
         noise_freq_maps, _, _ = make_sims(manager, config, components=["noise"])
         save_noise_sims(manager, noise_freq_maps, id_sim or 0)  # TODO check this
         return obsmats_loaded, dict_obsmats_func
