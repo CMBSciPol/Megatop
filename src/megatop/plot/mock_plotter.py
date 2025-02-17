@@ -293,7 +293,8 @@ def main():
         plot_fiducial_spectra(manager)
         plot_fg_sims(manager, config)
         plot_cmb_sims(manager, config)
-        plot_noise_sims(manager, config)
+        if config.noise_sim_pars.noise_option != "no_noise":
+            plot_noise_sims(manager, config)
         plot_saved_sims(manager, config)
 
 
