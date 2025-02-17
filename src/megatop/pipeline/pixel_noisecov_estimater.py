@@ -81,6 +81,9 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             )
 
         if config.noise_cov_pars.save_preprocessed_noise_maps:
+            manager.get_path_to_preprocessed_noise_maps(sub=id_real).parent.mkdir(
+                exist_ok=True, parents=True
+            )
             logger.info("Saving pre-processed noise maps to disk")
             np.save(
                 manager.get_path_to_preprocessed_noise_maps(sub=id_real),
