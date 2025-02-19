@@ -164,6 +164,9 @@ class GeneralConfig:
     lmin: int = 30
     lmax: int = field(default=1_000)  # using field because of the validator
 
+    num_realizations: int = 1
+    """Number of sky realizations"""
+
     @lmax.validator  # pyright: ignore[reportAttributeAccessIssue]
     def check(self, attribute, value):
         """Check that lmax <= 3 * nside - 1"""

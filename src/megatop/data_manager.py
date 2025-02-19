@@ -174,7 +174,7 @@ class DataManager:
         names = [dest / map_set.map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
-    def get_osbmats_filenames(self) -> list[Path]:
+    def get_obsmat_filenames(self) -> list[Path]:
         """Get the list of filenames for the observation matrices."""
         names = [map_set.obsmat_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".npz") for name in names]

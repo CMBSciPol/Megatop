@@ -1,26 +1,25 @@
 import argparse
-import multiprocessing as mp
-import sys
+from functools import partial
 from pathlib import Path
 
 import healpy as hp
 import numpy as np
+from mpi4py.futures import MPICommExecutor
+from numpy.typing import NDArray
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask, mock
+from megatop.utils.mpi import get_world
 
 
-def make_sims(
+def generate_simu(
     manager: DataManager,
     config: Config,
-    obsmats_loaded: bool = False,
-    dict_obsmats_func: dict | None = None,
+    obsmat_funcs: dict | None = None,
     components: str | list[str] = "all",
 ):
+    """Generate a single realization of the sky maps."""
     timer = Timer()
-
-    # create the directory for the maps
-    manager.path_to_maps.mkdir(parents=True, exist_ok=True)
 
     timer.start("simulate-one-sky-map")
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # TODO read_binary in manager ?
@@ -105,12 +104,12 @@ def make_sims(
                 config.nside, cmb_map + fg_freq_maps[i_f], config.beams[i_f]
             )
 
-    if obsmats_loaded and dict_obsmats_func is not None:
+    if obsmat_funcs is not None:
         with Timer("filter-freq-maps"):
-            for i_f, map_set_name in enumerate(dict_obsmats_func.keys()):
+            for i_f, map_set_name in enumerate(obsmat_funcs.keys()):
                 logger.info(f"Filtering {config.frequencies[i_f]} channel")
                 combined_freq_maps_beamed[i_f] = mock.apply_observation_matrix(
-                    dict_obsmats_func[map_set_name], combined_freq_maps_beamed[i_f]
+                    obsmat_funcs[map_set_name], combined_freq_maps_beamed[i_f]
                 )
 
     for i_f in range(len(config.frequencies)):
@@ -127,153 +126,124 @@ def make_sims(
     return noise_freq_maps, combined_freq_maps, combined_freq_maps_beamed
 
 
-def load_obsmat(
-    manager: DataManager,
-    config: Config,
-    obsmats_loaded: bool = False,
-    dict_obsmats_func: dict | None = None,
-):
-    if config.map_sim_pars.filter_sims and not obsmats_loaded:
-        logger.info("Loading observation matrices")
-        with Timer(thread="load-obsmat"):
-            dict_obsmats_func = mock.load_obseration_matrix(
-                config.nside, config.map_sets, manager.get_osbmats_filenames()
-            )
-            return True, dict_obsmats_func
-    elif obsmats_loaded:
-        return True, dict_obsmats_func
-    return False, None  # No obsmats needed
-
-
-def save_sims(manager: DataManager, freq_maps_write):
-    for i, fname in enumerate(manager.get_maps_filenames()):
-        logger.debug(f"Saving simulated sky to {fname}")
-        hp.write_map(
-            fname,
-            freq_maps_write[i],
-            dtype=["float64", "float64", "float64"],
-            overwrite=True,
+def load_obsmat(manager: DataManager, config: Config):
+    # TODO: move to data manager
+    logger.info("Loading observation matrices")
+    with Timer(thread="load-obsmat"):
+        return mock.load_observation_matrix(
+            config.nside, config.map_sets, manager.get_obsmat_filenames()
         )
 
 
-def save_noise_sims(manager: DataManager, noise_freq_maps_write, id_sim=0):
+def save_simu(
+    manager: DataManager,
+    simulated_maps: NDArray,
+    id_sim: int | None = None,
+    is_noise: bool = False,
+) -> None:
+    """Save a sky realization."""
     # create the subdirectory for this realization
-    manager.get_path_to_noise_maps_sub(id_sim).mkdir(parents=True, exist_ok=True)
+    if id_sim is not None:
+        if is_noise:
+            path = manager.get_path_to_noise_maps_sub(id_sim)
+        else:
+            path = manager.get_path_to_maps_sub(id_sim)
+        path.mkdir(parents=True, exist_ok=True)
+
+    # get appropriate filenames based on type
+    filenames = (
+        manager.get_noise_maps_filenames(sub=id_sim)
+        if is_noise
+        else manager.get_maps_filenames(sub=id_sim)
+    )
 
     # save the maps
-    for i, fname in enumerate(manager.get_noise_maps_filenames(sub=id_sim)):
-        logger.debug(f"Saving noise simulation to {fname}")
+    for i, fname in enumerate(filenames):
+        msg = "Saving noise simulation" if is_noise else "Saving simulated sky"
+        logger.debug(f"{msg} to {fname}")
         hp.write_map(
             fname,
-            noise_freq_maps_write[i],
+            simulated_maps[i],
             dtype=["float64", "float64", "float64"],
             overwrite=True,
         )
 
 
-def run_sim(args, id_sim=None, obsmats_loaded=False, dict_obsmats_func=None):
-    if id_sim is None or (
-        args.config and args.noise_only and args.Nsims
-    ):  # Running only one simulation or multiple noise only simulaiton from 1 config
-        if args.config is None:
-            logger.warning("No config file provided, using example config")
-            config = Config.get_example()
-        else:
-            config = Config.from_yaml(args.config)
+def process_simu(
+    config: Config,
+    manager: DataManager,
+    id_sim: int | None = None,
+    noise_only: bool = False,
+    obsmat_funcs: dict | None = None,
+) -> None | int:
+    """Generate and save a single realization of the sky maps."""
+    if noise_only:
+        noise_freq_maps, _, _ = generate_simu(manager, config, components=["noise"])
+        save_simu(manager, noise_freq_maps, id_sim=id_sim, is_noise=True)
     else:
-        if not args.config_root:
-            logger.warning("No config root provided, required for multiple simulations. exiting")
-            raise AttributeError
-        fname_config = args.config_root.with_name(f"{args.config_root.name}_{id_sim:04d}.yaml")
-        config = Config.from_yaml(fname_config)
-    manager = DataManager(config)
-    manager.dump_config()
-
-    if args.noise_only:
-        # Handling noise Nsims vs nrealizations for noise_cov_pixel
-        if args.Nsims is not None:
-            if args.Nsims < config.noise_cov_pars.nrealizations:
-                logger.error(
-                    f"Number of noise only sims Nsims = {args.Nsims} is smaller than the expected number of noise realization for the noise covariance estimation config.noise_cov_pars.nrealizations = {config.noise_cov_pars.nrealizations} in config. This will ead to an error later on. Exiting mocker..."
-                )
-                sys.exit()
-            elif args.Nsims > config.noise_cov_pars.nrealizations:
-                logger.warning(
-                    f"Nsims = {args.Nsims} > config.noise_cov_pars.nrealizations = {config.noise_cov_pars.nrealizations}, will generate extra noise only sims"
-                )
-        elif config.noise_cov_pars.nrealizations > 1:
-            logger.warning(
-                f"Nims=1 by default and config.noise_cov_pars.nrealizations = {config.noise_cov_pars.nrealizations} is bigger. Not enough noise only sims will be generated for the noise covariance estimation. Exiting mocker..."
-            )
-            sys.exit()
-
-        noise_freq_maps, _, _ = make_sims(manager, config, components=["noise"])
-        save_noise_sims(manager, noise_freq_maps, id_sim or 0)  # TODO check this
-        return obsmats_loaded, dict_obsmats_func
-    obsmats_loaded, dict_obsmats_func = load_obsmat(
-        manager, config, obsmats_loaded, dict_obsmats_func
-    )
-    noise_freq_maps, _, combined_freq_maps_beamed = make_sims(
-        manager, config, obsmats_loaded, dict_obsmats_func
-    )
-    save_sims(manager, combined_freq_maps_beamed)
-    save_noise_sims(manager, noise_freq_maps, id_sim or 0)  # TODO check this
-    return obsmats_loaded, dict_obsmats_func
+        noise_freq_maps, _, combined_freq_maps_beamed = generate_simu(
+            manager, config, obsmat_funcs=obsmat_funcs
+        )
+        save_simu(manager, combined_freq_maps_beamed, id_sim=id_sim, is_noise=False)
+        save_simu(manager, noise_freq_maps, id_sim=id_sim, is_noise=True)
+    return id_sim
 
 
 def main():
-    parser = argparse.ArgumentParser(description="simplistic simulator")
-    parser.add_argument("--config", type=Path, help="config file")
-    parser.add_argument(
-        "--config_root", type=Path, help="config file root (will be appended  by {id_sim:04d})"
-    )
-    parser.add_argument("--Nsims", type=int, help="Number of simulations performed")
-    parser.add_argument(
-        "--noise-only", action="store_true", help="generate noise-only sims and save them to disk"
-    )
-    parser.add_argument(
-        "--nomultiproc", action="store_true", help="don't use multprocessing parallelisation"
-    )
-    args = parser.parse_args()
+    world, rank, size = get_world()
 
-    if args.config and not args.noise_only and not args.Nsims:  # Prioritize --config if provided
-        run_sim(args)
+    parser = argparse.ArgumentParser(
+        description="Script for generating signal and noise realizations",
+        epilog="mpi4py is required to run this script",
+    )
+    parser.add_argument("--config", type=Path, help="config file")
+    parser.add_argument("--noise-only", action="store_true", help="only produce noise maps")
+
+    # Parse arguments
+    args = parser.parse_args()
+    if args.config is None:
+        if rank == 0:
+            logger.warning("No config file provided, using example config")
+        config = Config.get_example()
+    else:
+        config = Config.from_yaml(args.config)
+    manager = DataManager(config)
+    if rank == 0:
+        manager.dump_config()
+
+    nreal = config.general_pars.num_realizations
+    if nreal == 1:
+        if rank == 0:
+            logger.info("Generating one realization")
+            if size > 1:
+                msg = "Running with only one process, other processes will be idle"
+                logger.warning(msg)
+            process_simu(config, manager, noise_only=args.noise_only)
         return
 
-    if args.config_root or (
-        args.config and args.noise_only and args.Nsims
-    ):  # Multiple simulations mode
-        if not args.Nsims:
-            logger.warning("Nsims not specified, will only run one ")
-            Nsims = 1
-        else:
-            Nsims = args.Nsims
+    # Multiple realizations
+    if rank == 0:
+        logger.info(f"Generating {nreal} realizations")
 
-        num_workers = 1 if args.nomultiproc else min(mp.cpu_count(), Nsims)
-        obsmats_loaded, dict_obsmats_func = run_sim(
-            args, 0
-        )  # run the first iteration to load obsmat if required
-        if obsmats_loaded:
-            num_workers = (
-                1  # if obsmats loaded, we don't parallelize #TODO find a way to parallelize ?
-            )
-        logger.info(f"Using {num_workers} worker processes")
-        if num_workers > 1:
-            mp.set_start_method("spawn", force=True)  # Ensure a clean multiprocessing start
-            with mp.Pool(num_workers) as pool:
-                pool.starmap(
-                    run_sim,
-                    [
-                        (args, id_sim, obsmats_loaded, dict_obsmats_func)
-                        for id_sim in range(1, Nsims)
-                    ],
-                )
-        else:
-            for id_sim in range(1, Nsims):
-                run_sim(args, id_sim, obsmats_loaded, dict_obsmats_func)
-    else:
-        # Default case: no arguments provided, run single simulation with example config
-        run_sim(args)
+    if config.map_sim_pars.filter_sims and not args.noise_only:
+        # We need to load the obsmat(s)
+        # FIXME: use parallel loading
+        if rank == 0:
+            msg = "Parallelization of obsmats not implemented yet, ignoring other processes"
+            logger.warning(msg)
+            obsmat_funcs = load_obsmat(manager, config)
+            for id_sim in range(nreal):
+                process_simu(config, manager, id_sim=id_sim, obsmat_funcs=obsmat_funcs)
+        return
+
+    # No observation matrices to load (either noise only, of non-filtered sims)
+    # We can parallelize the simulations
+    with MPICommExecutor() as executor:
+        if executor is not None:
+            logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+            func = partial(process_simu, config, manager, noise_only=args.noise_only)
+            for result in executor.map(func, range(nreal), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                logger.info(f"Finished realization {result}")
 
 
 if __name__ == "__main__":
