@@ -162,7 +162,7 @@ class MasksConfig:
 class GeneralConfig:
     nside: int = 512
     lmin: int = 30
-    lmax: int = field(default=1_000)
+    lmax: int = field(default=1_000)  # using field because of the validator
 
     @lmax.validator  # pyright: ignore[reportAttributeAccessIssue]
     def check(self, attribute, value):
@@ -180,7 +180,7 @@ class PreProcessingConfig:
 
 @frozen
 class NoiseCovmatConfig:
-    nrealizations: int | None = None  # TODO: depends on mocker?
+    nrealizations: int | None = None  # FIXME: redundant with general 'num_realizations' parameter
     save_preprocessed_noise_maps: bool = False
 
 
