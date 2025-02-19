@@ -163,9 +163,6 @@ class GeneralConfig:
     nside: int = 512
     lmin: int = 30
     lmax: int = field(default=1_000)
-    id_sim: int = 0
-
-    ben_sims: bool = False
 
     @lmax.validator  # pyright: ignore[reportAttributeAccessIssue]
     def check(self, attribute, value):
@@ -256,7 +253,6 @@ class NoiseSimConfig:
     SAC_yrs_LF: int = 1
 
     include_nhits: bool = True
-    save_noise_sim: bool = False  # TODO: needed?
 
 
 @frozen
