@@ -184,7 +184,7 @@ def run_sim(args, id_sim=None, obsmats_loaded=False, dict_obsmats_func=None):
         if not args.config_root:
             logger.warning("No config root provided, required for multiple simulations. exiting")
             raise AttributeError
-        fname_config = args.config_root.with_name(f"{args.config_root.name}_{id_sim:04d}.yml")
+        fname_config = args.config_root.with_name(f"{args.config_root.name}_{id_sim:04d}.yaml")
         config = Config.from_yaml(fname_config)
     manager = DataManager(config)
     manager.dump_config()
