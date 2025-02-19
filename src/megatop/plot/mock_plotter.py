@@ -12,7 +12,7 @@ from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
 from megatop.utils.preproc import read_input_maps
 
 
-def plot_fiducial_spectra(manager):
+def plot_fiducial_spectra(manager: DataManager):
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -52,7 +52,7 @@ def plot_fiducial_spectra(manager):
     plt.clf()
 
 
-def plot_fg_sims(manager, config, maps=True, cls=True):
+def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -111,7 +111,7 @@ def plot_fg_sims(manager, config, maps=True, cls=True):
         )
 
 
-def plot_cmb_sims(manager, config, maps=True, cls=True):
+def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
     cmb_map = mock.generate_map_cmb(
         Cl_cmb_model, config.nside, fixed_cmb_seed=config.map_sim_pars.fixed_cmb_seed
@@ -149,7 +149,7 @@ def plot_cmb_sims(manager, config, maps=True, cls=True):
         )
 
 
-def plot_noise_sims(manager, config, maps=True, cls=True):
+def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     binary_mask = hp.read_map(manager.path_to_binary_mask)
 
     fsky_binary = sum(binary_mask) / len(binary_mask)
@@ -237,7 +237,7 @@ def plot_noise_sims(manager, config, maps=True, cls=True):
         )
 
 
-def plot_saved_sims(manager, config, maps=True, cls=True):
+def plot_saved_sims(manager: DataManager, config: Config, maps=True, cls=True):
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
