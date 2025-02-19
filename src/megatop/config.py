@@ -231,7 +231,7 @@ class MapSimConfig:
     cmb_sim_no_pysm: bool = True
     r_input: float = 0
     A_lens: float = 1
-    fixed_cmb: bool = False
+    fixed_cmb_seed: bool | None = None
     filter_sims: bool = False
 
     @sky_model.validator  # pyright: ignore[reportAttributeAccessIssue]

@@ -68,7 +68,7 @@ def make_sims(
 
         Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
         cmb_map = mock.generate_map_cmb(
-            Cl_cmb_model, config.nside, fixed_cmb=config.map_sim_pars.fixed_cmb
+            Cl_cmb_model, config.nside, fixed_cmb_seed=config.map_sim_pars.fixed_cmb_seed
         )
 
         logger.debug(f"CMB map has shape {cmb_map.shape}")
