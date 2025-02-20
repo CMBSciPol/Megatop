@@ -183,7 +183,6 @@ class PreProcessingConfig:
 
 @frozen
 class NoiseCovmatConfig:
-    nrealizations: int | None = None  # FIXME: redundant with general 'num_realizations' parameter
     save_preprocessed_noise_maps: bool = False
 
 
@@ -230,8 +229,10 @@ class PlotsConfig:
 
 @frozen
 class MapSimConfig:
+    n_sim: int = 0
     sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
     cmb_sim_no_pysm: bool = True
+    noise_option: ValidNoiseOptionType = "white_noise"
     r_input: float = 0
     A_lens: float = 1
     fixed_cmb_seed: bool | None = None
@@ -247,15 +248,22 @@ class MapSimConfig:
 
 @frozen
 class NoiseSimConfig:
+    n_sim: int = 0
     experiment: ValidExperimentType = "SO"
-    noise_option: ValidNoiseOptionType = "white_noise"  # TODO: check default value
-
+    noise_option: ValidNoiseOptionType = field(default="white noise")  # TODO: check default value
     # these three are required if experiment = 'SO'
     sensitivity_level: SensitivityMode = SensitivityMode.GOAL
     knee_mode: KneeMode = KneeMode.OPTIMISTIC
     SAC_yrs_LF: int = 1
 
     include_nhits: bool = True
+
+    @noise_option.validator
+    def check(self, attribute, value):
+        """Check that the noise option for the noise simulations is not no noise."""
+        if value == "no_noise":
+            msg = f"{attribute.name} cannot be {value} for noise simulations"
+            raise ValueError(msg)
 
 
 @frozen

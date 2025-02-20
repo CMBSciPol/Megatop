@@ -173,18 +173,18 @@ def process_simu(
     config: Config,
     manager: DataManager,
     id_sim: int | None = None,
-    noise_only: bool = False,
+    sim_signal: bool = True,  # True: simulate signal (with noise) ; False: simulate noise only
     obsmat_funcs: dict | None = None,
 ) -> None | int:
     """Generate and save a single realization of the sky maps."""
-    if noise_only:
-        noise_freq_maps, _, _ = generate_simu(manager, config, components=["noise"])
-        save_simu(manager, noise_freq_maps, id_sim=id_sim, is_noise=True)
-    else:
+    if sim_signal:
         noise_freq_maps, _, combined_freq_maps_beamed = generate_simu(
             manager, config, obsmat_funcs=obsmat_funcs
         )
         save_simu(manager, combined_freq_maps_beamed, id_sim=id_sim, is_noise=False)
+        save_simu(manager, noise_freq_maps, id_sim=id_sim, is_noise=True)
+    else:
+        noise_freq_maps, _, _ = generate_simu(manager, config, components=["noise"])
         save_simu(manager, noise_freq_maps, id_sim=id_sim, is_noise=True)
     return id_sim
 
@@ -196,54 +196,53 @@ def main():
         description="Script for generating signal and noise realizations",
         epilog="mpi4py is required to run this script",
     )
-    parser.add_argument("--config", type=Path, help="config file")
-    parser.add_argument("--noise-only", action="store_true", help="only produce noise maps")
+    parser.add_argument("--config", type=Path, required=True, help="config file")
 
     # Parse arguments
     args = parser.parse_args()
-    if args.config is None:
-        if rank == 0:
-            logger.warning("No config file provided, using example config")
-        config = Config.get_example()
-    else:
-        config = Config.from_yaml(args.config)
+    config = Config.from_yaml(args.config)
     manager = DataManager(config)
     if rank == 0:
         manager.dump_config()
 
-    nreal = config.general_pars.num_realizations
-    if nreal == 1:
-        if rank == 0:
-            logger.info("Generating one realization")
-            if size > 1:
-                msg = "Running with only one process, other processes will be idle"
-                logger.warning(msg)
-            process_simu(config, manager, noise_only=args.noise_only)
+    # Noise simulations:
+    n_sim_noise = config.noise_sim_pars.n_sim
+    with MPICommExecutor() as executor:
+        if executor is not None:
+            logger.info(f"Generating {n_sim_noise} noise realizations")
+            logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+            func = partial(process_simu, config, manager, sim_signal=False)
+            for result in executor.map(func, range(n_sim_noise), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                logger.info(f"Finished realization {result}")
+
+    # Signal simulations:
+    n_sim_sky = config.map_sim_pars.n_sim
+    if n_sim_sky == 0:  # WHERE IS THE REAL DATA???
+        logger.info(f"Generating {n_sim_sky} sky realizations")
         return
-
-    # Multiple realizations
     if rank == 0:
-        logger.info(f"Generating {nreal} realizations")
-
-    if config.map_sim_pars.filter_sims and not args.noise_only:
+        logger.info(f"Generating {n_sim_sky} sky realizations")
+    if config.map_sim_pars.filter_sims:
         # We need to load the obsmat(s)
         # FIXME: use parallel loading
         if rank == 0:
             msg = "Parallelization of obsmats not implemented yet, ignoring other processes"
             logger.warning(msg)
             obsmat_funcs = load_obsmat(manager, config)
-            for id_sim in range(nreal):
-                process_simu(config, manager, id_sim=id_sim, obsmat_funcs=obsmat_funcs)
-        return
+            for id_sim in range(n_sim_sky):
+                process_simu(
+                    config, manager, id_sim=id_sim, sim_signal=True, obsmat_funcs=obsmat_funcs
+                )
+    else:
+        with MPICommExecutor() as executor:
+            if executor is not None:
+                logger.info(f"Generating {n_sim_sky} sky realizations")
+                logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+                func = partial(process_simu, config, manager, sim_signal=True)
+                for result in executor.map(func, range(n_sim_noise), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                    logger.info(f"Finished realization {result}")
 
-    # No observation matrices to load (either noise only, of non-filtered sims)
-    # We can parallelize the simulations
-    with MPICommExecutor() as executor:
-        if executor is not None:
-            logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
-            func = partial(process_simu, config, manager, noise_only=args.noise_only)
-            for result in executor.map(func, range(nreal), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
-                logger.info(f"Finished realization {result}")
+    return
 
 
 if __name__ == "__main__":
