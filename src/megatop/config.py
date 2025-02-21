@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from attrs import Factory, asdict, field, frozen
-from cattrs.preconf.pyyaml import make_converter
+
+from megatop._converter import yaml_converter
 
 __all__ = [
     "CompSepConfig",
@@ -67,10 +68,6 @@ class KneeMode(IntEnum):
     OPTIMISTIC = auto()
     NONE = auto()
     SUPER_PESSIMISTIC = auto()
-
-
-# forbid extra keys in the yaml file to catch possible typos
-_yaml_converter = make_converter(forbid_extra_keys=True)
 
 
 @frozen
@@ -293,14 +290,19 @@ class Config:
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "Config":
-        """Create a Config from a yaml file."""
-        return _yaml_converter.loads(Path(path).read_text(), cls)
+        """Load and instantiate a ``Config`` from a YAML file."""
+        data = Path(path).read_text()
+        return yaml_converter.loads(data, cls)
 
     def to_yaml(self, path: str | Path) -> None:
-        """Serialize the Config to a yaml file."""
+        """Dump the config to a YAML file.
+
+        The '.yaml' suffix is automatically added if not already present.
+        """
         filename = Path(path).with_suffix(".yaml")
         filename.parent.mkdir(parents=True, exist_ok=True)
-        filename.write_text(_yaml_converter.dumps(self))
+        data = yaml_converter.dumps(self)
+        filename.write_text(data)
 
     @classmethod
     def get_example(cls) -> "Config":
