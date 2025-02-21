@@ -39,10 +39,6 @@ class DataManager:
         return self.path_to_maps / f"{sub:04d}"
 
     @property
-    def path_to_obsmats(self) -> Path:
-        return self._config.map_sim_pars.obsmat_path
-
-    @property
     def path_to_beams(self) -> Path:
         return self._config.data_dirs.root / self._config.data_dirs.beams
 
@@ -176,7 +172,7 @@ class DataManager:
 
     def get_obsmat_filenames(self) -> list[Path]:
         """Get the list of filenames for the observation matrices."""
-        names = [map_set.obsmat_filename for map_set in self._config.map_sets]
+        names = [map_set.obsmat_path for map_set in self._config.map_sets]
         return [name.with_suffix(".npz") for name in names]
 
     def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:

@@ -118,10 +118,6 @@ class MapSetConfig:
     def noise_map_filename(self) -> str:
         return self.noise_prefix + self.name
 
-    @property
-    def obsmat_filename(self) -> str:
-        return self.obsmat_path
-
 
 @frozen
 class MasksConfig:
