@@ -39,10 +39,11 @@ def generate_simu(
             noise_freq_maps = mock.get_noise_map_from_white_noise(
                 config.frequencies, config.nside, map_white_noise_levels
             )
+            logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
         elif config.noise_sim_pars.noise_option == "no_noise":
             logger.info("Simulation has NO NOISE")
-            noise_freq_maps = np.zeros((len(config.frequencies), 3, hp.nside2npix(config.nside)))
+            noise_freq_maps = None
 
         elif config.noise_sim_pars.noise_option == "noise_spectra":
             logger.info("Simulation has noise from full spectra")
@@ -50,12 +51,12 @@ def generate_simu(
             noise_freq_maps = mock.get_noise_map_from_noise_spectra(
                 config.frequencies, config.nside, n_ell
             )
+            logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
-        logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
         timer.stop("compute-noise-maps")
     else:
-        noise_freq_maps = np.zeros((len(config.frequencies), 3, hp.nside2npix(config.nside)))
-    if config.noise_sim_pars.include_nhits:
+        noise_freq_maps = None
+    if noise_freq_maps is not None and config.noise_sim_pars.include_nhits:
         noise_freq_maps = mock.include_hits_noise(
             noise_freq_maps, hp.read_map(manager.path_to_nhits_map), binary_mask
         )  # TODO move reading of maps to manager
@@ -111,10 +112,10 @@ def generate_simu(
                 combined_freq_maps_beamed[i_f] = mock.apply_observation_matrix(
                     obsmat_funcs[map_set_name], combined_freq_maps_beamed[i_f]
                 )
-
-    for i_f in range(len(config.frequencies)):
-        combined_freq_maps[i_f] += noise_freq_maps[i_f]
-        combined_freq_maps_beamed[i_f] += noise_freq_maps[i_f]
+    if noise_freq_maps is not None:
+        for i_f in range(len(config.frequencies)):
+            combined_freq_maps[i_f] += noise_freq_maps[i_f]
+            combined_freq_maps_beamed[i_f] += noise_freq_maps[i_f]
 
     combined_freq_maps = mask.apply_binary_mask(combined_freq_maps, binary_mask, unseen=False)
     combined_freq_maps_beamed = mask.apply_binary_mask(
@@ -182,7 +183,6 @@ def process_simu(
             manager, config, obsmat_funcs=obsmat_funcs
         )
         save_simu(manager, combined_freq_maps_beamed, id_sim=id_sim, is_noise=False)
-        save_simu(manager, noise_freq_maps, id_sim=id_sim, is_noise=True)
     else:
         noise_freq_maps, _, _ = generate_simu(manager, config, components=["noise"])
         save_simu(manager, noise_freq_maps, id_sim=id_sim, is_noise=True)
@@ -205,7 +205,40 @@ def main():
     if rank == 0:
         manager.dump_config()
 
+    # Signal simulations:
+    n_sim_sky = config.map_sim_pars.n_sim
+    if n_sim_sky == 0:
+        logger.info("No sky realizations generated")
+    else:
+        if rank == 0:
+            logger.info(f"Generating {n_sim_sky} sky realizations")
+        if config.map_sim_pars.filter_sims:
+            # We need to load the obsmat(s)
+            # FIXME: use parallel loading
+            if rank == 0:
+                msg = "Parallelization of obsmats not implemented yet, ignoring other processes"
+                logger.warning(msg)
+                obsmat_funcs = load_obsmat(manager, config)
+                for id_sim in range(n_sim_sky):
+                    process_simu(
+                        config, manager, id_sim=id_sim, sim_signal=True, obsmat_funcs=obsmat_funcs
+                    )
+        else:
+            with MPICommExecutor() as executor:
+                if executor is not None:
+                    logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+                    func = partial(process_simu, config, manager, sim_signal=True)
+                    for result in executor.map(func, range(n_sim_sky), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                        logger.info(f"Finished sky realization {result + 1} / {n_sim_sky}")
+
     # Noise simulations:
+    if (
+        config.noise_sim_pars.noise_option == "no_noise"
+    ):  # If noise_option == no_noise, no noise simulations are generated, no matter noise_sim_pars.n_sims
+        logger.info(
+            f" Parameter noise_option is set to {config.noise_sim_pars.noise_option}: no noise realizations generated"
+        )
+        return
     n_sim_noise = config.noise_sim_pars.n_sim
     with MPICommExecutor() as executor:
         if executor is not None:
@@ -213,35 +246,7 @@ def main():
             logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
             func = partial(process_simu, config, manager, sim_signal=False)
             for result in executor.map(func, range(n_sim_noise), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
-                logger.info(f"Finished realization {result}")
-
-    # Signal simulations:
-    n_sim_sky = config.map_sim_pars.n_sim
-    if n_sim_sky == 0:  # WHERE IS THE REAL DATA???
-        logger.info(f"Generating {n_sim_sky} sky realizations")
-        return
-    if rank == 0:
-        logger.info(f"Generating {n_sim_sky} sky realizations")
-    if config.map_sim_pars.filter_sims:
-        # We need to load the obsmat(s)
-        # FIXME: use parallel loading
-        if rank == 0:
-            msg = "Parallelization of obsmats not implemented yet, ignoring other processes"
-            logger.warning(msg)
-            obsmat_funcs = load_obsmat(manager, config)
-            for id_sim in range(n_sim_sky):
-                process_simu(
-                    config, manager, id_sim=id_sim, sim_signal=True, obsmat_funcs=obsmat_funcs
-                )
-    else:
-        with MPICommExecutor() as executor:
-            if executor is not None:
-                logger.info(f"Generating {n_sim_sky} sky realizations")
-                logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
-                func = partial(process_simu, config, manager, sim_signal=True)
-                for result in executor.map(func, range(n_sim_noise), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
-                    logger.info(f"Finished realization {result}")
-
+                logger.info(f"Finished noise realization {result + 1} / {n_sim_noise}")
     return
 
 

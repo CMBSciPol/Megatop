@@ -232,7 +232,7 @@ class MapSimConfig:
     n_sim: int = 0
     sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
     cmb_sim_no_pysm: bool = True
-    noise_option: ValidNoiseOptionType = "white_noise"
+    # noise_option: ValidNoiseOptionType = "white_noise"
     r_input: float = 0
     A_lens: float = 1
     fixed_cmb_seed: bool | None = None
@@ -258,12 +258,12 @@ class NoiseSimConfig:
 
     include_nhits: bool = True
 
-    @noise_option.validator
-    def check(self, attribute, value):
-        """Check that the noise option for the noise simulations is not no noise."""
-        if value == "no_noise":
-            msg = f"{attribute.name} cannot be {value} for noise simulations"
-            raise ValueError(msg)
+    # @noise_option.validator
+    # def check(self, attribute, value):
+    #    """Check that the noise option for the noise simulations is not no noise."""
+    #    if value == "no_noise":
+    #        msg = f"{attribute.name} cannot be {value} for noise simulations"
+    #        raise ValueError(msg)
 
 
 @frozen
