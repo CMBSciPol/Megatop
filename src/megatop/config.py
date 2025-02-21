@@ -1,5 +1,3 @@
-# pyright: reportAssignmentType=false
-
 from enum import IntEnum, auto
 from pathlib import Path
 from typing import Any, Literal
@@ -7,6 +5,10 @@ from typing import Any, Literal
 from attrs import Factory, asdict, define, field
 
 from megatop._converter import yaml_converter
+
+# pyright: reportAssignmentType = false
+# pyright: reportAttributeAccessIssue = false
+
 
 __all__ = [
     "CompSepConfig",
@@ -143,7 +145,7 @@ class MasksConfig:
     mock_nsources: int = 100
     mock_sources_hole_radius: float = 4  # TODO: conflict/redundant with 'apod_radius_point_source'
 
-    @gal_key.validator  # pyright: ignore[reportAttributeAccessIssue, reportOptionalMemberAccess]
+    @gal_key.validator  # pyright: ignore[reportOptionalMemberAccess]
     def _check_gal_key(self, attribute, value):
         """Check that gal_key is set if include_galactic is True."""
         if self.include_galactic and value is None:
@@ -160,7 +162,7 @@ class GeneralConfig:
     num_realizations: int = 1
     """Number of sky realizations"""
 
-    @lmax.validator  # pyright: ignore[reportAttributeAccessIssue]
+    @lmax.validator
     def check(self, attribute, value):
         """Check that lmax <= 3 * nside - 1"""
         if value > (three_nside_minus_one := 3 * self.nside - 1):
@@ -231,7 +233,7 @@ class MapSimConfig:
     fixed_cmb_seed: bool | None = None
     filter_sims: bool = False
 
-    @sky_model.validator  # pyright: ignore[reportAttributeAccessIssue]
+    @sky_model.validator
     def check(self, attribute, value):
         """Check that the sky model only contains dust and/or synchrotron templates"""
         if not all(template.startswith(("d", "s")) for template in value):
