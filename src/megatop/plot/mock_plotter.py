@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from megatop import Config, DataManager
+from megatop.config import NoiseOption
 from megatop.utils import Timer, logger, mock
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
@@ -159,13 +160,13 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    if config.noise_sim_pars.noise_option == "white_noise":
+    if config.noise_sim_pars.noise_option == NoiseOption.WHITE:
         n_ell, map_white_noise_levels = mock.get_noise(config, fsky_binary)
         noise_freq_maps = mock.get_noise_map_from_white_noise(
             config.frequencies, config.nside, map_white_noise_levels
         )
 
-    elif config.noise_sim_pars.noise_option == "noise_spectra":
+    elif config.noise_sim_pars.noise_option == NoiseOption.ONE_OVER_F:
         n_ell, map_white_noise_levels = mock.get_noise(config, fsky_binary)
         noise_freq_maps = mock.get_noise_map_from_noise_spectra(
             config.frequencies, config.nside, n_ell
@@ -218,7 +219,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 * fsky_binary
                 / fsky_correction
             )
-        elif config.noise_sim_pars.noise_option == "noise_spectra":
+        elif config.noise_sim_pars.noise_option == NoiseOption.ONE_OVER_F:
             cl_model = np.zeros_like(cls)
             cl_model[:, 1, 2:-1] = n_ell * fsky_binary / fsky_correction
             cl_model[:, 2, 2:-1] = n_ell * fsky_binary / fsky_correction
@@ -293,7 +294,7 @@ def main():
         plot_fiducial_spectra(manager)
         plot_fg_sims(manager, config)
         plot_cmb_sims(manager, config)
-        if config.noise_sim_pars.noise_option != "no_noise":
+        if config.noise_sim_pars.noise_option != NoiseOption.NOISELESS:
             plot_noise_sims(manager, config)
         plot_saved_sims(manager, config)
 

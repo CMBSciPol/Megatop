@@ -75,8 +75,8 @@ def get_noise(config: Config, fsky_binary):
     logger.info("Using SO V3calc to get white noise levels.")
     idx_freqs = config.indexes_into_SO_freqs
     _, n_ell, white_noise_levels = V3.so_V3_SA_noise(
-        sensitivity_mode=config.noise_sim_pars.sensitivity_level,
-        one_over_f_mode=config.noise_sim_pars.knee_mode,
+        sensitivity_mode=config.noise_sim_pars.v3_sensitivity_mode,
+        one_over_f_mode=config.noise_sim_pars.v3_one_over_f_mode,
         SAC_yrs_LF=config.noise_sim_pars.SAC_yrs_LF,
         f_sky=fsky_binary,
         ell_max=3 * config.nside - 1,

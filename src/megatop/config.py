@@ -1,4 +1,4 @@
-from enum import IntEnum, auto
+from enum import Enum, IntEnum
 from pathlib import Path
 from typing import Any, Literal
 
@@ -16,7 +16,6 @@ __all__ = [
     "DataDirsConfig",
     "FiducialCMBConfig",
     "GeneralConfig",
-    "KneeMode",
     "Map2ClConfig",
     "MapSetConfig",
     "MapSimConfig",
@@ -26,12 +25,13 @@ __all__ = [
     "OutputDirsConfig",
     "PlotsConfig",
     "PreProcessingConfig",
-    "SensitivityMode",
+    "V3Noise",
+    "V3Sensitivity",
     "ValidApoType",
     "ValidExperimentType",
-    "ValidNoiseOptionType",
     "ValidPlanckGalKey",
 ]
+
 
 SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
 SO_BEAMS_ARCMIN = {
@@ -48,28 +48,29 @@ ValidPlanckGalKey = Literal[
     "GAL020", "GAL040", "GAL060", "GAL070", "GAL080", "GAL090", "GAL097", "GAL099"
 ]
 ValidExperimentType = Literal["SO"]
-ValidNoiseOptionType = Literal["white_noise", "no_noise", "noise_spectra"]
 
 
-class SensitivityMode(IntEnum):
-    """Sensitivity assumption"""
+class NoiseOption(Enum):
+    NOISELESS = "no_noise"
+    WHITE = "white_noise"
+    ONE_OVER_F = "noise_spectra"
 
-    # check V3calc for reference
+
+class V3Sensitivity(IntEnum):
+    """V3calc sensitivity assumption."""
 
     THRESHOLD = 0
-    BASELINE = auto()
-    GOAL = auto()
+    BASELINE = 1
+    GOAL = 2
 
 
-class KneeMode(IntEnum):
-    """Knee frequency assumption"""
+class V3Noise(IntEnum):
+    """V3calc 1/f noise assumption."""
 
-    # check V3calc for reference
-
+    WHITE = 2
+    OPTIMISTIC = 1
     PESSIMISTIC = 0
-    OPTIMISTIC = auto()
-    NONE = auto()
-    SUPER_PESSIMISTIC = auto()
+    SUPER_PESSIMISTIC = 3
 
 
 @define
@@ -123,7 +124,7 @@ class MapSetConfig:
 
 @define
 class MasksConfig:
-    input_nhits_map: Path | None = None  # TODO: move to inputs
+    input_nhits_map: Path | None = None
 
     nhits_map_name: str = "nhits_map"
     analysis_mask_name: str = "analysis_mask"
@@ -143,7 +144,7 @@ class MasksConfig:
     input_sources_mask: Path | None = None
     sources_mask_name: str = "sources_mask"
     mock_nsources: int = 100
-    mock_sources_hole_radius: float = 4  # TODO: conflict/redundant with 'apod_radius_point_source'
+    mock_sources_hole_radius: float = 4
 
     @gal_key.validator  # pyright: ignore[reportOptionalMemberAccess]
     def _check_gal_key(self, attribute, value):
@@ -157,7 +158,7 @@ class MasksConfig:
 class GeneralConfig:
     nside: int = 512
     lmin: int = 30
-    lmax: int = field(default=1_000)  # using field because of the validator
+    lmax: int = field(default=1_000)
 
     num_realizations: int = 1
     """Number of sky realizations"""
@@ -227,7 +228,7 @@ class MapSimConfig:
     n_sim: int = 0
     sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
     cmb_sim_no_pysm: bool = True
-    # noise_option: ValidNoiseOptionType = "white_noise"
+    # noise_option: NoiseOption = NoiseOption.ONE_OVER_F
     r_input: float = 0
     A_lens: float = 1
     fixed_cmb_seed: bool | None = None
@@ -245,10 +246,11 @@ class MapSimConfig:
 class NoiseSimConfig:
     n_sim: int = 0
     experiment: ValidExperimentType = "SO"
-    noise_option: ValidNoiseOptionType = field(default="white noise")  # TODO: check default value
+    noise_option: NoiseOption = field(default=NoiseOption.ONE_OVER_F)
+
     # these three are required if experiment = 'SO'
-    sensitivity_level: SensitivityMode = SensitivityMode.GOAL
-    knee_mode: KneeMode = KneeMode.OPTIMISTIC
+    v3_sensitivity_mode: V3Sensitivity = V3Sensitivity.GOAL
+    v3_one_over_f_mode: V3Noise = V3Noise.OPTIMISTIC
     SAC_yrs_LF: int = 1
 
     include_nhits: bool = True
@@ -256,7 +258,7 @@ class NoiseSimConfig:
     # @noise_option.validator
     # def check(self, attribute, value):
     #    """Check that the noise option for the noise simulations is not no noise."""
-    #    if value == "no_noise":
+    #    if value == NoiseOption.NOISELESS:
     #        msg = f"{attribute.name} cannot be {value} for noise simulations"
     #        raise ValueError(msg)
 

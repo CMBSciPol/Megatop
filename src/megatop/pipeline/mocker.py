@@ -8,6 +8,7 @@ from mpi4py.futures import MPICommExecutor
 from numpy.typing import NDArray
 
 from megatop import Config, DataManager
+from megatop.config import NoiseOption
 from megatop.utils import Timer, logger, mask, mock
 from megatop.utils.mpi import get_world
 
@@ -32,7 +33,7 @@ def generate_simu(
         # Creating noise maps
         timer.start("compute-noise-maps")
 
-        if config.noise_sim_pars.noise_option == "white_noise":
+        if config.noise_sim_pars.noise_option == NoiseOption.WHITE:
             logger.info("Simulation has white noise only")
             # TODO: refactor to use config (requires changes in utils/mock.py)
             _, map_white_noise_levels = mock.get_noise(config, fsky_binary)
@@ -41,11 +42,11 @@ def generate_simu(
             )
             logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
-        elif config.noise_sim_pars.noise_option == "no_noise":
+        elif config.noise_sim_pars.noise_option == NoiseOption.NOISELESS:
             logger.info("Simulation has NO NOISE")
             noise_freq_maps = None
 
-        elif config.noise_sim_pars.noise_option == "noise_spectra":
+        elif config.noise_sim_pars.noise_option == NoiseOption.ONE_OVER_F:
             logger.info("Simulation has noise from full spectra")
             n_ell, _ = mock.get_noise(config, fsky_binary)
             noise_freq_maps = mock.get_noise_map_from_noise_spectra(
