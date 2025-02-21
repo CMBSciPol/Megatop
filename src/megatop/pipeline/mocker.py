@@ -200,7 +200,7 @@ def main():
 
     # Parse arguments
     args = parser.parse_args()
-    config = Config.from_yaml(args.config)
+    config = Config.load_yaml(args.config)
     manager = DataManager(config)
     if rank == 0:
         manager.dump_config()

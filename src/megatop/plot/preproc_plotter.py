@@ -56,7 +56,7 @@ def main():
         logger.warning("No config file provided, using example config")
         config = Config.get_example()
     else:
-        config = Config.from_yaml(args.config)
+        config = Config.load_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
 

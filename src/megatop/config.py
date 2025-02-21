@@ -289,12 +289,12 @@ class Config:
             raise ValueError(msg)
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "Config":
+    def load_yaml(cls, path: str | Path) -> "Config":
         """Load and instantiate a ``Config`` from a YAML file."""
         data = Path(path).read_text()
         return yaml_converter.loads(data, cls)
 
-    def to_yaml(self, path: str | Path) -> None:
+    def dump_yaml(self, path: str | Path) -> None:
         """Dump the config to a YAML file.
 
         The '.yaml' suffix is automatically added if not already present.
