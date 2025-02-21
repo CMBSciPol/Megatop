@@ -75,7 +75,7 @@ _yaml_converter = make_converter(forbid_extra_keys=True)
 
 @frozen
 class DataDirsConfig:
-    root: Path = field(converter=Path, default="data")
+    root: Path = field(converter=Path)
     maps: str = "maps"
     beams: str = "beams"
     bandpasses: str = "bandpasses"
@@ -84,7 +84,7 @@ class DataDirsConfig:
 
 @frozen
 class OutputDirsConfig:
-    root: Path = field(converter=Path, default="outputs")
+    root: Path = field(converter=Path)
     masks: str = "masks"
     preproc: str = "preproc"
     covar: str = "covar"
@@ -96,7 +96,7 @@ class OutputDirsConfig:
 
 @frozen
 class FiducialCMBConfig:
-    root: Path = field(converter=Path, default="fiducial_cmb")
+    root: Path = field(converter=Path)
     lensed_scalar: str = "lensed_scalar_cl"
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
@@ -108,7 +108,7 @@ class MapSetConfig:
     exp_tag: str
     file_prefix: str = ""
     noise_prefix: str = "noise_"
-    obsmat_path: Path = field(converter=Path, default="")
+    obsmat_path: Path = field(converter=Path, default=".")
 
     def __attrs_post_init__(self) -> None:
         object.__setattr__(self, "name", f"{self.exp_tag}_f{self.freq_tag:03d}")
@@ -270,9 +270,9 @@ class NoiseSimConfig:
 class Config:
     """Class holding the global configuration for Megatop."""
 
-    data_dirs: DataDirsConfig = Factory(DataDirsConfig)
-    output_dirs: OutputDirsConfig = Factory(OutputDirsConfig)
-    fiducial_cmb: FiducialCMBConfig = Factory(FiducialCMBConfig)
+    data_dirs: DataDirsConfig
+    output_dirs: OutputDirsConfig
+    fiducial_cmb: FiducialCMBConfig
     map_sets: list[MapSetConfig] = Factory(list)
     masks_pars: MasksConfig = Factory(MasksConfig)
     general_pars: GeneralConfig = Factory(GeneralConfig)
@@ -306,10 +306,11 @@ class Config:
     def get_example(cls) -> "Config":
         """Return an example configuration with one map set"""
         return cls(
-            data_dirs=DataDirsConfig(root="<data_root>"),
-            output_dirs=OutputDirsConfig(root="<output_root>"),
-            fiducial_cmb=FiducialCMBConfig(root="<fiducial_cmb_root>"),
+            data_dirs=DataDirsConfig(root="data_root"),
+            output_dirs=OutputDirsConfig(root="output_root"),
+            fiducial_cmb=FiducialCMBConfig(root="fiducial_cmb_root"),
             map_sets=[
+                # typical SO configuration
                 MapSetConfig(freq_tag=27, exp_tag="SAT4"),
                 MapSetConfig(freq_tag=39, exp_tag="SAT4"),
                 MapSetConfig(freq_tag=93, exp_tag="SAT1"),
