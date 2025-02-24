@@ -160,9 +160,6 @@ class GeneralConfig:
     lmin: int = 30
     lmax: int = field(default=1_000)
 
-    num_realizations: int = 1
-    """Number of sky realizations"""
-
     @lmax.validator
     def check(self, attribute, value):
         """Check that lmax <= 3 * nside - 1"""
