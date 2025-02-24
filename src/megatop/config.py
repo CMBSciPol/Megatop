@@ -73,6 +73,18 @@ class V3Noise(IntEnum):
     SUPER_PESSIMISTIC = 3
 
 
+# Register structure hooks for the V3Sensitivity and V3Noise enums
+# That should be done in _converter.py, but only unstructure hooks are working
+@yaml_converter.register_structure_hook
+def structure_V3Sensitivity(val: Any, _) -> V3Sensitivity:
+    return V3Sensitivity[val]
+
+
+@yaml_converter.register_structure_hook
+def structure_V3Noise(val: Any, _) -> V3Noise:
+    return V3Noise[val]
+
+
 @define
 class DataDirsConfig:
     root: Path = field(converter=Path)
