@@ -27,6 +27,11 @@ def requires_mpi4py(func: Callable[Param, ReturnType]) -> Callable[Param, Return
 
 
 @requires_mpi4py
+def get_world() -> tuple[MPI.Comm, int, int]:
+    return (c := MPI.COMM_WORLD), c.Get_rank(), c.Get_size()
+
+
+@requires_mpi4py
 def MPISUM(array, comm, rank, root):
     """
     Reduces an array using the SUM operator to the root process using MPI.

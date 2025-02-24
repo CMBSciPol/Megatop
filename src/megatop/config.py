@@ -1,11 +1,14 @@
-# pyright: reportAssignmentType=false
-
-from enum import IntEnum, auto
+from enum import Enum, IntEnum
 from pathlib import Path
 from typing import Any, Literal
 
-from attrs import Factory, asdict, field, frozen
-from cattrs.preconf.pyyaml import make_converter
+from attrs import Factory, asdict, define, field
+
+from megatop._converter import yaml_converter
+
+# pyright: reportAssignmentType = false
+# pyright: reportAttributeAccessIssue = false
+
 
 __all__ = [
     "CompSepConfig",
@@ -13,7 +16,6 @@ __all__ = [
     "DataDirsConfig",
     "FiducialCMBConfig",
     "GeneralConfig",
-    "KneeMode",
     "Map2ClConfig",
     "MapSetConfig",
     "MapSimConfig",
@@ -23,12 +25,13 @@ __all__ = [
     "OutputDirsConfig",
     "PlotsConfig",
     "PreProcessingConfig",
-    "SensitivityMode",
+    "V3Noise",
+    "V3Sensitivity",
     "ValidApoType",
     "ValidExperimentType",
-    "ValidNoiseOptionType",
     "ValidPlanckGalKey",
 ]
+
 
 SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
 SO_BEAMS_ARCMIN = {
@@ -45,46 +48,43 @@ ValidPlanckGalKey = Literal[
     "GAL020", "GAL040", "GAL060", "GAL070", "GAL080", "GAL090", "GAL097", "GAL099"
 ]
 ValidExperimentType = Literal["SO"]
-ValidNoiseOptionType = Literal["white_noise", "no_noise", "noise_spectra"]
 
 
-class SensitivityMode(IntEnum):
-    """Sensitivity assumption"""
+class NoiseOption(Enum):
+    NOISELESS = "no_noise"
+    WHITE = "white_noise"
+    ONE_OVER_F = "noise_spectra"
 
-    # check V3calc for reference
+
+class V3Sensitivity(IntEnum):
+    """V3calc sensitivity assumption."""
 
     THRESHOLD = 0
-    BASELINE = auto()
-    GOAL = auto()
+    BASELINE = 1
+    GOAL = 2
 
 
-class KneeMode(IntEnum):
-    """Knee frequency assumption"""
+class V3Noise(IntEnum):
+    """V3calc 1/f noise assumption."""
 
-    # check V3calc for reference
-
+    WHITE = 2
+    OPTIMISTIC = 1
     PESSIMISTIC = 0
-    OPTIMISTIC = auto()
-    NONE = auto()
-    SUPER_PESSIMISTIC = auto()
+    SUPER_PESSIMISTIC = 3
 
 
-# forbid extra keys in the yaml file to catch possible typos
-_yaml_converter = make_converter(forbid_extra_keys=True)
-
-
-@frozen
+@define
 class DataDirsConfig:
-    root: Path = field(converter=Path, default="data")
+    root: Path = field(converter=Path)
     maps: str = "maps"
     beams: str = "beams"
     bandpasses: str = "bandpasses"
     noise_maps: str = "noise_maps"
 
 
-@frozen
+@define
 class OutputDirsConfig:
-    root: Path = field(converter=Path, default="outputs")
+    root: Path = field(converter=Path)
     masks: str = "masks"
     preproc: str = "preproc"
     covar: str = "covar"
@@ -94,24 +94,24 @@ class OutputDirsConfig:
     noise_spectra: str = "noise_spectra"
 
 
-@frozen
+@define
 class FiducialCMBConfig:
-    root: Path = field(converter=Path, default="fiducial_cmb")
+    root: Path = field(converter=Path)
     lensed_scalar: str = "lensed_scalar_cl"
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
 
-@frozen
+@define
 class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
     exp_tag: str
     file_prefix: str = ""
     noise_prefix: str = "noise_"
-    obsmat_path: Path = field(converter=Path, default="")
+    obsmat_path: Path = field(converter=Path, default=".")
 
     def __attrs_post_init__(self) -> None:
-        object.__setattr__(self, "name", f"{self.exp_tag}_f{self.freq_tag:03d}")
+        self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
 
     @property
     def map_filename(self) -> str:
@@ -121,14 +121,10 @@ class MapSetConfig:
     def noise_map_filename(self) -> str:
         return self.noise_prefix + self.name
 
-    @property
-    def obsmat_filename(self) -> str:
-        return self.obsmat_path
 
-
-@frozen
+@define
 class MasksConfig:
-    input_nhits_map: Path | None = None  # TODO: move to inputs
+    input_nhits_map: Path | None = None
 
     nhits_map_name: str = "nhits_map"
     analysis_mask_name: str = "analysis_mask"
@@ -148,9 +144,9 @@ class MasksConfig:
     input_sources_mask: Path | None = None
     sources_mask_name: str = "sources_mask"
     mock_nsources: int = 100
-    mock_sources_hole_radius: float = 4  # TODO: conflict/redundant with 'apod_radius_point_source'
+    mock_sources_hole_radius: float = 4
 
-    @gal_key.validator  # pyright: ignore[reportAttributeAccessIssue, reportOptionalMemberAccess]
+    @gal_key.validator  # pyright: ignore[reportOptionalMemberAccess]
     def _check_gal_key(self, attribute, value):
         """Check that gal_key is set if include_galactic is True."""
         if self.include_galactic and value is None:
@@ -158,16 +154,16 @@ class MasksConfig:
             raise ValueError(msg)
 
 
-@frozen
+@define
 class GeneralConfig:
     nside: int = 512
     lmin: int = 30
     lmax: int = field(default=1_000)
-    id_sim: int = 0
 
-    ben_sims: bool = False
+    num_realizations: int = 1
+    """Number of sky realizations"""
 
-    @lmax.validator  # pyright: ignore[reportAttributeAccessIssue]
+    @lmax.validator
     def check(self, attribute, value):
         """Check that lmax <= 3 * nside - 1"""
         if value > (three_nside_minus_one := 3 * self.nside - 1):
@@ -175,19 +171,18 @@ class GeneralConfig:
             raise ValueError(msg)
 
 
-@frozen
+@define
 class PreProcessingConfig:
     common_beam_correction: float = 100
     beam_fwhms: list[float] | None = None
 
 
-@frozen
+@define
 class NoiseCovmatConfig:
-    nrealizations: int | None = None  # TODO: depends on mocker?
     save_preprocessed_noise_maps: bool = False
 
 
-@frozen
+@define
 class _MinimizeOptions:
     disp: bool = False
     gtol: float = 1e-12
@@ -196,7 +191,7 @@ class _MinimizeOptions:
     ftol: float = 1e-12
 
 
-@frozen
+@define
 class CompSepConfig:
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
@@ -214,7 +209,7 @@ class CompSepConfig:
         return options
 
 
-@frozen
+@define
 class Map2ClConfig:
     delta_ell: int | list[int] = 10
     purify_e: bool = True
@@ -222,22 +217,24 @@ class Map2ClConfig:
     n_iter_namaster: int = 3
 
 
-@frozen
+@define
 class PlotsConfig:
     lmin_plot: int = 30
     lmax_plot: int = 1_000
 
 
-@frozen
+@define
 class MapSimConfig:
+    n_sim: int = 0
     sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
     cmb_sim_no_pysm: bool = True
+    # noise_option: NoiseOption = NoiseOption.ONE_OVER_F
     r_input: float = 0
     A_lens: float = 1
-    fixed_cmb: bool = False
+    fixed_cmb_seed: bool | None = None
     filter_sims: bool = False
 
-    @sky_model.validator  # pyright: ignore[reportAttributeAccessIssue]
+    @sky_model.validator
     def check(self, attribute, value):
         """Check that the sky model only contains dust and/or synchrotron templates"""
         if not all(template.startswith(("d", "s")) for template in value):
@@ -245,27 +242,34 @@ class MapSimConfig:
             raise ValueError(msg)
 
 
-@frozen
+@define
 class NoiseSimConfig:
+    n_sim: int = 0
     experiment: ValidExperimentType = "SO"
-    noise_option: ValidNoiseOptionType = "white_noise"  # TODO: check default value
+    noise_option: NoiseOption = field(default=NoiseOption.ONE_OVER_F)
 
     # these three are required if experiment = 'SO'
-    sensitivity_level: SensitivityMode = SensitivityMode.GOAL
-    knee_mode: KneeMode = KneeMode.OPTIMISTIC
+    v3_sensitivity_mode: V3Sensitivity = V3Sensitivity.GOAL
+    v3_one_over_f_mode: V3Noise = V3Noise.OPTIMISTIC
     SAC_yrs_LF: int = 1
 
     include_nhits: bool = True
-    save_noise_sim: bool = False  # TODO: needed?
+
+    # @noise_option.validator
+    # def check(self, attribute, value):
+    #    """Check that the noise option for the noise simulations is not no noise."""
+    #    if value == NoiseOption.NOISELESS:
+    #        msg = f"{attribute.name} cannot be {value} for noise simulations"
+    #        raise ValueError(msg)
 
 
-@frozen
+@define
 class Config:
     """Class holding the global configuration for Megatop."""
 
-    data_dirs: DataDirsConfig = Factory(DataDirsConfig)
-    output_dirs: OutputDirsConfig = Factory(OutputDirsConfig)
-    fiducial_cmb: FiducialCMBConfig = Factory(FiducialCMBConfig)
+    data_dirs: DataDirsConfig
+    output_dirs: OutputDirsConfig
+    fiducial_cmb: FiducialCMBConfig
     map_sets: list[MapSetConfig] = Factory(list)
     masks_pars: MasksConfig = Factory(MasksConfig)
     general_pars: GeneralConfig = Factory(GeneralConfig)
@@ -285,24 +289,30 @@ class Config:
             raise ValueError(msg)
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "Config":
-        """Create a Config from a yaml file."""
-        return _yaml_converter.loads(Path(path).read_text(), cls)
+    def load_yaml(cls, path: str | Path) -> "Config":
+        """Load and instantiate a ``Config`` from a YAML file."""
+        data = Path(path).read_text()
+        return yaml_converter.loads(data, cls)
 
-    def to_yaml(self, path: str | Path) -> None:
-        """Serialize the Config to a yaml file."""
+    def dump_yaml(self, path: str | Path) -> None:
+        """Dump the config to a YAML file.
+
+        The '.yaml' suffix is automatically added if not already present.
+        """
         filename = Path(path).with_suffix(".yaml")
         filename.parent.mkdir(parents=True, exist_ok=True)
-        filename.write_text(_yaml_converter.dumps(self))
+        data = yaml_converter.dumps(self)
+        filename.write_text(data)
 
     @classmethod
     def get_example(cls) -> "Config":
         """Return an example configuration with one map set"""
         return cls(
-            data_dirs=DataDirsConfig(root="<data_root>"),
-            output_dirs=OutputDirsConfig(root="<output_root>"),
-            fiducial_cmb=FiducialCMBConfig(root="<fiducial_cmb_root>"),
+            data_dirs=DataDirsConfig(root="data_root"),
+            output_dirs=OutputDirsConfig(root="output_root"),
+            fiducial_cmb=FiducialCMBConfig(root="fiducial_cmb_root"),
             map_sets=[
+                # typical SO configuration
                 MapSetConfig(freq_tag=27, exp_tag="SAT4"),
                 MapSetConfig(freq_tag=39, exp_tag="SAT4"),
                 MapSetConfig(freq_tag=93, exp_tag="SAT1"),

@@ -32,17 +32,18 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     return np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0]])
 
 
-def generate_map_cmb(Cl_cmb_model, nside: int, fixed_cmb: bool):
+def generate_map_cmb(Cl_cmb_model, nside: int, fixed_cmb_seed: int | None = None):
     # TODO write tests
     lmax = 3 * nside
-    if fixed_cmb:
-        # Fixing seed so that the CMB is the same for all sims
-        # We need to do this because synfast uses the legacy numpy random number generator
-        np.random.seed(1234)  # noqa: NPY002
+
+    # Fixing seed if required
+    # hp.synfast uses the legacy numpy random number generator
+    np.random.seed(fixed_cmb_seed)  # noqa: NPY002
     map_CMB = hp.synfast(Cl_cmb_model[0], nside=nside, lmax=lmax, new=True, pixwin=False)
-    if fixed_cmb:
-        # Resetting seed
-        np.random.seed(None)  # noqa: NPY002
+
+    # Resetting seed
+    np.random.seed(None)  # noqa: NPY002
+
     return np.array(map_CMB)
 
 
@@ -74,8 +75,8 @@ def get_noise(config: Config, fsky_binary):
     logger.info("Using SO V3calc to get white noise levels.")
     idx_freqs = config.indexes_into_SO_freqs
     _, n_ell, white_noise_levels = V3.so_V3_SA_noise(
-        sensitivity_mode=config.noise_sim_pars.sensitivity_level,
-        one_over_f_mode=config.noise_sim_pars.knee_mode,
+        sensitivity_mode=config.noise_sim_pars.v3_sensitivity_mode,
+        one_over_f_mode=config.noise_sim_pars.v3_one_over_f_mode,
         SAC_yrs_LF=config.noise_sim_pars.SAC_yrs_LF,
         f_sky=fsky_binary,
         ell_max=3 * config.nside - 1,
@@ -175,9 +176,9 @@ def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float):
     return np.array(freq_map_beamed)
 
 
-def load_obseration_matrix(nside: int, map_sets, obsmats_filenames) -> dict:
+def load_observation_matrix(nside: int, map_sets, obsmat_filenames) -> dict:
     dict_obsmats_func = {}
-    for map_set, fname in zip(map_sets, obsmats_filenames, strict=False):
+    for map_set, fname in zip(map_sets, obsmat_filenames, strict=False):
         logger.info(f"Loading obsmat for {map_set.name} from {fname}")
         obsmat = sp.sparse.load_npz(fname)
         dict_obsmats_func[map_set.name] = lambda map_, obs_mat=obsmat: obs_mat.dot(

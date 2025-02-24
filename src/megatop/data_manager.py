@@ -22,7 +22,7 @@ class DataManager:
         If the filename is not a absolute path, it is assumed relative to the output root.
         """
         logger.info(f"Dumping the config in {self.path_to_output}")
-        self._config.to_yaml(self.path_to_output / filename)
+        self._config.dump_yaml(self.path_to_output / filename)
 
     # Paths to the data/input directories
     # -----------------------------------
@@ -37,10 +37,6 @@ class DataManager:
 
     def get_path_to_maps_sub(self, sub: int) -> Path:
         return self.path_to_maps / f"{sub:04d}"
-
-    @property
-    def path_to_obsmats(self) -> Path:
-        return self._config.map_sim_pars.obsmat_path
 
     @property
     def path_to_beams(self) -> Path:
@@ -174,9 +170,9 @@ class DataManager:
         names = [dest / map_set.map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
-    def get_osbmats_filenames(self) -> list[Path]:
+    def get_obsmat_filenames(self) -> list[Path]:
         """Get the list of filenames for the observation matrices."""
-        names = [map_set.obsmat_filename for map_set in self._config.map_sets]
+        names = [map_set.obsmat_path for map_set in self._config.map_sets]
         return [name.with_suffix(".npz") for name in names]
 
     def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
