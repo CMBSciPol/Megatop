@@ -2,11 +2,14 @@ import contextlib
 from collections.abc import Callable
 from functools import wraps
 from importlib.util import find_spec
-from typing import ParamSpec, TypeVar
+from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 import numpy as np
 
 with contextlib.suppress(ImportError):
+    from mpi4py import MPI
+
+if TYPE_CHECKING:
     from mpi4py import MPI
 
 
@@ -27,7 +30,7 @@ def requires_mpi4py(func: Callable[Param, ReturnType]) -> Callable[Param, Return
 
 
 @requires_mpi4py
-def get_world() -> tuple[MPI.Comm, int, int]:
+def get_world() -> tuple["MPI.Comm", int, int]:
     return (c := MPI.COMM_WORLD), c.Get_rank(), c.Get_size()
 
 
