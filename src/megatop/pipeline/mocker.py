@@ -234,7 +234,7 @@ def main():
 
     # Noise simulations:
     if (
-        config.noise_sim_pars.noise_option == "no_noise"
+        config.noise_sim_pars.noise_option == NoiseOption.NOISELESS
     ):  # If noise_option == no_noise, no noise simulations are generated, no matter noise_sim_pars.n_sims
         logger.info(
             f" Parameter noise_option is set to {config.noise_sim_pars.noise_option}: no noise realizations generated"
