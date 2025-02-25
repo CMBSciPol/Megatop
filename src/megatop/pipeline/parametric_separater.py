@@ -1,5 +1,5 @@
 import argparse
-import multiprocessing as mp
+from functools import partial
 from pathlib import Path
 
 import fgbuster as fg
@@ -7,19 +7,20 @@ import healpy as hp
 import numpy as np
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
+from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask
 
 
-def weighted_comp_sep(manager: DataManager, config: Config):
+def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
         logger.debug(f"Loading covmat from {noisecov_fname}")
         noisecov = np.load(noisecov_fname)
 
     with Timer("load-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps()
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
 
@@ -73,10 +74,11 @@ def weighted_comp_sep(manager: DataManager, config: Config):
     return res
 
 
-def save_compsep_results(manager: DataManager, res):
-    manager.path_to_components.mkdir(parents=True, exist_ok=True)
-    fname_results = manager.path_to_compsep_results
-    fname_compmaps = manager.path_to_components_maps
+def save_compsep_results(manager: DataManager, res, id_sim: int | None = None):
+    path = manager.get_path_to_components(sub=id_sim)
+    path.mkdir(parents=True, exist_ok=True)
+    fname_results = manager.get_path_to_compsep_results(sub=id_sim)
+    fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
     res_dict = {}
     for attr in dir(res):
         if (
@@ -91,64 +93,31 @@ def save_compsep_results(manager: DataManager, res):
     np.save(fname_compmaps, res.s)
 
 
-def compsep_and_save(args, id_sim=None):
-    if id_sim is None:  # Running only one simulation
-        if args.config is None:
-            logger.warning("No config file provided, using example config")
-            config = Config.get_example()
-        else:
-            config = Config.load_yaml(args.config)
-    else:
-        if not args.config_root:
-            logger.warning("No config root provided, required for multiple simulations. exiting")
-            raise AttributeError
-        fname_config = args.config_root.with_name(f"{args.config_root.name}_{id_sim:04d}.yaml")
-        config = Config.load_yaml(fname_config)
-    manager = DataManager(config)
-    manager.dump_config()
+def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = None):
     with Timer("weighted-compsep"):
-        res = weighted_comp_sep(manager, config)
-    save_compsep_results(manager, res)
+        res = weighted_comp_sep(manager, config, id_sim=id_sim)
+    save_compsep_results(manager, res, id_sim=id_sim)
+    return id_sim
 
 
 def main():
     parser = argparse.ArgumentParser(description="Component separation")
-    parser.add_argument("--config", type=Path, help="config file")
-    parser.add_argument(
-        "--config_root", type=Path, help="config file root (will be appended  by {id_sim:04d})"
-    )
-    parser.add_argument("--Nsims", type=int, help="Number of simulations performed")
-    parser.add_argument(
-        "--nomultiproc", action="store_true", help="don't use multprocessing parallelisation"
-    )
+    parser.add_argument("--config", type=Path, required=True, help="config file")
+
     args = parser.parse_args()
+    config = Config.load_yaml(args.config)
+    manager = DataManager(config)
 
-    if args.config:  # Prioritize --config if provided
-        compsep_and_save(args)
-        return
-
-    if args.config_root:  # Multiple simulations mode
-        if not args.Nsims:
-            logger.warning("Nsims not specified, will only run one ")
-            Nsims = 1
-        else:
-            Nsims = args.Nsims
-
-        num_workers = 1 if args.nomultiproc else min(mp.cpu_count(), Nsims)
-        logger.info(f"Using {num_workers} worker processes")
-        if num_workers > 1:
-            mp.set_start_method("spawn", force=True)  # Ensure a clean multiprocessing start
-            with mp.Pool(num_workers) as pool:
-                pool.starmap(
-                    compsep_and_save,
-                    [(args, id_sim) for id_sim in range(Nsims)],
-                )
-        else:
-            for id_sim in range(Nsims):
-                compsep_and_save(args, id_sim)
+    n_sim_sky = config.map_sim_pars.n_sim
+    if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data
+        compsep_and_save(config, manager, id_sim=None)
     else:
-        # Default case: no arguments provided, run single simulation with example config
-        compsep_and_save(args)
+        with MPICommExecutor() as executor:
+            if executor is not None:
+                logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+                func = partial(compsep_and_save, config, manager)
+                for result in executor.map(func, range(n_sim_sky), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                    logger.info(f"Finished component separation on map {result + 1} / {n_sim_sky}")
 
 
 if __name__ == "__main__":
