@@ -116,7 +116,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 def main():
     parser = argparse.ArgumentParser(
         description="Pixel noise covariance estimater",
-        epilog="mpi4py is required to run this script",
     )
     parser.add_argument("--config", type=Path, required=True, help="config file")
 
