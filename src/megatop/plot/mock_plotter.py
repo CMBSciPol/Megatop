@@ -202,7 +202,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
         else:
             fsky_correction = 1.0
 
-        if config.noise_sim_pars.noise_option == "white_noise":
+        if config.noise_sim_pars.noise_option == NoiseOption.WHITE:
             cl_model = np.ones_like(cls)
             cl_model[:, 0] = (
                 (map_white_noise_levels[:, np.newaxis] / np.sqrt(2) * np.pi / 180 / 60) ** 2
