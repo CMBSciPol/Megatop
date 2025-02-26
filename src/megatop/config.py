@@ -2,7 +2,8 @@ from enum import Enum, IntEnum
 from pathlib import Path
 from typing import Any, Literal
 
-from attrs import Factory, asdict, define, field
+import numpy as np
+from attrs import Factory, asdict, evolve, field, frozen
 
 from megatop._converter import yaml_converter
 
@@ -85,7 +86,7 @@ def structure_V3Noise(val: Any, _) -> V3Noise:
     return V3Noise[val]
 
 
-@define
+@frozen
 class DataDirsConfig:
     root: Path = field(converter=Path)
     maps: str = "maps"
@@ -94,7 +95,7 @@ class DataDirsConfig:
     noise_maps: str = "noise_maps"
 
 
-@define
+@frozen
 class OutputDirsConfig:
     root: Path = field(converter=Path)
     masks: str = "masks"
@@ -107,14 +108,14 @@ class OutputDirsConfig:
     mcmc: str = "mcmc"
 
 
-@define
+@frozen
 class FiducialCMBConfig:
     root: Path = field(converter=Path)
     lensed_scalar: str = "lensed_scalar_cl"
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
 
-@define
+@frozen
 class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
@@ -124,7 +125,8 @@ class MapSetConfig:
     obsmat_path: Path = field(converter=Path, default=".")
 
     def __attrs_post_init__(self) -> None:
-        self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
+        # circumvent immutability
+        object.__setattr__(self, "name", f"{self.exp_tag}_f{self.freq_tag:03d}")
 
     @property
     def map_filename(self) -> str:
@@ -135,7 +137,7 @@ class MapSetConfig:
         return self.noise_prefix + self.name
 
 
-@define
+@frozen
 class MasksConfig:
     input_nhits_map: Path | None = None
 
@@ -167,7 +169,7 @@ class MasksConfig:
             raise ValueError(msg)
 
 
-@define
+@frozen
 class GeneralConfig:
     nside: int = 512
     lmin: int = 30
@@ -181,18 +183,18 @@ class GeneralConfig:
             raise ValueError(msg)
 
 
-@define
+@frozen
 class PreProcessingConfig:
     common_beam_correction: float = 100
     beam_fwhms: list[float] | None = None
 
 
-@define
+@frozen
 class NoiseCovmatConfig:
     save_preprocessed_noise_maps: bool = False
 
 
-@define
+@frozen
 class _MinimizeOptions:
     disp: bool = False
     gtol: float = 1e-12
@@ -201,7 +203,7 @@ class _MinimizeOptions:
     ftol: float = 1e-12
 
 
-@define
+@frozen
 class CompSepConfig:
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
@@ -219,7 +221,7 @@ class CompSepConfig:
         return options
 
 
-@define
+@frozen
 class Map2ClConfig:
     delta_ell: int | list[int] = 10
     purify_e: bool = True
@@ -227,13 +229,13 @@ class Map2ClConfig:
     n_iter_namaster: int = 3
 
 
-@define
+@frozen
 class PlotsConfig:
     lmin_plot: int = 30
     lmax_plot: int = 1_000
 
 
-@define
+@frozen
 class MapSimConfig:
     n_sim: int = 1
     sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
@@ -252,7 +254,7 @@ class MapSimConfig:
             raise ValueError(msg)
 
 
-@define
+@frozen
 class NoiseSimConfig:
     n_sim: int = 1
     experiment: ValidExperimentType = "SO"
@@ -338,6 +340,25 @@ class Config:
                 MapSetConfig(freq_tag=280, exp_tag="SAT3"),
             ],
         )
+
+    def split_map_sets(self, num_colors: int, color: int = 0):
+        """Split the configuration into color groups (similar to MPI_Comm_split).
+
+        Returns a different configuration based on a color value, allowing for parallel processing
+        of map sets. Each color group gets a configuration with the same subset of map_sets.
+
+        Args:
+            num_colors (int): Number of color groups to split the configuration into.
+            color (int, optional): Index used to select which map_set group to return.
+
+        Returns:
+            Config: A new Config object containing only the map_sets corresponding to the given
+                color. All other configuration parameters remain unchanged.
+        """
+        all_indices = np.arange(len(self.map_sets))
+        # modulo to ensure access within bounds
+        my_indices = np.array_split(all_indices, num_colors)[color % num_colors]
+        return evolve(self, map_sets=[ms for i, ms in enumerate(self.map_sets) if i in my_indices])
 
     @property
     def nside(self) -> int:
