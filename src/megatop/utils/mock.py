@@ -16,7 +16,7 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
 
     r_input = manager._config.map_sim_pars.r_input
     A_lens = manager._config.map_sim_pars.A_lens
-    logger.info(f"CMB simulation has r={r_input} and A_lens={A_lens}")
+    logger.debug(f"CMB simulation has r={r_input} and A_lens={A_lens}")
     Cl_lens = hp.read_cl(manager.path_to_lensed_scalar)
     Cl_BB_prim = r_input * hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2]
 
@@ -49,7 +49,7 @@ def generate_map_cmb(Cl_cmb_model, nside: int, fixed_cmb_seed: int | None = None
 
 def generate_map_fgs_pysm(frequencies, nside, sky_model, input_coord="G", output_coord="E"):
     # TODO write tests
-    logger.info(f"Generating FG maps for {frequencies} GHz")
+    logger.debug(f"Generating FG maps for {frequencies} GHz")
 
     sky = Sky(nside=nside, preset_strings=sky_model)
     maps_fgs = []
@@ -60,7 +60,7 @@ def generate_map_fgs_pysm(frequencies, nside, sky_model, input_coord="G", output
             .value
         )
         if input_coord != output_coord:
-            logger.info(f"Rotating {fr}GHz foreground map from {input_coord} to {output_coord}")
+            logger.debug(f"Rotating {fr}GHz foreground map from {input_coord} to {output_coord}")
             r = hp.Rotator(coord=[input_coord, output_coord])
             m = r.rotate_map_pixel(m)
         maps_fgs.append(m)
@@ -72,7 +72,7 @@ def get_noise(config: Config, fsky_binary):
     if config.noise_sim_pars.experiment != "SO":
         raise NotImplementedError
 
-    logger.info("Using SO V3calc to get white noise levels.")
+    logger.debug("Using SO V3calc to get white noise levels.")
     idx_freqs = config.indexes_into_SO_freqs
     _, n_ell, white_noise_levels = V3.so_V3_SA_noise(
         sensitivity_mode=config.noise_sim_pars.v3_sensitivity_mode,
@@ -86,7 +86,7 @@ def get_noise(config: Config, fsky_binary):
     )
     white_noise_levels = white_noise_levels[idx_freqs]
     n_ell = n_ell[idx_freqs]
-    logger.info(
+    logger.debug(
         f"Map white noise level (Q,U) {', '.join(f'{lvl:.2f}' for lvl in white_noise_levels)} muK-arcmin"
     )
     return n_ell, white_noise_levels
@@ -130,7 +130,7 @@ def get_noise_map_from_noise_spectra(frequencies, nside: int, n_ell):
 
 
 def include_hits_noise(noise_maps, nhits_map, binary_mask):
-    logger.info("Rescaling the noise maps by the hits count")
+    logger.debug("Rescaling the noise maps by the hits count")
     nhits_map_rescaled = nhits_map / max(nhits_map)
     mask_indices = np.where(binary_mask == 1)[0]
     if np.any(nhits_map_rescaled[mask_indices] == 0):
