@@ -204,23 +204,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-"""
-def main():
-    parser = argparse.ArgumentParser(description="Noise spectra estimator")
-    parser.add_argument("--config", type=Path, required=True, help="config file")
-
-    args = parser.parse_args()
-    config = Config.load_yaml(args.config)
-    manager = DataManager(config)
-    manager.dump_config()
-
-    n_sim_sky = config.map_sim_pars.n_sim
-    if n_sim_sky == 0:
-        noise_spectra_estimator(config, manager)
-    else:
-        num_workers = min(cpu_count(), n_sim_sky)
-        with Pool(processes=num_workers) as pool:
-            for result in pool.starmap(noise_spectra_estimator, [(config, manager, i) for i in range(n_sim_sky)]):
-             logger.info(f"Finished noise spectra estimation for sky simulation {result + 1}/{n_sim_sky}")
-"""
