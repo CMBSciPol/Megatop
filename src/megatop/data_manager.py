@@ -69,10 +69,6 @@ class DataManager:
     def path_to_covar(self) -> Path:
         return self.path_to_output / self._config.output_dirs.covar
 
-    @property
-    def path_to_noise_spectra(self) -> Path:
-        return self.path_to_output / self._config.output_dirs.noise_spectra
-
     # Paths to the plot directories (in output)
     # -----------------------------------------
 
@@ -217,6 +213,15 @@ class DataManager:
         fname = self.get_path_to_spectra(sub=sub) / "binning"
         return fname.with_suffix(".npz")
 
+    def get_path_to_noise_spectra(self, sub: int | None = None) -> Path:
+        if sub is not None:
+            return self.path_to_output / self._config.output_dirs.noise_spectra / f"{sub:04d}"
+        return self.path_to_output / self._config.output_dirs.noise_spectra
+
+    def get_path_to_noise_spectra_cross_components(self, sub: int | None = None) -> Path:
+        fname = self.get_path_to_noise_spectra(sub=sub) / "noise_cross_components_Cls"
+        return fname.with_suffix(".npz")
+
     @property
     def path_to_pixel_noisecov(self) -> Path:
         fname = self.path_to_covar / "pixel_noisecov_preprocessed"
@@ -228,8 +233,3 @@ class DataManager:
         # NB: originally saved to 'path_to_components' but it is a covariance after all...
         fname = self.path_to_covar / "invAtNA"
         return fname.with_suffix(".npy")
-
-    @property
-    def path_to_noise_cross_components_spectra(self) -> Path:
-        fname = self.path_to_noise_spectra / "noise_cross_components_Cls"
-        return fname.with_suffix(".npz")
