@@ -238,11 +238,11 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
         )
 
 
-def plot_saved_sims(manager: DataManager, config: Config, maps=True, cls=True):
+def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True, cls=True):
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    combined_maps = np.array(read_input_maps(manager.get_maps_filenames()))
+    combined_maps = np.array(read_input_maps(manager.get_maps_filenames(sub=id_sim)))
     binary_mask = hp.read_map(manager.path_to_binary_mask)
 
     combined_maps = apply_binary_mask(combined_maps, binary_mask, unseen=True)
@@ -290,13 +290,20 @@ def main():
 
     logger.info("Plotting mocker outputs...")
 
+    n_sim_sky = config.map_sim_pars.n_sim
+    if n_sim_sky == 0:
+        id_sim = None
+    else:
+        logger.info("Plotting only simulation #0")
+        id_sim = 0
+
     with Timer("mock-plotter"):
         plot_fiducial_spectra(manager)
         plot_fg_sims(manager, config)
         plot_cmb_sims(manager, config)
         if config.noise_sim_pars.noise_option != NoiseOption.NOISELESS:
             plot_noise_sims(manager, config)
-        plot_saved_sims(manager, config)
+        plot_saved_sims(manager, config, id_sim)
 
 
 if __name__ == "__main__":

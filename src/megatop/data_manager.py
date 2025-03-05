@@ -21,7 +21,7 @@ class DataManager:
 
         If the filename is not a absolute path, it is assumed relative to the output root.
         """
-        logger.info(f"Dumping the config in {self.path_to_output}")
+        logger.info(f"Dumping the config in {self.path_to_output / filename}")
         self._config.dump_yaml(self.path_to_output / filename)
 
     # Paths to the data/input directories
