@@ -19,7 +19,9 @@ def plot_noise_spectra(manager, config, id_sim=None):
 
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
 
-    all_noise_Cls = np.load(manager.path_to_noise_cross_components_spectra, allow_pickle=True)
+    fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+    all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)
+
     plot_all_Cls(
         all_noise_Cls,
         bin_centre_lminlmax,
@@ -29,7 +31,8 @@ def plot_noise_spectra(manager, config, id_sim=None):
         y_axis_label=r"$C_{\ell}$",
     )
 
-    all_Cls = np.load(manager.path_to_cross_components_spectra, allow_pickle=True)
+    fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+    all_Cls = np.load(fname_all_Cls, allow_pickle=True)
 
     debiased_cls = {}
     for key_cls, key_noise_cls in zip(all_Cls.keys(), all_noise_Cls.keys(), strict=False):
