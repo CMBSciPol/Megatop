@@ -145,7 +145,7 @@ class MasksConfig:
     apod_radius: float = 10
     apod_radius_point_source: float = 4
     apod_type: ValidApoType = "C1"
-    binary_mask_zero_threshold: float = 1e-3
+    binary_mask_zero_threshold: float = 1e-1
 
     # TODO: option to give the direct path to the galactic mask?
     include_galactic: bool = False
@@ -234,7 +234,7 @@ class PlotsConfig:
 
 @define
 class MapSimConfig:
-    n_sim: int = 0
+    n_sim: int = 1
     sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
     cmb_sim_no_pysm: bool = True
     # noise_option: NoiseOption = NoiseOption.ONE_OVER_F
@@ -253,7 +253,7 @@ class MapSimConfig:
 
 @define
 class NoiseSimConfig:
-    n_sim: int = 0
+    n_sim: int = 1
     experiment: ValidExperimentType = "SO"
     noise_option: NoiseOption = field(default=NoiseOption.ONE_OVER_F)
 

@@ -21,7 +21,7 @@ class DataManager:
 
         If the filename is not a absolute path, it is assumed relative to the output root.
         """
-        logger.info(f"Dumping the config in {self.path_to_output}")
+        logger.info(f"Dumping the config in {self.path_to_output / filename}")
         self._config.dump_yaml(self.path_to_output / filename)
 
     # Paths to the data/input directories
@@ -50,9 +50,6 @@ class DataManager:
     def path_to_noise_maps(self) -> Path:
         return self._config.data_dirs.root / self._config.data_dirs.noise_maps
 
-    def get_path_to_noise_maps_sub(self, sub: int) -> Path:
-        return self.path_to_noise_maps / f"{sub:04d}"
-
     # Paths to the output directories
     # -------------------------------
 
@@ -71,18 +68,6 @@ class DataManager:
     @property
     def path_to_covar(self) -> Path:
         return self.path_to_output / self._config.output_dirs.covar
-
-    @property
-    def path_to_components(self) -> Path:
-        return self.path_to_output / self._config.output_dirs.components
-
-    @property
-    def path_to_spectra(self) -> Path:
-        return self.path_to_output / self._config.output_dirs.spectra
-
-    @property
-    def path_to_noise_spectra(self) -> Path:
-        return self.path_to_output / self._config.output_dirs.noise_spectra
 
     # Paths to the plot directories (in output)
     # -----------------------------------------
@@ -187,8 +172,9 @@ class DataManager:
     def get_path_to_preprocessed_maps(self, sub: int | None = None) -> Path:
         fname = "freq_maps_preprocessed"
         if sub is not None:
-            fname += f"_{sub:04d}"
-        fname = self.path_to_preproc / fname
+            fname = self.path_to_preproc / f"{sub:04d}" / fname
+        else:
+            fname = self.path_to_preproc / fname
         return fname.with_suffix(".npy")
 
     def get_path_to_preprocessed_noise_maps(self, sub: int | None = None) -> Path:
@@ -198,14 +184,47 @@ class DataManager:
         fname = self.path_to_covar / fname
         return fname.with_suffix(".npy")
 
+    def get_path_to_noise_maps_sub(self, sub: int) -> Path:
+        return self.path_to_noise_maps / f"{sub:04d}"
+
+    def get_path_to_components(self, sub: int | None = None) -> Path:
+        if sub is not None:
+            return self.path_to_output / self._config.output_dirs.components / f"{sub:04d}"
+        return self.path_to_output / self._config.output_dirs.components
+
+    def get_path_to_components_maps(self, sub: int | None = None) -> Path:
+        fname = self.get_path_to_components(sub=sub) / "components_maps"
+        return fname.with_suffix(".npy")
+
+    def get_path_to_compsep_results(self, sub: int | None = None) -> Path:
+        fname = self.get_path_to_components(sub=sub) / "compsep_results"
+        return fname.with_suffix(".npz")
+
+    def get_path_to_spectra(self, sub: int | None = None) -> Path:
+        if sub is not None:
+            return self.path_to_output / self._config.output_dirs.spectra / f"{sub:04d}"
+        return self.path_to_output / self._config.output_dirs.spectra
+
+    def get_path_to_spectra_cross_components(self, sub: int | None = None) -> Path:
+        fname = self.get_path_to_spectra(sub=sub) / "cross_components_Cls"
+        return fname.with_suffix(".npz")
+
+    def get_path_to_spectra_binning(self, sub: int | None = None) -> Path:
+        fname = self.get_path_to_spectra(sub=sub) / "binning"
+        return fname.with_suffix(".npz")
+
+    def get_path_to_noise_spectra(self, sub: int | None = None) -> Path:
+        if sub is not None:
+            return self.path_to_output / self._config.output_dirs.noise_spectra / f"{sub:04d}"
+        return self.path_to_output / self._config.output_dirs.noise_spectra
+
+    def get_path_to_noise_spectra_cross_components(self, sub: int | None = None) -> Path:
+        fname = self.get_path_to_noise_spectra(sub=sub) / "noise_cross_components_Cls"
+        return fname.with_suffix(".npz")
+
     @property
     def path_to_pixel_noisecov(self) -> Path:
         fname = self.path_to_covar / "pixel_noisecov_preprocessed"
-        return fname.with_suffix(".npy")
-
-    @property
-    def path_to_components_maps(self) -> Path:
-        fname = self.path_to_components / "components_maps"
         return fname.with_suffix(".npy")
 
     @property
@@ -214,23 +233,3 @@ class DataManager:
         # NB: originally saved to 'path_to_components' but it is a covariance after all...
         fname = self.path_to_covar / "invAtNA"
         return fname.with_suffix(".npy")
-
-    @property
-    def path_to_compsep_results(self) -> Path:
-        fname = self.path_to_components / "compsep_results"
-        return fname.with_suffix(".npz")
-
-    @property
-    def path_to_binning(self) -> Path:
-        fname = self.path_to_spectra / "binning"
-        return fname.with_suffix(".npz")
-
-    @property
-    def path_to_cross_components_spectra(self) -> Path:
-        fname = self.path_to_spectra / "cross_components_Cls"
-        return fname.with_suffix(".npz")
-
-    @property
-    def path_to_noise_cross_components_spectra(self) -> Path:
-        fname = self.path_to_noise_spectra / "noise_cross_components_Cls"
-        return fname.with_suffix(".npz")

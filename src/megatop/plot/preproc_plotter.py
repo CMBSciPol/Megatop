@@ -10,14 +10,14 @@ from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB
 
 
-def plot_preprocessed_maps(manager, config, maps=True, cls=True):
+def plot_preprocessed_maps(manager, config, id_sim=None, maps=True, cls=True):
     plot_dir = manager.path_to_preproc_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Plotting pre-processing outputs")
 
     with Timer("load-freq-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps()
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
         binary_mask = hp.read_map(manager.path_to_binary_mask)
@@ -62,8 +62,15 @@ def main():
 
     logger.info("Plotting preprocessing outputs...")
 
+    n_sim_sky = config.map_sim_pars.n_sim
+    if n_sim_sky == 0:
+        id_sim = None
+    else:
+        logger.info("Plotting only simulation #0")
+        id_sim = 0
+
     with Timer("preproc-plotter"):
-        plot_preprocessed_maps(manager, config)
+        plot_preprocessed_maps(manager, config, id_sim=id_sim)
 
 
 if __name__ == "__main__":

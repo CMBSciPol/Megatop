@@ -8,14 +8,17 @@ from megatop.utils import Timer, logger
 from megatop.utils.plot import plot_all_Cls
 
 
-def plot_map2cl(manager):
+def plot_map2cl(manager, id_sim=None):
     plot_dir = manager.path_to_spectra_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
-    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
+
+    path_binning = manager.get_path_to_spectra_binning(sub=id_sim)
+    binning_info = np.load(path_binning, allow_pickle=True)
 
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
 
-    all_Cls = np.load(manager.path_to_cross_components_spectra, allow_pickle=True)
+    path_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+    all_Cls = np.load(path_all_Cls, allow_pickle=True)
     plot_all_Cls(
         all_Cls,
         bin_centre_lminlmax,
@@ -42,7 +45,14 @@ def main():
     timer = Timer()
     timer.start("map2cl_plotter")
 
-    plot_map2cl(manager)
+    n_sim_sky = config.map_sim_pars.n_sim
+    if n_sim_sky == 0:
+        id_sim = None
+    else:
+        logger.info("Plotting only simulation #0")
+        id_sim = 0
+
+    plot_map2cl(manager, id_sim=id_sim)
 
     timer.stop("map2cl_plotter")
 

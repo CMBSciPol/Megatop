@@ -10,14 +10,18 @@ from megatop.utils.mock import get_Cl_CMB_model_from_manager
 from megatop.utils.plot import plot_all_Cls, plot_all_Cls_diff
 
 
-def plot_noise_spectra(manager, config):
+def plot_noise_spectra(manager, config, id_sim=None):
     plot_dir = manager.path_to_spectra_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
-    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
+
+    path_binning = manager.get_path_to_spectra_binning(sub=id_sim)
+    binning_info = np.load(path_binning, allow_pickle=True)
 
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
 
-    all_noise_Cls = np.load(manager.path_to_noise_cross_components_spectra, allow_pickle=True)
+    fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+    all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)
+
     plot_all_Cls(
         all_noise_Cls,
         bin_centre_lminlmax,
@@ -27,7 +31,8 @@ def plot_noise_spectra(manager, config):
         y_axis_label=r"$C_{\ell}$",
     )
 
-    all_Cls = np.load(manager.path_to_cross_components_spectra, allow_pickle=True)
+    fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+    all_Cls = np.load(fname_all_Cls, allow_pickle=True)
 
     debiased_cls = {}
     for key_cls, key_noise_cls in zip(all_Cls.keys(), all_noise_Cls.keys(), strict=False):
@@ -99,7 +104,14 @@ def main():
     timer = Timer()
     timer.start("Noise_spectra_plotter")
 
-    plot_noise_spectra(manager, config)
+    n_sim_sky = config.map_sim_pars.n_sim
+    if n_sim_sky == 0:
+        id_sim = None
+    else:
+        logger.info("Plotting only simulation #0")
+        id_sim = 0
+
+    plot_noise_spectra(manager, config, id_sim=id_sim)
 
     timer.stop("Noise_spectra_plotter")
 

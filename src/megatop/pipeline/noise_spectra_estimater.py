@@ -1,10 +1,13 @@
 import argparse
 import tracemalloc
+
+# from mpi4py.futures import MPICommExecutor
 from pathlib import Path
 
 import healpy as hp
 import numpy as np
 import pymaster as nmt
+from mpi4py import MPI
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
@@ -19,33 +22,22 @@ from megatop.utils.spectra import (
 from megatop.utils.utils import MemoryUsage
 
 
-def noise_spectra_estimator(manager: DataManager, config: Config):
+def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: int | None = None):
     tracemalloc.start()
 
-    try:
-        from mpi4py import MPI
-
-        comm = MPI.COMM_WORLD
-        size = comm.Get_size()
-        rank = comm.rank
-        root = 0
-
-    except ImportError:
-        logger.info("Could not find MPI. Proceeding without.")
-
-        comm = None
-        root = 0
-        rank = 0
-        size = 1
+    comm = MPI.COMM_WORLD
+    size = comm.Get_size()
+    rank = comm.rank
+    root = 0
 
     MemoryUsage(f"rank = {rank} ")
 
-    nreal = config.noise_cov_pars.nrealizations
+    n_sim_noise = config.noise_sim_pars.n_sim
 
-    # The None case of nreal is useful when calling get_noise_map_filename
+    # The None case of nreal is useful when calling get_innoise_map_filename
     # so we need to handle it when creating the list of realisations to loop over
-    int_nreal = 1 if nreal is None else nreal
-    realisation_list = np.arange(int_nreal)
+    int_n_sim_noise = 1 if n_sim_noise is None else n_sim_noise
+    realisation_list = np.arange(int_n_sim_noise)
 
     # splitting the list of simulation between the ranks of the process:
     rank_realisation_list = np.array_split(realisation_list, size)[rank]
@@ -55,10 +47,12 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
-    W_maxL = np.load(manager.path_to_compsep_results, allow_pickle=True)["W_maxL"]
+    W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
+        "W_maxL"
+    ]
 
     # Loading bin info from map2cl step:
-    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
+    binning_info = np.load(manager.get_path_to_spectra_binning(sub=id_sim_sky), allow_pickle=True)
     nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
 
     # Getting effective beam TODO: add case for input maps (no preproc)
@@ -87,7 +81,7 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
     for id_realisation in rank_realisation_list:
         noise_freq_maps = []
 
-        id_real = None if nreal is None else id_realisation
+        id_real = None if n_sim_noise is None else id_realisation
 
         logger.info(f"id_realisation = {id_real}")
         logger.info(f"in = {rank_realisation_list}")
@@ -170,7 +164,7 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
         # Average noise spectra over nsims
         mean_noise_spectra = {}
         for key in sum_noise_spectra:
-            mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_nreal
+            mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_n_sim_noise
         mean_noise_spectra = limit_namaster_output(
             mean_noise_spectra, binning_info["bin_index_lminlmax"]
         )
@@ -179,27 +173,33 @@ def noise_spectra_estimator(manager: DataManager, config: Config):
         mean_noise_spectra = None
 
     if rank == root:
-        manager.path_to_noise_cross_components_spectra.parent.mkdir(parents=True, exist_ok=True)
-        np.savez(manager.path_to_noise_cross_components_spectra, **mean_noise_spectra)
+        path = manager.get_path_to_noise_spectra(sub=id_sim_sky)
+        path.mkdir(parents=True, exist_ok=True)
+        fname = manager.get_path_to_noise_spectra_cross_components(sub=id_sim_sky)
+        logger.info(f"Saving estimated noise spectra to {fname}")
+        np.savez(fname, **mean_noise_spectra)
 
-    if rank == root:
-        logger.info("\n\nNoise spectra computation step completed successfully.\n\n")
+    return id_sim_sky
 
 
 def main():
     parser = argparse.ArgumentParser(description="Noise spectra estimator")
-    parser.add_argument("--config", type=Path, help="config file")
+    parser.add_argument("--config", type=Path, required=True, help="config file")
+
     args = parser.parse_args()
-    if args.config is None:
-        logger.warning("No config file provided, using example config")
-        config = Config.get_example()
-    else:
-        config = Config.load_yaml(args.config)
+    config = Config.load_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
 
-    with Timer("noise-spectra-estimator"):
-        noise_spectra_estimator(manager, config)
+    n_sim_sky = config.map_sim_pars.n_sim
+    if n_sim_sky == 0:
+        noise_spectra_estimator(config, manager)
+    else:
+        for i in range(n_sim_sky):
+            result = noise_spectra_estimator(config, manager, i)
+            logger.info(
+                f"Finished noise spectra estimation for sky simulation {result + 1}/{n_sim_sky}"
+            )
 
 
 if __name__ == "__main__":

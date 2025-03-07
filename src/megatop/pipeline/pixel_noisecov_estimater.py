@@ -37,12 +37,12 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
     noise_cov_preprocessed = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
 
     # Importing noise maps
-    nreal = config.noise_cov_pars.nrealizations
+    n_sim = config.noise_sim_pars.n_sim
 
-    # The None case of nreal is useful when calling get_noise_map_filename
+    # The None case of n_sim is useful when calling get_noise_map_filename
     # so we need to handle it when creating the list of realisations to loop over
-    int_nreal = 1 if nreal is None else nreal
-    realisation_list = np.arange(int_nreal)
+    int_n_sim = 1 if n_sim is None else n_sim
+    realisation_list = np.arange(int_n_sim)
 
     # splitting the list of simulation between the ranks of the process:
     rank_realisation_list = np.array_split(realisation_list, size)[rank]
@@ -50,9 +50,9 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
     for id_realisation in rank_realisation_list:
         noise_freq_maps = []
 
-        id_real = None if nreal is None else id_realisation
+        id_real = None if n_sim is None else id_realisation
 
-        logger.info(f"id_realisation = {id_real}")
+        logger.info(f"Noise realisation {id_real + 1}/{n_sim}")
         logger.info(f"in = {rank_realisation_list}")  # debug in logger
 
         for noise_filename in manager.get_noise_maps_filenames(id_real):
@@ -90,7 +90,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 noise_freq_maps_preprocessed,
             )
 
-        MemoryUsage(f"memory for id_realisation = {id_real} ")
+        MemoryUsage(f"Memory for noise realisation {id_real + 1}: ")
 
         noise_cov_preprocessed += noise_freq_maps_preprocessed**2
 
@@ -101,7 +101,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
     if rank == root:
         # Average noise_cov and noise_cov_preprocessed over nsims
-        noise_cov_preprocessed_mean = noise_cov_preprocessed_recvbuf / int_nreal
+        noise_cov_preprocessed_mean = noise_cov_preprocessed_recvbuf / int_n_sim
     else:
         noise_cov_preprocessed_mean = None
 
@@ -114,16 +114,16 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pixel noise covariance estimater")
-    parser.add_argument("--config", type=Path, help="config file")
+    parser = argparse.ArgumentParser(
+        description="Pixel noise covariance estimater",
+    )
+    parser.add_argument("--config", type=Path, required=True, help="config file")
+
     args = parser.parse_args()
-    if args.config is None:
-        logger.warning("No config file provided, using example config")
-        config = Config.get_example()
-    else:
-        config = Config.load_yaml(args.config)
+    config = Config.load_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
+
     pixel_noisecov_estimation(manager, config)
 
 
