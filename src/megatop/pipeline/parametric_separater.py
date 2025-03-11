@@ -11,6 +11,7 @@ from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask
+from megatop.utils.preproc import read_input_maps
 
 
 def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
@@ -74,6 +75,22 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     return res
 
 
+def get_native_resolution_component_maps(manager: DataManager, res, id_sim: int | None = None):
+    # Load the native resolution maps (i.e. before pre-processing)
+    native_input_maps = read_input_maps(manager.get_maps_filenames(sub=id_sim))
+
+    # Get component separation operator:
+    W_maxL = res.W_maxL
+
+    # Applying to the native resolution maps
+    native_comp_maps = np.einsum("ifsp,fsp->isp", W_maxL, native_input_maps)
+
+    # Apply binary mask:
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+
+    return mask.apply_binary_mask(native_comp_maps, binary_mask, unseen=True)
+
+
 def save_compsep_results(manager: DataManager, res, id_sim: int | None = None):
     path = manager.get_path_to_components(sub=id_sim)
     path.mkdir(parents=True, exist_ok=True)
@@ -96,6 +113,9 @@ def save_compsep_results(manager: DataManager, res, id_sim: int | None = None):
 def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = None):
     with Timer("weighted-compsep"):
         res = weighted_comp_sep(manager, config, id_sim=id_sim)
+    if config.parametric_sep_pars.use_native_resolution:
+        with Timer("native resolution maps"):
+            res.s = get_native_resolution_component_maps(manager, res, id_sim=id_sim)
     save_compsep_results(manager, res, id_sim=id_sim)
     return id_sim
 
