@@ -79,11 +79,14 @@ def get_native_resolution_component_maps(manager: DataManager, res, id_sim: int 
     # Load the native resolution maps (i.e. before pre-processing)
     native_input_maps = read_input_maps(manager.get_maps_filenames(sub=id_sim))
 
+    # Slicing to remove I using list comprehension, this is easier in numpy but we want to keep it more general
+    # in the case where there might be difference nside. Although W_maxL can't have a different nside by frequency (for now)
+    native_input_maps = [freq_maps[1:] for freq_maps in native_input_maps]
+
     # Get component separation operator:
     W_maxL = res.W_maxL
-
     # Applying to the native resolution maps
-    native_comp_maps = np.einsum("ifsp,fsp->isp", W_maxL, native_input_maps)
+    native_comp_maps = np.einsum("ifsp,fsp->isp", W_maxL, native_input_maps)  # slicing to remove I
 
     # Apply binary mask:
     binary_mask = hp.read_map(manager.path_to_binary_mask)
@@ -115,6 +118,7 @@ def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = 
         res = weighted_comp_sep(manager, config, id_sim=id_sim)
     if config.parametric_sep_pars.use_native_resolution:
         with Timer("native resolution maps"):
+            logger.info("Using native resolution maps")
             res.s = get_native_resolution_component_maps(manager, res, id_sim=id_sim)
     save_compsep_results(manager, res, id_sim=id_sim)
     return id_sim
