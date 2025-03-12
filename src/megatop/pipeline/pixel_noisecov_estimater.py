@@ -89,6 +89,10 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 manager.get_path_to_preprocessed_noise_maps(sub=id_real),
                 noise_freq_maps_preprocessed,
             )
+            if config.parametric_sep_pars.use_native_resolution:
+                logger.warning(
+                    "Native resolution maps are used after component separation. Therefore the pre-processed noise maps are saved but not used."
+                )
 
         MemoryUsage(f"Memory for noise realisation {id_real + 1}: ")
 
