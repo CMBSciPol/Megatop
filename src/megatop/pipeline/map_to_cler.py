@@ -13,7 +13,7 @@ from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     create_binning,
     get_common_beam_wpix,
-    get_native_post_compsep_beam_wpix,
+    get_normalized_CMB_native_post_compsep_beam_wpix,
     initialize_nmt_workspace,
     limit_namaster_output,
 )
@@ -49,8 +49,6 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int | None 
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Generating effective beam
-    # TODO: If input maps are used instead of preprocessed ones, the effective beam after compsep must be computed.
-
     if config.parametric_sep_pars.use_native_resolution:
         logger.info(
             "Using native resolution maps. Getting effective beam from component separation results."
@@ -61,14 +59,9 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int | None 
             "A_maxL"
         ]
 
-        effective_beam_P, effective_beam_T = get_native_post_compsep_beam_wpix(
+        effective_beam_CMB = get_normalized_CMB_native_post_compsep_beam_wpix(
             config.beams, A_maxL, config.nside
         )
-
-        # Getting only CMB component [0,0] and normalizing by the max of the CMB Temperature effective beam.
-        # This should be more consistent with how beams are handled in healpy (TODO:to be checked)
-        effective_beam_CMB = effective_beam_P[0, 0] / np.max(effective_beam_T[0, 0])
-
     else:
         effective_beam_CMB = get_common_beam_wpix(
             config.pre_proc_pars.common_beam_correction, config.nside
