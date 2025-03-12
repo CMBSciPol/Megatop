@@ -16,6 +16,7 @@ from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
+    get_normalized_CMB_native_post_compsep_beam_wpix,
     initialize_nmt_workspace,
     limit_namaster_output,
 )
@@ -55,10 +56,24 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     binning_info = np.load(manager.get_path_to_spectra_binning(sub=id_sim_sky), allow_pickle=True)
     nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
 
-    # Getting effective beam TODO: add case for input maps (no preproc)
-    effective_beam_CMB = get_common_beam_wpix(
-        config.pre_proc_pars.common_beam_correction, config.nside
-    )
+    # Generating effective beam
+    if config.parametric_sep_pars.use_native_resolution:
+        logger.info(
+            "Using native resolution maps. Getting effective beam from component separation results."
+        )
+
+        # Loading component separation operator
+        A_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
+            "A_maxL"
+        ]
+
+        effective_beam_CMB = get_normalized_CMB_native_post_compsep_beam_wpix(
+            config.beams, A_maxL, config.nside
+        )
+    else:
+        effective_beam_CMB = get_common_beam_wpix(
+            config.pre_proc_pars.common_beam_correction, config.nside
+        )
 
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
@@ -86,7 +101,16 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         logger.info(f"id_realisation = {id_real}")
         logger.info(f"in = {rank_realisation_list}")
 
-        if config.noise_cov_pars.save_preprocessed_noise_maps:
+        if config.parametric_sep_pars.use_native_resolution:
+            logger.info("Using native resolution maps, loading raw noise maps (no pre-processing).")
+            for noise_filename in manager.get_noise_maps_filenames(id_real):
+                logger.debug(f"Importing noise map: {noise_filename}")
+                noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
+
+            noise_freq_maps_preprocessed = np.array(noise_freq_maps)
+
+            # Loading component separation operator
+        elif config.noise_cov_pars.save_preprocessed_noise_maps:
             # TODO if use input maps for compsep then can also just import input noise maps here
             logger.info("Loading pre-processed noise maps")
 
@@ -95,7 +119,14 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             )
 
         else:
-            nside_in_list = []
+            logger.info(
+                "Pre-processed noise maps weren't saved, loading raw noise maps and pre-processing them..."
+            )
+            logger.warning(
+                "Having config.noise_cov_pars.save_preprocessed_noise_maps=True would save time"
+            )
+
+            nside_in_list = []  # TODO: Is this useful??
             for noise_filename in manager.get_noise_maps_filenames(id_real):
                 logger.debug(f"Importing noise map: {noise_filename}")
                 noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
