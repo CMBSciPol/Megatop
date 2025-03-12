@@ -45,7 +45,7 @@ def get_common_beam_wpix(common_beam_fwhm_arcmin, nside):
     return Bl_gauss_common[:, 1] * wpix_out[1]  # TODO only polarisation one ?
 
 
-def get_native_post_compsep_beam_wpix(freq_beam_fwhm: list[float], W_maxL: np.ndarray, nside: int):
+def get_native_post_compsep_beam_wpix(freq_beam_fwhm: list[float], A_maxL: np.ndarray, nside: int):
     wpix_out = hp.pixwin(nside, pol=True, lmax=3 * nside)  # Pixel window function of output maps
     Bl_gauss = []
     Bl_gauss_T = []
@@ -59,9 +59,21 @@ def get_native_post_compsep_beam_wpix(freq_beam_fwhm: list[float], W_maxL: np.nd
     Bl_gauss = np.array(Bl_gauss)
     Bl_gauss_T = np.array(Bl_gauss_T)
 
-    effectiv_beam = np.einsum("fc, fl, fk->ckl", W_maxL, Bl_gauss, W_maxL)
-    effectiv_beam_T = np.einsum("fc, fl, fk->ckl", W_maxL, Bl_gauss_T, W_maxL)
+    effectiv_beam = np.einsum("fc, fl, fk->ckl", A_maxL, Bl_gauss, A_maxL)
+    effectiv_beam_T = np.einsum("fc, fl, fk->ckl", A_maxL, Bl_gauss_T, A_maxL)
     return effectiv_beam, effectiv_beam_T
+
+
+def get_normalized_CMB_native_post_compsep_beam_wpix(
+    freq_beam_fwhm: list[float], A_maxL: np.ndarray, nside: int
+):
+    effectiv_beam_P, effectiv_beam_T = get_native_post_compsep_beam_wpix(
+        freq_beam_fwhm, A_maxL, nside
+    )
+
+    # Getting only CMB component [0,0] and normalizing by the max of the CMB Temperature effective beam.
+    # This should be more consistent with how beams are handled in healpy (TODO:to be checked)
+    return effectiv_beam_P[0, 0] / np.max(effectiv_beam_T[0, 0])
 
 
 def get_effective_beam_noise_preproc(config: Config, A):
