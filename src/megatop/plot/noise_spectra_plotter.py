@@ -60,6 +60,9 @@ def plot_noise_spectra(manager, config, id_sim=None):
             bined_Cl_cmb_model[2],
         ]
     }
+    # This is useful for later summary stats like plots
+    np.save(plot_dir / "bined_cmb_theory_cls.npy", bined_Cl_cmb_model_dict)
+
     diabiased_cls_CMB_only = {"CMBxCMB": debiased_cls["CMBxCMB"]}
 
     plot_all_Cls_diff(
