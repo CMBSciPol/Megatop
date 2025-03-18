@@ -100,6 +100,10 @@ class DataManager:
     def path_to_spectra_plots(self) -> Path:
         return self.path_to_plots / self._config.output_dirs.spectra
 
+    @property
+    def path_to_mcmc_plots(self) -> Path:
+        return self.path_to_plots / self._config.output_dirs.mcmc
+
     # Paths to fiducial CMB files
     # ---------------------------
 
