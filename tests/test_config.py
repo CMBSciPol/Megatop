@@ -43,9 +43,16 @@ def test_split_map_sets_one_group(example_config: Config) -> None:
 @pytest.mark.parametrize("n_groups", [1, 2, 3, 4])
 def test_split_map_sets_more_groups(n_groups: int, example_config: Config) -> None:
     num_sets = len(example_config.map_sets)
+    cmb_seed = 12345
 
     def sconf(c: int):
-        return example_config.split_map_sets(n_groups, color=c)
+        return example_config.split_map_sets(n_groups, color=c, cmb_seed=cmb_seed)
 
-    total_sets = sum(len(sconf(c).map_sets) for c in range(n_groups))
+    sub_configs = [sconf(c) for c in range(n_groups)]
+
+    # check that the total number of map sets is conserved
+    total_sets = sum(len(sc.map_sets) for sc in sub_configs)
     assert total_sets == num_sets
+
+    # check that cmb_seed is set correctly
+    assert all(sc.map_sim_pars.fixed_cmb_seed == cmb_seed for sc in sub_configs)

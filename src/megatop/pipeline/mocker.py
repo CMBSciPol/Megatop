@@ -269,8 +269,18 @@ def main():
     scomm = world.Split(color=color, key=rank)
     srank = scomm.Get_rank()
     ssize = scomm.Get_size()
+
+    # Now split the configuration for the different groups
     num_groups = min(size, num_sets)
-    sconf = config.split_map_sets(num_groups, color=color)
+    # generate a common random seed for the CMB simulation
+    # which needs to be the same across all map sets
+    cmb_seed = None
+    if rank == 0 and num_groups > 1:
+        rng = np.random.default_rng()
+        cmb_seed = rng.integers(2**32)
+        logger.debug(f"Common CMB seed: {cmb_seed}")
+    cmb_seed = world.bcast(cmb_seed, root=0)
+    sconf = config.split_map_sets(num_groups, color=color, cmb_seed=cmb_seed)
     if srank == 0:
         num_sets = len(sconf.map_sets)
         sets = ", ".join(s.name for s in sconf.map_sets)

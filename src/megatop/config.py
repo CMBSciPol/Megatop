@@ -341,15 +341,17 @@ class Config:
             ],
         )
 
-    def split_map_sets(self, num_colors: int, color: int = 0):
+    def split_map_sets(self, num_colors: int, color: int = 0, cmb_seed: int | None = None):
         """Split the configuration into color groups (similar to MPI_Comm_split).
 
         Returns a different configuration based on a color value, allowing for parallel processing
-        of map sets. Each color group gets a configuration with the same subset of map_sets.
+        of map sets. Each color group gets a configuration with the same subset of map_sets. The
+        user must provide a common CMB seed to all colors if there is more than one color.
 
         Args:
             num_colors (int): Number of color groups to split the configuration into.
             color (int, optional): Index used to select which map_set group to return.
+            cmb_seed (int, optional): The common CMB seed to use for all colors.
 
         Returns:
             Config: A new Config object containing only the map_sets corresponding to the given
@@ -358,7 +360,15 @@ class Config:
         all_indices = np.arange(len(self.map_sets))
         # modulo to ensure access within bounds
         my_indices = np.array_split(all_indices, num_colors)[color % num_colors]
-        return evolve(self, map_sets=[ms for i, ms in enumerate(self.map_sets) if i in my_indices])
+        # set the common CMB seed
+        if num_colors > 1 and cmb_seed is None:
+            msg = "cmb_seed must be provided when splitting the configuration"
+            raise ValueError(msg)
+        return evolve(
+            self,
+            map_sets=[ms for i, ms in enumerate(self.map_sets) if i in my_indices],
+            map_sim_pars=evolve(self.map_sim_pars, fixed_cmb_seed=cmb_seed),
+        )
 
     @property
     def nside(self) -> int:
