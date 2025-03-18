@@ -167,8 +167,8 @@ def func_signal(
     # apply filtering
     if obsmat_funcs is not None:
         with Timer("filter-freq-maps"):
-            for i_f, func in obsmat_funcs.items():
-                logger.debug(f"Filtering {config.frequencies[i_f]} channel")
+            for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+                logger.debug(f"Filtering {key} channel")
                 sky[i_f] = mock.apply_observation_matrix(func, sky[i_f])
 
     # add noise
