@@ -8,14 +8,8 @@ import emcee
 import healpy as hp
 import numpy as np
 from camb import initialpower
-from getdist import MCSamples, plots
-from matplotlib import pyplot as plt
 from mpi4py.futures import MPICommExecutor
 
-# sys.path.append('/Users/villarubia/Documents/PhD-APC/PROJECTS/MEGATOP/Megatop/src/megatop')
-# from megatop.config import Config
-# from megatop.data_manager import DataManager
-# from megatop.utils import logger
 from megatop import Config, DataManager
 from megatop.utils import logger
 
@@ -201,7 +195,7 @@ def logL_cosmo(
 
 
 def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None = None):
-    # 1. load parameters and estimated spectra
+    # 1. load parameters and estimated spectra:
 
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
@@ -233,21 +227,21 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
 
-    # 2. init mcmc parameters
+    # 2. init mcmc parameters:
     if not dust_marg and not sync_marg:
-        param_names = ["r", "A_lens"]
+        param_names = ["r", "A_{lens}"]
         theta_init_guess = [0.005, 1.1]
         theta_offsets = [0.001, 0.1]
     if dust_marg and not sync_marg:
-        param_names = ["r", "A_lens", "A_dust"]
+        param_names = ["r", "A_{lens}", "A_{dust}"]
         theta_init_guess = [0.005, 1.1, 0.01]
         theta_offsets = [0.001, 0.1, 0.005]
     if not dust_marg and sync_marg:
-        param_names = ["r", "A_lens", "A_sync"]
+        param_names = ["r", "A_{lens}", "A_{sync}"]
         theta_init_guess = None
         theta_offsets = None
     if dust_marg and sync_marg:
-        param_names = ["r", "A_lens", "A_dust", "A_sync"]
+        param_names = ["r", "A_{lens}", "A_{dust}", "A_{sync}"]
         theta_init_guess = None
         theta_offsets = None
 
@@ -291,44 +285,14 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         pos, prob, state = sampler.run_mcmc(theta_0, n_steps)  # , progress=True
     chains = sampler.chain.reshape((-1, n_dim))
 
-    # 4. save mcmc chains
-
+    # 4. save mcmc chains:
     path = manager.get_path_to_mcmc(sub=id_sim)
     path.mkdir(parents=True, exist_ok=True)
     fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
 
     np.savez(fname_chains, mcmc_chains=chains, param_names=param_names, allow_pickle=True)
 
-    plot_corner_plot(manager=manager, config=config, id_sim=id_sim)
-
     return id_sim
-
-
-def plot_corner_plot(manager: DataManager, config: Config, id_sim: int | None = None):
-    r_sim = config.map_sim_pars.r_input
-    A_lens_sim = config.map_sim_pars.A_lens
-
-    fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
-    mcmc = np.load(fname_chains, allow_pickle=True)
-    chains = mcmc["mcmc_chains"]
-    param_names = mcmc["param_names"]
-
-    samples = MCSamples(samples=chains, names=param_names, labels=param_names)
-    print(samples.getMeans())
-
-    gd_plot = plots.get_subplot_plotter(width_inch=8)
-    gd_plot.settings.figure_legend_frame = False
-    gd_plot.settings.alpha_filled_add = 0.4
-
-    gd_plot.triangle_plot(
-        [samples],
-        filled=True,
-        legend_loc="upper right",
-        line_args=[{"lw": 1.5, "color": "darkblue"}],
-        contour_colors=["darkblue"],
-        markers={"r": r_sim, "A_lens": A_lens_sim},
-    )
-    plt.show()
 
 
 def main():
