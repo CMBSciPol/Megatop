@@ -517,7 +517,7 @@ def quick_plot_obsmat(path_to_obsmat = None, plot_dir=None):
     Returns:
         None
     """
-
+    import os
     #On NERSC for MSS2 simulations:
     sim_dir = '/global/cfs/projectdirs/sobs/awg_bb/'
     obsmat_dir = 'bbmaster_paper/obs_mat_nside128_fpthin8'
@@ -550,6 +550,8 @@ def single_pixel_obsmat(theta, phi, path_to_obsmat = None, nside=128, pol = 'TT'
     Returns:
         None
     """
+    
+    import scipy.sparse
     #Load Observation matrix(takes minutes)
     OBS = scipy.sparse.load_npz(path_to_obsmat)
     print("Loading the observation matrix...(this could take minutes)")
@@ -576,14 +578,16 @@ def single_pixel_obsmat(theta, phi, path_to_obsmat = None, nside=128, pol = 'TT'
     ax1 = fig.add_subplot(1, 2, 1)
     ax1.hist(pixel_dense, bins=50, range = (min_val,max_val),density=False)
     ax1.set_yscale('log')
-
+    
+    #Right subplot: healpix mollview
     plt.sca(ax2)
+    pixel_dense_masked = pixel_dense.copy()
     pixel_dense_masked[np.where(pixel_dense==0)] = hp.UNSEEN
-    hp.mollview(pixel_dense_masked, nest=True, hold=True, title="Obsmat for One Pixel at location {}".format(loc), min = min_val,  max = max_val)#, norm = 'log')
+    hp.mollview(pixel_dense_masked, nest=True, hold=True, title="Obsmat for One Pixel at location theta:{} phi:{}".format(theta, phi), min = min_val,  max = max_val)#, norm = 'log')
     #Label the center
-    hp.projscatter(loc, lonlat=True, marker='+', color='red', s=25)
+    hp.projscatter(theta, phi, lonlat=True, marker='+', color='red', s=25)
     hp.graticule()
 
     #plt.tight_layout()
-    plt.savefig("Pixel_{}_obsmat.png".format(loc),bbox_inches="tight")
+    plt.savefig("Pixel_{}_{}_obsmat.png".format(theta, phi),bbox_inches="tight")
     plt.close()
