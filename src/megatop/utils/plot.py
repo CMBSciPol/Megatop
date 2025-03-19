@@ -534,7 +534,7 @@ def quick_plot_obsmat(path_to_obsmat = None, plot_dir=None):
     plt.close()
     
     
-def single_pixel_obsmat(path_to_obsmat = None, theta, phi, nside=128, pol = 'TT'):
+def single_pixel_obsmat(theta, phi, path_to_obsmat = None, nside=128, pol = 'TT'):
     
     """
     This function plots a histogram and a healpix mollview of the observation matrix for one specific pixel at location (theta,phi).
