@@ -207,23 +207,25 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "CMBxCMB"
-    ][3]
+    ][3]  # [1:]
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "DustxDust"
-    ][3]
+    ][3]  # [1:]
     Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
         "Noise_CMBxNoise_CMB"
-    ][3]
+    ][3]  # [1:]
 
-    ls_bins_low = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_low"]
-    ls_bins_high = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_high"]
+    ls_bins_low = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_low"]  # [1:]
+    ls_bins_high = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_high"]  # [1:]
     ls_bins_lminlmax_idx = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
         "bin_index_lminlmax"
-    ]
+    ]  # [1:]
     ls_bins_lminlmax_centre = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
         "bin_centre_lminlmax"
-    ]
-    delta_l = ls_bins_lminlmax_centre[1] - ls_bins_lminlmax_centre[0]
+    ]  # [1:]
+    delta_l = (
+        config.map2cl_pars.delta_ell
+    )  # ls_bins_lminlmax_centre[1] - ls_bins_lminlmax_centre[0]
 
     Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
 
@@ -296,7 +298,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Component separation")
+    parser = argparse.ArgumentParser(description="Cl to r estmation")
     parser.add_argument("--config", type=Path, required=True, help="config file")
 
     args = parser.parse_args()
