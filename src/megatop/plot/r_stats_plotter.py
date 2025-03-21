@@ -10,15 +10,16 @@ from megatop.utils import logger
 
 
 def plot_r_statistics(managers, configs):
-    """Plots r statistics for different pipieline configurations in a single figure, grouping by sky model."""
-
+    """Plots r statistics for different pipeline configurations in a single figure, grouping by sky model."""
     sky_model_dict = defaultdict(list)  # Group data by sky model
 
     for manager, config in zip(managers, configs, strict=False):
         n_sim_sky = config.map_sim_pars.n_sim
         sky_model = "".join(config.map_sim_pars.sky_model)
 
-        r_samples = []
+        r_means = []
+        r_stds = []
+
         for id_sim in range(n_sim_sky):
             fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
             mcmc = np.load(fname_chains, allow_pickle=True)
@@ -26,11 +27,13 @@ def plot_r_statistics(managers, configs):
             param_names = mcmc["param_names"]
 
             idx_r = np.where(param_names == "r")[0][0]
-            r_samples.append(chains[:, idx_r])
+            r_samples = chains[:, idx_r]
 
-        r_samples = np.concatenate(r_samples)
-        r_mean = np.mean(r_samples)
-        r_std = np.std(r_samples)
+            r_means.append(np.mean(r_samples))
+            r_stds.append(np.std(r_samples))
+
+        r_mean_final = np.mean(r_means)  # Mean of means
+        r_std_final = np.mean(r_stds)  # Mean of standard deviations
 
         if config.cl2r_pars.dust_marg:
             color = "mediumvioletred"
@@ -39,7 +42,7 @@ def plot_r_statistics(managers, configs):
             color = "darkblue"
             label = r"$\theta = (r, A_{\rm lens})$"
 
-        sky_model_dict[sky_model].append((r_mean * 1e3, r_std * 1e3, color, label))
+        sky_model_dict[sky_model].append((r_mean_final * 1e3, r_std_final * 1e3, color, label))
 
     sky_models = list(sky_model_dict.keys())
     x_positions = np.arange(len(sky_models))
@@ -71,7 +74,7 @@ def plot_r_statistics(managers, configs):
 
     plot_dir = manager.path_to_mcmc_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
-    plot_name = "r_stats_model_compraison"
+    plot_name = "r_stats_model_comparison"
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")
 
     plt.show()
