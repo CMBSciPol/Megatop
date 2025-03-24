@@ -189,12 +189,12 @@ def mask_handler(manager: DataManager, config: Config):
             f"  {first_min_custom}, {first_max_custom} (first),\n"
             f"  {second_min_custom}, {second_max_custom} (second)"
         )
-        logger.info(
-            "For comparison, the nominal mask has:\n"
-            f"  {first_min_nom}, {first_max_nom} (first nominal),\n"
-            f"  {second_min_nom}, {second_max_nom} (second nominal)"
-        )
         if nominal_hitmap is not None:
+            logger.info(
+                "For comparison, the nominal mask has:\n"
+                f"  {first_min_nom}, {first_max_nom} (first nominal),\n"
+                f"  {second_min_nom}, {second_max_nom} (second nominal)"
+            )
             first_is_bounded = (
                 2 * first_min_nom < first_min_custom and first_max_custom < 2 * first_max_nom
             )
