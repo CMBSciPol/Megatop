@@ -39,20 +39,19 @@ def compute_generic_Cl(lmin, lmax):
     def get_Cl(r):
         infl_params = initialpower.InitialPowerLaw()
         infl_params.set_params(ns=0.96, r=r)
-        trans_func = camb.get_transfer_functions(cosmo_params)
-        trans_func.power_spectra_from_transfer(infl_params)
+        results = camb.get_results(cosmo_params)
         if r == 0:
-            return trans_func.get_total_cls(LMAX, CMB_unit="muK")[:, 2]
+            return results.get_cmb_power_spectra(cosmo_params, CMB_unit="muK", raw_cl=True)[
+                "total"
+            ][:, 2]
         if r == 1:
-            return trans_func.get_unlensed_total_cls(LMAX, CMB_unit="muK")[:, 2]
-        return None  # TODO: Why does the pre-commit force me to add this?
+            return results.get_cmb_power_spectra(cosmo_params, CMB_unit="muK", raw_cl=True)[
+                "unlensed_total"
+            ][:, 2]
+        return None
 
-    Dls_BB_prim_generic = get_Cl(1)[lmin : lmax + 1]
-    Dls_BB_lensing_generic = get_Cl(0)[lmin : lmax + 1]
-
-    ls = np.arange(lmin, lmax + 1)
-    Cl_BB_prim_generic = Dls_BB_prim_generic * (2 * np.pi) / (ls * (ls + 1))
-    Cl_BB_lensing_generic = Dls_BB_lensing_generic * (2 * np.pi) / (ls * (ls + 1))
+    Cl_BB_prim_generic = get_Cl(1)[lmin : lmax + 1]
+    Cl_BB_lensing_generic = get_Cl(0)[lmin : lmax + 1]
 
     return Cl_BB_prim_generic, Cl_BB_lensing_generic
 
@@ -116,7 +115,7 @@ def Cl_CMB_model(
         r, A_lens, A_dust, A_sync = theta
         return None
 
-    return None  # TODO: Why does the pre-commit force me to add this?
+    return None
 
 
 def prior_bounds(theta, dust_marg, sync_marg):
@@ -207,22 +206,22 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "CMBxCMB"
-    ][3]  # [1:]
+    ][3][1:]
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "DustxDust"
-    ][3]  # [1:]
+    ][3][1:]
     Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
         "Noise_CMBxNoise_CMB"
-    ][3]  # [1:]
+    ][3][1:]
 
-    ls_bins_low = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_low"]  # [1:]
-    ls_bins_high = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_high"]  # [1:]
+    ls_bins_low = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_low"][1:]
+    ls_bins_high = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_high"][1:]
     ls_bins_lminlmax_idx = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
         "bin_index_lminlmax"
-    ]  # [1:]
+    ][1:]
     ls_bins_lminlmax_centre = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
         "bin_centre_lminlmax"
-    ]  # [1:]
+    ][1:]
     delta_l = (
         config.map2cl_pars.delta_ell
     )  # ls_bins_lminlmax_centre[1] - ls_bins_lminlmax_centre[0]
