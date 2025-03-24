@@ -87,14 +87,6 @@ def save_simu(
     is_noise: bool = False,
 ) -> None:
     """Save a sky realization."""
-    # create the subdirectory for this realization
-    if id_sim is not None:
-        if is_noise:
-            path = manager.get_path_to_noise_maps_sub(id_sim)
-        else:
-            path = manager.get_path_to_maps_sub(id_sim)
-        path.mkdir(parents=True, exist_ok=True)
-
     # get appropriate filenames based on type
     filenames = (
         manager.get_noise_maps_filenames(sub=id_sim)
@@ -294,6 +286,11 @@ def main():
     # Dump the full configuration including the generated seed, before splitting the map sets
     if rank == 0:
         manager.dump_config()
+        # Also create the directories for the noise and signal maps
+        for i in range(config.map_sim_pars.n_sim):
+            manager.get_path_to_maps_sub(i).mkdir(parents=True, exist_ok=True)
+        for i in range(config.noise_sim_pars.n_sim):
+            manager.get_path_to_noise_maps_sub(i).mkdir(parents=True, exist_ok=True)
     world.Barrier()
 
     # Split the configuration
