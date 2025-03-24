@@ -44,11 +44,11 @@ def mask_handler(manager: DataManager, config: Config):
 
         try:
             logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
-            with urlopen(SO_NOMINAL_HITMAP_URL) as _:
+            with urlopen(SO_NOMINAL_HITMAP_URL, timeout=10) as _:
                 # healpy can read directly from the URL
                 nominal_hitmap = hp.read_map(SO_NOMINAL_HITMAP_URL)
                 nominal_hitmap = hp.ud_grade(nominal_hitmap, config.nside, power=-2)
-        except URLError:
+        except Exception:
             logger.warning("Failed to access URL, setting nominal hitmap = 1")
             nominal_hitmap = np.ones(hp.nside2npix(config.nside))
 
@@ -56,6 +56,11 @@ def mask_handler(manager: DataManager, config: Config):
                 logger.error("No custom hitmap provided and nominal hitmap download failed")
                 logger.error("Exiting mask_handler without creating a mask")
                 sys.exit()
+            else:
+                logger.warning(
+                    "Cannot download nominal hitmap, won't be able to compare spin derivatives of the custom hitmap."
+                )
+                nominal_hitmap = None
 
         if config.use_input_nhits:
             # TODO: write test that confirms that the input path can not be None in this branch
@@ -134,21 +139,22 @@ def mask_handler(manager: DataManager, config: Config):
     apod_radius = config.masks_pars.apod_radius
     apod_type = config.masks_pars.apod_type
 
-    with Timer("apodize-nominal"):
-        logger.info(f"Apodizing nominal mask to {apod_radius = } arcmin with {apod_type = }")
+    if nominal_hitmap is not None:
+        with Timer("apodize-nominal"):
+            logger.info(f"Apodizing nominal mask to {apod_radius = } arcmin with {apod_type = }")
 
-        nominal_mask = get_apodized_mask_from_nhits(
-            nominal_hitmap,
-            config.nside,
-            galactic_mask=None,
-            point_source_mask=None,
-            zero_threshold=threshold,
-            apod_radius=apod_radius,
-            apod_type=apod_type,
-        )
-        first_nom, second_nom = get_spin_derivatives(nominal_mask)
-        first_min_nom, first_max_nom = np.min(first_nom), np.max(first_nom)
-        second_min_nom, second_max_nom = np.min(second_nom), np.max(second_nom)
+            nominal_mask = get_apodized_mask_from_nhits(
+                nominal_hitmap,
+                config.nside,
+                galactic_mask=None,
+                point_source_mask=None,
+                zero_threshold=threshold,
+                apod_radius=apod_radius,
+                apod_type=apod_type,
+            )
+            first_nom, second_nom = get_spin_derivatives(nominal_mask)
+            first_min_nom, first_max_nom = np.min(first_nom), np.max(first_nom)
+            second_min_nom, second_max_nom = np.min(second_nom), np.max(second_nom)
 
     # --------------------------------------
     # TODO: from here
@@ -188,20 +194,20 @@ def mask_handler(manager: DataManager, config: Config):
             f"  {first_min_nom}, {first_max_nom} (first nominal),\n"
             f"  {second_min_nom}, {second_max_nom} (second nominal)"
         )
-
-        first_is_bounded = (
-            2 * first_min_nom < first_min_custom and first_max_custom < 2 * first_max_nom
-        )
-        second_is_bounded = (
-            2 * second_min_nom < second_min_custom and second_max_custom < 2 * second_max_nom
-        )
-
-        if not (first_is_bounded and second_is_bounded):
-            logmsg = (
-                "WARNING: Your analysis mask may not be smooth enough, "
-                "so B-mode purification could induce biases."
+        if nominal_hitmap is not None:
+            first_is_bounded = (
+                2 * first_min_nom < first_min_custom and first_max_custom < 2 * first_max_nom
             )
-            logger.warning(logmsg)
+            second_is_bounded = (
+                2 * second_min_nom < second_min_custom and second_max_custom < 2 * second_max_nom
+            )
+
+            if not (first_is_bounded and second_is_bounded):
+                logmsg = (
+                    "WARNING: Your analysis mask may not be smooth enough, "
+                    "so B-mode purification could induce biases."
+                )
+                logger.warning(logmsg)
 
         timer.stop("apodize-custom")
 
