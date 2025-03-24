@@ -271,12 +271,8 @@ def main():
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
 
-    world, rank, size = get_world()
-    if rank == 0:
-        # dump the full configuration
-        manager.dump_config()
-
     # Split the world communicator based on map sets
+    world, rank, size = get_world()
     num_sets = len(config.map_sets)
     color = rank % num_sets
     scomm = world.Split(color=color, key=rank)
@@ -299,6 +295,12 @@ def main():
             cmb_seed = rng.integers(2**32)
             logger.debug(f"Common CMB seed: {cmb_seed}")
         cmb_seed = world.bcast(cmb_seed, root=0)
+        config.map_sim_pars.cmb_seed = int(world.bcast(cmb_seed, root=0))
+
+    # Dump the full configuration including the generated seed, before splitting the map sets
+    if rank == 0:
+        manager.dump_config()
+    world.Barrier()
 
     # Split the configuration
     sconf = config.split_map_sets(num_groups, color=color, cmb_seed=cmb_seed)
