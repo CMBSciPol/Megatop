@@ -104,6 +104,7 @@ class OutputDirsConfig:
     components: str = "components"
     spectra: str = "spectra"
     noise_spectra: str = "noise_spectra"
+    mcmc: str = "mcmc"
 
 
 @define
@@ -273,6 +274,12 @@ class NoiseSimConfig:
 
 
 @define
+class Cl2rConfig:
+    dust_marg: bool = False
+    sync_marg: bool = False
+
+
+@define
 class Config:
     """Class holding the global configuration for Megatop."""
 
@@ -289,6 +296,7 @@ class Config:
     plot_pars: PlotsConfig = Factory(PlotsConfig)
     map_sim_pars: MapSimConfig = Factory(MapSimConfig)
     noise_sim_pars: NoiseSimConfig = Factory(NoiseSimConfig)
+    cl2r_pars: Cl2rConfig = Factory(Cl2rConfig)
 
     def __attrs_post_init(self) -> None:
         """Perform consistency checks after initialization."""

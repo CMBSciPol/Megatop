@@ -100,6 +100,10 @@ class DataManager:
     def path_to_spectra_plots(self) -> Path:
         return self.path_to_plots / self._config.output_dirs.spectra
 
+    @property
+    def path_to_mcmc_plots(self) -> Path:
+        return self.path_to_plots / self._config.output_dirs.mcmc
+
     # Paths to fiducial CMB files
     # ---------------------------
 
@@ -220,6 +224,15 @@ class DataManager:
 
     def get_path_to_noise_spectra_cross_components(self, sub: int | None = None) -> Path:
         fname = self.get_path_to_noise_spectra(sub=sub) / "noise_cross_components_Cls"
+        return fname.with_suffix(".npz")
+
+    def get_path_to_mcmc(self, sub: int | None = None) -> Path:
+        if sub is not None:
+            return self.path_to_output / self._config.output_dirs.mcmc / f"{sub:04d}"
+        return self.path_to_output / self._config.output_dirs.mcmc
+
+    def get_path_to_mcmc_chains(self, sub: int | None = None) -> Path:
+        fname = self.get_path_to_mcmc(sub=sub) / "mcmc_chains"
         return fname.with_suffix(".npz")
 
     @property
