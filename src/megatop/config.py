@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
-from attrs import Factory, asdict, evolve, field, frozen
+from attrs import Factory, asdict, define, evolve, field
 
 from megatop._converter import yaml_converter
 
@@ -86,7 +86,7 @@ def structure_V3Noise(val: Any, _) -> V3Noise:
     return V3Noise[val]
 
 
-@frozen
+@define
 class DataDirsConfig:
     root: Path = field(converter=Path)
     maps: str = "maps"
@@ -95,7 +95,7 @@ class DataDirsConfig:
     noise_maps: str = "noise_maps"
 
 
-@frozen
+@define
 class OutputDirsConfig:
     root: Path = field(converter=Path)
     masks: str = "masks"
@@ -108,14 +108,14 @@ class OutputDirsConfig:
     mcmc: str = "mcmc"
 
 
-@frozen
+@define
 class FiducialCMBConfig:
     root: Path = field(converter=Path)
     lensed_scalar: str = "lensed_scalar_cl"
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
 
-@frozen
+@define
 class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
@@ -125,8 +125,7 @@ class MapSetConfig:
     obsmat_path: Path = field(converter=Path, default=".")
 
     def __attrs_post_init__(self) -> None:
-        # circumvent immutability
-        object.__setattr__(self, "name", f"{self.exp_tag}_f{self.freq_tag:03d}")
+        self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
 
     @property
     def map_filename(self) -> str:
@@ -137,7 +136,7 @@ class MapSetConfig:
         return self.noise_prefix + self.name
 
 
-@frozen
+@define
 class MasksConfig:
     input_nhits_map: Path | None = None
 
@@ -169,7 +168,7 @@ class MasksConfig:
             raise ValueError(msg)
 
 
-@frozen
+@define
 class GeneralConfig:
     nside: int = 512
     lmin: int = 30
@@ -183,18 +182,18 @@ class GeneralConfig:
             raise ValueError(msg)
 
 
-@frozen
+@define
 class PreProcessingConfig:
     common_beam_correction: float = 100
     beam_fwhms: list[float] | None = None
 
 
-@frozen
+@define
 class NoiseCovmatConfig:
     save_preprocessed_noise_maps: bool = False
 
 
-@frozen
+@define
 class _MinimizeOptions:
     disp: bool = False
     gtol: float = 1e-12
@@ -203,7 +202,7 @@ class _MinimizeOptions:
     ftol: float = 1e-12
 
 
-@frozen
+@define
 class CompSepConfig:
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
@@ -221,7 +220,7 @@ class CompSepConfig:
         return options
 
 
-@frozen
+@define
 class Map2ClConfig:
     delta_ell: int | list[int] = 10
     purify_e: bool = True
@@ -229,13 +228,13 @@ class Map2ClConfig:
     n_iter_namaster: int = 3
 
 
-@frozen
+@define
 class PlotsConfig:
     lmin_plot: int = 30
     lmax_plot: int = 1_000
 
 
-@frozen
+@define
 class MapSimConfig:
     n_sim: int = 1
     sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
@@ -254,7 +253,7 @@ class MapSimConfig:
             raise ValueError(msg)
 
 
-@frozen
+@define
 class NoiseSimConfig:
     n_sim: int = 1
     experiment: ValidExperimentType = "SO"
