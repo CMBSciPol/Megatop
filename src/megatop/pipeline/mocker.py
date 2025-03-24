@@ -225,7 +225,7 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
     )
 
     if filtering := config.map_sim_pars.filter_sims:
-        # Load the obsmat(s) for out map set(s)
+        # Load the obsmat(s) for our map set(s)
         obsmat_funcs = load_obsmat(manager, config)
         func = partial(func, obsmat_funcs=obsmat_funcs)
 
