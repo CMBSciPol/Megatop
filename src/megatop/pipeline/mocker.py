@@ -54,7 +54,7 @@ def get_cmb(manager: DataManager, config: Config) -> NDArray:
     logger.debug("Computing CMB map from fiducial spectra")
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
     cmb_map = mock.generate_map_cmb(
-        Cl_cmb_model, config.nside, fixed_cmb_seed=config.map_sim_pars.fixed_cmb_seed
+        Cl_cmb_model, config.nside, cmb_seed=config.map_sim_pars.cmb_seed
     )
     logger.debug(f"CMB map has shape {cmb_map.shape}")
     return cmb_map
@@ -148,14 +148,13 @@ def func_signal(
     binary_mask: NDArray,
     nhits_map: NDArray,
     *,
-    fixed_cmb: bool,
     obsmat_funcs: dict | None = None,
 ) -> int:
     """Generate a sky realization."""
 
     # incorporate realization id into the seed if CMB is not fixed
-    if not fixed_cmb:
-        config.map_sim_pars.fixed_cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
+    if not config.map_sim_pars.single_cmb:
+        config.map_sim_pars.cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
 
     # generate the components
     cmb = get_cmb(manager, config)
@@ -204,7 +203,7 @@ def func_noise(
     return id_sim
 
 
-def process_signal(config: Config, manager: DataManager, comm: Comm, *, fixed_cmb: bool):
+def process_signal(config: Config, manager: DataManager, comm: Comm):
     rank = comm.Get_rank()
     n_sim = config.map_sim_pars.n_sim
 
@@ -223,7 +222,6 @@ def process_signal(config: Config, manager: DataManager, comm: Comm, *, fixed_cm
         config=config,
         binary_mask=binary_mask,
         nhits_map=nhits_map,
-        fixed_cmb=fixed_cmb,
     )
 
     if filtering := config.map_sim_pars.filter_sims:
@@ -283,18 +281,14 @@ def main():
     num_groups = min(size, num_sets)
 
     # We need to handle the CMB seed carefully
-    # First, check if one was provided in the configuration
-    cmb_seed = config.map_sim_pars.fixed_cmb_seed
-    fixed_cmb = cmb_seed is not None
-
     # If not provided, generate a common one that will be shared by all groups
+    cmb_seed = config.map_sim_pars.cmb_seed
     if cmb_seed is None:
         if rank == 0 and num_groups > 1:
             # Process 0 generates the seed for everyone from a random source
             rng = np.random.default_rng()
             cmb_seed = rng.integers(2**32)
             logger.debug(f"Common CMB seed: {cmb_seed}")
-        cmb_seed = world.bcast(cmb_seed, root=0)
         config.map_sim_pars.cmb_seed = int(world.bcast(cmb_seed, root=0))
 
     # Dump the full configuration including the generated seed, before splitting the map sets
@@ -303,7 +297,7 @@ def main():
     world.Barrier()
 
     # Split the configuration
-    sconf = config.split_map_sets(num_groups, color=color, cmb_seed=cmb_seed)
+    sconf = config.split_map_sets(num_groups, color=color)
 
     if srank == 0:
         num_sets = len(sconf.map_sets)
@@ -312,7 +306,7 @@ def main():
 
     # Update the manager's configuration before processing
     manager = DataManager(sconf)
-    process_signal(sconf, manager, scomm, fixed_cmb=fixed_cmb)
+    process_signal(sconf, manager, scomm)
     process_noise(sconf, manager, scomm)
 
 

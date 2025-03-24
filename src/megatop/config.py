@@ -242,7 +242,10 @@ class MapSimConfig:
     # noise_option: NoiseOption = NoiseOption.ONE_OVER_F
     r_input: float = 0
     A_lens: float = 1
-    fixed_cmb_seed: int | None = None
+    cmb_seed: int | None = None
+    """Optional integer seed for the CMB."""
+    single_cmb: bool = False
+    """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
 
     @sky_model.validator
@@ -340,17 +343,15 @@ class Config:
             ],
         )
 
-    def split_map_sets(self, num_colors: int, color: int = 0, cmb_seed: int | None = None):
+    def split_map_sets(self, num_colors: int, color: int = 0):
         """Split the configuration into color groups (similar to MPI_Comm_split).
 
         Returns a different configuration based on a color value, allowing for parallel processing
-        of map sets. Each color group gets a configuration with the same subset of map_sets. The
-        user must provide a common CMB seed to all colors if there is more than one color.
+        of map sets. Each color group gets a configuration with the same subset of map_sets.
 
         Args:
             num_colors (int): Number of color groups to split the configuration into.
             color (int, optional): Index used to select which map_set group to return.
-            cmb_seed (int, optional): The common CMB seed to use for all colors.
 
         Returns:
             Config: A new Config object containing only the map_sets corresponding to the given
@@ -359,15 +360,7 @@ class Config:
         all_indices = np.arange(len(self.map_sets))
         # modulo to ensure access within bounds
         my_indices = np.array_split(all_indices, num_colors)[color % num_colors]
-        # set the common CMB seed
-        if num_colors > 1 and cmb_seed is None:
-            msg = "cmb_seed must be provided when splitting the configuration"
-            raise ValueError(msg)
-        return evolve(
-            self,
-            map_sets=[ms for i, ms in enumerate(self.map_sets) if i in my_indices],
-            map_sim_pars=evolve(self.map_sim_pars, fixed_cmb_seed=cmb_seed),
-        )
+        return evolve(self, map_sets=[ms for i, ms in enumerate(self.map_sets) if i in my_indices])
 
     @property
     def nside(self) -> int:

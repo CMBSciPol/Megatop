@@ -32,13 +32,13 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     return np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0]])
 
 
-def generate_map_cmb(Cl_cmb_model, nside: int, fixed_cmb_seed: int | None = None):
+def generate_map_cmb(Cl_cmb_model, nside: int, cmb_seed: int | None = None):
     # TODO write tests
     lmax = 3 * nside
 
     # Fixing seed if required
     # hp.synfast uses the legacy numpy random number generator
-    np.random.seed(fixed_cmb_seed)  # noqa: NPY002
+    np.random.seed(cmb_seed)  # noqa: NPY002
     map_CMB = hp.synfast(Cl_cmb_model[0], nside=nside, lmax=lmax, new=True, pixwin=False)
 
     # Resetting seed
