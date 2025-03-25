@@ -17,6 +17,7 @@ from megatop.utils.mask import (
     get_spin_derivatives,
     random_src_mask,
 )
+from megatop.utils.mpi import get_world
 
 SO_NOMINAL_HITMAP_URL = (
     "https://portal.nersc.gov/cfs/sobs/users/so_bb/norm_nHits_SA_35FOV_ns512.fits"
@@ -159,15 +160,16 @@ def mask_handler(manager: DataManager, config: Config):
 
 def main():
     parser = argparse.ArgumentParser(description="Mask handler")
-    parser.add_argument("--config", type=Path, help="config file")
+    parser.add_argument("--config", type=Path, required=True, help="config file")
+
     args = parser.parse_args()
-    if args.config is None:
-        logger.warning("No config file provided, using example config")
-        config = Config.get_example()
-    else:
-        config = Config.load_yaml(args.config)
+    config = Config.load_yaml(args.config)
     manager = DataManager(config)
-    manager.dump_config()
+
+    world, rank, size = get_world()
+    if rank == 0:
+        manager.dump_config()
+
     mask_handler(manager, config)
 
 

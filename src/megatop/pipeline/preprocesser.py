@@ -9,6 +9,7 @@ from mpi4py.futures import MPICommExecutor
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mask import apply_binary_mask
+from megatop.utils.mpi import get_world
 from megatop.utils.preproc import common_beam_and_nside, read_input_maps
 
 
@@ -61,6 +62,10 @@ def main():
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
+
+    world, rank, size = get_world()
+    if rank == 0:
+        manager.dump_config()
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data

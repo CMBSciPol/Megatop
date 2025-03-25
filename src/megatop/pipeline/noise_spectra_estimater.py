@@ -11,7 +11,7 @@ from mpi4py import MPI
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
-from megatop.utils.mpi import MPISUM
+from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
@@ -189,7 +189,10 @@ def main():
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
-    manager.dump_config()
+
+    world, rank, size = get_world()
+    if rank == 0:
+        manager.dump_config()
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:
