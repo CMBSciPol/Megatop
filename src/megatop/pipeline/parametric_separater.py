@@ -44,20 +44,47 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
-    freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
-        freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
-    )
-    noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
 
-    res = fg.separation_recipes.weighted_comp_sep(
-        components,
-        instrument,
-        data=freq_maps_preprocessed_QU_masked,
-        cov=noisecov_QU_masked,
-        options=options,
-        tol=tol,
-        method=method,
-    )
+    use_harmonic_compsep = True
+    if not use_harmonic_compsep:
+        freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
+            freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
+        )
+        noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
+        res = fg.separation_recipes.weighted_comp_sep(
+            components,
+            instrument,
+            data=freq_maps_preprocessed_QU_masked,
+            cov=noisecov_QU_masked,
+            options=options,
+            tol=tol,
+            method=method,
+        )
+    else:
+        import IPython
+
+        IPython.embed()
+
+        freq_maps_preprocessed_TQU_masked = mask.apply_binary_mask(
+            freq_maps_preprocessed, binary_mask, unseen=True
+        )
+        noisecov_TQU_masked = mask.apply_binary_mask(noisecov, binary_mask, unseen=True)
+
+        instrument["fwhm"] = config.beams
+        std_instr = fg.observation_helpers.standardize_instrument(instrument)
+
+        res = fg.separation_recipes.harmonic_comp_sep(
+            components,
+            std_instr,
+            data=freq_maps_preprocessed_TQU_masked,
+            nside=config.nside,
+            lmax=config.lmax,
+            invN=noisecov_TQU_masked,
+            mask=binary_mask,
+            options=options,
+            tol=tol,
+            method=method,
+        )
 
     A = MixingMatrix(*components)
     A_ev = A.evaluator(np.array(instrument["frequency"]))
