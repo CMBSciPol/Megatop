@@ -28,7 +28,7 @@ dependencies = [
     "matplotlib",
     "numpy",
     "pymaster",
-    "pysm3 @ git+https://github.com/galsci/pysm.git@3.4.1a2",
+    "pysm3 >= 3.4.1a2",
     "pyyaml",
     "tqdm",
 ]
