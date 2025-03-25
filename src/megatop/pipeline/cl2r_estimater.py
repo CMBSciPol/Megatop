@@ -12,6 +12,7 @@ from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
 from megatop.utils import logger
+from megatop.utils.mpi import get_world
 
 
 def compute_generic_Cl(lmin, lmax):
@@ -303,6 +304,10 @@ def main():
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
+
+    world, rank, size = get_world()
+    if rank == 0:
+        manager.dump_config()
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:

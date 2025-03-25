@@ -2,7 +2,8 @@ from enum import Enum, IntEnum
 from pathlib import Path
 from typing import Any, Literal
 
-from attrs import Factory, asdict, define, field
+import numpy as np
+from attrs import Factory, asdict, define, evolve, field
 
 from megatop._converter import yaml_converter
 
@@ -241,7 +242,10 @@ class MapSimConfig:
     # noise_option: NoiseOption = NoiseOption.ONE_OVER_F
     r_input: float = 0
     A_lens: float = 1
-    fixed_cmb_seed: bool | None = None
+    cmb_seed: int | None = None
+    """Optional integer seed for the CMB."""
+    single_cmb: bool = False
+    """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
 
     @sky_model.validator
@@ -338,6 +342,25 @@ class Config:
                 MapSetConfig(freq_tag=280, exp_tag="SAT3"),
             ],
         )
+
+    def split_map_sets(self, num_colors: int, color: int = 0):
+        """Split the configuration into color groups (similar to MPI_Comm_split).
+
+        Returns a different configuration based on a color value, allowing for parallel processing
+        of map sets. Each color group gets a configuration with the same subset of map_sets.
+
+        Args:
+            num_colors (int): Number of color groups to split the configuration into.
+            color (int, optional): Index used to select which map_set group to return.
+
+        Returns:
+            Config: A new Config object containing only the map_sets corresponding to the given
+                color. All other configuration parameters remain unchanged.
+        """
+        all_indices = np.arange(len(self.map_sets))
+        # modulo to ensure access within bounds
+        my_indices = np.array_split(all_indices, num_colors)[color % num_colors]
+        return evolve(self, map_sets=[ms for i, ms in enumerate(self.map_sets) if i in my_indices])
 
     @property
     def nside(self) -> int:

@@ -10,8 +10,8 @@ RNG = np.random.default_rng()
 
 def test_fixed_cmb_simulation():
     cl_cmb_model = RNG.random((1, 6, 3 * NSIDE - 1))
-    maps_1 = mock.generate_map_cmb(cl_cmb_model, NSIDE, fixed_cmb_seed=1234)
-    maps_2 = mock.generate_map_cmb(cl_cmb_model, NSIDE, fixed_cmb_seed=1234)
+    maps_1 = mock.generate_map_cmb(cl_cmb_model, NSIDE, cmb_seed=1234)
+    maps_2 = mock.generate_map_cmb(cl_cmb_model, NSIDE, cmb_seed=1234)
     assert np.all(maps_1 == maps_2)
 
 

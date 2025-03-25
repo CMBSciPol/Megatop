@@ -7,7 +7,7 @@ import numpy as np
 
 from megatop import Config, DataManager
 from megatop.utils import logger
-from megatop.utils.mpi import MPISUM
+from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.utils import MemoryUsage
 
@@ -122,7 +122,10 @@ def main():
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
-    manager.dump_config()
+
+    world, rank, size = get_world()
+    if rank == 0:
+        manager.dump_config()
 
     pixel_noisecov_estimation(manager, config)
 

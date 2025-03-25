@@ -7,7 +7,12 @@ allow-direct-references = true
 
 [project]
 name = "Megatop"
-authors = [{ name = "Baptiste Jost" }, { name = "Benjamin Beringue" }]
+authors = [
+    { name = "Baptiste Jost" },
+    { name = "Benjamin Beringue" },
+    { name = "Simon Biquard" },
+    { name = "Amalia Aguilar" },
+]
 version = "0.1.0"
 description = "A map-based CMB polarization data analysis pipeline"
 readme = "README.md"
@@ -16,7 +21,9 @@ dependencies = [
     "attrs",
     "camb",
     "cattrs",
+    "emcee",
     "fgbuster @ git+https://github.com/fgbuster/fgbuster.git@std_inst_bandpass",
+    "getdist",
     "healpy",
     "matplotlib",
     "numpy",

@@ -9,6 +9,7 @@ from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask
+from megatop.utils.mpi import get_world
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     create_binning,
@@ -111,6 +112,10 @@ def main():
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
+
+    world, rank, size = get_world()
+    if rank == 0:
+        manager.dump_config()
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:
