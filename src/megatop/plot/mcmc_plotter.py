@@ -51,7 +51,6 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     plot_dir.mkdir(parents=True, exist_ok=True)
     plot_name = "corner_plot_all_skysims"
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")
-    plt.show()
     plt.clf()
 
 
@@ -87,7 +86,6 @@ def plot_single_cornerplot(manager: DataManager, config: Config, id_sim: int | N
     plot_dir.mkdir(parents=True, exist_ok=True)
     plot_name = f"corner_plot_skysim{id_sim}"
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")
-    plt.show()
     plt.clf()
 
 
@@ -252,7 +250,6 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     plot_dir = manager.path_to_mcmc_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
     plt.savefig(plot_dir / f"spectra_comparison_skysim{id_sim}.png", bbox_inches="tight")
-    plt.show()
     plt.clf()
 
 

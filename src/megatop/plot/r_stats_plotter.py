@@ -77,7 +77,6 @@ def plot_r_statistics(managers, configs):
     plot_name = "r_stats_model_comparison"
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")
 
-    plt.show()
     plt.clf()
 
 
