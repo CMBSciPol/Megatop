@@ -54,7 +54,7 @@ dev = ["pytest"]
 "megatop-noisespectra-plot" = "megatop.plot.noise_spectra_plotter:main"
 "megatop-cl2r-run" = "megatop.pipeline.cl2r_estimater:main"
 "megatop-mcmc-plot" = "megatop.plot.mcmc_plotter:main"
-"megatop-rstats_plot" = "megatop.plot.r_stats_plotter:main"
+"megatop-rstats-plot" = "megatop.plot.r_stats_plotter:main"
 
 [tool.ruff]
 fix = true            # autofix issues when possible
