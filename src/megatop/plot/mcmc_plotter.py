@@ -18,10 +18,11 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     n_sim_sky = config.map_sim_pars.n_sim
 
     all_samples = []
-    colors = [
-        plt.cm.plasma(i / (n_sim_sky - 1)) for i in range(n_sim_sky)
-    ]  # Convert to list of color values
-
+    colors = (
+        [plt.cm.plasma(0.5)]
+        if n_sim_sky == 1
+        else [plt.cm.plasma(i / (n_sim_sky - 1)) for i in range(n_sim_sky)]
+    )
     for id_sim in range(n_sim_sky):
         fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
         mcmc = np.load(fname_chains, allow_pickle=True)
@@ -108,8 +109,8 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         "Noise_CMBxNoise_CMB"
     ][3][1:]
 
-    ls_bins_low = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_low"][1:]
-    ls_bins_high = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_high"][1:]
+    ls_bins_low = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_low"]  # [1:]
+    ls_bins_high = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_high"]  # [1:]
     ls_bins_lminlmax_idx = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
         "bin_index_lminlmax"
     ][1:]
@@ -126,6 +127,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     param_names = mcmc["param_names"]
     samples = MCSamples(samples=chains, names=param_names, labels=param_names)
     theta_est = samples.getMeans()
+    print("ESTIMATED PARAMS:", theta_est)
 
     if not dust_marg and not sync_marg:
         r_est, A_lens_est = theta_est
@@ -138,6 +140,8 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
 
     # Compute individual Cl components
     Cl_BB_prim_est = r_est * Cl_BB_prim_generic
+    print("r_est:", r_est)
+    print("Cl_BB_prim_generic:", Cl_BB_prim_generic)
     Cl_BB_lensing_est = A_lens_est * Cl_BB_lensing_generic
     if dust_marg:
         Cl_BB_dust_est = A_dust_est * Cl_DustxDust_BB_est
@@ -190,6 +194,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         color="hotpink",
         zorder=2,
     )
+
     ax.plot(
         np.arange(lmin, lmax + 1),
         Cl_BB_prim_est,
@@ -269,8 +274,8 @@ def main():
     if n_sim_sky == 0:
         id_sim = None
     else:
-        plot_all_cornerplots(manager, config)
-        id_sim = 1
+        # plot_all_cornerplots(manager, config)
+        id_sim = 0
         logger.info(f"Plotting for sky simulation #{id_sim}")
         plot_single_cornerplot(manager, config, id_sim=id_sim)
         plot_spectra_comparison(manager, config, id_sim=id_sim)
