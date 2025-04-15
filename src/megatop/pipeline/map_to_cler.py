@@ -62,6 +62,109 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int | None 
         effective_beam_CMB = get_normalized_CMB_native_post_compsep_beam_wpix(
             config.beams, A_maxL, config.nside
         )
+        # import IPython
+        # IPython.embed()
+        # W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim), allow_pickle=True)[
+        #     "W_maxL"
+        # ]
+        # W_maxL[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
+        # wpix_out = hp.pixwin(config.nside, pol=True, lmax=3 * config.nside)  # Pixel window function of output maps
+        # # wpix_out = np.array([1,1]) # Testing without pixel window function
+        # Bl_gauss_P = []
+        # Bl_gauss_T = []
+
+        # for i_f in range(len(config.beams)):
+        #     Bl_gauss_fwhm = hp.gauss_beam(
+        #         np.radians(config.beams[i_f] / 60), lmax=3 * config.nside, pol=True
+        #     )
+        #     Bl_gauss_P.append(Bl_gauss_fwhm[:, 1] * wpix_out[1])
+        #     Bl_gauss_T.append(Bl_gauss_fwhm[:, 0] * wpix_out[0])
+        # Bl_gauss_P = np.array(Bl_gauss_P)
+        # Bl_gauss_T = np.array(Bl_gauss_T)
+
+        # lmax_for_alm_computation = 3 * config.nside
+        # W_alm = np.zeros((3, len(config.frequencies), 2, hp.sphtfunc.Alm.getsize(lmax_for_alm_computation)), dtype=complex)
+        # W_alm2map = np.zeros((3, len(config.frequencies), 2, hp.nside2npix(config.nside)))
+        # WlmBl = np.zeros((3, len(config.frequencies), 2, hp.sphtfunc.Alm.getsize(lmax_for_alm_computation)), dtype=complex)
+        # WlmBl_T = np.zeros((3, len(config.frequencies), 2, hp.sphtfunc.Alm.getsize(lmax_for_alm_computation)), dtype=complex)
+        # WlmBl2map = np.zeros((3, len(config.frequencies), 2, hp.nside2npix(config.nside)))
+        # WlmBl2Cl = np.zeros((3, len(config.frequencies), 2, 3*config.nside+1))
+        # WlmBl2Cl_T = np.zeros((3, len(config.frequencies), 2, 3*config.nside+1))
+
+        # for component_index in range(3):
+        #     for freq_i in range(len(config.frequencies)):
+        #         for QU_index in range(2):
+        #             W_alm[component_index, freq_i, QU_index] = hp.map2alm(
+        #                 W_maxL[component_index, freq_i, QU_index],
+        #                 lmax=lmax_for_alm_computation,
+        #                 iter=10,
+        #             )
+        #             W_alm2map[component_index, freq_i, QU_index] = hp.alm2map(
+        #                 W_alm[component_index, freq_i, QU_index],
+        #                 config.nside,
+        #                 lmax=lmax_for_alm_computation,
+        #                 pixwin=False,
+        #                 fwhm=0.0,
+        #                 pol=False,
+        #             )
+        #             WlmBl[component_index, freq_i, QU_index] = hp.almxfl(
+        #                 W_alm[component_index, freq_i, QU_index],
+        #                 Bl_gauss_P[freq_i],
+        #             )
+        #             WlmBl_T[component_index, freq_i, QU_index] = hp.almxfl(
+        #                 W_alm[component_index, freq_i, QU_index],
+        #                 Bl_gauss_T[freq_i],
+        #             )
+        #             WlmBl2map[component_index, freq_i, QU_index] = hp.alm2map(
+        #                 WlmBl[component_index, freq_i, QU_index],
+        #                 config.nside,
+        #                 lmax=lmax_for_alm_computation,
+        #                 pixwin=False,
+        #                 fwhm=0.0,
+        #                 pol=False,
+        #             )
+        #             WlmBl2Cl[component_index, freq_i, QU_index] = hp.alm2cl(
+        #                 WlmBl[component_index, freq_i, QU_index])
+        #             WlmBl2Cl_T[component_index, freq_i, QU_index] = hp.alm2cl(
+        #                 WlmBl_T[component_index, freq_i, QU_index])
+        # # Plotting first elements and compare all maps
+        # import matplotlib.pyplot as plt
+        # column = 3
+        # row = 1
+        # component_index, freq_i, QU_index = 0, 0, 0
+        # title_set = [ 'W_maxL', 'W_alm2map', 'WlmBl2map']
+        # plt.figure(figsize=(20, 7))
+        # for i, map_set  in enumerate([W_maxL, W_alm2map, WlmBl2map]):
+        #     map_set_ = map_set[component_index, freq_i, QU_index]
+        #     map_set_[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
+        #     hp.mollview(
+        #             map_set[component_index, freq_i, QU_index],
+        #             title=title_set[i],
+        #             sub=(row, column, i + 1),
+        #     )
+        # plt.savefig('test_Wmaps.png')
+        # plt.close()
+
+        # fsky = np.sum(binary_mask) / len(binary_mask)
+        # # effective_beam_CMB_test = np.sqrt(np.sum(WlmBl2Cl[0], axis=(0,1))/2/fsky) / np.max(np.sqrt(np.sum(WlmBl2Cl_T[0], axis=(0,1))/2/fsky))
+        # effective_beam_CMB_test = np.sqrt(np.sum(WlmBl2Cl[0], axis=(0,1))/2/fsky) / np.max(np.sqrt(np.sum(WlmBl2Cl[0], axis=(0,1))/2/fsky))
+
+        # plt.plot(effective_beam_CMB)
+        # plt.plot(np.sqrt(np.sum(WlmBl2Cl[0], axis=(0,1))/2/fsky) )
+        # plt.plot(np.sqrt(np.sum(WlmBl2Cl_T[0], axis=(0,1))/2/fsky))
+        # plt.plot(effective_beam_CMB_test)
+        # # for i in range(6):
+        # #     plt.plot(WlmBl2Cl[0,i,0] / fsky)
+        # #     plt.plot(WlmBl2Cl[0,i,1]/ fsky)
+        # # plt.plot(np.sqrt(np.sum(WlmBl2Cl[0], axis=(0,1))/2/fsky))
+        # plt.savefig('test_WlmBl2Cl.png')
+        # plt.close()
+
+        # test_alm = hp.map2alm(W_maxL[0,0,0], lmax = 3*config.nside, iter=10)
+        # test_map = hp.alm2map(test_alm, config.nside)
+        # test_almTQU = hp.map2alm([W_maxL[0,0,0]/W_maxL[0,0,0], W_maxL[0,0,0], W_maxL[0,0,1]],
+        #                          pol=True, lmax = 3*config.nside, iter=10)
+        # test_mapTQU = hp.alm2map(test_almTQU, config.nside)
     else:
         effective_beam_CMB = get_common_beam_wpix(
             config.pre_proc_pars.common_beam_correction, config.nside
