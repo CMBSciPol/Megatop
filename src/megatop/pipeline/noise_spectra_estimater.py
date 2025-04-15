@@ -160,10 +160,11 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         noise_map_post_compsep *= binary_mask
 
         # TODO: update keys wrt relevant components once implemented in compsep step
+        logger.warning("SAVING ONLY CMB NOISE MAP TO SAVE TIME, MUST BE MADE INTO AN OPTION")
         noise_comp_dict = {
             "Noise_CMB": noise_map_post_compsep[0],
-            "Noise_Dust": noise_map_post_compsep[1],
-            "Noise_Synch": noise_map_post_compsep[2],
+            # "Noise_Dust": noise_map_post_compsep[1],
+            # "Noise_Synch": noise_map_post_compsep[2],
         }
 
         # Computing auto and cross spectra
