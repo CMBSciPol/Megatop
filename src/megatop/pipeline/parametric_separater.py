@@ -10,15 +10,20 @@ from fgbuster.mixingmatrix import MixingMatrix
 from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
+from megatop.config import NoiseOption
 from megatop.utils import Timer, logger, mask
 from megatop.utils.preproc import read_input_maps
 
 
 def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
     with Timer("load-covmat"):
-        noisecov_fname = manager.path_to_pixel_noisecov
-        logger.debug(f"Loading covmat from {noisecov_fname}")
-        noisecov = np.load(noisecov_fname)
+        if config.noise_sim_pars.noise_option == NoiseOption.NOISELESS:
+            logger.debug("Noise option is set to noiseless, using IDENTITY noisecov")
+            noisecov = np.ones((len(config.frequencies), 3, hp.nside2npix(config.nside)))
+        else:
+            noisecov_fname = manager.path_to_pixel_noisecov
+            logger.debug(f"Loading covmat from {noisecov_fname}")
+            noisecov = np.load(noisecov_fname)
 
     with Timer("load-maps"):
         preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
