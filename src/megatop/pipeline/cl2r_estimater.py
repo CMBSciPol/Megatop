@@ -1,5 +1,4 @@
 import argparse
-import warnings
 from functools import partial
 from pathlib import Path
 
@@ -16,10 +15,6 @@ from megatop.utils.mpi import get_world
 
 
 def compute_generic_Cl(lmin, lmax):
-    warnings.filterwarnings(
-        "ignore",
-        message="power_spectra_from_transfer with non-linear lensing does not recalculate the non-linear correction",
-    )
     LMAX = 2000
     cosmo_params = camb.set_params(
         H0=67.5,
@@ -40,6 +35,7 @@ def compute_generic_Cl(lmin, lmax):
     def get_Cl(r):
         infl_params = initialpower.InitialPowerLaw()
         infl_params.set_params(ns=0.96, r=r)
+        cosmo_params.InitPower = infl_params
         results = camb.get_results(cosmo_params)
         if r == 0:
             return results.get_cmb_power_spectra(cosmo_params, CMB_unit="muK", raw_cl=True)[
@@ -196,7 +192,6 @@ def logL_cosmo(
 
 def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None = None):
     # 1. load parameters and estimated spectra:
-
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
     lmin = config.general_pars.lmin
@@ -223,9 +218,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     ls_bins_lminlmax_centre = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
         "bin_centre_lminlmax"
     ][1:]
-    delta_l = (
-        config.map2cl_pars.delta_ell
-    )  # ls_bins_lminlmax_centre[1] - ls_bins_lminlmax_centre[0]
+    delta_l = config.map2cl_pars.delta_ell
 
     Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
 
@@ -247,7 +240,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         theta_init_guess = None
         theta_offsets = None
 
-    n_dim, n_walkers, n_steps, n_steps_burnin = len(theta_init_guess), 200, 10000, 2000
+    n_dim, n_walkers, n_steps, n_steps_burnin = len(theta_init_guess), 200, 15000, 2000
     rng = np.random.default_rng()
     theta_0 = np.array(theta_init_guess) + np.array(theta_offsets) * rng.standard_normal(
         (n_walkers, n_dim)
@@ -276,13 +269,13 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         ),
     )
 
-    logger.info(f"Running burn-in for map {id_sim + 1}...")
+    logger.info(f"Running burn-in for sky sim {id_sim + 1}...")
     with np.errstate(invalid="ignore", divide="ignore"):
         theta_0, _, _ = sampler.run_mcmc(
             theta_0, n_steps_burnin
         )  # progress = True, skip_initial_state_check=True
     sampler.reset()
-    logger.info(f"Running production for map {id_sim + 1}...")
+    logger.info(f"Running production for sky sim {id_sim + 1}...")
     with np.errstate(invalid="ignore", divide="ignore"):
         pos, prob, state = sampler.run_mcmc(theta_0, n_steps)  # , progress=True
     chains = sampler.chain.reshape((-1, n_dim))
