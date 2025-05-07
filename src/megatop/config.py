@@ -203,6 +203,8 @@ class _MinimizeOptions:
 
 @define
 class CompSepConfig:
+    use_harmonic_compsep: bool = False
+    use_N_ell_em: bool = False
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
