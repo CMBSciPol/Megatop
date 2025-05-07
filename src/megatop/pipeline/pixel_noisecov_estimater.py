@@ -35,6 +35,11 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
     logger.info(f"rank = {rank}, size = {size}")
     noise_cov_preprocessed = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
+    # use_harmonic_compsep = False
+    if config.parametric_sep_pars.use_harmonic_compsep:
+        noise_cov_preprocessed_alms = np.zeros(
+            (len(config.frequencies), 3, hp.Alm.getsize(3 * config.nside)), dtype=np.complex128
+        )
 
     # Importing noise maps
     n_sim = config.noise_sim_pars.n_sim
@@ -73,12 +78,22 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         else:
             noise_freq_maps = np.array(noise_freq_maps, dtype=object)
-            noise_freq_maps_preprocessed = common_beam_and_nside(
-                nside=config.nside,
-                common_beam=config.pre_proc_pars.common_beam_correction,
-                frequency_beams=config.beams,
-                freq_maps=noise_freq_maps,
-            )
+
+            if not config.parametric_sep_pars.use_harmonic_compsep:
+                noise_freq_maps_preprocessed = common_beam_and_nside(
+                    nside=config.nside,
+                    common_beam=config.pre_proc_pars.common_beam_correction,
+                    frequency_beams=config.beams,
+                    freq_maps=noise_freq_maps,
+                )
+            else:
+                noise_freq_maps_preprocessed, noise_freq_alms_preprocessed = common_beam_and_nside(
+                    nside=config.nside,
+                    common_beam=config.pre_proc_pars.common_beam_correction,
+                    frequency_beams=config.beams,
+                    freq_maps=noise_freq_maps,
+                    output_alms=True,
+                )
 
         if config.noise_cov_pars.save_preprocessed_noise_maps:
             manager.get_path_to_preprocessed_noise_maps(sub=id_real).parent.mkdir(
@@ -89,25 +104,44 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 manager.get_path_to_preprocessed_noise_maps(sub=id_real),
                 noise_freq_maps_preprocessed,
             )
+            if config.parametric_sep_pars.use_harmonic_compsep:
+                logger.warning("Saving alms is not implemented yet")
 
         MemoryUsage(f"Memory for noise realisation {id_real + 1}: ")
 
         noise_cov_preprocessed += noise_freq_maps_preprocessed**2
 
+        if config.parametric_sep_pars.use_harmonic_compsep:
+            noise_cov_preprocessed_alms += (
+                noise_freq_alms_preprocessed.conjugate() * noise_freq_alms_preprocessed
+            )
+
     if comm is not None:
         noise_cov_preprocessed_recvbuf = MPISUM(noise_cov_preprocessed, comm, rank, root)
+        if config.parametric_sep_pars.use_harmonic_compsep:
+            noise_cov_preprocessed_recvbuf_alms = MPISUM(
+                noise_cov_preprocessed_alms, comm, rank, root
+            )
     else:
         noise_cov_preprocessed_recvbuf = noise_cov_preprocessed
+        if config.parametric_sep_pars.use_harmonic_compsep:
+            noise_cov_preprocessed_recvbuf_alms = noise_cov_preprocessed_alms
 
     if rank == root:
         # Average noise_cov and noise_cov_preprocessed over nsims
         noise_cov_preprocessed_mean = noise_cov_preprocessed_recvbuf / int_n_sim
+        if config.parametric_sep_pars.use_harmonic_compsep:
+            noise_cov_preprocessed_mean_alms = noise_cov_preprocessed_recvbuf_alms / int_n_sim
     else:
         noise_cov_preprocessed_mean = None
+        if config.parametric_sep_pars.use_harmonic_compsep:
+            noise_cov_preprocessed_mean_alms = None
 
     if rank == root:
         manager.path_to_covar.mkdir(exist_ok=True, parents=True)
         np.save(manager.path_to_pixel_noisecov, noise_cov_preprocessed_mean)
+        if config.parametric_sep_pars.use_harmonic_compsep:
+            np.save(manager.path_to_alm_noisecov, noise_cov_preprocessed_mean_alms)
 
     if rank == root:
         logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
