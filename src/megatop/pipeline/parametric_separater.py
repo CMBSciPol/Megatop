@@ -14,6 +14,25 @@ from megatop.utils import Timer, logger, mask
 from megatop.utils.mpi import get_world
 
 
+def unformat_alm(real_alms):
+    logger.warning("Unformatting alms: has not been tested with masked data")
+
+    if real_alms.shape[-1] % 2 != 0:
+        error_msg = "Wrong real_alms size. The real alm array is not in the correct format, its last dimension should be even"
+        raise TypeError(error_msg)
+
+    complex_alms_shape = real_alms.shape[:-1] + (real_alms.shape[-1] // 2,)
+    # complex_alms = np.zeros(complex_alms_shape, dtype='complex128')
+    lmax = hp.Alm.getlmax(complex_alms_shape[-1])
+
+    em = hp.Alm.getlm(lmax)[1]
+    em = np.stack((em, em), axis=-1).reshape(-1)
+    mask_em = [m != 0 for m in em]
+    real_alms[..., mask_em] /= np.sqrt(2)
+
+    return real_alms[..., ::2] + 1j * real_alms[..., 1::2]
+
+
 def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
@@ -46,8 +65,8 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
-    use_harmonic_compsep = True
-    if not use_harmonic_compsep:
+    # use_harmonic_compsep = True
+    if not config.parametric_sep_pars.use_harmonic_compsep:
         freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
             freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
         )
@@ -62,16 +81,100 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
             method=method,
         )
     else:
-        import IPython
-
-        IPython.embed()
-
         freq_maps_preprocessed_TQU_masked = mask.apply_binary_mask(
             freq_maps_preprocessed, binary_mask, unseen=True
         )
-        noisecov_TQU_masked = mask.apply_binary_mask(noisecov, binary_mask, unseen=True)
+        # freq_maps_preprocessed_TQU_masked = freq_maps_preprocessed
 
-        instrument["fwhm"] = config.beams
+        # noisecov_TQU_masked = mask.apply_binary_mask(noisecov, binary_mask, unseen=True)
+        noisecov_TQU_masked = mask.apply_binary_mask(noisecov, binary_mask, unseen=True)
+        noisecov_QU_masked = noisecov_TQU_masked[:, 1:]
+
+        if not config.parametric_sep_pars.use_N_ell_em:
+            inv_noisecov_TQU_masked = mask.apply_binary_mask(1 / noisecov, binary_mask, unseen=True)
+            # inv_noisecov_TQU_masked[...,np.where(inv_noisecov_TQU_masked==hp.UNSEEN)[-1]] = np.abs(np.random.normal(0,1,(6,3,np.where(inv_noisecov_TQU_masked==hp.UNSEEN)[-1].shape[0])))
+            # noisecov_TQU_masked[..., np.where(binary_mask == 0)[0]] = np.random.normal(0,1,(6,3,np.where(binary_mask == 0)[0].shape[0]))
+
+            # noisecov_masked_lm_real_format = fg.separation_recipes._format_alms(noisecov_masked_lm)
+
+            # noisecov_masked_lm_real_format_diag = np.zeros( noisecov_masked_lm_real_format.shape + (noisecov_masked_lm_real_format.shape[-1] ,),
+            #                                         dtype=noisecov_masked_lm_real_format.dtype)
+            # for i in range(noisecov_masked_lm_real_format_diag.shape[-1]):
+            #     noisecov_masked_lm_real_format_diag[...,i,i] = noisecov_masked_lm_real_format[...,i]
+
+            # noisecov_masked_lm_freq_diag = np.zeros( (noisecov_masked_lm.shape[0],noisecov_masked_lm.shape[0],
+            #                                         noisecov_masked_lm.shape[1], noisecov_masked_lm.shape[2]),
+            #                                         dtype=noisecov_masked_lm.dtype)
+            # for i in range(noisecov_masked_lm.shape[0]): noisecov_masked_lm_freq_diag[i,i] = noisecov_masked_lm[i]
+
+            # For now harmonic compsep only works using N_ell not N_ell_m
+            """
+            noisecov_masked_lm = np.array([hp.map2alm(
+                inv_noisecov_TQU_masked[f], lmax=3*config.nside, iter=10, pol=True
+            ) for f in range(inv_noisecov_TQU_masked.shape[0])])
+
+            noisecov_masked_ell = np.array([hp.alm2cl(
+                noisecov_masked_lm[f], lmax=3*config.nside
+            )[:3] for f in range(inv_noisecov_TQU_masked.shape[0])])
+
+            noisecov_masked_ELL_freq_diag = np.zeros( (noisecov_masked_ell.shape[0],noisecov_masked_ell.shape[0],
+                                                    noisecov_masked_ell.shape[1] , noisecov_masked_ell.shape[2]),
+                                                    dtype=noisecov_masked_ell.dtype)
+            for i in range(noisecov_masked_ell.shape[0]): noisecov_masked_ELL_freq_diag[i,i] = noisecov_masked_ell[i]
+
+            invN = noisecov_masked_ELL_freq_diag.T[:,1:]
+            invNlm = None
+            """
+
+            noise_cov_masked_ell_anafast = np.array(
+                [
+                    hp.anafast(inv_noisecov_TQU_masked[f], lmax=3 * config.nside)[:3]
+                    for f in range(inv_noisecov_TQU_masked.shape[0])
+                ]
+            )
+
+            noisecov_masked_ELL_freq_diag_anafast = np.zeros(
+                (
+                    noise_cov_masked_ell_anafast.shape[0],
+                    noise_cov_masked_ell_anafast.shape[0],
+                    noise_cov_masked_ell_anafast.shape[1],
+                    noise_cov_masked_ell_anafast.shape[2],
+                ),
+                dtype=noise_cov_masked_ell_anafast.dtype,
+            )
+            for i in range(noise_cov_masked_ell_anafast.shape[0]):
+                noisecov_masked_ELL_freq_diag_anafast[i, i] = noise_cov_masked_ell_anafast[i]
+
+            invN = noisecov_masked_ELL_freq_diag_anafast.T[:, 1:]
+            invNlm = None
+
+        else:
+            noisecov_alm_fname = manager.path_to_alm_noisecov
+            logger.debug(f"Loading covmat from {noisecov_fname}")
+            noisecov_alm = np.load(noisecov_alm_fname)
+
+            inv_noisecov_alm = 1 / np.real(noisecov_alm)
+            inv_noisecov_alm[..., np.where(noisecov_alm == 0)[-1]] = 0
+            inv_noisecov_alm = inv_noisecov_alm.astype("complex128")
+
+            noisecov_alm_real = fg.separation_recipes._format_alms(inv_noisecov_alm)
+
+            shape_noisecov_alm_real = noisecov_alm_real.shape
+            shape_noisecov_alm_real_diag = (
+                *shape_noisecov_alm_real,
+                shape_noisecov_alm_real[-1],
+            )  # repeating the last dimension
+            noisecov_alm_real_diag = np.zeros(
+                shape_noisecov_alm_real_diag,
+                dtype=noisecov_alm_real.dtype,
+            )
+            for i in range(noisecov_alm_real_diag.shape[-1]):
+                noisecov_alm_real_diag[..., i, i] = noisecov_alm_real[..., i]
+
+            invN = None
+            invNlm = noisecov_alm_real_diag[:, 1:]
+
+        instrument["fwhm"] = [None] * 6  # config.beams
         std_instr = fg.observation_helpers.standardize_instrument(instrument)
 
         res = fg.separation_recipes.harmonic_comp_sep(
@@ -79,12 +182,31 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
             std_instr,
             data=freq_maps_preprocessed_TQU_masked,
             nside=config.nside,
-            lmax=config.lmax,
-            invN=noisecov_TQU_masked,
-            mask=binary_mask,
+            lmax=3 * config.nside,
+            invN=invN,
+            invNlm=invNlm,
+            mask=None,
             options=options,
             tol=tol,
             method=method,
+        )
+
+        A = MixingMatrix(*components)
+        A_ev = A.evaluator(np.array(instrument["frequency"]))
+        A_maxL = A_ev(res.x)  # pyright: ignore[reportCallIssue]
+        res.A_maxL = A_maxL
+
+        AtNA = np.einsum("cf, fsp, fk->cksp", A_maxL.T, 1 / noisecov_QU_masked, A_maxL)
+        res.invAtNA_map = np.linalg.inv(AtNA.T).T
+        res.invAtNA_alm = res.invAtNA
+        res.invAtNA = res.invAtNA_map
+
+        res.s_alm = res.s
+        res.s = np.array(
+            [
+                hp.alm2map_spin(res.s_alm[i], nside=config.nside, spin=2, lmax=3 * config.nside)
+                for i in range(res.s_alm.shape[0])
+            ]
         )
 
     A = MixingMatrix(*components)
