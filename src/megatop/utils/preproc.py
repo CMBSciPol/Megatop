@@ -14,6 +14,7 @@ def common_beam_and_nside(
     common_beam: float,
     frequency_beams: list[float],
     freq_maps: list[npt.ArrayLike],
+    output_alms: bool = False,
 ):
     nside_input_maps = [hp.npix2nside(freq_maps[i].shape[-1]) for i in range(len(frequency_beams))]
     idx_nside_small = np.argwhere(np.array(nside_input_maps) < nside)
@@ -25,6 +26,7 @@ def common_beam_and_nside(
         raise ValueError(msg)  # TODO better error handling ?
 
     freq_maps_out = []
+    freq_alms_out = []
     logger.info(f"Common beam correction -> {common_beam} arcmin and NSIDE -> {nside}")
     lmax_convolution = 3 * nside
     wpix_out = hp.pixwin(
@@ -67,6 +69,9 @@ def common_beam_and_nside(
         alm_out_E = hp.almxfl(alm_in_E, sm_corr_P)
         alm_out_B = hp.almxfl(alm_in_B, sm_corr_P)
 
+        if output_alms:
+            freq_alms_out.append([alm_out_T, alm_out_E, alm_out_B])
+
         # alm-->mapf
         map_out_T, map_out_Q, map_out_U = hp.alm2map(
             [alm_out_T, alm_out_E, alm_out_B],
@@ -79,7 +84,11 @@ def common_beam_and_nside(
 
         # a priori all the options are set to there default, even lmax which is computed wrt input alms
         out_map = np.array([map_out_T, map_out_Q, map_out_U])
+
         freq_maps_out.append(out_map)
+    if output_alms:
+        return np.array(freq_maps_out), np.array(freq_alms_out)
+
     return np.array(freq_maps_out)
 
 
