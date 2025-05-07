@@ -241,6 +241,11 @@ class DataManager:
         return fname.with_suffix(".npy")
 
     @property
+    def path_to_alm_noisecov(self) -> Path:
+        fname = self.path_to_covar / "alm_noisecov_preprocessed"
+        return fname.with_suffix(".npy")
+
+    @property
     def path_to_invAtNA(self) -> Path:
         # TODO: more understandable name?
         # NB: originally saved to 'path_to_components' but it is a covariance after all...
