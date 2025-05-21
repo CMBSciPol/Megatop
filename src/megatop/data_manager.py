@@ -43,8 +43,8 @@ class DataManager:
         return self._config.data_dirs.root / self._config.data_dirs.beams
 
     @property
-    def path_to_bandpasses(self) -> Path:
-        return self._config.data_dirs.root / self._config.data_dirs.bandpasses
+    def path_to_passbands(self) -> Path:
+        return self._config.data_dirs.root / self._config.data_dirs.passbands
 
     @property
     def path_to_noise_maps(self) -> Path:
