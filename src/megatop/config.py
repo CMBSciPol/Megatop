@@ -91,7 +91,7 @@ class DataDirsConfig:
     root: Path = field(converter=Path)
     maps: str = "maps"
     beams: str = "beams"
-    bandpasses: str = "bandpasses"
+    passbands: str = "passbands"
     noise_maps: str = "noise_maps"
 
 
@@ -208,6 +208,7 @@ class CompSepConfig:
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
+    passband_int: bool = False
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
         """Return the minimize options as a dictionary.
@@ -247,6 +248,7 @@ class MapSimConfig:
     single_cmb: bool = False
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
+    passband_int: bool = False
 
     @sky_model.validator
     def check(self, attribute, value):
