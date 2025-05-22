@@ -123,6 +123,7 @@ class MapSetConfig:
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     obsmat_path: Path = field(converter=Path, default=".")
+    passband_filename: str = ""
 
     def __attrs_post_init__(self) -> None:
         self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
@@ -257,7 +258,6 @@ class MapSimConfig:
             msg = f"{attribute.name} only supports 'd*' (dust) and 's*' (synchrotron) models"
             raise ValueError(msg)
 
-
 @define
 class NoiseSimConfig:
     n_sim: int = 1
@@ -304,12 +304,20 @@ class Config:
     noise_sim_pars: NoiseSimConfig = Factory(NoiseSimConfig)
     cl2r_pars: Cl2rConfig = Factory(Cl2rConfig)
 
-    def __attrs_post_init(self) -> None:
+    def __attrs_post_init__(self) -> None:
         """Perform consistency checks after initialization."""
         # TODO: use validators
         if len(self.frequencies) != len(self.beams):
             msg = "Not the same number of frequencies and beam sizes"
             raise ValueError(msg)
+
+        # Validate passband_filename for all map sets if passband_int=True
+        if self.map_sim_pars.passband_int or self.parametric_sep_pars.passband_int:
+            for map_set in self.map_sets:
+                if not map_set.passband_filename:
+                    msg = f"Map set '{map_set.name}' requires a non-empty bandpass_filename because passband_int=True."
+                    raise ValueError(msg)
+
 
     @classmethod
     def load_yaml(cls, path: str | Path) -> "Config":
