@@ -315,7 +315,7 @@ class Config:
         if self.map_sim_pars.passband_int or self.parametric_sep_pars.passband_int:
             for map_set in self.map_sets:
                 if not map_set.passband_filename:
-                    msg = f"Map set '{map_set.name}' requires a non-empty bandpass_filename because passband_int=True."
+                    msg = f"Map set '{map_set.name}' requires a non-empty passband_filename because passband_int=True."
                     raise ValueError(msg)
 
 
