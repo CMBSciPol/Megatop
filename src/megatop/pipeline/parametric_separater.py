@@ -10,7 +10,7 @@ from fgbuster.mixingmatrix import MixingMatrix
 from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
-from megatop.utils import Timer, logger, mask
+from megatop.utils import Timer, logger, mask, passband
 from megatop.utils.mpi import get_world
 
 
@@ -28,6 +28,12 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     timer = Timer()
     timer.start("do-compsep")
     instrument = {"frequency": config.frequencies}
+    if config.parametric_sep_pars.passband_int:
+        logger.info("Using passband-integration for the component separation step.")
+        config.map_sets = passband.passband_constructor(
+            config, manager, passband_int=config.parametric_sep_pars.passband_int
+        )
+        instrument.frequency = passband.fgbuster_passband(config.map_sets)
     if config.parametric_sep_pars.include_synchrotron:
         components = [
             CMB(),
