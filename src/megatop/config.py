@@ -115,7 +115,7 @@ class FiducialCMBConfig:
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
 
-@define
+@define(slots=False)
 class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
@@ -258,6 +258,7 @@ class MapSimConfig:
             msg = f"{attribute.name} only supports 'd*' (dust) and 's*' (synchrotron) models"
             raise ValueError(msg)
 
+
 @define
 class NoiseSimConfig:
     n_sim: int = 1
@@ -317,7 +318,6 @@ class Config:
                 if not map_set.passband_filename:
                     msg = f"Map set '{map_set.name}' requires a non-empty passband_filename because passband_int=True."
                     raise ValueError(msg)
-
 
     @classmethod
     def load_yaml(cls, path: str | Path) -> "Config":
