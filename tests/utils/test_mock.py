@@ -2,6 +2,7 @@ import healpy as hp
 import numpy as np
 import pytest
 
+from megatop.config import MapSetConfig
 from megatop.utils import mock
 
 NSIDE = 8
@@ -27,8 +28,16 @@ def test_shape_spectra_noise_map():
 
 
 def test_shape_fg_map():
+    map_sets = [
+        MapSetConfig(freq_tag=100, exp_tag="test"),
+        MapSetConfig(freq_tag=200, exp_tag="test"),
+    ]
+    map_sets[0].frequency = 100
+    map_sets[0].weight = 1
+    map_sets[1].frequency = 200
+    map_sets[1].weight = 1
     freq_maps = mock.generate_map_fgs_pysm(
-        [100, 200], NSIDE, ["d0"], input_coord="G", output_coord="E"
+        map_sets, NSIDE, ["d0"], input_coord="G", output_coord="E"
     )
     assert freq_maps.shape == (2, 3, hp.nside2npix(NSIDE))
 
