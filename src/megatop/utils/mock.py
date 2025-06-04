@@ -47,20 +47,17 @@ def generate_map_cmb(Cl_cmb_model, nside: int, cmb_seed: int | None = None):
     return np.array(map_CMB)
 
 
-def generate_map_fgs_pysm(frequencies, nside, sky_model, input_coord="G", output_coord="E"):
-    # TODO write tests
-    logger.debug(f"Generating FG maps for {frequencies} GHz")
-
-    sky = Sky(nside=nside, preset_strings=sky_model)
+def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_coord="E"):
+    # TODO write tests and check coords
+    logger.debug(f"Generating FG maps for {[m.freq_tag for m in map_sets]} GHz")
+    sky = Sky(nside=nside, preset_strings=sky_model, output_unit=units.uK_CMB)
     maps_fgs = []
-    for fr in frequencies:
-        m = (
-            sky.get_emission(fr * units.GHz)  # pyright: ignore[reportAttributeAccessIssue]
-            .to(units.uK_CMB, equivalencies=units.cmb_equivalencies(fr * units.GHz))  # pyright: ignore[reportAttributeAccessIssue]
-            .value
-        )
+    for map_set in map_sets:
+        m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value  # pyright: ignore[reportAttributeAccessIssue])
         if input_coord != output_coord:
-            logger.debug(f"Rotating {fr}GHz foreground map from {input_coord} to {output_coord}")
+            logger.debug(
+                f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"
+            )
             r = hp.Rotator(coord=[input_coord, output_coord])
             m = r.rotate_map_pixel(m)
         maps_fgs.append(m)

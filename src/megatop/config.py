@@ -91,7 +91,7 @@ class DataDirsConfig:
     root: Path = field(converter=Path)
     maps: str = "maps"
     beams: str = "beams"
-    bandpasses: str = "bandpasses"
+    passbands: str = "passbands"
     noise_maps: str = "noise_maps"
 
 
@@ -115,7 +115,7 @@ class FiducialCMBConfig:
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
 
-@define
+@define(slots=False)
 class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
@@ -123,6 +123,7 @@ class MapSetConfig:
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     obsmat_path: Path = field(converter=Path, default=".")
+    passband_filename: str = ""
 
     def __attrs_post_init__(self) -> None:
         self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
@@ -208,6 +209,7 @@ class CompSepConfig:
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
+    passband_int: bool = False
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
         """Return the minimize options as a dictionary.
@@ -247,6 +249,7 @@ class MapSimConfig:
     single_cmb: bool = False
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
+    passband_int: bool = False
 
     @sky_model.validator
     def check(self, attribute, value):
@@ -302,12 +305,19 @@ class Config:
     noise_sim_pars: NoiseSimConfig = Factory(NoiseSimConfig)
     cl2r_pars: Cl2rConfig = Factory(Cl2rConfig)
 
-    def __attrs_post_init(self) -> None:
+    def __attrs_post_init__(self) -> None:
         """Perform consistency checks after initialization."""
         # TODO: use validators
         if len(self.frequencies) != len(self.beams):
             msg = "Not the same number of frequencies and beam sizes"
             raise ValueError(msg)
+
+        # Validate passband_filename for all map sets if passband_int=True
+        if self.map_sim_pars.passband_int or self.parametric_sep_pars.passband_int:
+            for map_set in self.map_sets:
+                if not map_set.passband_filename:
+                    msg = f"Map set '{map_set.name}' requires a non-empty passband_filename because passband_int=True."
+                    raise ValueError(msg)
 
     @classmethod
     def load_yaml(cls, path: str | Path) -> "Config":
