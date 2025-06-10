@@ -151,6 +151,7 @@ def plotTTEEBB(
     use_D_ell=True,
     lims_x=(2, 2000),
     lims_y=(1e-2, 1e7),
+    ell=None,
 ):
     """
     This function plots the Cls. It directly saves the plot directly.
@@ -165,9 +166,10 @@ def plotTTEEBB(
         use_D_ell (bool): If True, the Cls are multiplied by ell*(ell+1)/2/pi.
         lims_x (tuple): The limits for the x axis of the plot.
         lims_y (tuple): The limits for the y axis of the plot.
+        ell (ndarray): The ell values to use for the x axis. If None, it will be set to np.arange(0, Cl.shape[-1]).
     """
-
-    ell = np.arange(0, Cl.shape[-1])
+    if ell is None:
+        ell = np.arange(0, Cl.shape[-1])
     norm = ell * (ell + 1) / 2 / np.pi
 
     if not use_D_ell:
