@@ -134,3 +134,76 @@ def create_binning(nside, delta_ell, end_first_bin=None):
     bin_center = (bin_low + bin_high) / 2
 
     return bin_low, bin_high, bin_center
+
+
+def spectra_from_namaster(
+    freq_noise_maps,
+    mask_analysis,
+    workspaceff,
+    nmt_bins,
+    compute_cross_freq=False,
+    purify_e=False,
+    purify_b=False,
+):
+    """
+    Computes the auto and cross-spectra from the frequency noise maps using NaMaster.
+    Parameters
+    ----------
+    freq_noise_maps : np.ndarray
+        Frequency noise maps, shape (n_freq, 3, n_pix).
+        where 3 refers to the T, Q, U components.
+    mask_analysis : np.ndarray
+        Analysis mask, shape (n_pix,).
+    workspaceff : nmt.NmtWorkspace
+        NaMaster workspace for decoupling the spectra.
+    nmt_bins : nmt.NmtBin
+        NaMaster binning object for the spectra.
+    compute_cross_freq : bool, optional
+        Whether to compute cross-frequency spectra. Default is False.
+    purify_e : bool, optional
+        Whether to purify E-mode polarization. Default is False.
+    purify_b : bool, optional
+        Whether to purify B-mode polarization. Default is False.
+    Returns
+    -------
+    cl_decoupled_freq : np.ndarray
+        Decoupled power spectra for each frequency, shape (n_freq, n_bins, 3).
+        Where 3 refers to the T, E, B components. And T is set to zero.
+    unbin_cl_decoupled_freq : np.ndarray
+        Unbinned decoupled power spectra for each frequency, shape (n_freq, n_bins, 3).
+        Where 3 refers to the T, E, B components. And T is set to zero.
+
+    Notes
+    -----
+    - The function computes the auto-spectra for each frequency noise map.
+    - The T component is set to zero in the output spectra.
+    - The EB cross-spectra are ignored in the output.
+    """
+
+    if compute_cross_freq:
+        msg = "Cross-frequency spectra computation is not implemented yet"
+        raise NotImplementedError(msg)
+
+    cl_decoupled_freq = []
+    unbin_cl_decoupled_freq = []
+    for f in range(freq_noise_maps.shape[0]):
+        fields = nmt.NmtField(
+            mask_analysis,
+            freq_noise_maps[f, 1:],
+            beam=None,
+            purify_e=purify_e,
+            purify_b=purify_b,
+            n_iter=10,
+        )
+        cl_coupled = nmt.compute_coupled_cell(fields, fields)
+        cl_decoupled = workspaceff.decouple_cell(cl_coupled)
+        unbin_cl_decoupled = nmt_bins.unbin_cell(cl_decoupled)
+
+        # Keeping only the T, E, B components, setting T to zero
+        # Warning: we are ignoring the EB cross-spectra here
+        cl_decoupled_freq.append([cl_decoupled[0] * 0, cl_decoupled[0], cl_decoupled[3]])
+        unbin_cl_decoupled_freq.append(
+            [unbin_cl_decoupled[0] * 0, unbin_cl_decoupled[0], unbin_cl_decoupled[3]]
+        )
+
+    return np.array(cl_decoupled_freq), np.array(unbin_cl_decoupled_freq)
