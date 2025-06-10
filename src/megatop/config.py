@@ -205,7 +205,10 @@ class _MinimizeOptions:
 @define
 class CompSepConfig:
     use_harmonic_compsep: bool = False
-    use_N_ell_em: bool = False
+    harmonic_lmax: int = 3 * 512  # TODO: use config.nside
+    harmonic_lmin: int = 2
+    harmonic_delta_ell: int = 3  # TODO: use config.nside
+
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
