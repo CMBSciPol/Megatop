@@ -241,8 +241,18 @@ class DataManager:
         return fname.with_suffix(".npy")
 
     @property
-    def path_to_alm_noisecov(self) -> Path:
-        fname = self.path_to_covar / "alm_noisecov_preprocessed"
+    def path_to_nl_noisecov(self) -> Path:
+        fname = self.path_to_covar / "nl_nu_covariance"
+        return fname.with_suffix(".npy")
+
+    @property
+    def path_to_nl_noisecov_unbinned(self) -> Path:
+        fname = self.path_to_covar / "covar_cl_unbinned"
+        return fname.with_suffix(".npy")
+
+    @property
+    def path_to_effectiv_bins_harmonic_compsep(self) -> Path:
+        fname = self.path_to_covar / "effective_bins_lminmax"
         return fname.with_suffix(".npy")
 
     @property
