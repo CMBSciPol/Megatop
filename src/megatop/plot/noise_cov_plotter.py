@@ -57,10 +57,38 @@ def plot_noisecov(manager, config, maps=True, cls=True):
             freqs=config.frequencies,
             Cl=spectra_array,
             save_name="spectra_noise_cov_anafast",
-            y_axis_label=r"$C_\ell$ noise covariance",
+            y_axis_label=r"$C_\ell$ noise covariance (from anafast maps)",
             use_D_ell=False,
             lims_x=None,
             lims_y=None,
+        )
+
+    if config.parametric_sep_pars.use_harmonic_compsep:
+        ell_bin_lminlmax = np.load(manager.path_to_effectiv_bins_harmonic_compsep)
+        binned_nl = np.load(manager.path_to_nl_noisecov)
+        unbinned_nl = np.load(manager.path_to_nl_noisecov_unbinned)
+        plotTTEEBB(
+            plot_dir=plot_dir,
+            freqs=config.frequencies,
+            Cl=binned_nl,
+            save_name="harmonic_pipe_spectra_noise_cov_binned",
+            y_axis_label=r"$N_\ell$ binned noise covariance (namaster)",
+            use_D_ell=False,
+            lims_x=None,
+            lims_y=None,
+            ell=ell_bin_lminlmax,
+        )
+
+        plotTTEEBB(
+            plot_dir=plot_dir,
+            freqs=config.frequencies,
+            Cl=unbinned_nl,
+            save_name="harmonic_pipe_spectra_noise_cov_unbinned",
+            y_axis_label=r"$N_\ell$ unbinned noise covariance (namaster)",
+            use_D_ell=False,
+            lims_x=None,
+            lims_y=None,
+            ell=None,
         )
 
 
