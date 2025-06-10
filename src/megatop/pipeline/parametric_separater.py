@@ -78,9 +78,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         # Each C_ell in a bin is equal to C_bin
         Cl_from_maps = np.load(manager.path_to_nl_noisecov_unbinned)
         # add 0 for first bins in the last dimension (ell)
-        ell_min_namaster = (
-            config.parametric_sep_pars.harmonic_lmin
-        )  # TODO: this should be a parameter
+        ell_min_namaster = config.parametric_sep_pars.harmonic_lmin
         Cl_from_maps = np.pad(
             Cl_from_maps,
             ((0, 0), (0, 0), (ell_min_namaster, 0)),
@@ -110,81 +108,65 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         instrument["fwhm"] = [None] * 6  # we don't correct for the beam inside the harmonic compsep
         std_instr = fg.observation_helpers.standardize_instrument(instrument)
 
-        use_namaster_spectra = True
-        if use_namaster_spectra:
-            mask_analysis = hp.read_map(manager.path_to_analysis_mask)
+        mask_analysis = hp.read_map(manager.path_to_analysis_mask)
 
-            data_alms = []
-            for f in range(freq_maps_preprocessed_TQU_masked.shape[0]):
-                fields = nmt.NmtField(
-                    mask_analysis,
-                    freq_maps_preprocessed_TQU_masked[f, 1:],
-                    beam=None,
-                    purify_e=False,
-                    purify_b=False,
-                    n_iter=10,
-                )
-
-                data_alms.append(
-                    truncate_alm(fields.alm, lmax_new=config.parametric_sep_pars.harmonic_lmax - 1)
-                )
-            data_alms = np.array(data_alms)
-
-            correct_TF = False
-            if correct_TF:
-                TF = np.load(
-                    "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmat_namaster/TF_pure_E_bins_all_freqs.npy"
-                )
-                print("TF shape", TF.shape)
-                unbined_TF = np.load(
-                    "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmat_namaster/TF_pure_E_unbins_all_freqs.npy"
-                )
-                for f in range(data_alms.shape[0]):
-                    data_alms[f, 0] = hp.almxfl(
-                        data_alms[f, 0],
-                        1 / np.sqrt(unbined_TF[f, : config.parametric_sep_pars.harmonic_lmax]),
-                    )
-                    data_alms[f, 1] = hp.almxfl(
-                        data_alms[f, 1],
-                        1 / np.sqrt(unbined_TF[f, : config.parametric_sep_pars.harmonic_lmax]),
-                    )
-                for f in range(data_alms.shape[0]):
-                    invN[:, 1, f, f] = (
-                        invN[:, 1, f, f]
-                        / (unbined_TF[f, : config.parametric_sep_pars.harmonic_lmax])
-                    )
-
-                # putting the nans to 0
-                invN[np.isnan(invN)] = 0
-                data_alms[np.isnan(data_alms)] = 0
-
-            res = fg.separation_recipes.harmonic_comp_sep_input_alms(
-                components,
-                std_instr,
-                data_alms,
-                config.nside,
-                config.parametric_sep_pars.harmonic_lmax - 1,
-                invN=invN,
-                invNlm=invNlm,
-                mask=None,
-                options=options,
-                tol=tol,
-                method=method,
+        data_alms = []
+        for f in range(freq_maps_preprocessed_TQU_masked.shape[0]):
+            fields = nmt.NmtField(
+                mask_analysis,
+                freq_maps_preprocessed_TQU_masked[f, 1:],
+                beam=None,
+                purify_e=False,
+                purify_b=False,
+                n_iter=10,
             )
-        else:
-            res = fg.separation_recipes.harmonic_comp_sep(
-                components,
-                std_instr,
-                data=freq_maps_preprocessed_TQU_masked,
-                nside=config.nside,
-                lmax=config.parametric_sep_pars.lmax_harmonic_compsep,
-                invN=invN,
-                invNlm=invNlm,
-                mask=None,
-                options=options,
-                tol=tol,
-                method=method,
+
+            data_alms.append(
+                truncate_alm(fields.alm, lmax_new=config.parametric_sep_pars.harmonic_lmax - 1)
             )
+        data_alms = np.array(data_alms)
+
+        correct_TF = False
+        if correct_TF:
+            TF = np.load(
+                "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmat_namaster/TF_pure_E_bins_all_freqs.npy"
+            )
+            print("TF shape", TF.shape)
+            unbined_TF = np.load(
+                "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmat_namaster/TF_pure_E_unbins_all_freqs.npy"
+            )
+            for f in range(data_alms.shape[0]):
+                data_alms[f, 0] = hp.almxfl(
+                    data_alms[f, 0],
+                    1 / np.sqrt(unbined_TF[f, : config.parametric_sep_pars.harmonic_lmax]),
+                )
+                data_alms[f, 1] = hp.almxfl(
+                    data_alms[f, 1],
+                    1 / np.sqrt(unbined_TF[f, : config.parametric_sep_pars.harmonic_lmax]),
+                )
+            for f in range(data_alms.shape[0]):
+                invN[:, 1, f, f] = (
+                    invN[:, 1, f, f] / (unbined_TF[f, : config.parametric_sep_pars.harmonic_lmax])
+                )
+
+            # putting the nans to 0
+            invN[np.isnan(invN)] = 0
+            data_alms[np.isnan(data_alms)] = 0
+
+        res = fg.separation_recipes.harmonic_comp_sep(
+            components,
+            std_instr,
+            data_alms,
+            config.nside,
+            config.parametric_sep_pars.harmonic_lmax - 1,
+            invN=invN,
+            invNlm=invNlm,
+            mask=None,
+            data_is_alm=True,
+            options=options,
+            tol=tol,
+            method=method,
+        )
 
         A = MixingMatrix(*components)
         A_ev = A.evaluator(np.array(instrument["frequency"]))
