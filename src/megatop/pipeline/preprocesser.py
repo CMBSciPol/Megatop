@@ -23,7 +23,7 @@ def preprocess_map(
     if np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams)):
         logger.info("Common beam correction is the same as the input beam, no need to apply it.")
         logger.warning("This is mostly for testing it might not actually represent the real noise")
-        freq_maps_convolved = input_maps.astype("float64")
+        freq_maps_convolved = np.array(input_maps, dtype="float64")
     else:
         freq_maps_convolved = common_beam_and_nside(
             nside=config.nside,
