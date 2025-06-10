@@ -15,6 +15,7 @@ def common_beam_and_nside(
     frequency_beams: list[float],
     freq_maps: list[npt.ArrayLike],
     output_alms: bool = False,
+    lmax_convolution: int | None = None,
 ):
     nside_input_maps = [hp.npix2nside(freq_maps[i].shape[-1]) for i in range(len(frequency_beams))]
     idx_nside_small = np.argwhere(np.array(nside_input_maps) < nside)
@@ -28,7 +29,9 @@ def common_beam_and_nside(
     freq_maps_out = []
     freq_alms_out = []
     logger.info(f"Common beam correction -> {common_beam} arcmin and NSIDE -> {nside}")
-    lmax_convolution = 3 * nside
+    if lmax_convolution is None:
+        lmax_convolution = 3 * nside
+
     wpix_out = hp.pixwin(
         nside, pol=True, lmax=lmax_convolution
     )  # Pixel window function of output maps
