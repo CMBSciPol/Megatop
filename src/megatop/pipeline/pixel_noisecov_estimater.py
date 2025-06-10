@@ -10,48 +10,8 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mpi import MPISUM
 from megatop.utils.preproc import common_beam_and_nside
-from megatop.utils.spectra import create_binning, initialize_nmt_workspace
+from megatop.utils.spectra import create_binning, initialize_nmt_workspace, spectra_from_namaster
 from megatop.utils.utils import MemoryUsage
-
-
-def spectra_from_namaster(
-    freq_noise_maps,
-    mask_analysis,
-    workspaceff,
-    nmt_bins,
-    compute_cross_freq=False,
-    purify_e=False,
-    purify_b=False,
-):
-    # TODO: put in utils
-    # TODO: write docstring
-    if compute_cross_freq:
-        msg = "Cross-frequency spectra computation is not implemented yet"
-        raise NotImplementedError(msg)
-
-    cl_decoupled_freq = []
-    unbin_cl_decoupled_freq = []
-    for f in range(freq_noise_maps.shape[0]):
-        fields = nmt.NmtField(
-            mask_analysis,
-            freq_noise_maps[f, 1:],
-            beam=None,
-            purify_e=purify_e,
-            purify_b=purify_b,
-            n_iter=10,
-        )
-        cl_coupled = nmt.compute_coupled_cell(fields, fields)
-        cl_decoupled = workspaceff.decouple_cell(cl_coupled)
-        unbin_cl_decoupled = nmt_bins.unbin_cell(cl_decoupled)
-
-        # Keeping only the T, E, B components, setting T to zero
-        # Warning: we are ignoring the EB cross-spectra here
-        cl_decoupled_freq.append([cl_decoupled[0] * 0, cl_decoupled[0], cl_decoupled[3]])
-        unbin_cl_decoupled_freq.append(
-            [unbin_cl_decoupled[0] * 0, unbin_cl_decoupled[0], unbin_cl_decoupled[3]]
-        )
-
-    return np.array(cl_decoupled_freq), np.array(unbin_cl_decoupled_freq)
 
 
 def pixel_noisecov_estimation(manager: DataManager, config: Config):
