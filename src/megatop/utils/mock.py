@@ -79,7 +79,7 @@ def get_noise(config: Config, fsky_binary):
         ell_max=3 * config.nside - 1,
         delta_ell=1,
         beam_corrected=False,
-        remove_kluge=False,
+        remove_kluge=not config.noise_sim_pars.include_nhits,
     )
     white_noise_levels = white_noise_levels[idx_freqs]
     n_ell = n_ell[idx_freqs]
