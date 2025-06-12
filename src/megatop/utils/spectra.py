@@ -6,7 +6,7 @@ from megatop import Config
 
 
 def compute_auto_cross_cl_from_maps_list(
-    maps_dict, mask, beam, workspace, purify_e=True, purify_b=True, n_iter=3
+    maps_dict, mask, beam, workspace, purify_e=False, purify_b=True, n_iter=3
 ):
     # Create the fields
     fields = []

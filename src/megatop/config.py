@@ -225,9 +225,16 @@ class CompSepConfig:
 @define
 class Map2ClConfig:
     delta_ell: int | list[int] = 10
-    purify_e: bool = True
+    purify_e: bool = field(default=False)
     purify_b: bool = True
     n_iter_namaster: int = 3
+
+    @purify_e.validator
+    def check(self, attribute, value):
+        """Check that the purify_e argument is set to false if purify_b is true"""
+        if self.purify_b and value:
+            msg = f"Cannot purify both E and B modes spectra simultaneously. Set {attribute.name} to False in your config."
+            raise ValueError(msg)
 
 
 @define
