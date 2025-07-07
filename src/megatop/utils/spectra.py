@@ -144,6 +144,7 @@ def spectra_from_namaster(
     compute_cross_freq=False,
     purify_e=False,
     purify_b=False,
+    beam=None,
 ):
     """
     Computes the auto and cross-spectra from the frequency noise maps using NaMaster.
@@ -164,6 +165,9 @@ def spectra_from_namaster(
         Whether to purify E-mode polarization. Default is False.
     purify_b : bool, optional
         Whether to purify B-mode polarization. Default is False.
+    beam : np.ndarray, optional
+        Beam correction factors, shape (n_freq, n_bins). If None, no beam correction is applied.
+        Default is None.
     Returns
     -------
     cl_decoupled_freq : np.ndarray
@@ -184,17 +188,31 @@ def spectra_from_namaster(
         msg = "Cross-frequency spectra computation is not implemented yet"
         raise NotImplementedError(msg)
 
+    if beam is not None and beam.shape[0] != freq_noise_maps.shape[0]:
+        msg = f"Beam shape {beam.shape} does not match frequency noise maps shape {freq_noise_maps.shape}"
+        raise ValueError(msg)
+
+    # reset_workspace = True if workspaceff is None else False
+    reset_workspace = (
+        workspaceff is None
+    )  # returns bool depending on whether workspaceff is None or not
+
     cl_decoupled_freq = []
     unbin_cl_decoupled_freq = []
     for f in range(freq_noise_maps.shape[0]):
+        beam_f = beam[f] if beam is not None else None
+
         fields = nmt.NmtField(
             mask_analysis,
             freq_noise_maps[f, 1:],
-            beam=None,
+            beam=beam_f,
             purify_e=purify_e,
             purify_b=purify_b,
             n_iter=10,
         )
+        if reset_workspace:
+            workspaceff = nmt.NmtWorkspace.from_fields(fields, fields, nmt_bins)
+
         cl_coupled = nmt.compute_coupled_cell(fields, fields)
         cl_decoupled = workspaceff.decouple_cell(cl_coupled)
         unbin_cl_decoupled = nmt_bins.unbin_cell(cl_decoupled)
