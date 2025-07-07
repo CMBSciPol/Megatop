@@ -54,8 +54,9 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         )[0]
 
         # Bins from Carlos BBMASTER paper:
-        USE_BBMASTER_BINS = True
-        if USE_BBMASTER_BINS:
+        # USE_BBMASTER_BINS = False
+
+        if config.parametric_sep_pars.DEBUGuse_BBMASTER_bin:
             logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
 
             nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
@@ -65,6 +66,9 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             )[0]
 
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
+
+        if config.parametric_sep_pars.DEBUGnorm_mask:
+            mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
 
         with Timer("init-namaster-workspace"):
             workspaceff = initialize_nmt_workspace(
@@ -110,7 +114,12 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             logger.debug(f"Importing noise map: {noise_filename}")
             noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
 
-        if np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams)):
+        # DEBUGtruncatealms = True,
+
+        if (
+            np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams))
+            or config.pre_proc_pars.DEBUGskippreproc
+        ):  # and not DEBUGtruncatealms:
             logger.info(
                 "Common beam correction is the same as the input beam, no need to apply it."
             )
@@ -121,12 +130,18 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         else:
             noise_freq_maps = np.array(noise_freq_maps, dtype=object)
+            # DEBUGlm_range = [
+            #     config.parametric_sep_pars.harmonic_lmin,
+            #     config.parametric_sep_pars.harmonic_lmax,
+            # ]
 
             noise_freq_maps_preprocessed = common_beam_and_nside(
                 nside=config.nside,
                 common_beam=config.pre_proc_pars.common_beam_correction,
                 frequency_beams=config.beams,
                 freq_maps=noise_freq_maps,
+                # DEBUGtruncatealms=DEBUGtruncatealms,
+                # DEBUGlm_range=DEBUGlm_range,
             )
 
         if config.noise_cov_pars.save_preprocessed_noise_maps:
@@ -145,13 +160,79 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         if config.parametric_sep_pars.use_harmonic_compsep:
             # Computing the noise spectra from the preprocessed noise maps using namaster
-            noise_spectra, noise_spectra_unbined = spectra_from_namaster(
-                noise_freq_maps_preprocessed,
-                mask_analysis,
-                workspaceff,
-                nmt_bins,
-                compute_cross_freq=False,
-            )
+            if config.parametric_sep_pars.harmonic_delta_ell != 1:
+                # use_beam = True
+                if config.parametric_sep_pars.DEBUGnamaster_deconv:
+                    # import IPython; IPython.embed()
+                    common_beam = hp.gauss_beam(
+                        np.radians(config.pre_proc_pars.common_beam_correction / 60.0),
+                        lmax=3 * config.nside,
+                        pol=True,
+                    )[
+                        :-1, 1
+                    ]  # taking only the GRAD/ELECTRIC/E polarization beam (it is equal to the  CURL/MAGNETIC/B polarization beam)
+                    # beam4namaster = np.tile(common_beam, (len(config.frequencies), 1))
+                    # beam4namaster = np.tile(beam4namaster, (len(config.frequencies), 1))
+
+                    beam4namaster = np.array(
+                        [
+                            hp.gauss_beam(np.radians(beam / 60), lmax=3 * config.nside, pol=True)[
+                                :-1, 1
+                            ]
+                            / common_beam
+                            for beam in config.beams
+                        ]
+                    )
+                    workspaceff = None
+                    input_namaster_noise_maps = np.array(
+                        noise_freq_maps
+                    )  # TODO: there is some redundancy in the case where all beam = 0 and common beam = 0
+
+                    if config.pre_proc_pars.DEBUGskippreproc:
+                        beam4namaster = None
+                    # test_maps = np.tile(noise_freq_maps_preprocessed[0], (6,1,1))
+
+                    # correct_TF = False
+                    # if correct_TF:
+                    #     BBTF = np.load('/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmatBBMASER_namaster/TF_FirstDayEveryMonth_Full_nside512_fpthin8_pwf_beam.npz', allow_pickle=True)
+                    #     transfer = BBTF['tf']
+                    #     nside_native = 512
+                    #     nmt_bins_native = nmt.NmtBin.from_nside_linear(nside_native, nlb=10, is_Dell=False)
+
+                    #     transfer_flat = transfer.reshape(-1, transfer.shape[-1])
+                    #     unbin_transfer_flat = nmt_bins_native.unbin_cell(transfer_flat)
+                    #     unbin_transfer = unbin_transfer_flat.reshape(transfer.shape[0], transfer.shape[1], -1)[...,:config.parametric_sep_pars.harmonic_lmax]
+
+                    #     inv_unbined_TF = np.zeros_like(unbin_transfer)
+                    #     # Ignoring the first two bins which are always 0
+                    #     # Keeping them to 0, they will be ignored in the rest of the code anyways
+                    #     inv_unbined_TF[...,2:] = np.linalg.inv(unbin_transfer[...,2:].T).T
+
+                else:
+                    beam4namaster = None
+                    input_namaster_noise_maps = noise_freq_maps_preprocessed
+
+                noise_spectra, noise_spectra_unbined = spectra_from_namaster(
+                    input_namaster_noise_maps,
+                    mask_analysis,
+                    workspaceff,
+                    nmt_bins,
+                    compute_cross_freq=False,
+                    purify_e=False,
+                    purify_b=False,
+                    beam=beam4namaster,
+                )
+            else:
+                logger.warning(
+                    "Using harmonic delta ell = 1, this is not recommended for noise spectra estimation. Healpy is used in this case."
+                )
+                noise_spectra = np.array(
+                    [
+                        hp.anafast(noise_freq_maps_preprocessed[i])[:3]
+                        for i in range(len(config.frequencies))
+                    ]
+                )
+                noise_spectra_unbined = noise_spectra.copy()
             noise_spectra = noise_spectra[..., bin_index_lminlmax]
 
             # Adding the noise spectra to the ones from previous realisations
