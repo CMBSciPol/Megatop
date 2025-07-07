@@ -181,6 +181,14 @@ class DataManager:
             fname = self.path_to_preproc / fname
         return fname.with_suffix(".npy")
 
+    def get_path_to_preprocessed_alms(self, sub: int | None = None) -> Path:
+        fname = "freq_alms_preprocessed"
+        if sub is not None:
+            fname = self.path_to_preproc / f"{sub:04d}" / fname
+        else:
+            fname = self.path_to_preproc / fname
+        return fname.with_suffix(".npy")
+
     def get_path_to_preprocessed_noise_maps(self, sub: int | None = None) -> Path:
         fname = "noise_maps_preprocessed"
         if sub is not None:
