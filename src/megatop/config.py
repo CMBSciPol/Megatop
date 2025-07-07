@@ -186,6 +186,7 @@ class GeneralConfig:
 class PreProcessingConfig:
     common_beam_correction: float = 100
     beam_fwhms: list[float] | None = None
+    DEBUGskippreproc: bool = False
 
 
 @define
@@ -208,6 +209,11 @@ class CompSepConfig:
     harmonic_lmax: int = 3 * 512  # TODO: use config.nside
     harmonic_lmin: int = 2
     harmonic_delta_ell: int = 3  # TODO: use config.nside
+    DEBUGnamaster_deconv: bool = False
+    DEBUGnorm_mask: bool = False
+    DEBUGcommon_beam_correction_before_smoothmask: bool = False
+    DEBUGuse_BBMASTER_bin: bool = False
+    DEBUG_EmodesOnly: bool = False
 
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
