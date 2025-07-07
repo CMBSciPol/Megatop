@@ -18,18 +18,47 @@ from megatop.utils.spectra import (
 )
 
 
-def spectra_estimation(manager: DataManager, config: Config, id_sim: int | None = None):
+def spectra_estimation(
+    manager: DataManager, config: Config, id_sim: int, USE_BBMASTER_BINS: bool | None = None
+):
     with Timer("load-component-maps"):
         comp_path = manager.get_path_to_components_maps(sub=id_sim)
         print(comp_path)
         comp_maps = np.load(manager.get_path_to_components_maps(sub=id_sim))
 
     # Creating/loading bins
-    bin_low, bin_high, bin_centre = create_binning(
-        config.nside, config.map2cl_pars.delta_ell, end_first_bin=config.lmin
-    )
+    # Bins from Carlos BBMASTER paper:
+    # USE_BBMASTER_BINS = True
+    # import IPython; IPython.embed()
+    if USE_BBMASTER_BINS:
+        logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
 
-    bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
+        bin_low, bin_high, bin_centre = create_binning(
+            config.nside,
+            config.parametric_sep_pars.harmonic_delta_ell,
+            end_first_bin=config.parametric_sep_pars.harmonic_delta_ell,
+        )
+        nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
+
+        ell_min_namaster = config.parametric_sep_pars.harmonic_lmin
+        ell_max_namaster = config.parametric_sep_pars.harmonic_lmax
+        bin_index_lminlmax = np.where(
+            (bin_low >= ell_min_namaster) & (bin_high <= ell_max_namaster)
+        )[0]
+
+        nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
+        bin_index_lminlmax = np.where(
+            (nmt_bins.get_effective_ells() >= ell_min_namaster)
+            & (nmt_bins.get_effective_ells() <= ell_max_namaster)
+        )[0]
+
+    else:
+        bin_low, bin_high, bin_centre = create_binning(
+            config.nside, config.map2cl_pars.delta_ell, end_first_bin=config.lmin
+        )
+
+        bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
+        nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
 
     path = manager.get_path_to_spectra_binning(sub=id_sim)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -41,7 +70,6 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int | None 
         bin_index_lminlmax=bin_index_lminlmax,
         bin_centre_lminlmax=bin_centre[bin_index_lminlmax],
     )
-    nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
 
     # Loading analysis mask
     mask_analysis = hp.read_map(manager.path_to_analysis_mask)
@@ -99,7 +127,12 @@ def save_spectra(manager: DataManager, all_Cls: dict, id_sim: int | None = None)
 
 def map2cl_and_save(config: Config, manager: DataManager, id_sim: int | None = None):
     with Timer("spectra-estimation"):
-        all_Cls = spectra_estimation(manager, config, id_sim=id_sim)
+        all_Cls = spectra_estimation(
+            manager,
+            config,
+            id_sim=id_sim,
+            USE_BBMASTER_BINS=config.parametric_sep_pars.DEBUGuse_BBMASTER_bin,
+        )
     save_spectra(manager, all_Cls=all_Cls, id_sim=id_sim)
     return id_sim
 
