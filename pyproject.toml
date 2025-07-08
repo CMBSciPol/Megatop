@@ -52,6 +52,8 @@ dev = ["pytest"]
 "megatop-preproc-plot" = "megatop.plot.preproc_plotter:main"
 "megatop-noisespectra-run" = "megatop.pipeline.noise_spectra_estimater:main"
 "megatop-noisespectra-plot" = "megatop.plot.noise_spectra_plotter:main"
+"megatop-cl2r-run" = "megatop.pipeline.cl2r_estimater:main"
+"megatop-cl2r-plot" = "megatop.plot.r_stats_plotter:main"
 
 
 [tool.ruff]
