@@ -86,6 +86,20 @@ def plotter(manager: DataManager, config: Config):
     plt.savefig(plot_dir / "analysis_mask_second.png")
     plt.clf()
 
+    if config.masks_pars.DEBUG_output_apod_binary_mask:
+        apod_binary_mask = hp.read_map(manager.path_to_apod_binary_mask)
+
+        plt.figure(figsize=(16, 9))
+        hp.mollview(
+            apod_binary_mask,
+            cmap=cmap,
+            cbar=True,
+            title="Apodized binary mask (no nhits rescaling)",
+        )
+        hp.graticule()
+        plt.savefig(plot_dir / "apodized_binary_mask.png")
+        plt.clf()
+
 
 def main():
     parser = argparse.ArgumentParser(description="Plotter for mask_hanlder output")
