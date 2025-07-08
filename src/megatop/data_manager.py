@@ -140,6 +140,11 @@ class DataManager:
         return fname.with_suffix(".fits")
 
     @property
+    def path_to_apod_binary_mask(self) -> Path:
+        fname = self.path_to_masks / self._config.masks_pars.DEBUGapod_binary_mask_name
+        return fname.with_suffix(".fits")
+
+    @property
     def path_to_galactic_mask(self) -> Path:
         fname = f"{(p := self._config.masks_pars).galactic_mask_name}_{p.gal_key}"
         fname = self.path_to_masks / fname
