@@ -15,6 +15,7 @@ from megatop.utils import Timer, logger, mask
 from megatop.utils.compsep import set_alm_tozero_below_lmin
 from megatop.utils.mpi import get_world
 
+
 def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
@@ -312,7 +313,6 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
             tol=tol,
             method=method,
         )
-        # import IPython; IPython.embed()
 
         A = MixingMatrix(*components)
         A_ev = A.evaluator(np.array(instrument["frequency"]))
@@ -325,7 +325,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         res.invAtNA = res.invAtNA_map
 
         res.s_alm = res.s
-        res.s = np.array(
+        res.s_alm2map = np.array(
             [
                 hp.alm2map_spin(
                     res.s_alm[i],
@@ -345,6 +345,29 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
     res.W_maxL = W_maxL
 
+    if config.parametric_sep_pars.use_harmonic_compsep:
+        logger.info("Harmonic Compsep: Computing component maps using W matrix and input maps")
+        with Timer("load-maps"):
+            preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+            logger.debug(f"Loading input maps from {preproc_maps_fname}")
+            freq_maps_preprocessed = np.load(preproc_maps_fname)
+        freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
+            freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
+        )
+        n_comp = W_maxL.shape[0]
+        res.s = np.zeros(
+            (
+                n_comp,
+                freq_maps_preprocessed_QU_masked.shape[-2],
+                freq_maps_preprocessed_QU_masked.shape[-1],
+            )
+        )
+        for c in range(n_comp):
+            res.s[c] = np.einsum(
+                "fsp, fsp -> sp",
+                W_maxL[c],
+                freq_maps_preprocessed_QU_masked,
+            )
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
     timer.stop("do-compsep")
