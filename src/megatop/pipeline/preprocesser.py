@@ -9,6 +9,7 @@ from mpi4py.futures import MPICommExecutor
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mask import apply_binary_mask
+from megatop.utils.mpi import get_world
 from megatop.utils.preproc import alm_common_beam, common_beam_and_nside, read_input_maps
 
 
@@ -21,19 +22,40 @@ def preprocess_map(
     )
 
     # DEBUGtruncatealms = True,
-
-    if (
+    # bool for the different conditions where the preprocessing can be skipped e.g. debug, no beam, same input and common beam, etc.
+    skip_preprocessing_bool = (
         np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams))
         or config.pre_proc_pars.DEBUGskippreproc
-    ) and not config.parametric_sep_pars.use_harmonic_compsep:  # and not DEBUGtruncatealms:
+    ) and not config.parametric_sep_pars.use_harmonic_compsep
+
+    if skip_preprocessing_bool:  # and not DEBUGtruncatealms:
         logger.info("Common beam correction is the same as the input beam, no need to apply it.")
         logger.warning("This is mostly for testing it might not actually represent the real noise")
         freq_maps_convolved = np.array(input_maps, dtype="float64")
-    elif config.parametric_sep_pars.use_harmonic_compsep:  # and config.parametric_sep_pars.DEBUGnamaster_deconv:# and not config.parametric_sep_pars.DEBUGcommon_beam_correction_before_smoothmask:
+    else:
+        # DEBUGlm_range= [config.parametric_sep_pars.harmonic_lmin, config.parametric_sep_pars.harmonic_lmax]
+        freq_maps_convolved = common_beam_and_nside(
+            nside=config.nside,
+            common_beam=config.pre_proc_pars.common_beam_correction,
+            frequency_beams=config.beams,
+            freq_maps=input_maps,
+            # DEBUGtruncatealms=DEBUGtruncatealms,
+            # DEBUGlm_range=DEBUGlm_range,
+        )
+        logger.info(f"Pre-processed maps have shape: {freq_maps_convolved.shape}")
+
+    if (
+        config.parametric_sep_pars.use_harmonic_compsep and not skip_preprocessing_bool
+    ):  # and config.parametric_sep_pars.DEBUGnamaster_deconv:# and not config.parametric_sep_pars.DEBUGcommon_beam_correction_before_smoothmask:
         logger.info(
             "Using harmonic pipeline for component separation. Pre-processing will output alms"
         )
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+
+        if config.masks_pars.DEBUG_output_apod_binary_mask:
+            logger.warning("DEBUG: Using apodized binary mask for harmonic component separation, ")
+            analysis_mask = hp.read_map(manager.path_to_apod_binary_mask)
+
         logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
         # TODO: remove after merge
         analysis_mask /= np.max(analysis_mask)  # normalize the mask to 1
@@ -53,23 +75,11 @@ def preprocess_map(
         )
         logger.info(f"Pre-processed alms have shape: {freq_alms_convolved.shape}")
 
-    else:
-        # DEBUGlm_range= [config.parametric_sep_pars.harmonic_lmin, config.parametric_sep_pars.harmonic_lmax]
-        freq_maps_convolved = common_beam_and_nside(
-            nside=config.nside,
-            common_beam=config.pre_proc_pars.common_beam_correction,
-            frequency_beams=config.beams,
-            freq_maps=input_maps,
-            # DEBUGtruncatealms=DEBUGtruncatealms,
-            # DEBUGlm_range=DEBUGlm_range,
-        )
-        logger.info(f"Pre-processed maps have shape: {freq_maps_convolved.shape}")
-
     if mask_output and not config.parametric_sep_pars.use_harmonic_compsep:
         binary_mask = hp.read_map(manager.path_to_binary_mask)
         freq_maps_convolved = apply_binary_mask(freq_maps_convolved, binary_mask=binary_mask)
     if config.parametric_sep_pars.use_harmonic_compsep:
-        return freq_alms_convolved
+        return freq_maps_convolved, freq_alms_convolved
     return freq_maps_convolved
 
 
@@ -91,7 +101,8 @@ def preproc_and_save(config: Config, manager: DataManager, id_sim: int | None = 
     with Timer("preprocesser"):
         convolved_output = preprocess_map(manager, config, id_sim=id_sim)
     if config.parametric_sep_pars.use_harmonic_compsep:
-        save_preprocessed_alms(manager, convolved_output, id_sim=id_sim)
+        save_preprocessed_maps(manager, convolved_output[0], id_sim=id_sim)
+        save_preprocessed_alms(manager, convolved_output[1], id_sim=id_sim)
     else:
         save_preprocessed_maps(manager, convolved_output, id_sim=id_sim)
     return id_sim
