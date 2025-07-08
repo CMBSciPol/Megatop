@@ -157,6 +157,26 @@ def mask_handler(manager: DataManager, config: Config):
     # Save final mask
     hp.write_map(manager.path_to_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True)
 
+    if config.masks_pars.DEBUG_output_apod_binary_mask:
+        # This apodized mask is NOT multiplied by the hitmap
+        # This is intended to be used in the harmonic component separation
+        # It should not be used when purification is needed.
+        with Timer("apodize-custom binary"):
+            apodized_binary_mask = get_apodized_mask_from_nhits(
+                hitmap,
+                config.nside,
+                galactic_mask=galactic_mask,
+                point_source_mask=ps_mask,
+                zero_threshold=threshold,
+                apod_radius=apod_radius,
+                apod_type=apod_type,
+                no_nhits_rescaling=True,  # do not multiply by hitmap
+            )
+
+        hp.write_map(
+            manager.path_to_apod_binary_mask, apodized_binary_mask, dtype=np.float32, overwrite=True
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(description="Mask handler")
