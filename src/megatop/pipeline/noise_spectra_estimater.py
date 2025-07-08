@@ -44,6 +44,9 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 
     # Loading masks
     mask_analysis = hp.read_map(manager.path_to_analysis_mask)
+    logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
+    # TODO: remove after merge
+    mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
@@ -54,7 +57,14 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     # Loading bin info from map2cl step:
     binning_info = np.load(manager.get_path_to_spectra_binning(sub=id_sim_sky), allow_pickle=True)
     nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
+    if config.parametric_sep_pars.DEBUGuse_BBMASTER_bin:
+        logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
 
+        nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
+        # bin_index_lminlmax = np.where(
+        #     (nmt_bins.get_effective_ells() >= ell_min_namaster)
+        #     & (nmt_bins.get_effective_ells() <= ell_max_namaster)
+        # )[0]
     # Getting effective beam TODO: add case for input maps (no preproc)
     effective_beam_CMB = get_common_beam_wpix(
         config.pre_proc_pars.common_beam_correction, config.nside
@@ -145,7 +155,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
         )
-
+        # import IPython; IPython.embed()
         # Summing the noise spectra
         for key in noise_Cls:
             if key not in sum_noise_spectra:
