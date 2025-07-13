@@ -163,6 +163,21 @@ class DataManager:
         """Get the list of filenames for the observation matrices."""
         names = [map_set.obsmat_path for map_set in self._config.map_sets]
         return [name.with_suffix(".npz") for name in names]
+    
+    def get_precomputations_obsmat_filenames(self, name_precomputation) -> list[Path]:
+        """Get the list of filenames for the precomputed observation matrices."""
+        names = [Path(str(map_set.obsmat_path) + name_precomputation) for map_set in self._config.map_sets]
+        return names
+
+    def get_path_to_obsmat_cg(self) -> Path | None:
+        return self.get_precomputations_obsmat_filenames(self._config.output_dirs.suffix_cg_obsmat)
+
+    def get_path_to_obsmat_rhs(self) -> Path | None:
+        return self.get_precomputations_obsmat_filenames(self._config.output_dirs.suffix_rhs_obsmat)
+
+    def get_path_to_diag_obsmat(self) -> Path:
+        """Get the path to the diagonal observation matrix."""
+        return (self.path_to_output / self._config.output_dirs.prepoc_diag_obsmat).with_suffix(".npy")
 
     def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
         """Get the list of filenames for the noise maps.

@@ -100,6 +100,9 @@ class OutputDirsConfig:
     root: Path = field(converter=Path)
     masks: str = "masks"
     preproc: str = "preproc"
+    suffix_cg_obsmat: str = "cg_obsmat"
+    suffix_rhs_obsmat: str = "rhs_obsmat"
+    prepoc_diag_obsmat: str = "diag_obsmat"
     covar: str = "covar"
     plots: str = "plots"
     components: str = "components"
@@ -210,6 +213,7 @@ class CompSepConfig:
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
     passband_int: bool = False
+    return_transpose_rhs: bool = False
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
         """Return the minimize options as a dictionary.
