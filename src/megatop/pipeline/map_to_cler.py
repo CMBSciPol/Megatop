@@ -29,7 +29,7 @@ def spectra_estimation(
 
     # Creating/loading bins
     # Bins from Carlos BBMASTER paper:
-    # USE_BBMASTER_BINS = True
+    # USE_BBMASTER_BINS = False
     # import IPython; IPython.embed()
     if USE_BBMASTER_BINS:
         logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
@@ -85,7 +85,10 @@ def spectra_estimation(
     effective_beam_CMB = get_common_beam_wpix(
         config.pre_proc_pars.common_beam_correction, config.nside
     )
-
+    # effective_beam_CMB = None
+    # effective_beam_CMB = np.ones_like(effective_beam_CMB)
+    # config.map2cl_pars.purify_e = False
+    # config.map2cl_pars.purify_b = True
     # Initializing workspace
     with Timer("init-namaster-workspace"):
         workspaceff = initialize_nmt_workspace(
@@ -94,11 +97,21 @@ def spectra_estimation(
             config.nside,
             mask_analysis,
             effective_beam_CMB[:-1],
+            # None,
             config.map2cl_pars.purify_e,
             config.map2cl_pars.purify_b,
             config.map2cl_pars.n_iter_namaster,
         )
-
+        # fields_init_wsp = nmt.NmtField(
+        #     mask_analysis,
+        #     None,
+        #     spin=2,
+        #     beam=None,
+        #     purify_e=config.map2cl_pars.purify_e,
+        #     purify_b=config.map2cl_pars.purify_b,
+        #     n_iter=config.map2cl_pars.n_iter_namaster,
+        # )
+        # workspaceff = nmt.NmtWorkspace.from_fields(fields_init_wsp,fields_init_wsp,nmt_bins)
     # Testing the function
 
     with Timer("estimate-spectra"):
@@ -111,6 +124,7 @@ def spectra_estimation(
             comp_dict,
             mask_analysis,
             effective_beam_CMB[:-1],
+            # None,
             workspaceff,
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
@@ -118,6 +132,89 @@ def spectra_estimation(
         )
 
         # Limiting the output to the desired l range
+    if config.parametric_sep_pars.DEBUG_stay_in_alm:
+        # import IPython; IPython.embed()
+        wsp = nmt.NmtWorkspace()
+        empty_field = nmt.NmtField(
+            mask_analysis,
+            None,
+            spin=2,
+            beam=None,  # effective_beam_CMB[:-1],
+            purify_e=config.map2cl_pars.purify_e,
+            purify_b=config.map2cl_pars.purify_b,
+            n_iter=config.map2cl_pars.n_iter_namaster,
+        )
+
+        wsp.compute_coupling_matrix(empty_field, empty_field, nmt_bins)
+        mcm = wsp.get_coupling_matrix()
+
+        nspec = 4  # only spin 2-2 correlation, if spin 0-2 is used, then nspec = 7
+        nl = nmt_bins.lmax + 1
+
+        mcm_reshape = np.transpose(mcm.reshape([nl, nspec, nl, nspec]), axes=[1, 0, 3, 2])
+
+        n_bins = nmt_bins.get_n_bands()
+        binner = np.array([nmt_bins.bin_cell(np.array([cl]))[0] for cl in np.eye(nl)]).T
+        mcm_binned = np.einsum("ij,kjlm->kilm", binner, mcm_reshape)
+        btmcm = np.transpose(
+            np.array(
+                [
+                    np.sum(mcm_binned[:, :, :, nmt_bins.get_ell_list(i)], axis=-1)
+                    for i in range(n_bins)
+                ]
+            ),
+            axes=[1, 2, 3, 0],
+        )
+        # mcm_binned = np.zeros([nspec, n_bins, nspec, nl], dtype=np.complex128)
+        # for b in range(n_bins):
+        #     mcm_binned[:,b] = np.sum(wsp.get_bandpower_windows()[:, b] * mcm_reshape, axis=1)
+        # mcm_binned = np.einsum('kilm,kjlm->kilm', wsp.get_bandpower_windows(), mcm_reshape)
+        # btmcm = np.einsum('kilm,kilj->kilj', mcm_binned, wsp.get_bandpower_windows())
+
+        inv_btmcm = np.linalg.inv(btmcm.reshape([nspec * n_bins, nspec * n_bins]))
+        inv_coupling = inv_btmcm.reshape([nspec, n_bins, nspec, n_bins])
+
+        cmb_map_analysis_masked = comp_dict["CMB"] * mask_analysis
+        coupled_cell = hp.anafast(
+            [
+                cmb_map_analysis_masked[0] * 0,
+                cmb_map_analysis_masked[0],
+                cmb_map_analysis_masked[1],
+            ],
+            lmax=nmt_bins.lmax,
+        )
+
+        binned_cl = nmt_bins.bin_cell(coupled_cell)
+        # Keeping only E/B auto/cross spectra
+        # EE, EB, EB, BB
+        binned_cl_spin2 = np.array([binned_cl[1], binned_cl[4], binned_cl[4], binned_cl[2]])
+        decoupled_cl = np.einsum("ijkl,kl->ij", inv_coupling, binned_cl_spin2)
+        print("Decoupled Cls shape:", decoupled_cl.shape)
+        """
+        import matplotlib.pyplot as plt
+
+        plt.plot(nmt_bins.get_effective_ells(), all_Cls['CMBxCMB'][0])
+        plt.plot(nmt_bins.get_effective_ells(), decoupled_cl[0])
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.savefig('comp_coupling_EE_Bpurification.png')
+        plt.close()
+
+        plt.plot(nmt_bins.get_effective_ells(), all_Cls['CMBxCMB'][-1])
+        plt.plot(nmt_bins.get_effective_ells(), decoupled_cl[-1])
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.savefig('comp_coupling_BB_Bpurification.png')
+        plt.close()
+
+        plt.plot(nmt_bins.get_effective_ells(), all_Cls['CMBxCMB'][1])
+        plt.plot(nmt_bins.get_effective_ells(), decoupled_cl[1])
+        plt.xscale('log')
+        # plt.yscale('log')
+        plt.savefig('comp_coupling_EB_Bpurification.png')
+        plt.close()
+        """
+
     return limit_namaster_output(all_Cls, bin_index_lminlmax)
 
 
