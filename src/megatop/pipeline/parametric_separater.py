@@ -5,7 +5,6 @@ from pathlib import Path
 import fgbuster as fg
 import healpy as hp
 import numpy as np
-import pymaster as nmt
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
 from mpi4py.futures import MPICommExecutor
@@ -198,95 +197,95 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
             data_alms = np.array(data_alms)
         """
         # import IPython; IPython.embed()  # DEBUG
-        correct_TF = False
-        if correct_TF:
-            BBTF = np.load(
-                "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmatBBMASER_namaster/TF_FirstDayEveryMonth_Full_nside512_fpthin8_pwf_beam.npz",
-                allow_pickle=True,
-            )
-            transfer = BBTF["tf"]
+        # correct_TF = False
+        # if correct_TF:
+        #     BBTF = np.load(
+        #         "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmatBBMASER_namaster/TF_FirstDayEveryMonth_Full_nside512_fpthin8_pwf_beam.npz",
+        #         allow_pickle=True,
+        #     )
+        #     transfer = BBTF["tf"]
 
-            nside_native = 512
-            nmt_bins_native = nmt.NmtBin.from_nside_linear(nside_native, nlb=10, is_Dell=False)
-            # bin_index_lminlmax = np.where((nmt_bins_native.get_effective_ells() >= config.parametric_sep_pars.harmonic_lmin) &
-            #                                (nmt_bins_native.get_effective_ells() <= 3 * config.nside+11))[0]
-            # transfer_truncated_to_nside_analysis = transfer[..., bin_index_lminlmax]
+        #     nside_native = 512
+        #     nmt_bins_native = nmt.NmtBin.from_nside_linear(nside_native, nlb=10, is_Dell=False)
+        #     # bin_index_lminlmax = np.where((nmt_bins_native.get_effective_ells() >= config.parametric_sep_pars.harmonic_lmin) &
+        #     #                                (nmt_bins_native.get_effective_ells() <= 3 * config.nside+11))[0]
+        #     # transfer_truncated_to_nside_analysis = transfer[..., bin_index_lminlmax]
 
-            transfer_flat = transfer.reshape(-1, transfer.shape[-1])
-            unbin_transfer_flat = nmt_bins_native.unbin_cell(transfer_flat)
-            unbin_transfer = unbin_transfer_flat.reshape(transfer.shape[0], transfer.shape[1], -1)[
-                ..., : config.parametric_sep_pars.harmonic_lmax
-            ]
+        #     transfer_flat = transfer.reshape(-1, transfer.shape[-1])
+        #     unbin_transfer_flat = nmt_bins_native.unbin_cell(transfer_flat)
+        #     unbin_transfer = unbin_transfer_flat.reshape(transfer.shape[0], transfer.shape[1], -1)[
+        #         ..., : config.parametric_sep_pars.harmonic_lmax
+        #     ]
 
-            inv_unbined_TF = np.zeros_like(unbin_transfer)
-            # Ignoring the first two bins which are always 0
-            # Keeping them to 0, they will be ignored in the rest of the code anyways
-            inv_unbined_TF[..., 2:] = np.linalg.inv(unbin_transfer[..., 2:].T).T
+        #     inv_unbined_TF = np.zeros_like(unbin_transfer)
+        #     # Ignoring the first two bins which are always 0
+        #     # Keeping them to 0, they will be ignored in the rest of the code anyways
+        #     inv_unbined_TF[..., 2:] = np.linalg.inv(unbin_transfer[..., 2:].T).T
 
-            # nside_analysis = config.nside
-            # nmt_bins_analysis = nmt.NmtBin.from_nside_linear(nside_analysis, nlb=10, is_Dell=False)
-            # unbin_analysis_TF = nmt_bins_analysis.unbin_cell(transfer_truncated_to_nside_analysis[0,0])
+        #     # nside_analysis = config.nside
+        #     # nmt_bins_analysis = nmt.NmtBin.from_nside_linear(nside_analysis, nlb=10, is_Dell=False)
+        #     # unbin_analysis_TF = nmt_bins_analysis.unbin_cell(transfer_truncated_to_nside_analysis[0,0])
 
-            # TF = np.load(
-            #     "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmat_namaster/TF_pure_E_bins_all_freqs.npy"
-            # )
-            # print("TF shape", TF.shape)
-            # unbined_TF = np.load(
-            #     "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmat_namaster/TF_pure_E_unbins_all_freqs.npy"
-            # )
-            # data_alms_save = data_alms.copy()
-            # invN_save = invN.copy()
-            options["maxfun"] = 1000
+        #     # TF = np.load(
+        #     #     "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmat_namaster/TF_pure_E_bins_all_freqs.npy"
+        #     # )
+        #     # print("TF shape", TF.shape)
+        #     # unbined_TF = np.load(
+        #     #     "/lustre/work/jost/SO_MEGATOP/harmonic_test_Nl_std_beam_nhits_obsmat_namaster/TF_pure_E_unbins_all_freqs.npy"
+        #     # )
+        #     # data_alms_save = data_alms.copy()
+        #     # invN_save = invN.copy()
+        #     options["maxfun"] = 1000
 
-            sqrtm_inv_unbined_TF = np.zeros_like(inv_unbined_TF, dtype=complex)
-            from scipy import linalg as splinalg
+        #     sqrtm_inv_unbined_TF = np.zeros_like(inv_unbined_TF, dtype=complex)
+        #     from scipy import linalg as splinalg
 
-            for ell in range(inv_unbined_TF.shape[-1]):
-                sqrtm_inv_unbined_TF[..., ell] = splinalg.sqrtm(inv_unbined_TF[..., ell])
+        #     for ell in range(inv_unbined_TF.shape[-1]):
+        #         sqrtm_inv_unbined_TF[..., ell] = splinalg.sqrtm(inv_unbined_TF[..., ell])
 
-            data_alms_TF_corrected = data_alms.copy()
-            data_alms_TF_corrected_fullMatrix = data_alms.copy()
-            invN_TF_corrected = invN.copy()
+        #     data_alms_TF_corrected = data_alms.copy()
+        #     data_alms_TF_corrected_fullMatrix = data_alms.copy()
+        #     invN_TF_corrected = invN.copy()
 
-            for f in range(data_alms.shape[0]):
-                data_alms_TF_corrected[f, 0] = hp.almxfl(
-                    data_alms[f, 0],
-                    np.sqrt(inv_unbined_TF[0, 0]),
-                )
-                data_alms_TF_corrected[f, 1] = hp.almxfl(
-                    data_alms[f, 1],
-                    # 1 / np.sqrt(unbined_TF[f, : config.parametric_sep_pars.harmonic_lmax]),
-                    np.sqrt(inv_unbined_TF[-1, -1]),
-                )
-                data_alms_TF_corrected_fullMatrix[f, 0] = hp.almxfl(
-                    data_alms[f, 0],
-                    sqrtm_inv_unbined_TF[0, 0],
-                ) + hp.almxfl(
-                    data_alms[f, 1],
-                    sqrtm_inv_unbined_TF[0, 3],
-                )
+        #     for f in range(data_alms.shape[0]):
+        #         data_alms_TF_corrected[f, 0] = hp.almxfl(
+        #             data_alms[f, 0],
+        #             np.sqrt(inv_unbined_TF[0, 0]),
+        #         )
+        #         data_alms_TF_corrected[f, 1] = hp.almxfl(
+        #             data_alms[f, 1],
+        #             # 1 / np.sqrt(unbined_TF[f, : config.parametric_sep_pars.harmonic_lmax]),
+        #             np.sqrt(inv_unbined_TF[-1, -1]),
+        #         )
+        #         data_alms_TF_corrected_fullMatrix[f, 0] = hp.almxfl(
+        #             data_alms[f, 0],
+        #             sqrtm_inv_unbined_TF[0, 0],
+        #         ) + hp.almxfl(
+        #             data_alms[f, 1],
+        #             sqrtm_inv_unbined_TF[0, 3],
+        #         )
 
-                data_alms_TF_corrected_fullMatrix[f, 0] = hp.almxfl(
-                    data_alms[f, 0],
-                    sqrtm_inv_unbined_TF[3, 0],
-                ) + hp.almxfl(
-                    data_alms[f, 1],
-                    sqrtm_inv_unbined_TF[3, 3],
-                )
-            for f in range(data_alms.shape[0]):
-                invN_TF_corrected[:, 1, f, f] = invN[:, 1, f, f] * inv_unbined_TF[0, 0]
-                invN_TF_corrected[:, 2, f, f] = invN[:, 2, f, f] * inv_unbined_TF[-1, -1]
+        #         data_alms_TF_corrected_fullMatrix[f, 0] = hp.almxfl(
+        #             data_alms[f, 0],
+        #             sqrtm_inv_unbined_TF[3, 0],
+        #         ) + hp.almxfl(
+        #             data_alms[f, 1],
+        #             sqrtm_inv_unbined_TF[3, 3],
+        #         )
+        #     for f in range(data_alms.shape[0]):
+        #         invN_TF_corrected[:, 1, f, f] = invN[:, 1, f, f] * inv_unbined_TF[0, 0]
+        #         invN_TF_corrected[:, 2, f, f] = invN[:, 2, f, f] * inv_unbined_TF[-1, -1]
 
-            invN_TF_corrected_fullMatrix = np.zeros_like(invN)
-            for f in range(data_alms.shape[0]):
-                invN_TF_corrected_fullMatrix[:, 1, f, f] = (
-                    invN[:, 1, f, f] * sqrtm_inv_unbined_TF[0, 0]
-                    + invN[:, 2, f, f] * sqrtm_inv_unbined_TF[0, 3]
-                )
-                invN_TF_corrected_fullMatrix[:, 2, f, f] = (
-                    invN[:, 1, f, f] * sqrtm_inv_unbined_TF[3, 0]
-                    + invN[:, 2, f, f] * sqrtm_inv_unbined_TF[3, 3]
-                )
+        #     invN_TF_corrected_fullMatrix = np.zeros_like(invN)
+        #     for f in range(data_alms.shape[0]):
+        #         invN_TF_corrected_fullMatrix[:, 1, f, f] = (
+        #             invN[:, 1, f, f] * sqrtm_inv_unbined_TF[0, 0]
+        #             + invN[:, 2, f, f] * sqrtm_inv_unbined_TF[0, 3]
+        #         )
+        #         invN_TF_corrected_fullMatrix[:, 2, f, f] = (
+        #             invN[:, 1, f, f] * sqrtm_inv_unbined_TF[3, 0]
+        #             + invN[:, 2, f, f] * sqrtm_inv_unbined_TF[3, 3]
+        #         )
 
         data_alms_lmin = set_alm_tozero_below_lmin(
             data_alms.copy(), config.parametric_sep_pars.harmonic_lmin
@@ -345,7 +344,10 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
     res.W_maxL = W_maxL
 
-    if config.parametric_sep_pars.use_harmonic_compsep:
+    if (
+        config.parametric_sep_pars.use_harmonic_compsep
+        and not config.parametric_sep_pars.DEBUG_stay_in_alm
+    ):
         logger.info("Harmonic Compsep: Computing component maps using W matrix and input maps")
         with Timer("load-maps"):
             preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
@@ -368,6 +370,10 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
                 W_maxL[c],
                 freq_maps_preprocessed_QU_masked,
             )
+
+    elif config.parametric_sep_pars.DEBUG_stay_in_alm:
+        logger.info("Staying in alm, compsep will return alms for each component, no maps")
+
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
     timer.stop("do-compsep")
@@ -375,11 +381,14 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     return res
 
 
-def save_compsep_results(manager: DataManager, res, id_sim: int | None = None):
+def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int | None = None):
     path = manager.get_path_to_components(sub=id_sim)
     path.mkdir(parents=True, exist_ok=True)
     fname_results = manager.get_path_to_compsep_results(sub=id_sim)
-    fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
+    if config.parametric_sep_pars.DEBUG_stay_in_alm:
+        fname_compalms = manager.get_path_to_components_alms(sub=id_sim)
+    else:
+        fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
     res_dict = {}
     for attr in dir(res):
         if (
@@ -389,15 +398,20 @@ def save_compsep_results(manager: DataManager, res, id_sim: int | None = None):
     # Saving result dict
     logger.info(f"Saving compsep results to {fname_results}")
     np.savez(fname_results, **res_dict)
-    # Saving component maps
-    logger.info(f"Saving component maps to {fname_compmaps}")
-    np.save(fname_compmaps, res.s)
+    if config.parametric_sep_pars.DEBUG_stay_in_alm:
+        # Saving component alms
+        logger.info(f"Saving component alms to {fname_compalms}")
+        np.save(fname_compalms, res.s_alm)
+    else:
+        # Saving component maps
+        logger.info(f"Saving component maps to {fname_compmaps}")
+        np.save(fname_compmaps, res.s)
 
 
 def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = None):
     with Timer("weighted-compsep"):
         res = weighted_comp_sep(manager, config, id_sim=id_sim)
-    save_compsep_results(manager, res, id_sim=id_sim)
+    save_compsep_results(manager, config, res, id_sim=id_sim)
     return id_sim
 
 
