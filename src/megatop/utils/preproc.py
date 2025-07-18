@@ -194,3 +194,21 @@ def alm_common_beam(
         data_alms[f, 0] = hp.almxfl(data_alms[f, 0], 1 / beam4namaster[f])
         data_alms[f, 1] = hp.almxfl(data_alms[f, 1], 1 / beam4namaster[f])
     return data_alms
+
+
+# def TF_correction_on_alms(
+#     alm: npt.NDArray,
+#     TF: npt.NDArray,):
+#     """
+#     Apply TF correction on alms.
+#     Parameters
+#     ----------
+#     alm : npt.NDArray
+#         Alms to apply TF correction on.
+#     TF : npt.NDArray
+#         TF correction to apply on alms.
+#     Returns
+#     -------
+#     npt.NDArray
+#         Alms with TF correction applied.
+#     """
