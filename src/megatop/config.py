@@ -93,6 +93,7 @@ class DataDirsConfig:
     beams: str = "beams"
     bandpasses: str = "bandpasses"
     noise_maps: str = "noise_maps"
+    TF_sims_maps: str = "TF_sims_maps"
 
 
 @define
@@ -122,7 +123,9 @@ class MapSetConfig:
     exp_tag: str
     file_prefix: str = ""
     noise_prefix: str = "noise_"
+    simfoTF_prefix: str = "simforTF_"
     obsmat_path: Path = field(converter=Path, default=".")
+    TF_path: Path = field(converter=Path, default=".")
 
     def __attrs_post_init__(self) -> None:
         self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
@@ -134,6 +137,10 @@ class MapSetConfig:
     @property
     def noise_map_filename(self) -> str:
         return self.noise_prefix + self.name
+
+    @property
+    def simforTF_map_filename(self) -> str:
+        return [self.simfoTF_prefix + f"pure{s}_" + self.name for s in ["T", "E", "B"]]
 
 
 @define
@@ -190,6 +197,7 @@ class PreProcessingConfig:
     common_beam_correction: float = 100
     beam_fwhms: list[float] | None = None
     DEBUGskippreproc: bool = False
+    DEBUGinclude_TF: bool = False
 
 
 @define
@@ -217,6 +225,7 @@ class CompSepConfig:
     DEBUGcommon_beam_correction_before_smoothmask: bool = False
     DEBUGuse_BBMASTER_bin: bool = False
     DEBUG_EmodesOnly: bool = False
+    DEBUG_stay_in_alm: bool = False
 
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
@@ -261,6 +270,11 @@ class MapSimConfig:
     single_cmb: bool = False
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
+    DEBUG_generate_sims_for_TF: bool = False
+    TF_power_law_amp: float = 1.0
+    TF_power_law_index: float = -2.0
+    TF_power_law_delta_ell: int = 1
+    TF_n_sim: int = 1
 
     @sky_model.validator
     def check(self, attribute, value):
