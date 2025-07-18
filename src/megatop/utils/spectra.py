@@ -145,6 +145,7 @@ def spectra_from_namaster(
     purify_e=False,
     purify_b=False,
     beam=None,
+    return_all_spectra=False,
 ):
     """
     Computes the auto and cross-spectra from the frequency noise maps using NaMaster.
@@ -217,11 +218,16 @@ def spectra_from_namaster(
         cl_decoupled = workspaceff.decouple_cell(cl_coupled)
         unbin_cl_decoupled = nmt_bins.unbin_cell(cl_decoupled)
 
-        # Keeping only the T, E, B components, setting T to zero
-        # Warning: we are ignoring the EB cross-spectra here
-        cl_decoupled_freq.append([cl_decoupled[0] * 0, cl_decoupled[0], cl_decoupled[3]])
-        unbin_cl_decoupled_freq.append(
-            [unbin_cl_decoupled[0] * 0, unbin_cl_decoupled[0], unbin_cl_decoupled[3]]
-        )
+        if return_all_spectra:
+            # Append the full decoupled and unbinned spectra
+            cl_decoupled_freq.append(cl_decoupled)
+            unbin_cl_decoupled_freq.append(unbin_cl_decoupled)
+        else:
+            # Keeping only the TT, EE, BB components, setting T to zero
+            # Warning: we are ignoring the EB cross-spectra here
+            cl_decoupled_freq.append([cl_decoupled[0] * 0, cl_decoupled[0], cl_decoupled[3]])
+            unbin_cl_decoupled_freq.append(
+                [unbin_cl_decoupled[0] * 0, unbin_cl_decoupled[0], unbin_cl_decoupled[3]]
+            )
 
     return np.array(cl_decoupled_freq), np.array(unbin_cl_decoupled_freq)
