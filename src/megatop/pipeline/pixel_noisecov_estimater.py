@@ -67,11 +67,15 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
         if config.masks_pars.DEBUG_output_apod_binary_mask:
-            logger.warning("DEBUG: Using apodized binary mask for harmonic component separation, ")
+            logger.warning(
+                "DEBUG: Using apodized binary mask for harmonic component separation (PIXEL NOISE COV step) "
+            )
             mask_analysis = hp.read_map(manager.path_to_apod_binary_mask)
-
-        if config.parametric_sep_pars.DEBUGnorm_mask:
-            mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
+        logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
+        # TODO: remove after merge
+        mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
+        # if config.parametric_sep_pars.DEBUGnorm_mask:
+        #     mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
 
         with Timer("init-namaster-workspace"):
             workspaceff = initialize_nmt_workspace(
@@ -224,7 +228,74 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     purify_e=False,
                     purify_b=False,
                     beam=beam4namaster,
+                    return_all_spectra=config.pre_proc_pars.DEBUGinclude_TF,
                 )
+
+                if config.pre_proc_pars.DEBUGinclude_TF:
+                    logger.warning("DEBUG: Including transfer function in the pre-processed alms. ")
+                    nside_native = 512
+
+                    nmt_bins_native = nmt.NmtBin.from_nside_linear(
+                        nside_native, nlb=10, is_Dell=False
+                    )
+                    # Checking if bins from noise_spectra computation and from TF computation match
+                    if not np.all(
+                        nmt_bins_native.get_effective_ells()[
+                            nmt_bins_native.get_effective_ells() < nmt_bins.lmax
+                        ]
+                        == nmt_bins.get_effective_ells()
+                    ):
+                        Error_msg = "Binning scheme from noise_spectra computation and from TF computation do not match. "
+                        raise Exception(Error_msg)
+
+                    common_bins = nmt_bins_native.get_effective_ells() < nmt_bins.lmax
+
+                    output_noise_spectra = np.zeros([len(config.frequencies), 3, sum(common_bins)])
+                    output_noise_spectra_unbined = np.zeros(
+                        [len(config.frequencies), 3, noise_spectra_unbined.shape[-1]]
+                    )
+
+                    # import IPython; IPython.embed()
+
+                    for f, tf_path in enumerate(manager.get_TF_filenames()):
+                        if tf_path == Path():
+                            logger.warning(
+                                f"DEBUG: Transfer function for frequency {config.frequencies[f]} is not provided, skipping."
+                            )
+                            output_noise_spectra[f, 0] = noise_spectra[f, 0] * 0
+                            output_noise_spectra[f, 1] = noise_spectra[f, 0]
+                            output_noise_spectra[f, 2] = noise_spectra[f, 3]
+                            output_noise_spectra_unbined[f, 0] = noise_spectra_unbined[f, 0] * 0
+                            output_noise_spectra_unbined[f, 1] = noise_spectra_unbined[f, 0]
+                            output_noise_spectra_unbined[f, 2] = noise_spectra_unbined[f, 3]
+                            continue
+                        logger.info(f"Loading transfer function from {tf_path}")
+                        transfer = np.load(tf_path, allow_pickle=True)["tf"]
+
+                        inv_tf = np.linalg.inv([T_ell.T for T_ell in transfer.T])[
+                            common_bins
+                        ]  # careful with the transpose here, transfer is not symetric
+
+                        noise_spectra_TF_corrected = np.einsum(
+                            "lij,jl->il",
+                            inv_tf,
+                            noise_spectra[f],
+                        )
+
+                        noise_spectra_TF_corrected_unbined = nmt_bins.unbin_cell(
+                            noise_spectra_TF_corrected
+                        )
+                        output_noise_spectra[f, 0] = noise_spectra_TF_corrected[0] * 0
+                        output_noise_spectra[f, 1] = noise_spectra_TF_corrected[0]
+                        output_noise_spectra[f, 2] = noise_spectra_TF_corrected[3]
+
+                        output_noise_spectra_unbined[f, 0] = (
+                            noise_spectra_TF_corrected_unbined[0] * 0
+                        )
+                        output_noise_spectra_unbined[f, 1] = noise_spectra_TF_corrected_unbined[0]
+                        output_noise_spectra_unbined[f, 2] = noise_spectra_TF_corrected_unbined[3]
+                noise_spectra = output_noise_spectra
+                noise_spectra_unbined = output_noise_spectra_unbined
             else:
                 logger.warning(
                     "Using harmonic delta ell = 1, this is not recommended for noise spectra estimation. Healpy is used in this case."
