@@ -66,6 +66,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             )[0]
 
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
+
         if config.masks_pars.DEBUG_output_apod_binary_mask:
             logger.warning(
                 "DEBUG: Using apodized binary mask for harmonic component separation (PIXEL NOISE COV step) "
@@ -296,6 +297,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                         output_noise_spectra_unbined[f, 2] = noise_spectra_TF_corrected_unbined[3]
                 noise_spectra = output_noise_spectra
                 noise_spectra_unbined = output_noise_spectra_unbined
+
             else:
                 logger.warning(
                     "Using harmonic delta ell = 1, this is not recommended for noise spectra estimation. Healpy is used in this case."

@@ -43,6 +43,7 @@ def preprocess_map(
         logger.info("Common beam correction is the same as the input beam, no need to apply it.")
         logger.warning("This is mostly for testing it might not actually represent the real noise")
         freq_maps_convolved = np.array(input_maps, dtype="float64")
+
     else:
         # DEBUGlm_range= [config.parametric_sep_pars.harmonic_lmin, config.parametric_sep_pars.harmonic_lmax]
         freq_maps_convolved = common_beam_and_nside(

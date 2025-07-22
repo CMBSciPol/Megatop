@@ -57,7 +57,6 @@ def spectra_estimation(
         bin_low, bin_high, bin_centre = create_binning(
             config.nside, config.map2cl_pars.delta_ell, end_first_bin=config.lmin
         )
-
         bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
         nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
 

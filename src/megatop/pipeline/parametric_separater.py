@@ -197,6 +197,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
             data_alms = np.array(data_alms)
         """
         # import IPython; IPython.embed()  # DEBUG
+
         # correct_TF = False
         # if correct_TF:
         #     BBTF = np.load(
@@ -324,7 +325,8 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         res.invAtNA = res.invAtNA_map
 
         res.s_alm = res.s
-        res.s_alm2map = np.array(
+        # res.s_alm2map = np.array(
+        res.s = np.array(
             [
                 hp.alm2map_spin(
                     res.s_alm[i],
