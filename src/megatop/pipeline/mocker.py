@@ -465,8 +465,8 @@ def main():
 
     # Update the manager's configuration before processing
     manager = DataManager(sconf)
-    # process_signal(sconf, manager, scomm)
-    # process_noise(sconf, manager, scomm)
+    process_signal(sconf, manager, scomm)
+    process_noise(sconf, manager, scomm)
 
     if config.map_sim_pars.DEBUG_generate_sims_for_TF:
         process_TF_sims(sconf, manager, scomm)
