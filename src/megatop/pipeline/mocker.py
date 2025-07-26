@@ -132,7 +132,7 @@ def save_TFsimu(
             msg = f"Saving filtered TF pure_{s} simulation"
             logger.info(f"{msg} to {filenames_filtered[f][j]}")
             hp.write_map(
-                filenames_unfiltered[f][j],
+                filenames_filtered[f][j],
                 filtered_maps_TEB[j, f],
                 dtype=["float64", "float64", "float64"],
                 overwrite=True,
@@ -379,7 +379,7 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
 
 
 def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
-    """Generate pure E and pure B map with power law spectra for Transfer Function Computation."""
+    """Generate pure T, E and pure B map with power law spectra for Transfer Function Computation."""
     rank = comm.Get_rank()
     n_sim = config.map_sim_pars.TF_n_sim
 
