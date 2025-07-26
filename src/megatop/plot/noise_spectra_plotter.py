@@ -14,10 +14,12 @@ def plot_noise_spectra(manager, config, id_sim=None):
     plot_dir = manager.path_to_spectra_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    path_binning = manager.get_path_to_spectra_binning(sub=id_sim)
-    binning_info = np.load(path_binning, allow_pickle=True)
+    # path_binning = manager.get_path_to_spectra_binning(sub=id_sim)
+    # binning_info = np.load(path_binning, allow_pickle=True)
+    # bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
+    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
+    bin_centre_lminlmax = binning_info['bin_centre_lminlmax']
 
-    bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
 
     fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
     all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)

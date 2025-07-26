@@ -11,6 +11,7 @@ from scipy.linalg import sqrtm
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mask import apply_binary_mask
+from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 from megatop.utils.preproc import alm_common_beam, common_beam_and_nside, read_input_maps
 
@@ -104,9 +105,10 @@ def preprocess_map(
                 #     allow_pickle=True,
                 # )
                 # transfer = BBTF["tf"]
-                nside_native = 512
                 # import IPython; IPython.embed()
-                nmt_bins_native = nmt.NmtBin.from_nside_linear(nside_native, nlb=10, is_Dell=False)
+                nmt_bins_native = load_nmt_binning(manager)
+                # nside_native = 512
+                # nmt_bins_native = nmt.NmtBin.from_nside_linear(nside_native, nlb=10, is_Dell=False)
                 inv_sqrt_tf_full = np.linalg.inv([sqrtm(TF_ell.T) for TF_ell in transfer.T])
                 # Keeping onky the following elements:
                 #  EE->EE  ;  EB->EB

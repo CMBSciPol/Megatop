@@ -10,9 +10,9 @@ from mpi4py.futures import MPICommExecutor
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask
 from megatop.utils.mpi import get_world
+from megatop.utils.binning import load_nmt_binning
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
-    create_binning,
     get_common_beam_wpix,
     initialize_nmt_workspace,
     limit_namaster_output,
@@ -31,45 +31,45 @@ def spectra_estimation(
     # Bins from Carlos BBMASTER paper:
     # USE_BBMASTER_BINS = False
     # import IPython; IPython.embed()
-    if USE_BBMASTER_BINS:
-        logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
+    # if USE_BBMASTER_BINS:
+    #     logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
 
-        bin_low, bin_high, bin_centre = create_binning(
-            config.nside,
-            config.parametric_sep_pars.harmonic_delta_ell,
-            end_first_bin=config.parametric_sep_pars.harmonic_delta_ell,
-        )
-        nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
+    #     bin_low, bin_high, bin_centre = create_binning(
+    #         config.nside,
+    #         config.parametric_sep_pars.harmonic_delta_ell,
+    #         end_first_bin=config.parametric_sep_pars.harmonic_delta_ell,
+    #     )
+    #     nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
 
-        ell_min_namaster = config.parametric_sep_pars.harmonic_lmin
-        ell_max_namaster = config.parametric_sep_pars.harmonic_lmax
-        bin_index_lminlmax = np.where(
-            (bin_low >= ell_min_namaster) & (bin_high <= ell_max_namaster)
-        )[0]
+    #     ell_min_namaster = config.parametric_sep_pars.harmonic_lmin
+    #     ell_max_namaster = config.parametric_sep_pars.harmonic_lmax
+    #     bin_index_lminlmax = np.where(
+    #         (bin_low >= ell_min_namaster) & (bin_high <= ell_max_namaster)
+    #     )[0]
 
-        nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
-        bin_index_lminlmax = np.where(
-            (nmt_bins.get_effective_ells() >= ell_min_namaster)
-            & (nmt_bins.get_effective_ells() <= ell_max_namaster)
-        )[0]
+    #     nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
+    #     bin_index_lminlmax = np.where(
+    #         (nmt_bins.get_effective_ells() >= ell_min_namaster)
+    #         & (nmt_bins.get_effective_ells() <= ell_max_namaster)
+    #     )[0]
 
-    else:
-        bin_low, bin_high, bin_centre = create_binning(
-            config.nside, config.map2cl_pars.delta_ell, end_first_bin=config.lmin
-        )
-        bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
-        nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
-
-    path = manager.get_path_to_spectra_binning(sub=id_sim)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(
-        path,
-        bin_low=bin_low,
-        bin_high=bin_high,
-        bin_centre=bin_centre,
-        bin_index_lminlmax=bin_index_lminlmax,
-        bin_centre_lminlmax=bin_centre[bin_index_lminlmax],
-    )
+    # else:
+    #     bin_low, bin_high, bin_centre = create_binning(
+    #         config.nside, config.map2cl_pars.delta_ell, end_first_bin=config.lmin
+    #     )
+    #     bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
+    #     nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
+    # path = manager.get_path_to_spectra_binning(sub=id_sim)
+    # path.parent.mkdir(parents=True, exist_ok=True)
+    # np.savez(
+    #     path,
+    #     bin_low=bin_low,
+    #     bin_high=bin_high,
+    #     bin_centre=bin_centre,
+    #     bin_index_lminlmax=bin_index_lminlmax,
+    #     bin_centre_lminlmax=bin_centre[bin_index_lminlmax],
+    # )
+    nmt_bins = load_nmt_binning(manager)
 
     # Loading analysis mask
     mask_analysis = hp.read_map(manager.path_to_analysis_mask)
@@ -213,7 +213,7 @@ def spectra_estimation(
         plt.savefig('comp_coupling_EB_Bpurification.png')
         plt.close()
         """
-
+    bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)['bin_index_lminlmax']
     return limit_namaster_output(all_Cls, bin_index_lminlmax)
 
 

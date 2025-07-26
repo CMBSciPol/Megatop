@@ -214,15 +214,12 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
         "Noise_CMBxNoise_CMB"
     ][3][1:]
+    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
-    ls_bins_low = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_low"][1:]
-    ls_bins_high = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_high"][1:]
-    ls_bins_lminlmax_idx = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
-        "bin_index_lminlmax"
-    ][1:]
-    ls_bins_lminlmax_centre = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
-        "bin_centre_lminlmax"
-    ][1:]
+    ls_bins_low = binning_info["bin_low"][1:]
+    ls_bins_high = binning_info["bin_high"][1:]
+    ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"][1:]
+    ls_bins_lminlmax_centre = binning_info["bin_centre_lminlmax"][1:]
     delta_l = (
         config.map2cl_pars.delta_ell
     )  # ls_bins_lminlmax_centre[1] - ls_bins_lminlmax_centre[0]

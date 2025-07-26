@@ -10,8 +10,9 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
-from megatop.utils.spectra import create_binning, initialize_nmt_workspace, spectra_from_namaster
+from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
 from megatop.utils.utils import MemoryUsage
+from megatop.utils.binning import load_nmt_binning
 
 
 def pixel_noisecov_estimation(manager: DataManager, config: Config):
@@ -40,30 +41,32 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
     if config.parametric_sep_pars.use_harmonic_compsep:
         # Initilizing the binning sccheme used in the harmonic component separation in namaster
-        bin_low, bin_high, bin_centre = create_binning(
-            config.nside,
-            config.parametric_sep_pars.harmonic_delta_ell,
-            end_first_bin=config.parametric_sep_pars.harmonic_delta_ell,
-        )
-        nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
+        # bin_low, bin_high, bin_centre = create_binning(
+        #     config.nside,
+        #     config.parametric_sep_pars.harmonic_delta_ell,
+        #     end_first_bin=config.parametric_sep_pars.harmonic_delta_ell,
+        # )
+        # nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
+        nmt_bins = load_nmt_binning(manager)
+        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)['bin_index_lminlmax']
 
         ell_min_namaster = config.parametric_sep_pars.harmonic_lmin
         ell_max_namaster = config.parametric_sep_pars.harmonic_lmax
-        bin_index_lminlmax = np.where(
-            (bin_low >= ell_min_namaster) & (bin_high <= ell_max_namaster)
-        )[0]
+        # bin_index_lminlmax = np.where(
+        #     (bin_low >= ell_min_namaster) & (bin_high <= ell_max_namaster)
+        # )[0]
 
         # Bins from Carlos BBMASTER paper:
         # USE_BBMASTER_BINS = False
 
-        if config.parametric_sep_pars.DEBUGuse_BBMASTER_bin:
-            logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
+        # if config.parametric_sep_pars.DEBUGuse_BBMASTER_bin:
+        #     logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
 
-            nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
-            bin_index_lminlmax = np.where(
-                (nmt_bins.get_effective_ells() >= ell_min_namaster)
-                & (nmt_bins.get_effective_ells() <= ell_max_namaster)
-            )[0]
+        #     nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
+        #     bin_index_lminlmax = np.where(
+        #         (nmt_bins.get_effective_ells() >= ell_min_namaster)
+        #         & (nmt_bins.get_effective_ells() <= ell_max_namaster)
+        #     )[0]
 
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
 

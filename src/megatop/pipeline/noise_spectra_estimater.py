@@ -11,6 +11,7 @@ from mpi4py import MPI
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
+from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import (
@@ -55,16 +56,15 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     ]
 
     # Loading bin info from map2cl step:
-    binning_info = np.load(manager.get_path_to_spectra_binning(sub=id_sim_sky), allow_pickle=True)
-    nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
-    if config.parametric_sep_pars.DEBUGuse_BBMASTER_bin:
-        logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
+    nmt_bins = load_nmt_binning(manager)
 
-        nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
-        # bin_index_lminlmax = np.where(
-        #     (nmt_bins.get_effective_ells() >= ell_min_namaster)
-        #     & (nmt_bins.get_effective_ells() <= ell_max_namaster)
-        # )[0]
+    # binning_info = np.load(manager.get_path_to_spectra_binning(sub=id_sim_sky), allow_pickle=True)
+    # nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
+    # if config.parametric_sep_pars.DEBUGuse_BBMASTER_bin:
+    #     logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
+
+    #     nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
+
     # Getting effective beam TODO: add case for input maps (no preproc)
     effective_beam_CMB = get_common_beam_wpix(
         config.pre_proc_pars.common_beam_correction, config.nside
@@ -171,12 +171,15 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         sum_noise_spectra_recvbuf = sum_noise_spectra
 
     if rank == root:
+        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)['bin_index_lminlmax']
+        
         # Average noise spectra over nsims
         mean_noise_spectra = {}
         for key in sum_noise_spectra:
             mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_n_sim_noise
+        
         mean_noise_spectra = limit_namaster_output(
-            mean_noise_spectra, binning_info["bin_index_lminlmax"]
+            mean_noise_spectra, bin_index_lminlmax
         )
 
     else:
