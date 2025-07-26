@@ -66,6 +66,10 @@ class DataManager:
         return self.path_to_output / self._config.output_dirs.masks
 
     @property
+    def path_to_transfer_functions_parents(self) -> Path:
+        return self.path_to_output / self._config.output_dirs.transfer_functions
+
+    @property
     def path_to_preproc(self) -> Path:
         return self.path_to_output / self._config.output_dirs.preproc
 
@@ -73,6 +77,9 @@ class DataManager:
     def path_to_covar(self) -> Path:
         return self.path_to_output / self._config.output_dirs.covar
 
+    @property
+    def path_to_binning(self) -> Path:
+        return self.path_to_output / self._config.output_dirs.binning / Path("binning.npz")
     # Paths to the plot directories (in output)
     # -----------------------------------------
 
@@ -175,15 +182,26 @@ class DataManager:
 
     def get_TF_filenames(self) -> list[Path]:
         """Get the list of filenames for the Transfer Functions."""
-        names = [map_set.TF_path for map_set in self._config.map_sets]
-        name_list = []
-        for name in names:
-            #  if name is '.' then we just pass it on
-            if name == Path():
-                name_list.append(name)
-            else:
+        if self._config.map_sim_pars.DEBUG_generate_sims_for_TF:
+            logger.info("Internal TF used, generating TF path on the fly")
+            TF_dir = self.path_to_transfer_functions_parents / Path('transfer_functions_output')
+            TF_dir.mkdir(parents=True, exist_ok=True)
+            name_list = []
+            for map_set in self._config.map_sets:
+                file_name = f"transfer_function_{map_set.name}_x_{map_set.name}"
+                name = TF_dir / Path(file_name)
                 name_list.append(name.with_suffix(".npz"))
-        # return [name.with_suffix(".npz") for name in names]
+
+        else:
+            names = [map_set.TF_path for map_set in self._config.map_sets]
+            name_list = []
+            for name in names:
+                #  if name is '.' then we just pass it on
+                if name == Path():
+                    name_list.append(name)
+                else:
+                    name_list.append(name.with_suffix(".npz"))
+            # return [name.with_suffix(".npz") for name in names]
         return name_list
 
     def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
@@ -267,7 +285,7 @@ class DataManager:
     def get_path_to_compsep_results(self, sub: int | None = None) -> Path:
         fname = self.get_path_to_components(sub=sub) / "compsep_results"
         return fname.with_suffix(".npz")
-
+    
     def get_path_to_spectra(self, sub: int | None = None) -> Path:
         if sub is not None:
             return self.path_to_output / self._config.output_dirs.spectra / f"{sub:04d}"

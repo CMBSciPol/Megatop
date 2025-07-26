@@ -100,6 +100,8 @@ class DataDirsConfig:
 class OutputDirsConfig:
     root: Path = field(converter=Path)
     masks: str = "masks"
+    binning: str = "binning"
+    transfer_functions: str = "transfer_functions"
     preproc: str = "preproc"
     covar: str = "covar"
     plots: str = "plots"
