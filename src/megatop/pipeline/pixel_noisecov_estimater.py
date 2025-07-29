@@ -4,15 +4,14 @@ from pathlib import Path
 
 import healpy as hp
 import numpy as np
-import pymaster as nmt
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
+from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
 from megatop.utils.utils import MemoryUsage
-from megatop.utils.binning import load_nmt_binning
 
 
 def pixel_noisecov_estimation(manager: DataManager, config: Config):
@@ -48,7 +47,9 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         # )
         # nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
         nmt_bins = load_nmt_binning(manager)
-        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)['bin_index_lminlmax']
+        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
+            "bin_index_lminlmax"
+        ]
 
         ell_min_namaster = config.parametric_sep_pars.harmonic_lmin
         ell_max_namaster = config.parametric_sep_pars.harmonic_lmax
@@ -237,24 +238,26 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
                 if config.pre_proc_pars.DEBUGinclude_TF:
                     logger.warning("DEBUG: Including transfer function in the pre-processed alms. ")
-                    nside_native = 512
 
-                    nmt_bins_native = nmt.NmtBin.from_nside_linear(
-                        nside_native, nlb=10, is_Dell=False
-                    )
+                    # nside_native = 512
+
+                    # nmt_bins_native = nmt.NmtBin.from_nside_linear(
+                    #     nside_native, nlb=10, is_Dell=False
+                    # )
                     # Checking if bins from noise_spectra computation and from TF computation match
-                    if not np.all(
-                        nmt_bins_native.get_effective_ells()[
-                            nmt_bins_native.get_effective_ells() < nmt_bins.lmax
-                        ]
-                        == nmt_bins.get_effective_ells()
-                    ):
-                        Error_msg = "Binning scheme from noise_spectra computation and from TF computation do not match. "
-                        raise Exception(Error_msg)
+                    # if not np.all(
+                    #     nmt_bins_native.get_effective_ells()[
+                    #         nmt_bins_native.get_effective_ells() < nmt_bins.lmax
+                    #     ]
+                    #     == nmt_bins.get_effective_ells()
+                    # ):
+                    #     Error_msg = "Binning scheme from noise_spectra computation and from TF computation do not match. "
+                    #     raise Exception(Error_msg)
 
-                    common_bins = nmt_bins_native.get_effective_ells() < nmt_bins.lmax
-
-                    output_noise_spectra = np.zeros([len(config.frequencies), 3, sum(common_bins)])
+                    # common_bins = nmt_bins_native.get_effective_ells() < nmt_bins.lmax
+                    output_noise_spectra = np.zeros(
+                        [len(config.frequencies), 3, nmt_bins.get_n_bands()]
+                    )  # sum(common_bins)
                     output_noise_spectra_unbined = np.zeros(
                         [len(config.frequencies), 3, noise_spectra_unbined.shape[-1]]
                     )
@@ -274,11 +277,14 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                             output_noise_spectra_unbined[f, 2] = noise_spectra_unbined[f, 3]
                             continue
                         logger.info(f"Loading transfer function from {tf_path}")
-                        transfer = np.load(tf_path, allow_pickle=True)["tf"]
+                        transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
 
                         inv_tf = np.linalg.inv([T_ell.T for T_ell in transfer.T])[
-                            common_bins
-                        ]  # careful with the transpose here, transfer is not symetric
+                            :, -4:, -4:
+                        ]  # taking only polarised compoenents
+                        # [
+                        #     common_bins
+                        # ]  # careful with the transpose here, transfer is not symetric
 
                         noise_spectra_TF_corrected = np.einsum(
                             "lij,jl->il",
