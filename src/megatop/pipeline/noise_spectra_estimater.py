@@ -17,7 +17,8 @@ from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
-    initialize_nmt_workspace,
+    get_effective_transfer_function,
+    # initialize_nmt_workspace,
     limit_namaster_output,
 )
 from megatop.utils.utils import MemoryUsage
@@ -58,13 +59,6 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
 
-    # binning_info = np.load(manager.get_path_to_spectra_binning(sub=id_sim_sky), allow_pickle=True)
-    # nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
-    # if config.parametric_sep_pars.DEBUGuse_BBMASTER_bin:
-    #     logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
-
-    #     nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
-
     # Getting effective beam TODO: add case for input maps (no preproc)
     effective_beam_CMB = get_common_beam_wpix(
         config.pre_proc_pars.common_beam_correction, config.nside
@@ -75,16 +69,27 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     )
     # Initializing workspace
     with Timer("init-namaster-workspace"):
-        workspaceff = initialize_nmt_workspace(
-            nmt_bins,
-            manager.path_to_lensed_scalar,
-            config.nside,
+        fields_init_wsp = nmt.NmtField(
             mask_analysis,
-            effective_beam_CMB[:-1],
-            config.map2cl_pars.purify_e,
-            config.map2cl_pars.purify_b,
-            config.map2cl_pars.n_iter_namaster,
+            None,
+            spin=2,
+            beam=effective_beam_CMB[:-1],
+            purify_e=config.map2cl_pars.purify_e,
+            purify_b=config.map2cl_pars.purify_b,
+            n_iter=config.map2cl_pars.n_iter_namaster,
         )
+        workspaceff = nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
+    # with Timer("init-namaster-workspace"):
+    #     workspaceff = initialize_nmt_workspace(
+    #         nmt_bins,
+    #         manager.path_to_lensed_scalar,
+    #         config.nside,
+    #         mask_analysis,
+    #         effective_beam_CMB[:-1],
+    #         config.map2cl_pars.purify_e,
+    #         config.map2cl_pars.purify_b,
+    #         config.map2cl_pars.n_iter_namaster,
+    #     )
 
     sum_noise_spectra = {}
 
@@ -145,6 +150,21 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             "Noise_Synch": noise_map_post_compsep[2],
         }
 
+        if (
+            config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
+        ) and not config.parametric_sep_pars.map2alm:
+            logger.info("Computing effective Transfer Function after component separation")
+            transfer_freq = []
+            for tf_path in manager.get_TF_filenames():
+                transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
+                transfer_freq.append(transfer)
+            transfer_freq = np.array(transfer_freq)
+            effective_transfer_function, inverse_effective_transfer_function = (
+                get_effective_transfer_function(transfer_freq, W_maxL, binary_mask)
+            )
+        else:
+            inverse_effective_transfer_function = None
+
         # Computing auto and cross spectra
         noise_Cls = compute_auto_cross_cl_from_maps_list(
             noise_comp_dict,
@@ -154,8 +174,9 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
+            inverse_effective_transfer_function=inverse_effective_transfer_function,
         )
-        # import IPython; IPython.embed()
+
         # Summing the noise spectra
         for key in noise_Cls:
             if key not in sum_noise_spectra:
@@ -171,16 +192,16 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         sum_noise_spectra_recvbuf = sum_noise_spectra
 
     if rank == root:
-        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)['bin_index_lminlmax']
-        
+        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
+            "bin_index_lminlmax"
+        ]
+
         # Average noise spectra over nsims
         mean_noise_spectra = {}
         for key in sum_noise_spectra:
             mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_n_sim_noise
-        
-        mean_noise_spectra = limit_namaster_output(
-            mean_noise_spectra, bin_index_lminlmax
-        )
+
+        mean_noise_spectra = limit_namaster_output(mean_noise_spectra, bin_index_lminlmax)
 
     else:
         mean_noise_spectra = None
