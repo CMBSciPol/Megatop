@@ -450,7 +450,7 @@ def main():
             manager.get_path_to_maps_sub(i).mkdir(parents=True, exist_ok=True)
         for i in range(config.noise_sim_pars.n_sim):
             manager.get_path_to_noise_maps_sub(i).mkdir(parents=True, exist_ok=True)
-        if config.map_sim_pars.DEBUG_generate_sims_for_TF:
+        if config.map_sim_pars.generate_sims_for_TF:
             for i in range(config.map_sim_pars.TF_n_sim):
                 manager.get_path_to_TF_sims_sub(i).mkdir(parents=True, exist_ok=True)
     world.Barrier()
@@ -468,7 +468,7 @@ def main():
     process_signal(sconf, manager, scomm)
     process_noise(sconf, manager, scomm)
 
-    if config.map_sim_pars.DEBUG_generate_sims_for_TF:
+    if config.map_sim_pars.generate_sims_for_TF:
         process_TF_sims(sconf, manager, scomm)
 
 
