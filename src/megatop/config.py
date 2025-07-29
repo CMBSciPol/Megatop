@@ -199,7 +199,8 @@ class PreProcessingConfig:
     common_beam_correction: float = 100
     beam_fwhms: list[float] | None = None
     DEBUGskippreproc: bool = False
-    DEBUGinclude_TF: bool = False
+    correct_for_TF: bool = False
+    sum_TF_column: bool = True
 
 
 @define
@@ -222,12 +223,7 @@ class CompSepConfig:
     harmonic_lmax: int = 3 * 512  # TODO: use config.nside
     harmonic_lmin: int = 2
     harmonic_delta_ell: int = 3  # TODO: use config.nside
-    DEBUGnamaster_deconv: bool = False
-    DEBUGnorm_mask: bool = False
-    DEBUGcommon_beam_correction_before_smoothmask: bool = False
-    DEBUGuse_BBMASTER_bin: bool = False
-    DEBUG_EmodesOnly: bool = False
-    DEBUG_stay_in_alm: bool = False
+    map2alm: bool = False
 
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
@@ -272,7 +268,7 @@ class MapSimConfig:
     single_cmb: bool = False
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
-    DEBUG_generate_sims_for_TF: bool = False
+    generate_sims_for_TF: bool = False
     TF_power_law_amp: float = 1.0
     TF_power_law_index: float = -2.0
     TF_power_law_delta_ell: int = 1

@@ -80,6 +80,7 @@ class DataManager:
     @property
     def path_to_binning(self) -> Path:
         return self.path_to_output / self._config.output_dirs.binning / Path("binning.npz")
+
     # Paths to the plot directories (in output)
     # -----------------------------------------
 
@@ -182,9 +183,9 @@ class DataManager:
 
     def get_TF_filenames(self) -> list[Path]:
         """Get the list of filenames for the Transfer Functions."""
-        if self._config.map_sim_pars.DEBUG_generate_sims_for_TF:
+        if self._config.map_sim_pars.generate_sims_for_TF:
             logger.info("Internal TF used, generating TF path on the fly")
-            TF_dir = self.path_to_transfer_functions_parents / Path('transfer_functions_output')
+            TF_dir = self.path_to_transfer_functions_parents / Path("transfer_functions_output")
             TF_dir.mkdir(parents=True, exist_ok=True)
             name_list = []
             for map_set in self._config.map_sets:
@@ -285,7 +286,7 @@ class DataManager:
     def get_path_to_compsep_results(self, sub: int | None = None) -> Path:
         fname = self.get_path_to_components(sub=sub) / "compsep_results"
         return fname.with_suffix(".npz")
-    
+
     def get_path_to_spectra(self, sub: int | None = None) -> Path:
         if sub is not None:
             return self.path_to_output / self._config.output_dirs.spectra / f"{sub:04d}"
