@@ -285,7 +285,7 @@ def main():
     # If not provided, generate a common one that will be shared by all groups
     cmb_seed = config.map_sim_pars.cmb_seed
     if cmb_seed is None:
-        if rank == 0 and num_groups > 1:
+        if rank == 0:
             # Process 0 generates the seed for everyone from a random source
             rng = np.random.default_rng()
             cmb_seed = rng.integers(2**32)
