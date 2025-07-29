@@ -124,8 +124,8 @@ class MapSetConfig:
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     obsmat_path: Path = field(converter=Path, default=".")
-    suffix_cg_obsmat: str = None
-    suffix_rhs_obsmat: str = None
+    suffix_cg_obsmat: str = ""
+    suffix_rhs_obsmat: str = ""
     passband_filename: str = ""
 
     def __attrs_post_init__(self) -> None:
