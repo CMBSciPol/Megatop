@@ -100,8 +100,6 @@ class OutputDirsConfig:
     root: Path = field(converter=Path)
     masks: str = "masks"
     preproc: str = "preproc"
-    suffix_cg_obsmat: str = "cg_obsmat"
-    suffix_rhs_obsmat: str = "rhs_obsmat"
     prepoc_diag_obsmat: str = "diag_obsmat"
     covar: str = "covar"
     plots: str = "plots"
@@ -126,6 +124,8 @@ class MapSetConfig:
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     obsmat_path: Path = field(converter=Path, default=".")
+    suffix_cg_obsmat: str = None
+    suffix_rhs_obsmat: str = None
     passband_filename: str = ""
 
     def __attrs_post_init__(self) -> None:

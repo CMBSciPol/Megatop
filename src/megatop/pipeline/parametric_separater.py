@@ -127,7 +127,7 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
             )
         
         path_rhs_obsmat = manager.get_path_to_obsmat_rhs()
-        if obsmat_cg_fname is None:
+        if path_rhs_obsmat is None:
             #TODO: how to handle this case?
             logger.warning(f"RHS observation matrix file {path_rhs_obsmat} does not exist. Using identity matrix instead.")
             obsmat_operator_rhs = None

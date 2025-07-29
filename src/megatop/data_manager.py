@@ -164,16 +164,27 @@ class DataManager:
         names = [map_set.obsmat_path for map_set in self._config.map_sets]
         return [name.with_suffix(".npz") for name in names]
     
-    def get_precomputations_obsmat_filenames(self, name_precomputation) -> list[Path]:
-        """Get the list of filenames for the precomputed observation matrices."""
-        names = [Path(str(map_set.obsmat_path) + name_precomputation) for map_set in self._config.map_sets]
+    def get_path_to_obsmat_cg(self) -> Path | None:
+        """Get the path to the precomputed observation matrix which will be used for the conjugate gradient computation.
+
+        If the suffix `suffix_cg_obsmat` is not set, returns None.
+        """
+        names = [Path(str(map_set.obsmat_path) + map_set.suffix_cg_obsmat) if map_set.suffix_cg_obsmat is not None else None for map_set in self._config.map_sets]
+        if None in names:
+            logger.warning(f"Not all suffix for cg obsmat were set, returning None for cg obsmat path (the cg obsmat will be Identity).")
+            return None
         return names
 
-    def get_path_to_obsmat_cg(self) -> Path | None:
-        return self.get_precomputations_obsmat_filenames(self._config.output_dirs.suffix_cg_obsmat)
-
     def get_path_to_obsmat_rhs(self) -> Path | None:
-        return self.get_precomputations_obsmat_filenames(self._config.output_dirs.suffix_rhs_obsmat)
+        """Get the path to the precomputed observation matrix which will be used for the right-hand side computation.
+
+        If the suffix `suffix_rhs_obsmat` is not set, returns None.
+        """
+        names = [Path(str(map_set.obsmat_path) + map_set.suffix_rhs_obsmat) if map_set.suffix_rhs_obsmat is not None else None for map_set in self._config.map_sets]
+        if None in names:
+            logger.warning(f"Not all suffix for rhs obsmat were set, returning None for rhs obsmat path (the rhs obsmat will be Identity).")
+            return None
+        return names
 
     def get_path_to_diag_obsmat(self) -> Path:
         """Get the path to the diagonal observation matrix."""
