@@ -214,6 +214,7 @@ class CompSepConfig:
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
     passband_int: bool = False
     return_transpose_rhs: bool = False
+    use_megabuster: bool = False
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
         """Return the minimize options as a dictionary.
