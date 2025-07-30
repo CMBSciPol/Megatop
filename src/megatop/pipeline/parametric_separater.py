@@ -2,17 +2,21 @@ import argparse
 from functools import partial
 from pathlib import Path
 
-import fgbuster as fg
-import megabuster as mb
-import healpy as hp
-import numpy as np
-from fgbuster.component_model import CMB, Dust, Synchrotron
-from fgbuster.mixingmatrix import MixingMatrix
-# from mpi4py.futures import MPICommExecutor
+import jax
 
-from megatop import Config, DataManager
-from megatop.utils import Timer, logger, mask, passband
-from megatop.utils.mpi import get_world
+jax.config.update("jax_enable_x64", True)
+
+import fgbuster as fg  # noqa: E402
+import healpy as hp  # noqa: E402
+import megabuster as mb  # noqa: E402
+import numpy as np  # noqa: E402
+from fgbuster.component_model import CMB, Dust, Synchrotron  # noqa: E402
+from fgbuster.mixingmatrix import MixingMatrix  # noqa: E402
+from mpi4py.futures import MPICommExecutor  # noqa: E402
+
+from megatop import Config, DataManager  # noqa: E402
+from megatop.utils import Timer, logger, mask, passband  # noqa: E402
+from megatop.utils.mpi import get_world  # noqa: E402
 
 
 def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
@@ -107,44 +111,57 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
         preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
-    
+
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
     with Timer("load-obsmat"):
         obsmat_cg_fname = manager.get_path_to_obsmat_cg()
-        if obsmat_cg_fname is None:
-            #TODO: how to handle this case?
-            logger.warning(f"No observation matrix file provided for CG. Using identity matrix instead.")
+
+        if np.all(np.array(obsmat_cg_fname) == Path()):
+            # TODO: how to handle this case?
+            logger.warning(
+                "No observation matrix file provided for CG. Using identity matrix instead."
+            )
             obsmat_operator_cg = None
+        elif np.any(np.array(obsmat_cg_fname) == Path()):
+            msg_any_obs = "Not all observation matrix files are provided. Provide either all or none, partial set of observation matrices is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
+            raise ValueError(msg_any_obs)
         else:
             logger.debug(f"Loading observation matrix from {obsmat_cg_fname}")
             obsmat_operator_cg = mb.io.load_all_obsmat(
-                obsmat_cg_fname, 
-                size_obsmat=int(binary_mask.sum()), 
-                nstokes=2, 
-                kind='precomputations_indices', 
-                mask_stacked=None
+                obsmat_cg_fname,
+                size_obsmat=int(binary_mask.sum()),
+                nstokes=2,
+                kind="precomputations_indices",
+                mask_stacked=None,
             )
-        
+
         path_rhs_obsmat = manager.get_path_to_obsmat_rhs()
-        if path_rhs_obsmat is None:
-            #TODO: how to handle this case?
-            logger.warning(f"RHS observation matrix file {path_rhs_obsmat} does not exist. Using identity matrix instead.")
+        if np.all(np.array(path_rhs_obsmat) == Path()):
+            # TODO: how to handle this case?
+            logger.warning(
+                f"RHS observation matrix file {path_rhs_obsmat} does not exist. Using identity matrix instead."
+            )
             obsmat_operator_rhs = None
+        elif np.any(np.array(path_rhs_obsmat) == Path()):
+            msg_any_rhs = "Not all path_rhs_obsmat files are provided. Provide either all or none, partial set of path_rhs_obsmat is not supported."
+            raise ValueError(msg_any_rhs)
         else:
             logger.debug(f"Loading full-sky transpose observation matrix from {path_rhs_obsmat}")
             obsmat_operator_rhs = mb.io.load_all_obsmat(
-                path_rhs_obsmat, 
-                size_obsmat=int(binary_mask.sum()), 
-                nstokes=2, 
-                kind='precomputations_indices', 
+                path_rhs_obsmat,
+                size_obsmat=int(binary_mask.sum()),
+                nstokes=2,
+                kind="precomputations_indices",
                 mask_stacked=None,
-                return_transpose=config.parametric_sep_pars.return_transpose_rhs
+                return_transpose=config.parametric_sep_pars.return_transpose_rhs,
             )
 
         path_diag_obsmat = manager.get_path_to_diag_obsmat()
         if not Path(path_diag_obsmat).exists():
-            logger.warning(f"Diagonal observation matrix file {path_diag_obsmat} does not exist. Using identity matrix instead.")
+            logger.warning(
+                f"Diagonal observation matrix file {path_diag_obsmat} does not exist. Using identity matrix instead."
+            )
             diag_obsmat_matrices = None
         else:
             logger.debug(f"Loading diagonal observation matrices from {path_diag_obsmat}")
@@ -160,48 +177,49 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
         # )
         # passbands_norm = passband.fgbuster_passband(config.map_sets)
         # instrument = {"frequency": passbands_norm}
-        raise NotImplementedError(
-            "Megabuster does not support passband integration yet. "
-            "Please use FGBuster for this feature."
-        )
-    else:
-        instrument = {"frequency": config.frequencies}
+        msg_passband = "Megabuster does not support passband integration yet. \nPlease use FGBuster for this feature."
+        raise NotImplementedError(msg_passband)
+    # instrument = {"frequency": config.frequencies}
     if config.parametric_sep_pars.include_synchrotron:
-        components = ['cmb', 'dust', 'synchrotron']  # TODO move default to config
+        components = ["cmb", "dust", "synchrotron"]  # TODO move default to config
     else:
-        components = ['cmb', 'dust']  # TODO move default to config
+        components = ["cmb", "dust"]  # TODO move default to config
 
     # get the 'options' through the appropriate method which returns a dict
     options = config.parametric_sep_pars.get_minimize_options_as_dict()
     tol = config.parametric_sep_pars.minimize_tol
-    # method = config.parametric_sep_pars.minimize_method
+    method = config.parametric_sep_pars.minimize_method
 
     # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
-    
+
     freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
         freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
     )
     noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
     inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
-    inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = 1./noisecov_QU_masked[noisecov_QU_masked != 0]
+    inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
+        1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
+    )
 
+    max_iter = options["maxiter"] if method != "TNC" else options["maxfun"]
+    # import IPython; IPython.embed()
     res = mb.compsep.perform_compsep(
-        first_guess_params={'beta_dust': np.array(1.54), 'beta_pl': np.array(-3.0)},
-        fixed_params={'temp_dust': 20.0},
+        first_guess_params={"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
+        fixed_params={"temp_dust": 20.0},
         sky_map=freq_maps_preprocessed_QU_masked,
         frequencies=np.array(config.frequencies),
         invN_matrix=inverse_noisecov_QU_masked,
         binary_mask=binary_mask,
-        obs_mat_operator=obsmat_operator_cg, 
+        obs_mat_operator=obsmat_operator_cg,
         obsmat_operator_rhs=obsmat_operator_rhs,
         diag_obsmat_matrices=diag_obsmat_matrices,
-        max_iter=options['maxiter'],
+        max_iter=max_iter,
         tol=tol,
-        ordering_parameter=['beta_dust', 'beta_pl'], 
+        ordering_parameter=["beta_dust", "beta_pl"],
         ordering_component=components,
     )
-    
+
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
     timer.stop("do-compsep")
@@ -219,9 +237,15 @@ def save_compsep_results(manager: DataManager, res, id_sim: int | None = None):
         if (
             not attr.startswith("__") and attr != "s"
         ):  # remove component maps to avoid saving twice.
-            if isinstance(getattr(res, attr), callable):
-                continue # Skip callable attributes 
+            # if isinstance(getattr(res, attr), callable):
+            #     continue # Skip callable attributes
             res_dict[attr] = getattr(res, attr)
+
+    if type(res_dict["W_maxL"]) is np.ndarray:
+        # If W_maxL is a function, we can't pickle it, so we remove it
+        logger.warning("W_maxL is a function, removing it from the results dictionary.")
+        res_dict.pop("W_maxL")
+
     # Saving result dict
     logger.info(f"Saving compsep results to {fname_results}")
     np.savez(fname_results, **res_dict)
@@ -232,7 +256,10 @@ def save_compsep_results(manager: DataManager, res, id_sim: int | None = None):
 
 def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = None):
     with Timer("weighted-compsep"):
-        res = weighted_comp_sep(manager, config, id_sim=id_sim)
+        if config.parametric_sep_pars.use_megabuster:
+            res = megabuster_comp_sep(manager, config, id_sim=id_sim)
+        else:
+            res = weighted_comp_sep(manager, config, id_sim=id_sim)
     save_compsep_results(manager, res, id_sim=id_sim)
     return id_sim
 
