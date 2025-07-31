@@ -58,7 +58,6 @@ def Cl_CMB_model(
     theta,
     dust_marg,
     sync_marg,
-    # lmin,
     Cl_BB_prim_generic,
     Cl_BB_lensing_generic,
     Cl_DustxDust_BB_est,
@@ -71,18 +70,9 @@ def Cl_CMB_model(
         Cl_BB_prim = r * Cl_BB_prim_generic
         Cl_BB_lensing = A_lens * Cl_BB_lensing_generic
         Cl_BB_CMB = Cl_BB_prim + Cl_BB_lensing
-        # import IPython; IPython.embed()
+
         Cl_BB_CMB_binned = nmt_bins.bin_cell(Cl_BB_CMB)[..., ls_bins_lminlmax_idx]
-        # Cl_BB_CMB_binned = np.array(
-        #     [
-        #         np.mean(Cl_BB_CMB[low_ell - lmin : high_ell - lmin + 1])
-        #         for low_ell, high_ell in zip(
-        #             ls_bins_low[ls_bins_lminlmax_idx],
-        #             ls_bins_high[ls_bins_lminlmax_idx],
-        #             strict=False,
-        #         )
-        #     ]
-        # )
+
         return Cl_BB_CMB_binned + Nl_CMBxCMB_BB_est
 
     if dust_marg and not sync_marg:
@@ -93,16 +83,7 @@ def Cl_CMB_model(
 
         Cl_BB_CMB = Cl_BB_prim + Cl_BB_lensing
         Cl_BB_CMB_binned = nmt_bins.bin_cell(Cl_BB_CMB)[..., ls_bins_lminlmax_idx]
-        # Cl_BB_CMB_binned = np.array(
-        #     [
-        #         np.mean(Cl_BB_CMB[low_ell - lmin : high_ell - lmin + 1])
-        #         for low_ell, high_ell in zip(
-        #             ls_bins_low[ls_bins_lminlmax_idx],
-        #             ls_bins_high[ls_bins_lminlmax_idx],
-        #             strict=False,
-        #         )
-        #     ]
-        # )
+
         Cl_BB_CMB_dust_binned = Cl_BB_CMB_binned + Cl_BB_dust
         return Cl_BB_CMB_dust_binned + Nl_CMBxCMB_BB_est
 
@@ -118,9 +99,9 @@ def Cl_CMB_model(
 
 
 def prior_bounds(theta, dust_marg, sync_marg, prior_bounds_dict):
-    lower_bound_r, upper_bound_r = prior_bounds_dict["r"]  # (-0.02, 0.036)
-    lower_bound_A_lens, upper_bound_A_lens = prior_bounds_dict["A_{lens}"]  # (0, 2)
-    lower_bound_A_dust, upper_bound_A_dust = prior_bounds_dict["A_{dust}"]  # (-0.02, 0.02)
+    lower_bound_r, upper_bound_r = prior_bounds_dict["r"]
+    lower_bound_A_lens, upper_bound_A_lens = prior_bounds_dict["A_{lens}"]
+    lower_bound_A_dust, upper_bound_A_dust = prior_bounds_dict["A_{dust}"]
 
     if not dust_marg and not sync_marg:
         r, A_lens = theta
@@ -149,7 +130,6 @@ def logL_cosmo(
     theta,
     dust_marg,
     sync_marg,
-    # lmin,
     fsky_obs,
     Cl_BB_prim_generic,
     Cl_BB_lensing_generic,
@@ -160,8 +140,8 @@ def logL_cosmo(
     delta_l,
     nmt_bins,
     prior_bounds_dict,
-    # ls_bins_low,
-    # ls_bins_high,
+    lmin_analysis=None,
+    lmax_analysis=None,
 ):
     prior_check = prior_bounds(theta, dust_marg, sync_marg, prior_bounds_dict)
     if prior_check != 0.0:
@@ -171,18 +151,25 @@ def logL_cosmo(
         theta,
         dust_marg,
         sync_marg,
-        # lmin,
         Cl_BB_prim_generic,
         Cl_BB_lensing_generic,
         Cl_DustxDust_BB_est,
         Nl_CMBxCMB_BB_est,
         ls_bins_lminlmax_idx,
         nmt_bins,
-        # ls_bins_low,
-        # ls_bins_high,
     )
 
     bin_centre = nmt_bins.get_effective_ells()[ls_bins_lminlmax_idx]
+
+    # Restricting ell range to analysis requirements
+    lmin_analysis = -np.inf if lmin_analysis is None else lmin_analysis
+    lmax_analysis = np.inf if lmax_analysis is None else lmax_analysis
+    ell_mask_analysis = (bin_centre >= lmin_analysis) & (bin_centre <= lmax_analysis)
+
+    bin_centre = bin_centre[ell_mask_analysis]
+    Cl_CMBxCMB_BB_model = Cl_CMBxCMB_BB_model[ell_mask_analysis]
+    Cl_CMBxCMB_BB_est = Cl_CMBxCMB_BB_est[ell_mask_analysis]
+
     log_L = -(1 / 2) * np.sum(
         (2 * bin_centre + 1)
         * fsky_obs
@@ -200,8 +187,6 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
-    # lmin = config.general_pars.lmin
-    # lmax = config.general_pars.lmax
 
     nhits_map = hp.read_map(manager.path_to_nhits_map)
     fsky_obs = np.mean(nhits_map)
@@ -220,23 +205,16 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
-    # ls_bins_low = binning_info["bin_low"]
-    # ls_bins_high = binning_info["bin_high"]
     ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
-    # ls_bins_lminlmax_centre = binning_info["bin_centre_lminlmax"]
-    delta_l = (
-        config.map2cl_pars.delta_ell
-    )  # ls_bins_lminlmax_centre[1] - ls_bins_lminlmax_centre[0]
-    load_model_spectra = True
-    if load_model_spectra:
+    delta_l = config.map2cl_pars.delta_ell
+
+    if config.cl2r_pars.load_model_spectra:
         Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: 3 * config.nside]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
             : 3 * config.nside
         ]
     else:
-        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(
-            0, 3 * config.nside - 1
-        )  # (lmin, lmax)
+        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
 
     # 2. init mcmc parameters:
     if not dust_marg and not sync_marg:
@@ -256,14 +234,17 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         theta_init_guess = None
         theta_offsets = None
 
-    n_dim, n_walkers, n_steps, n_steps_burnin = len(theta_init_guess), 200, 10000, 2000
+    n_dim, n_walkers, n_steps, n_steps_burnin = (
+        len(theta_init_guess),
+        config.cl2r_pars.n_walkers,
+        config.cl2r_pars.n_steps,
+        config.cl2r_pars.n_steps_burnin,
+    )
     rng = np.random.default_rng()
     theta_0 = np.array(theta_init_guess) + np.array(theta_offsets) * rng.standard_normal(
         (n_walkers, n_dim)
     )
-    import IPython
 
-    IPython.embed()
     prior_bounds_dict = config.cl2r_pars.prior_bounds
 
     # 3. run mcmc:
@@ -274,7 +255,6 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         args=(
             dust_marg,
             sync_marg,
-            # lmin,
             fsky_obs,
             Cl_BB_prim_generic,
             Cl_BB_lensing_generic,
@@ -285,8 +265,8 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
             delta_l,
             nmt_bins,
             prior_bounds_dict,
-            # ls_bins_low,
-            # ls_bins_high,
+            config.cl2r_pars.lmin_cosmo_analysis,
+            config.cl2r_pars.lmax_cosmo_analysis,
         ),
     )
 
@@ -316,7 +296,6 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         param_names=param_names,
         allow_pickle=True,
     )
-
     return id_sim
 
 
