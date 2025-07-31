@@ -10,7 +10,7 @@ import pymaster as nmt
 from mpi4py import MPI
 
 from megatop import Config, DataManager
-from megatop.utils import Timer, logger
+from megatop.utils import Timer, logger, mask
 from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import (
@@ -20,7 +20,7 @@ from megatop.utils.spectra import (
     limit_namaster_output,
 )
 from megatop.utils.utils import MemoryUsage
-
+import megabuster as mb
 
 def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: int | None = None):
     tracemalloc.start()
@@ -63,6 +63,84 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
     )
+
+    if config.parametric_sep_pars.use_megabuster:
+        logger.warning(
+            "Using Megabuster for component separation, make sure to have the correct parameters set in the config file"
+        )
+        
+        obsmat_cg_fname = manager.get_path_to_obsmat_cg()
+        if np.all(np.array(obsmat_cg_fname) == Path()):
+            # TODO: how to handle this case?
+            logger.warning(
+                "No observation matrix file provided for CG. Using identity matrix instead."
+            )
+            obsmat_operator_cg = None
+        elif np.any(np.array(obsmat_cg_fname) == Path()):
+            msg_any_obs = "Not all observation matrix files are provided. Provide either all or none, partial set of observation matrices is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
+            raise ValueError(msg_any_obs)
+        else:
+            logger.debug(f"Loading observation matrix from {obsmat_cg_fname}")
+            obsmat_operator_cg = mb.io.load_all_obsmat(
+                obsmat_cg_fname,
+                size_obsmat=int(binary_mask.sum()),
+                nstokes=2,
+                kind="precomputations_indices",
+                mask_stacked=None,
+            )
+
+        path_rhs_obsmat = manager.get_path_to_obsmat_rhs()
+        if np.all(np.array(path_rhs_obsmat) == Path()):
+            # TODO: how to handle this case?
+            logger.warning(
+                f"RHS observation matrix file {path_rhs_obsmat} does not exist. Using identity matrix instead."
+            )
+            obsmat_operator_rhs = None
+        elif np.any(np.array(path_rhs_obsmat) == Path()):
+            msg_any_rhs = "Not all path_rhs_obsmat files are provided. Provide either all or none, partial set of path_rhs_obsmat is not supported."
+            raise ValueError(msg_any_rhs)
+        else:
+            logger.debug(f"Loading full-sky transpose observation matrix from {path_rhs_obsmat}")
+            obsmat_operator_rhs = mb.io.load_all_obsmat(
+                path_rhs_obsmat,
+                size_obsmat=int(binary_mask.sum()),
+                nstokes=2,
+                kind="precomputations_indices",
+                mask_stacked=None,
+                return_transpose=config.parametric_sep_pars.return_transpose_rhs,
+            )
+
+        path_diag_obsmat = manager.get_path_to_diag_obsmat()
+        if not Path(path_diag_obsmat).exists():
+            logger.warning(
+                f"Diagonal observation matrix file {path_diag_obsmat} does not exist. Using identity matrix instead."
+            )
+            diag_obsmat_matrices = None
+        else:
+            logger.debug(f"Loading diagonal observation matrices from {path_diag_obsmat}")
+            diag_obsmat_matrices = np.load(path_diag_obsmat)
+        with Timer("load-covmat"):
+            noisecov_fname = manager.path_to_pixel_noisecov
+            logger.debug(f"Loading covmat from {noisecov_fname}")
+            noisecov = np.load(noisecov_fname)
+
+        noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
+        inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
+        inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
+            1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
+        )
+
+         # get the 'options' through the appropriate method which returns a dict
+        tol = config.parametric_sep_pars.minimize_tol
+        max_iter = config.parametric_sep_pars.get_minimize_options_as_dict()["maxiter"]
+
+        parameters_foregrounds_x = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
+            "x"
+        ]
+        parameters_foregrounds = {'beta_dust': np.array(parameters_foregrounds_x[0]),
+                                  'beta_pl': np.array(parameters_foregrounds_x[1]),
+        }
+
     # Initializing workspace
     with Timer("init-namaster-workspace"):
         workspaceff = initialize_nmt_workspace(
@@ -123,9 +201,27 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                 )
 
         # Applying component-separation operator
-        noise_map_post_compsep = np.einsum(
-            "ifsp,fsp->isp", W_maxL, noise_freq_maps_preprocessed[:, 1:]
-        )  # slicing noise to remove T
+        if not config.parametric_sep_pars.use_megabuster:
+            noise_map_post_compsep = np.einsum(
+                "ifsp,fsp->isp", W_maxL, noise_freq_maps_preprocessed[:, 1:]
+            )  # slicing noise to remove T
+        else:
+            noise_map_post_compsep = mb.compsep.perform_compsep(
+                first_guess_params=parameters_foregrounds,
+                fixed_params={"temp_dust": 20.0},
+                sky_map=noise_freq_maps_preprocessed[:, 1:] * binary_mask,
+                frequencies=np.array(config.frequencies),
+                invN_matrix=inverse_noisecov_QU_masked,
+                binary_mask=binary_mask,
+                obs_mat_operator=obsmat_operator_cg,
+                obsmat_operator_rhs=obsmat_operator_rhs,
+                diag_obsmat_matrices=diag_obsmat_matrices,
+                max_iter=max_iter,
+                tol=tol,
+                ordering_parameter=["beta_dust", "beta_pl"],
+                ordering_component=["cmb", "dust", "synchrotron"],
+                do_minimization=False,  # we do not want to minimize the chi2
+            ).s
         noise_map_post_compsep *= binary_mask
 
         # TODO: update keys wrt relevant components once implemented in compsep step
