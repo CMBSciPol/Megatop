@@ -307,6 +307,7 @@ class NoiseSimConfig:
 class Cl2rConfig:
     dust_marg: bool = False
     sync_marg: bool = False
+    prior_bounds: dict[str, list] = Factory(dict)
 
 
 @define
