@@ -303,11 +303,26 @@ class NoiseSimConfig:
     #        raise ValueError(msg)
 
 
+def default_prior_bounds() -> dict[str, list[float]]:
+    return {
+        "r": [-0.02, 1.0],
+        "A_{lens}": [0.0, 2.0],
+        "A_{dust}": [0.0, 1.0],
+        "A_{sync}": [0.0, 1.0],
+    }
+
+
 @define
 class Cl2rConfig:
     dust_marg: bool = False
     sync_marg: bool = False
-    prior_bounds: dict[str, list] = Factory(dict)
+    prior_bounds: dict[str, list] = Factory(default_prior_bounds)
+    load_model_spectra: bool = False
+    n_walkers: int = 200
+    n_steps: int = 10000
+    n_steps_burnin: int = 2000
+    lmin_cosmo_analysis: int | None = None
+    lmax_cosmo_analysis: int | None = None
 
 
 @define
