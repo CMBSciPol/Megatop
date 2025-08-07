@@ -54,6 +54,9 @@ dev = ["pytest"]
 "megatop-noisespectra-plot" = "megatop.plot.noise_spectra_plotter:main"
 "megatop-cl2r-run" = "megatop.pipeline.cl2r_estimater:main"
 "megatop-cl2r-plot" = "megatop.plot.r_stats_plotter:main"
+"megatop-cl2r_mcmc-plot" = "megatop.plot.mcmc_plotter:main"
+"megatop-binning-run" = "megatop.pipeline.binner_maker:main"
+"megatop-TFcomputing-run" = "megatop.pipeline.TF_computation_interface:main"
 
 
 [tool.ruff]
