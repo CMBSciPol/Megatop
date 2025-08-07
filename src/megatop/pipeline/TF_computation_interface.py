@@ -137,7 +137,12 @@ def main():
     if rank == 0:
         manager.dump_config()
 
-    create_and_run_soopercool_yaml(manager=manager, config=config)
+    if config.map_sim_pars.generate_sims_for_TF and config.pre_proc_pars.correct_for_TF:
+        create_and_run_soopercool_yaml(manager=manager, config=config)
+    else:
+        logger.info(
+            "Skipping transfer function computation, as generate_sims_for_TF or correct_for_TF is not set to True."
+        )
 
     # TODO: parallelize
     # n_sim_sky = config.map_sim_pars.n_sim
