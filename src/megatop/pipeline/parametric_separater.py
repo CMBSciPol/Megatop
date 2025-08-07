@@ -136,7 +136,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
     res.W_maxL = W_maxL
 
-    if config.parametric_sep_pars.map2alm:
+    if config.parametric_sep_pars.alm2map:
         logger.info(
             "Harmonic Compsep: Computing component map from output alms, this might induce some edge effect..."
         )
