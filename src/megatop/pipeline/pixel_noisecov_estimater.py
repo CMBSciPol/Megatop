@@ -39,13 +39,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
     noise_cov_preprocessed = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
 
     if config.parametric_sep_pars.use_harmonic_compsep:
-        # Initilizing the binning sccheme used in the harmonic component separation in namaster
-        # bin_low, bin_high, bin_centre = create_binning(
-        #     config.nside,
-        #     config.parametric_sep_pars.harmonic_delta_ell,
-        #     end_first_bin=config.parametric_sep_pars.harmonic_delta_ell,
-        # )
-        # nmt_bins = nmt.NmtBin.from_edges(bin_low, bin_high + 1)
         nmt_bins = load_nmt_binning(manager)
         bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
             "bin_index_lminlmax"
@@ -53,21 +46,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         ell_min_namaster = config.parametric_sep_pars.harmonic_lmin
         ell_max_namaster = config.parametric_sep_pars.harmonic_lmax
-        # bin_index_lminlmax = np.where(
-        #     (bin_low >= ell_min_namaster) & (bin_high <= ell_max_namaster)
-        # )[0]
-
-        # Bins from Carlos BBMASTER paper:
-        # USE_BBMASTER_BINS = False
-
-        # if config.parametric_sep_pars.DEBUGuse_BBMASTER_bin:
-        #     logger.warning("Using EXTERNAL BBMASTER bins for the harmonic component separation.")
-
-        #     nmt_bins = nmt.NmtBin.from_nside_linear(config.nside, nlb=10, is_Dell=False)
-        #     bin_index_lminlmax = np.where(
-        #         (nmt_bins.get_effective_ells() >= ell_min_namaster)
-        #         & (nmt_bins.get_effective_ells() <= ell_max_namaster)
-        #     )[0]
 
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
 
@@ -202,7 +180,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     for f, tf_path in enumerate(manager.get_TF_filenames()):
                         if tf_path == Path():
                             logger.warning(
-                                f"DEBUG: Transfer function for frequency {config.frequencies[f]} is not provided, skipping."
+                                f"DEBUG: Transfer function for frequency p{config.frequencies[f]} is not provided, skipping."
                             )
                             output_noise_spectra[f, 0] = noise_spectra[f, 0] * 0
                             output_noise_spectra[f, 1] = noise_spectra[f, 0]
