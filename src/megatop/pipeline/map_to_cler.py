@@ -44,7 +44,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
 
     if (
         config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
-    ) and not config.parametric_sep_pars.map2alm:
+    ) and not config.parametric_sep_pars.alm2map:
         logger.info("Computing effective Transfer Function after component separation")
         transfer_freq = []
         for tf_path in manager.get_TF_filenames():
