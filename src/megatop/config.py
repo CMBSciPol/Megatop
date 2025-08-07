@@ -182,9 +182,9 @@ class MasksConfig:
 
 @define
 class GeneralConfig:
-    nside: int = 512
+    nside: int = 128
     lmin: int = 30
-    lmax: int = field(default=1_000)
+    lmax: int = field(default=256)
 
     @lmax.validator
     def check(self, attribute, value):
@@ -205,7 +205,7 @@ class PreProcessingConfig:
 
 @define
 class NoiseCovmatConfig:
-    save_preprocessed_noise_maps: bool = False
+    save_preprocessed_noise_maps: bool = True
 
 
 @define
@@ -220,10 +220,10 @@ class _MinimizeOptions:
 @define
 class CompSepConfig:
     use_harmonic_compsep: bool = False
-    harmonic_lmax: int = 3 * 512  # TODO: use config.nside
-    harmonic_lmin: int = 2
-    harmonic_delta_ell: int = 3  # TODO: use config.nside
-    map2alm: bool = False
+    harmonic_lmax: int = 2 * 128  # TODO: use config.nside
+    harmonic_lmin: int = 30
+    harmonic_delta_ell: int = 10  # TODO: harmonize with binning from map2cl
+    alm2map: bool = False
 
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
@@ -244,7 +244,7 @@ class CompSepConfig:
 @define
 class Map2ClConfig:
     delta_ell: int | list[int] = 10
-    purify_e: bool = True
+    purify_e: bool = False
     purify_b: bool = True
     n_iter_namaster: int = 3
 
@@ -317,7 +317,7 @@ class Cl2rConfig:
     dust_marg: bool = False
     sync_marg: bool = False
     prior_bounds: dict[str, list] = Factory(default_prior_bounds)
-    load_model_spectra: bool = False
+    load_model_spectra: bool = True
     n_walkers: int = 200
     n_steps: int = 10000
     n_steps_burnin: int = 2000
