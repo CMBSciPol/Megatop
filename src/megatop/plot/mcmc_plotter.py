@@ -1,13 +1,98 @@
 import argparse
 from pathlib import Path
 
+import healpy as hp
 import numpy as np
 from getdist import MCSamples, plots
 from matplotlib import pyplot as plt
 
 from megatop import Config, DataManager
 from megatop.pipeline.cl2r_estimater import Cl_CMB_model, compute_generic_Cl
+from megatop.plot.r_stats_plotter import get_params_statistics
 from megatop.utils import logger
+from megatop.utils.binning import load_nmt_binning
+
+
+def add_error_bars_to_getdist_plot(gd_plot, stats_params_dict):
+    """Adds error bars to the GetDist plot based on the statistics dictionary."""
+
+    legend_mean_of_std = ""
+    legend_std_of_mean = ""
+    for param_name, stats in stats_params_dict.items():
+        mean = stats["mean"]
+        std = stats["mean_of_std"]
+        std_of_mean = stats["std_of_mean"]
+        legend_mean_of_std += "\n" + rf"${param_name}$ = {mean:.4f}" + r"$\pm$" + f"{std:.4f}"
+        legend_std_of_mean += (
+            "\n" + rf"${param_name}$ = {mean:.4f}" + r"$\pm$" + f"{std_of_mean:.4f}"
+        )
+    # 1D plots:
+    for param_name, stats in stats_params_dict.items():
+        mean = stats["mean"]
+        std = stats["mean_of_std"]
+        std_of_mean = stats["std_of_mean"]
+        ax_param = gd_plot.get_axes_for_params(param_name)
+        ylims = ax_param.get_ylim()
+
+        ax_param.errorbar(
+            mean,
+            ylims[1] * 1.1,
+            xerr=std_of_mean,
+            fmt="o",
+            color="darkgreen",
+            label=r"$\langle\langle \text{chain} \rangle_{\rm step} \rangle_{sims} \pm \sigma(\langle \text{chain} \rangle_{\rm step})_{sims}$"
+            + legend_std_of_mean,
+            capsize=4,
+        )
+        ax_param.errorbar(
+            mean,
+            ylims[1] * 1.1,
+            xerr=std,
+            fmt="o",
+            color="darkblue",
+            label=r"$\langle\langle \text{chain} \rangle_{\rm step} \rangle_{sims} \pm \langle \sigma(\text{chain})_{\rm step} \rangle_{sims}$"
+            + legend_mean_of_std,
+            capsize=4,
+        )
+        ax_param.set_ylim([ylims[0], ylims[1] * 1.2])  # Extend y-limits for visibility
+    # Update legend:
+    ax_param.legend(
+        loc="lower right", bbox_to_anchor=(1.0, 1.5), fontsize=10, frameon=True, fancybox=True
+    )
+    # 2D plots:
+    for param_name_x, stats_x in stats_params_dict.items():
+        for param_name_y, stats_y in stats_params_dict.items():
+            ax_2d = gd_plot.get_axes_for_params(param_name_x, param_name_y)
+            if ax_2d is None:
+                continue
+
+            mean_x = stats_x["mean"]
+            mean_y = stats_y["mean"]
+            std_x = stats_x["mean_of_std"]
+            std_y = stats_y["mean_of_std"]
+            std_of_mean_x = stats_x["std_of_mean"]
+            std_of_mean_y = stats_y["std_of_mean"]
+
+            ax_2d.errorbar(
+                mean_x,
+                mean_y,
+                xerr=std_of_mean_x,
+                yerr=std_of_mean_y,
+                fmt="o",
+                color="darkgreen",
+                label=f"{param_name_x}, {param_name_y} mean ± std of mean",
+                capsize=4,
+            )
+            ax_2d.errorbar(
+                mean_x,
+                mean_y,
+                xerr=std_x,
+                yerr=std_y,
+                fmt="o",
+                color="darkblue",
+                label=f"{param_name_x}, {param_name_y} mean ± std",
+                capsize=4,
+            )
 
 
 def plot_all_cornerplots(manager: DataManager, config: Config):
@@ -18,33 +103,48 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     n_sim_sky = config.map_sim_pars.n_sim
 
     all_samples = []
-    colors = [
-        plt.cm.plasma(i / (n_sim_sky - 1)) for i in range(n_sim_sky)
-    ]  # Convert to list of color values
-
+    # colors = (
+    #     [plt.cm.plasma(0.5)]
+    #     if n_sim_sky == 1
+    #     else [plt.cm.plasma(i / (n_sim_sky - 1)) for i in range(n_sim_sky)]
+    # )
     for id_sim in range(n_sim_sky):
         fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
         mcmc = np.load(fname_chains, allow_pickle=True)
         chains = mcmc["mcmc_chains"]
         param_names = mcmc["param_names"]
 
-        samples = MCSamples(samples=chains, names=param_names, labels=param_names)
+        samples = MCSamples(
+            samples=chains,
+            names=param_names,
+            labels=param_names,
+        )
         all_samples.append(samples)
 
     # Make plot:
     gd_plot = plots.get_subplot_plotter(width_inch=8)
     gd_plot.settings.figure_legend_frame = False
+    gd_plot.settings.line_labels = False
     gd_plot.settings.alpha_filled_add = 0.4
+    gd_plot.settings.alpha_factor_contour_lines = 0.4
     gd_plot.settings.line_styles = ["-"] * n_sim_sky
 
     gd_plot.triangle_plot(
         all_samples,
-        filled=True,
+        filled=False,
         legend_loc=None,
-        line_args=[{"lw": 1.0, "color": colors[i]} for i in range(n_sim_sky)],
-        contour_colors=colors,
+        legend_labels=[None] * n_sim_sky,
+        line_args=[{"lw": 1.0, "color": "darkblue", "alpha": 0.4} for i in range(n_sim_sky)],
+        # line_args=[{"lw": 1.0, "color": colors[i]} for i in range(n_sim_sky)],
+        contour_colors=["darkblue"] * n_sim_sky,
+        contour_args=[{"lw": 1.0, "color": "darkblue", "alpha": 0.4} for i in range(n_sim_sky)],
+        # contour_colors=colors,
         markers={"r": r_sim, "A_{lens}": A_lens_sim},
     )
+
+    stats_params_dict = get_params_statistics(manager, config)
+
+    add_error_bars_to_getdist_plot(gd_plot, stats_params_dict)
 
     # Save figure:
     plot_dir = manager.path_to_mcmc_plots
@@ -93,31 +193,36 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     # Load necessary parameters
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
-    lmin = config.general_pars.lmin
-    lmax = config.general_pars.lmax
+    # lmin = config.general_pars.lmin
+    # lmax = config.general_pars.lmax
     sky_model = "".join(config.map_sim_pars.sky_model)
 
     # Load spectra data
     Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "CMBxCMB"
-    ][3][1:]
+    ][3]
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "DustxDust"
-    ][3][1:]
+    ][3]
     Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
         "Noise_CMBxNoise_CMB"
-    ][3][1:]
+    ][3]
 
-    ls_bins_low = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_low"][1:]
-    ls_bins_high = np.load(manager.get_path_to_spectra_binning(sub=id_sim))["bin_high"][1:]
-    ls_bins_lminlmax_idx = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
-        "bin_index_lminlmax"
-    ][1:]
-    ls_bins_lminlmax_centre = np.load(manager.get_path_to_spectra_binning(sub=id_sim))[
-        "bin_centre_lminlmax"
-    ][1:]
+    nmt_bins = load_nmt_binning(manager)
+    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
+    ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
 
-    Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
+    ls_bins_lminlmax_centre = binning_info["bin_centre_lminlmax"]
+
+    if config.cl2r_pars.load_model_spectra:
+        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: 3 * config.nside]
+        Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
+            : 3 * config.nside
+        ]
+    else:
+        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
+
+    # Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
 
     # Load estimated parameters from MCMC chains
     fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
@@ -147,14 +252,12 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         theta_est,
         dust_marg,
         sync_marg,
-        lmin,
         Cl_BB_prim_generic,
         Cl_BB_lensing_generic,
         Cl_DustxDust_BB_est,
         Nl_CMBxCMB_BB_est,
-        ls_bins_low,
-        ls_bins_high,
         ls_bins_lminlmax_idx,
+        nmt_bins,
     )
 
     # Plot spectra
@@ -191,7 +294,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         zorder=2,
     )
     ax.plot(
-        np.arange(lmin, lmax + 1),
+        np.arange(0, 3 * config.nside),
         Cl_BB_prim_est,
         label=r"$C_\ell^{prim, \rm est} = r^{\rm est} \cdot C_\ell^{\rm prim}(r=1)$ ",
         color="darkcyan",
@@ -200,7 +303,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     )
 
     ax.plot(
-        np.arange(lmin, lmax + 1),
+        np.arange(0, 3 * config.nside),
         Cl_BB_lensing_est,
         label=r"$C_\ell^{lensing, \rm est} = A_{\rm lens}^{\rm est} \cdot C_\ell^{\rm prim}(r=0)$",
         color="seagreen",
@@ -270,7 +373,7 @@ def main():
         id_sim = None
     else:
         plot_all_cornerplots(manager, config)
-        id_sim = 1
+        id_sim = 0
         logger.info(f"Plotting for sky simulation #{id_sim}")
         plot_single_cornerplot(manager, config, id_sim=id_sim)
         plot_spectra_comparison(manager, config, id_sim=id_sim)
