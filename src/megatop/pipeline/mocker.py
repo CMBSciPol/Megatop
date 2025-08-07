@@ -239,6 +239,11 @@ def func_TF_sims(
                 filtered_freq_map_pure_B[i_f] = mock.apply_observation_matrix(
                     func, filtered_freq_map_pure_B[i_f]
                 )
+    else:
+        msg_no_obsmat = (
+            "No observation matrices provided for filtering. Please provide obsmat_funcs."
+        )
+        raise ValueError(msg_no_obsmat)
 
     # mask unobserved pixels
     _ = mask.apply_binary_mask(unfiltered_freq_map_pure_T, binary_mask, unseen=False)
