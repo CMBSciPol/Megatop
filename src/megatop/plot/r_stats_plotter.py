@@ -9,31 +9,50 @@ from megatop import Config, DataManager
 from megatop.utils import logger
 
 
+def get_params_statistics(manager, config):
+    """Extracts r statistics from MCMC chains for a given manager and configuration."""
+    n_sim_sky = config.map_sim_pars.n_sim
+
+    mean_per_sim = []
+    std_per_sim = []
+    for id_sim in range(n_sim_sky):
+        fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+        mcmc = np.load(fname_chains, allow_pickle=True)
+        chains = mcmc["mcmc_chains"]
+
+        mean_chain = np.mean(chains, axis=0)
+        std_chain = np.std(chains, axis=0)
+        mean_per_sim.append(mean_chain)
+        std_per_sim.append(std_chain)
+
+    mean_per_sim = np.array(mean_per_sim)
+    std_per_sim = np.array(std_per_sim)
+
+    stats_params_dict = {}
+    param_names = mcmc["param_names"]
+    for i, param_name in enumerate(param_names):
+        stats_params_dict[param_name] = {
+            "mean": np.mean(mean_per_sim[:, i]),
+            "mean_of_std": np.mean(std_per_sim[:, i]),
+            "std_of_mean": np.std(mean_per_sim[:, i]),
+            "mean_per_sim": mean_per_sim[:, i],
+            "std_per_sim": std_per_sim[:, i],
+        }
+
+    return stats_params_dict
+
+
 def plot_r_statistics(managers, configs):
     """Plots r statistics for different pipeline configurations in a single figure, grouping by sky model."""
     sky_model_dict = defaultdict(list)  # Group data by sky model
 
     for manager, config in zip(managers, configs, strict=False):
-        n_sim_sky = config.map_sim_pars.n_sim
         sky_model = "".join(config.map_sim_pars.sky_model)
 
-        r_means = []
-        r_stds = []
-
-        for id_sim in range(n_sim_sky):
-            fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
-            mcmc = np.load(fname_chains, allow_pickle=True)
-            chains = mcmc["mcmc_chains"]
-            param_names = mcmc["param_names"]
-
-            idx_r = np.where(param_names == "r")[0][0]
-            r_samples = chains[:, idx_r]
-
-            r_means.append(np.mean(r_samples))
-            r_stds.append(np.std(r_samples))
-
-        r_mean_final = np.mean(r_means)  # Mean of means
-        r_std_final = np.mean(r_stds)  # Mean of standard deviations
+        stats_params_dict = get_params_statistics(manager, config)
+        r_mean_final = stats_params_dict["r"]["mean"]
+        r_std_final = stats_params_dict["r"]["mean_of_std"]
+        r_std_of_mean_final = stats_params_dict["r"]["std_of_mean"]
 
         if config.cl2r_pars.dust_marg:
             color = "mediumvioletred"
@@ -42,7 +61,9 @@ def plot_r_statistics(managers, configs):
             color = "darkblue"
             label = r"$\theta = (r, A_{\rm lens})$"
 
-        sky_model_dict[sky_model].append((r_mean_final * 1e3, r_std_final * 1e3, color, label))
+        sky_model_dict[sky_model].append(
+            (r_mean_final * 1e3, r_std_final * 1e3, r_std_of_mean_final * 1e3, color, label)
+        )
 
     sky_models = list(sky_model_dict.keys())
     x_positions = np.arange(len(sky_models))
@@ -51,7 +72,17 @@ def plot_r_statistics(managers, configs):
     offset = 0.1
     for i, sky_model in enumerate(sky_models):
         entries = sky_model_dict[sky_model]
-        for j, (mean, std, color, label) in enumerate(entries):
+        for j, (mean, std, std_of_mean, color, label) in enumerate(entries):
+            plt.errorbar(
+                x_positions[i] + j * offset,
+                mean,
+                yerr=std_of_mean,
+                fmt="o",
+                color="darkgreen",
+                label=label + "± std of mean" if i == 0 else "_nolegend_",
+                capsize=5,
+            )
+
             plt.errorbar(
                 x_positions[i] + j * offset,
                 mean,
