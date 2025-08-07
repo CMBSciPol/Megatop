@@ -15,6 +15,24 @@ from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 
 
+def check_negative_bins_inside_analysis_range(
+    test_spectrum, bin_centre, lmin_analysis, lmax_analysis, spectra_name=""
+):
+    lmin_analysis = -np.inf if lmin_analysis is None else lmin_analysis
+    lmax_analysis = np.inf if lmax_analysis is None else lmax_analysis
+    ell_mask_analysis = (bin_centre >= lmin_analysis) & (bin_centre <= lmax_analysis)
+
+    bin_centre = bin_centre[ell_mask_analysis]
+
+    test_spectrum_in_range = test_spectrum[ell_mask_analysis]
+
+    if np.any(test_spectrum_in_range < 0):
+        logger.warning(
+            spectra_name
+            + " has NEGATIVE BINS inside the range of cosmological analysis. \nTHIS WILL CAUSE ISSUES FOR PARAMETER ESTIMATION"
+        )
+
+
 def compute_generic_Cl(lmin, lmax):
     LMAX = 2000
     cosmo_params = camb.set_params(
@@ -208,6 +226,14 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
     delta_l = config.map2cl_pars.delta_ell
 
+    check_negative_bins_inside_analysis_range(
+        Cl_CMBxCMB_BB_est,
+        bin_centre=nmt_bins.get_effective_ells()[ls_bins_lminlmax_idx],
+        lmin_analysis=config.cl2r_pars.lmin_cosmo_analysis,
+        lmax_analysis=config.cl2r_pars.lmax_cosmo_analysis,
+        spectra_name="CMBxCMB_BB_est",
+    )
+
     if config.cl2r_pars.load_model_spectra:
         Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: 3 * config.nside]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
@@ -284,6 +310,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     chains = sampler.get_chain(flat=True)
     log_prob = sampler.get_log_prob(flat=True)
 
+    logger.info(f"Mean parameters {param_names}: {np.mean(chains, axis=0)}")
     # 4. save mcmc chains:
     path = manager.get_path_to_mcmc(sub=id_sim)
     path.mkdir(parents=True, exist_ok=True)
