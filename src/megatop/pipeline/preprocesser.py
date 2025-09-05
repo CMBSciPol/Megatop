@@ -55,9 +55,7 @@ def preprocess_map(
         )
         logger.info(f"Pre-processed maps have shape: {freq_maps_convolved.shape}")
 
-    if (
-        config.parametric_sep_pars.use_harmonic_compsep and not skip_preprocessing_bool
-    ):  # and config.parametric_sep_pars.DEBUGnamaster_deconv:# and not config.parametric_sep_pars.DEBUGcommon_beam_correction_before_smoothmask:
+    if config.parametric_sep_pars.use_harmonic_compsep and not skip_preprocessing_bool:
         logger.info(
             "Using harmonic pipeline for component separation. Pre-processing will output alms"
         )
