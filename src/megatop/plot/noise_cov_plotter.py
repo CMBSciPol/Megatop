@@ -6,6 +6,7 @@ import numpy as np
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
+from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, freq_maps_plotter_one_stoke, plotTTEEBB
 
@@ -64,7 +65,11 @@ def plot_noisecov(manager, config, maps=True, cls=True):
         )
 
     if config.parametric_sep_pars.use_harmonic_compsep:
-        ell_bin_lminlmax = np.load(manager.path_to_effectiv_bins_harmonic_compsep)
+        nmt_bins = load_nmt_binning(manager)
+        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
+            "bin_index_lminlmax"
+        ]
+        ell_bin_lminlmax = nmt_bins.get_effective_ells()[bin_index_lminlmax]
         binned_nl = np.load(manager.path_to_nl_noisecov)
         unbinned_nl = np.load(manager.path_to_nl_noisecov_unbinned)
         plotTTEEBB(
