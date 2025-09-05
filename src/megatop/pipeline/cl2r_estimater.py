@@ -241,7 +241,6 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     else:
         Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
 
-
     # 2. init mcmc parameters:
     if not dust_marg and not sync_marg:
         param_names = ["r", "A_{lens}"]
