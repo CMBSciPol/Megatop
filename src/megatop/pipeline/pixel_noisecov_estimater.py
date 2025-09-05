@@ -57,8 +57,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
         # TODO: remove after merge
         mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
-        # if config.parametric_sep_pars.DEBUGnorm_mask:
-        #     mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
 
         with Timer("init-namaster-workspace"):
             workspaceff = initialize_nmt_workspace(
@@ -104,12 +102,10 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             logger.debug(f"Importing noise map: {noise_filename}")
             noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
 
-        # DEBUGtruncatealms = True,
-
         if (
             np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams))
             or config.pre_proc_pars.DEBUGskippreproc
-        ):  # and not DEBUGtruncatealms:
+        ):
             logger.info(
                 "Common beam correction is the same as the input beam, no need to apply it."
             )
@@ -120,18 +116,12 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         else:
             noise_freq_maps = np.array(noise_freq_maps, dtype=object)
-            # DEBUGlm_range = [
-            #     config.parametric_sep_pars.harmonic_lmin,
-            #     config.parametric_sep_pars.harmonic_lmax,
-            # ]
 
             noise_freq_maps_preprocessed = common_beam_and_nside(
                 nside=config.nside,
                 common_beam=config.pre_proc_pars.common_beam_correction,
                 frequency_beams=config.beams,
                 freq_maps=noise_freq_maps,
-                # DEBUGtruncatealms=DEBUGtruncatealms,
-                # DEBUGlm_range=DEBUGlm_range,
             )
 
         if config.noise_cov_pars.save_preprocessed_noise_maps:
@@ -172,7 +162,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
                     output_noise_spectra = np.zeros(
                         [len(config.frequencies), 3, nmt_bins.get_n_bands()]
-                    )  # sum(common_bins)
+                    )
                     output_noise_spectra_unbined = np.zeros(
                         [len(config.frequencies), 3, noise_spectra_unbined.shape[-1]]
                     )
@@ -197,6 +187,27 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                         ]  # taking only polarised components
                         # careful with the transpose here, transfer is not symetric
 
+                        reduced_TF = True
+                        # TODO: remove reduced_TF option, or if needed, make it a parameter in config
+                        if reduced_TF:
+                            # Using the same limited elements as for the preproc step
+                            # Since preproc uses alms and not spectra we only have alm_E, and alm_B
+                            inv_tf_ = np.zeros_like(inv_tf)
+                            if config.pre_proc_pars.sum_TF_column:
+                                inv_tf_sum = np.sum(
+                                    inv_tf, axis=1
+                                )  # summing over column to get all the contribution xy-->ab (EE-->EE + EB-->EE + BE-->EE + BB-->EE etc)
+                                inv_tf_[:, 0, 0] = inv_tf_sum[:, 0]  # EE->EE
+                                inv_tf_[:, 1, 1] = inv_tf_sum[:, 1]  # EB->EB
+                                inv_tf_[:, 2, 2] = inv_tf_sum[:, 2]  # BE->BE
+                                inv_tf_[:, 3, 3] = inv_tf_sum[:, 3]  # BB->BB
+                            else:
+                                inv_tf_[:, 0, 0] = inv_tf[:, 0, 0]
+                                inv_tf_[:, 1, 1] = inv_tf[:, 1, 1]
+                                inv_tf_[:, 2, 2] = inv_tf[:, 2, 2]
+                                inv_tf_[:, 3, 3] = inv_tf[:, 3, 3]
+                            inv_tf = inv_tf_
+
                         noise_spectra_TF_corrected = np.einsum(
                             "lij,jl->il",
                             inv_tf,
@@ -215,8 +226,8 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                         )
                         output_noise_spectra_unbined[f, 1] = noise_spectra_TF_corrected_unbined[0]
                         output_noise_spectra_unbined[f, 2] = noise_spectra_TF_corrected_unbined[3]
-                noise_spectra = output_noise_spectra
-                noise_spectra_unbined = output_noise_spectra_unbined
+                    noise_spectra = output_noise_spectra
+                    noise_spectra_unbined = output_noise_spectra_unbined
 
             else:
                 logger.warning(
@@ -272,10 +283,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             np.save(manager.path_to_nl_noisecov, noise_cov_preprocessed_mean_cl)
             np.save(
                 manager.path_to_nl_noisecov_unbinned, noise_cov_preprocessed_recvbuf_cl_unbinned
-            )
-            np.save(
-                manager.path_to_effectiv_bins_harmonic_compsep,
-                nmt_bins.get_effective_ells()[bin_index_lminlmax],
             )
 
     if rank == root:
