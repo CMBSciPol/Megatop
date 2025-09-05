@@ -1,9 +1,9 @@
-import healpy as hp
 import numpy as np
 import pymaster as nmt
 
 from megatop import DataManager
 from megatop.utils import logger
+
 
 def create_binning(nside, delta_ell, end_first_bin=None):
     """ """
@@ -20,10 +20,10 @@ def create_binning(nside, delta_ell, end_first_bin=None):
 
     return bin_low, bin_high, bin_center
 
+
 def load_nmt_binning(manager: DataManager):
     """Load the binning from the file."""
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
     # TODO: allow different binning functions?
     logger.info(f"Loading binning from {manager.path_to_binning}")
-    nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
-    return nmt_bins
+    return nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
