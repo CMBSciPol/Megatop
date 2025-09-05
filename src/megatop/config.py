@@ -279,7 +279,7 @@ class MapSimConfig:
     filter_sims: bool = False
     generate_sims_for_TF: bool = False
     TF_power_law_amp: float = 1.0
-    TF_power_law_index: float = -2.0
+    TF_power_law_index: float = 2.0  # minus sign is added in soopercool
     TF_power_law_delta_ell: int = 1
     TF_n_sim: int = 1
     passband_int: bool = False
