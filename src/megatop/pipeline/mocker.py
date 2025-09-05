@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
-from megatop.utils import Timer, function_timer, logger, mask, mock
+from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
 from megatop.utils.TF_utils import get_alms_from_cls, power_law_cl
 
@@ -66,7 +66,9 @@ def get_foregrounds(config: Config) -> NDArray:
     # Generating pysm foreground simulations
     logger.debug(f"Generating pysm sky {config.sky_model}")
     fg_freq_maps = mock.generate_map_fgs_pysm(
-        config.frequencies, config.nside, config.map_sim_pars.sky_model
+        config.map_sets,
+        config.nside,
+        config.map_sim_pars.sky_model,
     )
     logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
     return fg_freq_maps
@@ -281,6 +283,13 @@ def func_signal(
     # incorporate realization id into the seed if CMB is not fixed
     if not config.map_sim_pars.single_cmb:
         config.map_sim_pars.cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
+
+    # construct passbands if necessary
+    config.map_sets = passband.passband_constructor(
+        config, manager, passband_int=config.map_sim_pars.passband_int
+    )
+    if config.map_sim_pars.passband_int:
+        logger.info("Using passband-integration for the mocker step.")
 
     # generate the components
     cmb = get_cmb(manager, config)

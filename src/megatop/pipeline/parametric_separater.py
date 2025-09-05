@@ -10,7 +10,7 @@ from fgbuster.mixingmatrix import MixingMatrix
 from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
-from megatop.utils import Timer, logger, mask
+from megatop.utils import Timer, logger, mask, passband
 from megatop.utils.compsep import set_alm_tozero_below_lmin
 from megatop.utils.mpi import get_world
 
@@ -197,7 +197,16 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
 
     timer = Timer()
     timer.start("do-compsep")
-    instrument = {"frequency": config.frequencies}
+
+    if config.parametric_sep_pars.passband_int:
+        logger.info("Using passband-integration for the component separation step.")
+        config.map_sets = passband.passband_constructor(
+            config, manager, passband_int=config.parametric_sep_pars.passband_int
+        )
+        passbands_norm = passband.fgbuster_passband(config.map_sets)
+        instrument = {"frequency": passbands_norm}
+    else:
+        instrument = {"frequency": config.frequencies}
     if config.parametric_sep_pars.include_synchrotron:
         components = [
             CMB(),
@@ -236,11 +245,23 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     )
 
     A = MixingMatrix(*components)
-    A_ev = A.evaluator(np.array(instrument["frequency"]))
+    if config.parametric_sep_pars.passband_int:
+        config.map_sets = passband.passband_constructor(
+            config, manager, passband_int=config.parametric_sep_pars.passband_int
+        )
+        passbands_norm = passband.fgbuster_passband(config.map_sets)
+        instrument = {"frequency": passbands_norm}
+        A_ev = A.evaluator(instrument["frequency"])
+    else:
+        instrument = {"frequency": config.frequencies}
+        A_ev = A.evaluator(np.array(instrument["frequency"]))
+
     A_maxL = A_ev(res.x)  # pyright: ignore[reportCallIssue]
     res.A_maxL = A_maxL
 
+    # W_maxL = algebra.W(A_maxL, invN=1 / noisecov_QU_masked)
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
+
     res.W_maxL = W_maxL
 
     logger.info(f"Success: {res.success} -> {res.message}")

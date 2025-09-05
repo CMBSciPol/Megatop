@@ -202,7 +202,6 @@ def logL_cosmo(
 
 def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None = None):
     # 1. load parameters and estimated spectra:
-
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
 
@@ -242,6 +241,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     else:
         Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
 
+
     # 2. init mcmc parameters:
     if not dust_marg and not sync_marg:
         param_names = ["r", "A_{lens}"]
@@ -266,6 +266,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         config.cl2r_pars.n_steps,
         config.cl2r_pars.n_steps_burnin,
     )
+
     rng = np.random.default_rng()
     theta_0 = np.array(theta_init_guess) + np.array(theta_offsets) * rng.standard_normal(
         (n_walkers, n_dim)
@@ -296,13 +297,13 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         ),
     )
 
-    logger.info(f"Running burn-in for map {id_sim + 1}...")
+    logger.info(f"Running burn-in for sky sim {id_sim + 1}...")
     with np.errstate(invalid="ignore", divide="ignore"):
         theta_0, _, _ = sampler.run_mcmc(
             theta_0, n_steps_burnin, skip_initial_state_check=True
         )  # progress = True, skip_initial_state_check=True
     sampler.reset()
-    logger.info(f"Running production for map {id_sim + 1}...")
+    logger.info(f"Running production for sky sim {id_sim + 1}...")
     with np.errstate(invalid="ignore", divide="ignore"):
         pos, prob, state = sampler.run_mcmc(
             theta_0, n_steps, skip_initial_state_check=True

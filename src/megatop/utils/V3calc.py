@@ -194,7 +194,6 @@ def so_V3_SA_noise(
     delta_ell=1,
     beam_corrected=False,
     remove_kluge=False,
-    CMBS4="",
 ):
     ## retuns noise curves, including the impact of the beam for the SO small aperature telescopes
     ## noise curves are polarization only
@@ -240,10 +239,9 @@ def so_V3_SA_noise(
     )  ## from ABS, improving possible by scanning faster
     f_knee_pol_SA_225 = np.array([70.0, 35.0, 1.0, 210.0])
     f_knee_pol_SA_280 = np.array([100.0, 40.0, 1.0, 300.0])
-    # alpha_pol =np.array([-2.4,-2.4,-2.5,-3,-3,-3])  ## roughly consistent with Yuji's table, but ectrapolated
     alpha_pol = np.array(
-        [-2.4, -2.4, -2.4, -2.4, -2.4, -2.4]
-    )  ## roughly consistent with Yuji's table, but ectrapolated
+        [-2.4, -2.4, -2.5, -3, -3, -3]
+    )  ## Consistent with Wolz et al. Roughly consistent with Yuji's table, but ectrapolated.
 
     ####################################################################
     ## calculate the survey area and time
@@ -265,150 +263,57 @@ def so_V3_SA_noise(
     ####################################################################
     ###   CALCULATE N(ell) for Temperature
     ## calculate the experimental weight
-    if CMBS4:
-        # noise on I, E and B
-        Map_white_noise_levels = [
-            np.array([8.14, 6.73, 8.52, 10.27, 9.05, 9.31, 9.98, 74.81, 128.29]) / 3
-        ]
-        Map_white_noise_levels.append(
-            np.array([5.52, 4.56, 5.78, 6.96, 6.14, 4.31, 4.61, 35.62, 61.08]) / 3
-        )
-        Map_white_noise_levels.append(
-            np.array([5.07, 4.20, 5.31, 6.40, 5.64, 4.21, 4.51, 34.59, 59.32]) / 3
-        )
-    else:
-        W_T_27 = S_SA_27[sensitivity_mode] / np.sqrt(t)
-        W_T_39 = S_SA_39[sensitivity_mode] / np.sqrt(t)
-        W_T_93 = S_SA_93[sensitivity_mode] / np.sqrt(t)
-        W_T_145 = S_SA_145[sensitivity_mode] / np.sqrt(t)
-        W_T_225 = S_SA_225[sensitivity_mode] / np.sqrt(t)
-        W_T_280 = S_SA_280[sensitivity_mode] / np.sqrt(t)
+    W_T_27 = S_SA_27[sensitivity_mode] / np.sqrt(t)
+    W_T_39 = S_SA_39[sensitivity_mode] / np.sqrt(t)
+    W_T_93 = S_SA_93[sensitivity_mode] / np.sqrt(t)
+    W_T_145 = S_SA_145[sensitivity_mode] / np.sqrt(t)
+    W_T_225 = S_SA_225[sensitivity_mode] / np.sqrt(t)
+    W_T_280 = S_SA_280[sensitivity_mode] / np.sqrt(t)
 
-        ## calculate the map noise level (white) for the survey in uK_arcmin for temperature
-        MN_T_27 = W_T_27 * np.sqrt(A_arcmin)
-        MN_T_39 = W_T_39 * np.sqrt(A_arcmin)
-        MN_T_93 = W_T_93 * np.sqrt(A_arcmin)
-        MN_T_145 = W_T_145 * np.sqrt(A_arcmin)
-        MN_T_225 = W_T_225 * np.sqrt(A_arcmin)
-        MN_T_280 = W_T_280 * np.sqrt(A_arcmin)
-        Map_white_noise_levels = np.sqrt(2) * np.array(
-            [MN_T_27, MN_T_39, MN_T_93, MN_T_145, MN_T_225, MN_T_280]
-        )
-        # print("white noise level: ",Map_white_noise_levels ,"[uK-arcmin]")
+    ## calculate the map noise level (white) for the survey in uK_arcmin for temperature
+    MN_T_27 = W_T_27 * np.sqrt(A_arcmin)
+    MN_T_39 = W_T_39 * np.sqrt(A_arcmin)
+    MN_T_93 = W_T_93 * np.sqrt(A_arcmin)
+    MN_T_145 = W_T_145 * np.sqrt(A_arcmin)
+    MN_T_225 = W_T_225 * np.sqrt(A_arcmin)
+    MN_T_280 = W_T_280 * np.sqrt(A_arcmin)
+    Map_white_noise_levels = np.sqrt(2) * np.array(
+        [MN_T_27, MN_T_39, MN_T_93, MN_T_145, MN_T_225, MN_T_280]
+    )
     ###################################################
     ###   CALCULATE N(ell) for Polarization
     ## calculate the astmospheric contribution for P
-    if CMBS4:
-        print(" CMBS4 configuration !!!! ")
-        f_knee_pol_SA_20 = np.array([500, 200, 200])
-        f_knee_pol_SA_30 = np.array([150, 65, 75])
-        f_knee_pol_SA_40 = np.array([150, 65, 75])
-        f_knee_pol_SA_85 = np.array([150, 65, 75])
-        f_knee_pol_SA_95 = np.array([150, 65, 75])
-        f_knee_pol_SA_145 = np.array([230, 65, 60])
-        f_knee_pol_SA_155 = np.array([230, 65, 60])
-        f_knee_pol_SA_220 = np.array([220, 60, 60])
-        f_knee_pol_SA_270 = np.array([220, 60, 60])
-        fknee_tot = [
-            f_knee_pol_SA_20,
-            f_knee_pol_SA_30,
-            f_knee_pol_SA_40,
-            f_knee_pol_SA_85,
-            f_knee_pol_SA_95,
-            f_knee_pol_SA_145,
-            f_knee_pol_SA_155,
-            f_knee_pol_SA_220,
-            f_knee_pol_SA_270,
-        ]
+    AN_P_27 = (ell / f_knee_pol_SA_27[one_over_f_mode]) ** alpha_pol[0] + 1.0
+    AN_P_39 = (ell / f_knee_pol_SA_39[one_over_f_mode]) ** alpha_pol[1] + 1.0
+    AN_P_93 = (ell / f_knee_pol_SA_93[one_over_f_mode]) ** alpha_pol[2] + 1.0
+    AN_P_145 = (ell / f_knee_pol_SA_145[one_over_f_mode]) ** alpha_pol[3] + 1.0
+    AN_P_225 = (ell / f_knee_pol_SA_225[one_over_f_mode]) ** alpha_pol[4] + 1.0
+    AN_P_280 = (ell / f_knee_pol_SA_280[one_over_f_mode]) ** alpha_pol[5] + 1.0
 
-        alpha_pol_20 = np.array([-4.3, -1.9, -1.5])
-        alpha_pol_30 = np.array([-4.3, -1.9, -1.5])
-        alpha_pol_40 = np.array([-4.3, -1.9, -1.5])
-        alpha_pol_85 = np.array([-4.3, -1.9, -1.5])
-        alpha_pol_95 = np.array([-4.3, -1.9, -1.5])
-        alpha_pol_145 = np.array([-3.8, -3.0, -2.8])
-        alpha_pol_155 = np.array([-3.8, -3.0, -2.8])
-        alpha_pol_220 = np.array([-4.0, -3.1, -2.9])
-        alpha_pol_270 = np.array([-4.0, -1.3, -2.9])
-        alpha_tot = [
-            alpha_pol_20,
-            alpha_pol_30,
-            alpha_pol_40,
-            alpha_pol_85,
-            alpha_pol_95,
-            alpha_pol_145,
-            alpha_pol_155,
-            alpha_pol_220,
-            alpha_pol_270,
-        ]
+    ## calculate N(ell)
+    N_ell_P_27 = (W_T_27 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_27
+    N_ell_P_39 = (W_T_39 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_39
+    N_ell_P_93 = (W_T_93 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_93
+    N_ell_P_145 = (W_T_145 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_145
+    N_ell_P_225 = (W_T_225 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_225
+    N_ell_P_280 = (W_T_280 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_280
 
-        S4_beams = (
-            np.array([11.0, 72.8, 72.8, 25.5, 22.7, 13.0, 13.0])
-            / np.sqrt(8.0 * np.log(2))
-            / 60.0
-            * np.pi
-            / 180.0
-        )
+    ## include the imapct of the beam
+    SA_beams = so_V3_SA_beams() / np.sqrt(8.0 * np.log(2)) / 60.0 * np.pi / 180.0
 
-        N_ell_P_SA = []
-        for f in range(len(alpha_tot)):
-            if one_over_f_mode == 2:
-                NlT = Map_white_noise_levels[0][f] ** 2 * A_SR / A_arcmin * np.ones_like(ell)
-                NlE = Map_white_noise_levels[1][f] ** 2 * A_SR / A_arcmin * np.ones_like(ell)
-            else:
-                NlT = (
-                    Map_white_noise_levels[0][f] ** 2
-                    * A_SR
-                    * ((ell * 1.0 / fknee_tot[f][0]) ** alpha_tot[f][0] + 1.0)
-                    / A_arcmin
-                )
-                NlE = (
-                    Map_white_noise_levels[1][f] ** 2
-                    * A_SR
-                    * ((ell * 1.0 / fknee_tot[f][1]) ** alpha_tot[f][1] + 1.0)
-                    / A_arcmin
-                )
-            NlB = (
-                NlE * 1.0
-            )  # Map_white_noise_levels[2][f]**2 * A_SR * ((ell / fknee_tot[f][2] )**alpha_tot[f][2] + 1.)/A_arcmin
-            if beam_corrected:
-                NlT *= np.exp(ell * (ell + 1) * S4_beams[f] ** 2)
-                NlE *= np.exp(ell * (ell + 1) * S4_beams[f] ** 2)
-                NlB *= np.exp(ell * (ell + 1) * S4_beams[f] ** 2)
-            N_ell_P_SA.append([NlT, NlE, NlB])
-    else:
-        # print('SO configuration ')
-        AN_P_27 = (ell / f_knee_pol_SA_27[one_over_f_mode]) ** alpha_pol[0] + 1.0
-        AN_P_39 = (ell / f_knee_pol_SA_39[one_over_f_mode]) ** alpha_pol[1] + 1.0
-        AN_P_93 = (ell / f_knee_pol_SA_93[one_over_f_mode]) ** alpha_pol[2] + 1.0
-        AN_P_145 = (ell / f_knee_pol_SA_145[one_over_f_mode]) ** alpha_pol[3] + 1.0
-        AN_P_225 = (ell / f_knee_pol_SA_225[one_over_f_mode]) ** alpha_pol[4] + 1.0
-        AN_P_280 = (ell / f_knee_pol_SA_280[one_over_f_mode]) ** alpha_pol[5] + 1.0
+    ## lac beams as a sigma expressed in radians
+    if beam_corrected:
+        N_ell_P_27 *= np.exp(ell * (ell + 1) * SA_beams[0] ** 2)
+        N_ell_P_39 *= np.exp(ell * (ell + 1) * SA_beams[1] ** 2)
+        N_ell_P_93 *= np.exp(ell * (ell + 1) * SA_beams[2] ** 2)
+        N_ell_P_145 *= np.exp(ell * (ell + 1) * SA_beams[3] ** 2)
+        N_ell_P_225 *= np.exp(ell * (ell + 1) * SA_beams[4] ** 2)
+        N_ell_P_280 *= np.exp(ell * (ell + 1) * SA_beams[5] ** 2)
 
-        ## calculate N(ell)
-        N_ell_P_27 = (W_T_27 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_27
-        N_ell_P_39 = (W_T_39 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_39
-        N_ell_P_93 = (W_T_93 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_93
-        N_ell_P_145 = (W_T_145 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_145
-        N_ell_P_225 = (W_T_225 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_225
-        N_ell_P_280 = (W_T_280 * np.sqrt(2)) ** 2.0 * A_SR * AN_P_280
-
-        ## include the imapct of the beam
-        SA_beams = so_V3_SA_beams() / np.sqrt(8.0 * np.log(2)) / 60.0 * np.pi / 180.0
-
-        ## lac beams as a sigma expressed in radians
-        if beam_corrected:
-            N_ell_P_27 *= np.exp(ell * (ell + 1) * SA_beams[0] ** 2)
-            N_ell_P_39 *= np.exp(ell * (ell + 1) * SA_beams[1] ** 2)
-            N_ell_P_93 *= np.exp(ell * (ell + 1) * SA_beams[2] ** 2)
-            N_ell_P_145 *= np.exp(ell * (ell + 1) * SA_beams[3] ** 2)
-            N_ell_P_225 *= np.exp(ell * (ell + 1) * SA_beams[4] ** 2)
-            N_ell_P_280 *= np.exp(ell * (ell + 1) * SA_beams[5] ** 2)
-
-        ## make an array of nosie curves for T
-        N_ell_P_SA = np.array(
-            [N_ell_P_27, N_ell_P_39, N_ell_P_93, N_ell_P_145, N_ell_P_225, N_ell_P_280]
-        )
+    ## make an array of nosie curves for T
+    N_ell_P_SA = np.array(
+        [N_ell_P_27, N_ell_P_39, N_ell_P_93, N_ell_P_145, N_ell_P_225, N_ell_P_280]
+    )
 
     ####################################################################
     return (ell, N_ell_P_SA, Map_white_noise_levels)

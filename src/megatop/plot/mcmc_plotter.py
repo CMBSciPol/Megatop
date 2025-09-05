@@ -103,11 +103,13 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     n_sim_sky = config.map_sim_pars.n_sim
 
     all_samples = []
+
     # colors = (
     #     [plt.cm.plasma(0.5)]
     #     if n_sim_sky == 1
     #     else [plt.cm.plasma(i / (n_sim_sky - 1)) for i in range(n_sim_sky)]
     # )
+
     for id_sim in range(n_sim_sky):
         fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
         mcmc = np.load(fname_chains, allow_pickle=True)
@@ -293,6 +295,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         color="hotpink",
         zorder=2,
     )
+
     ax.plot(
         np.arange(0, 3 * config.nside),
         Cl_BB_prim_est,
