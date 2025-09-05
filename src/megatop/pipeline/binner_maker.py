@@ -1,18 +1,17 @@
-import pymaster as nmt
-import numpy as np
 import argparse
 from pathlib import Path
-import IPython
-from megatop.utils.mpi import get_world
 
-from megatop.utils import logger
+import numpy as np
+
 from megatop import Config, DataManager
+from megatop.utils import logger
 from megatop.utils.binning import (
     create_binning,
 )
+from megatop.utils.mpi import get_world
 
 
-def binning_maker(manager: DataManager, config: Config):    
+def binning_maker(manager: DataManager, config: Config):
     bin_low, bin_high, bin_centre = create_binning(
         config.nside, config.map2cl_pars.delta_ell, end_first_bin=config.lmin
     )
@@ -30,6 +29,7 @@ def binning_maker(manager: DataManager, config: Config):
     )
     logger.info(f"Saving binning to {path}")
 
+
 def main():
     parser = argparse.ArgumentParser(description="Cl to r estmation")
     parser.add_argument("--config", type=Path, required=True, help="config file")
@@ -37,7 +37,7 @@ def main():
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
-    
+
     world, rank, size = get_world()
     print(f"Rank {rank} of {size} is running")
     if rank == 0:
