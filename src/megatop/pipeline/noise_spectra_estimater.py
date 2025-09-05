@@ -18,7 +18,6 @@ from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
     get_effective_transfer_function,
-    # initialize_nmt_workspace,
     limit_namaster_output,
 )
 from megatop.utils.utils import MemoryUsage
@@ -79,17 +78,6 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             n_iter=config.map2cl_pars.n_iter_namaster,
         )
         workspaceff = nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
-    # with Timer("init-namaster-workspace"):
-    #     workspaceff = initialize_nmt_workspace(
-    #         nmt_bins,
-    #         manager.path_to_lensed_scalar,
-    #         config.nside,
-    #         mask_analysis,
-    #         effective_beam_CMB[:-1],
-    #         config.map2cl_pars.purify_e,
-    #         config.map2cl_pars.purify_b,
-    #         config.map2cl_pars.n_iter_namaster,
-    #     )
 
     sum_noise_spectra = {}
 
