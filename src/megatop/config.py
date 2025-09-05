@@ -246,7 +246,7 @@ class CompSepConfig:
 @define
 class Map2ClConfig:
     delta_ell: int | list[int] = 10
-    purify_e: bool = False
+    purify_e: bool = field(default=False)
     purify_b: bool = True
     n_iter_namaster: int = 3
 
