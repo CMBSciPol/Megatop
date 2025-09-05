@@ -22,6 +22,7 @@ def common_beam_and_nside(
     DEBUGtruncatealms: bool = False,
     DEBUGlm_range: tuple[int, int] | None = None,
 ):
+    # TODO: remove DEBUGtruncatealms and DEBUGlm_range after testing
     nside_input_maps = [hp.npix2nside(freq_maps[i].shape[-1]) for i in range(len(frequency_beams))]
     idx_nside_small = np.argwhere(np.array(nside_input_maps) < nside)
     if idx_nside_small.size > 0:
