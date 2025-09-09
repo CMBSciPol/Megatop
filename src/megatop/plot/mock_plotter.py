@@ -7,7 +7,7 @@ import numpy as np
 
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
-from megatop.utils import Timer, logger, mock
+from megatop.utils import Timer, logger, mock, passband
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
 from megatop.utils.preproc import read_input_maps
@@ -57,8 +57,15 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
+    # construct passbands if necessary
+    config.map_sets = passband.passband_constructor(
+        config, manager, passband_int=config.map_sim_pars.passband_int
+    )
+    if config.map_sim_pars.passband_int:
+        logger.info("Using passband-integration for the mocker step.")
+
     fg_freq_maps = mock.generate_map_fgs_pysm(
-        config.frequencies, config.nside, config.map_sim_pars.sky_model
+        config.map_sets, config.nside, config.map_sim_pars.sky_model
     )
     fg_freq_maps_beamed = np.zeros_like(fg_freq_maps)
 
