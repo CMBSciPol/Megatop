@@ -115,57 +115,56 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
     with Timer("load-obsmat"):
-        obsmat_cg_fname = manager.get_path_to_obsmat_cg()
+        obsmat_operator_fname = manager.get_path_list_or_None('suffix_obsmat_scipy')
 
-        if np.all(np.array(obsmat_cg_fname) == Path()):
+        if np.all(np.array(obsmat_operator_fname) == Path()):
             # TODO: how to handle this case?
             logger.warning(
-                "No observation matrix file provided for CG. Using identity matrix instead."
+                "No observation matrix file provided. Using identity matrix instead."
             )
-            obsmat_operator_cg = None
-        elif np.any(np.array(obsmat_cg_fname) == Path()):
+            obsmat_operator_rhs = None
+        elif np.any(np.array(obsmat_operator_fname) == Path()):
             msg_any_obs = "Not all observation matrix files are provided. Provide either all or none, partial set of observation matrices is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
             raise ValueError(msg_any_obs)
         else:
-            logger.debug(f"Loading observation matrix from {obsmat_cg_fname}")
-            obsmat_operator_cg = mb.io.load_all_obsmat(
-                obsmat_cg_fname,
-                size_obsmat=int(binary_mask.sum()),
+            logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
+            npix = binary_mask.size
+            indices_mask = np.arange(npix)[hp.reorder(binary_mask, r2n=True) != 0]
+            mask_stacked_nest = np.hstack((indices_mask + npix, indices_mask + 2*npix))
+            obsmat_operator_rhs = mb.io.build_obsmat_operator_from_flattened_matrices(
+                mb.io.load_all_obsmat(
+                    obsmat_operator_fname,
+                    size_obsmat=3*npix,
+                    kind="precomputations_scipy",
+                    mask_stacked=mask_stacked_nest,
+                ),
                 nstokes=2,
-                kind="precomputations_indices",
-                mask_stacked=None,
+                return_transpose=True,
             )
-
-        path_rhs_obsmat = manager.get_path_to_obsmat_rhs()
-        if np.all(np.array(path_rhs_obsmat) == Path()):
+            
+        path_eigen_decomp_fname = manager.get_path_list_or_None('suffix_eigen_decomp')
+        if np.all(np.array(path_eigen_decomp_fname) == Path()):
             # TODO: how to handle this case?
             logger.warning(
-                f"RHS observation matrix file {path_rhs_obsmat} does not exist. Using identity matrix instead."
+                "No eigen decomposition file provided for CG. Using identity matrix instead."
             )
-            obsmat_operator_rhs = None
-        elif np.any(np.array(path_rhs_obsmat) == Path()):
-            msg_any_rhs = "Not all path_rhs_obsmat files are provided. Provide either all or none, partial set of path_rhs_obsmat is not supported."
-            raise ValueError(msg_any_rhs)
+            central_freq_op = None
+            matrix_precond = None
+        elif np.any(np.array(path_eigen_decomp_fname) == Path()):
+            msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
+            raise ValueError(msg_any_obs)
         else:
-            logger.debug(f"Loading full-sky transpose observation matrix from {path_rhs_obsmat}")
-            obsmat_operator_rhs = mb.io.load_all_obsmat(
-                path_rhs_obsmat,
-                size_obsmat=int(binary_mask.sum()),
-                nstokes=2,
-                kind="precomputations_indices",
-                mask_stacked=None,
-                return_transpose=config.parametric_sep_pars.return_transpose_rhs,
+            logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
+            central_freq_op = mb.tools.get_dense_furax_operator_from_freq_array(
+                mb.io.load_matrix_precond(
+                    path_eigen_decomp_fname,
+                    power_diagonal=1
+                )
             )
-
-        path_diag_obsmat = manager.get_path_to_diag_obsmat()
-        if not Path(path_diag_obsmat).exists():
-            logger.warning(
-                f"Diagonal observation matrix file {path_diag_obsmat} does not exist. Using identity matrix instead."
+            matrix_precond = mb.io.load_matrix_precond(
+                path_eigen_decomp_fname,
+                power_diagonal=-1
             )
-            diag_obsmat_matrices = None
-        else:
-            logger.debug(f"Loading diagonal observation matrices from {path_diag_obsmat}")
-            diag_obsmat_matrices = np.load(path_diag_obsmat)
 
     timer = Timer()
     timer.start("do-compsep")
@@ -189,6 +188,8 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
     options = config.parametric_sep_pars.get_minimize_options_as_dict()
     tol = config.parametric_sep_pars.minimize_tol
     method = config.parametric_sep_pars.minimize_method
+    
+    megabuster_options = config.parametric_sep_pars.get_megabuster_options_as_dict()
 
     # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
@@ -210,12 +211,22 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
         sky_map=freq_maps_preprocessed_QU_masked,
         frequencies=np.array(config.frequencies),
         invN_matrix=inverse_noisecov_QU_masked,
+        do_minimization=True,
         binary_mask=binary_mask,
-        obs_mat_operator=obsmat_operator_cg,
+        obs_mat_operator=None,
         obsmat_operator_rhs=obsmat_operator_rhs,
-        diag_obsmat_matrices=diag_obsmat_matrices,
-        max_iter=max_iter,
-        tol=tol,
+        use_preconditioner_diag=megabuster_options['use_preconditioner_diag'],
+        use_preconditioner_pinv=megabuster_options['use_preconditioner_pinv'],
+        central_freq_op=central_freq_op,
+        matrix_precond=matrix_precond,
+        dictionary_parameters_minimization={
+            'max_iter':max_iter, 
+            'tol':tol
+        },
+        dictionary_parameters_CG={
+            'max_steps_CG':megabuster_options['max_steps_CG'], 
+            'tol_CG':megabuster_options['tol_CG']
+        },
         ordering_parameter=["beta_dust", "beta_pl"],
         ordering_component=components,
     )

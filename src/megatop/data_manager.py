@@ -163,32 +163,54 @@ class DataManager:
         """Get the list of filenames for the observation matrices."""
         names = [map_set.obsmat_path for map_set in self._config.map_sets]
         return [name.with_suffix(".npz") for name in names]
-    
-    def get_path_to_obsmat_cg(self) -> Path | None:
-        """Get the path to the precomputed observation matrix which will be used for the conjugate gradient computation.
 
-        If the suffix `suffix_cg_obsmat` is not set, returns None.
+    def get_path_list_or_None(self, attribute: str) -> list[Path] | None:
+        """Get the list of paths for a given attribute of the map sets, or None if any of them is not set.
+
+        Parameters
+        ----------
+        attribute : str
+            The attribute of the map sets to get the paths for. Must be one of 'suffix_obsmat_scipy', 'suffix_eigen_decomp'.
+
+        Returns
+        -------
+        list[Path] | None
+            The list of paths for the given attribute, or None if any of them is not set.
         """
-        names = [Path(str(map_set.obsmat_path) + map_set.suffix_cg_obsmat) if map_set.suffix_cg_obsmat is not None else None for map_set in self._config.map_sets]
+        valid_attributes = [
+            'suffix_obsmat_scipy',
+            'suffix_eigen_decomp',
+        ]
+        if attribute not in valid_attributes:
+            raise ValueError(f"Invalid attribute '{attribute}'. Must be one of {valid_attributes}.")
+        names = [Path(str(map_set.obsmat_path).replace('.npz','') + getattr(map_set, attribute)) if getattr(map_set, attribute) != '' else None for map_set in self._config.map_sets]
         if None in names:
-            logger.warning(f"Not all suffix for cg obsmat were set, returning None for cg obsmat path (the cg obsmat will be Identity).")
+            logger.warning(f"Not all {attribute} were set, returning None for {attribute} paths.")
             return None
         return names
 
-    def get_path_to_obsmat_rhs(self) -> Path | None:
-        """Get the path to the precomputed observation matrix which will be used for the right-hand side computation.
 
-        If the suffix `suffix_rhs_obsmat` is not set, returns None.
+    def get_path_to_matrix_precond_diag(self) -> Path:
+        """Get the path to the diagonal preconditioner."""
+        return (self.path_to_output / self._config.output_dirs.prepoc_diag_precond).with_suffix(".npy")
+
+    def get_path_to_matrix_precond_list(self) -> Path:
+        """Get the path to the list of frequency preconditioners."""
+        return self.get_path_list_or_None('suffix_eigen_decomp')
+
+    def get_path_to_matrix_precond(self) -> Path | list[Path] | None:
+        """Get the path to the preconditioner matrix.
+
+        If `use_preconditioner_diag` is True, returns the path to the diagonal preconditioner.
+        If `use_preconditioner_pinv` is True, returns the list of paths to the frequency preconditioners.
+        If neither is True, returns None.
         """
-        names = [Path(str(map_set.obsmat_path) + map_set.suffix_rhs_obsmat) if map_set.suffix_rhs_obsmat is not None else None for map_set in self._config.map_sets]
-        if None in names:
-            logger.warning(f"Not all suffix for rhs obsmat were set, returning None for rhs obsmat path (the rhs obsmat will be Identity).")
-            return None
-        return names
+        if self._config.compsep_pars.use_preconditioner_diag:
+            return self.get_path_to_matrix_precond_diag()
+        if self._config.compsep_pars.use_preconditioner_pinv:
+            return self.get_path_to_matrix_precond_list()
+        return None
 
-    def get_path_to_diag_obsmat(self) -> Path:
-        """Get the path to the diagonal observation matrix."""
-        return (self.path_to_output / self._config.output_dirs.prepoc_diag_obsmat).with_suffix(".npy")
 
     def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
         """Get the list of filenames for the noise maps.

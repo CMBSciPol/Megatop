@@ -100,7 +100,7 @@ class OutputDirsConfig:
     root: Path = field(converter=Path)
     masks: str = "masks"
     preproc: str = "preproc"
-    prepoc_diag_obsmat: str = "diag_obsmat"
+    prepoc_diag_precond: str = "diag_precond" #Modification megabuster
     covar: str = "covar"
     plots: str = "plots"
     components: str = "components"
@@ -124,8 +124,8 @@ class MapSetConfig:
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     obsmat_path: Path = field(converter=Path, default=".")
-    suffix_cg_obsmat: str = ""
-    suffix_rhs_obsmat: str = ""
+    suffix_obsmat_scipy: str = "" #Modification megabuster
+    suffix_eigen_decomp: str = "" #Modification megabuster
     passband_filename: str = ""
 
     def __attrs_post_init__(self) -> None:
@@ -205,6 +205,13 @@ class _MinimizeOptions:
     maxiter: int = 100
     ftol: float = 1e-12
 
+@define
+class _MEGABUSTEROptions: #Modification megabuster
+    max_steps_CG: int = 200
+    tol_CG: float = 1e-6
+    use_preconditioner_diag: bool = True
+    use_preconditioner_pinv: bool = False
+    
 
 @define
 class CompSepConfig:
@@ -213,8 +220,8 @@ class CompSepConfig:
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
     passband_int: bool = False
-    return_transpose_rhs: bool = False
-    use_megabuster: bool = False
+    use_megabuster: bool = False #Modification megabuster
+    megabuster_options: _MEGABUSTEROptions = Factory(_MEGABUSTEROptions) #Modification megabuster
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
         """Return the minimize options as a dictionary.
@@ -226,6 +233,10 @@ class CompSepConfig:
             options["maxfun"] = options.pop("maxiter")
         return options
 
+    def get_megabuster_options_as_dict(self) -> dict[str, Any]:
+        """Return the megabuster options as a dictionary.
+        """
+        return asdict(self.megabuster_options)
 
 @define
 class Map2ClConfig:
