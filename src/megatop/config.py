@@ -170,8 +170,8 @@ class MasksConfig:
     mock_nsources: int = 100
     mock_sources_hole_radius: float = 4
 
-    DEBUG_output_apod_binary_mask: bool = False
-    DEBUGapod_binary_mask_name: str = "apod_binary_mask"
+    # DEBUG_output_apod_binary_mask: bool = False
+    # DEBUGapod_binary_mask_name: str = "apod_binary_mask"
 
     @gal_key.validator  # pyright: ignore[reportOptionalMemberAccess]
     def _check_gal_key(self, attribute, value):

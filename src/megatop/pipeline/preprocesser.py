@@ -61,9 +61,9 @@ def preprocess_map(
         )
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
-        if config.masks_pars.DEBUG_output_apod_binary_mask:
-            logger.warning("DEBUG: Using apodized binary mask for harmonic component separation, ")
-            analysis_mask = hp.read_map(manager.path_to_apod_binary_mask)
+        # if config.masks_pars.DEBUG_output_apod_binary_mask:
+        #     logger.warning("DEBUG: Using apodized binary mask for harmonic component separation, ")
+        #     analysis_mask = hp.read_map(manager.path_to_apod_binary_mask)
 
         logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
         # TODO: remove after merge

@@ -49,11 +49,11 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
 
-        if config.masks_pars.DEBUG_output_apod_binary_mask:
-            logger.warning(
-                "DEBUG: Using apodized binary mask for harmonic component separation (PIXEL NOISE COV step) "
-            )
-            mask_analysis = hp.read_map(manager.path_to_apod_binary_mask)
+        # if config.masks_pars.DEBUG_output_apod_binary_mask:
+        #     logger.warning(
+        #         "DEBUG: Using apodized binary mask for harmonic component separation (PIXEL NOISE COV step) "
+        #     )
+        #     mask_analysis = hp.read_map(manager.path_to_apod_binary_mask)
         logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
         # TODO: remove after merge
         mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
