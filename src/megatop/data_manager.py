@@ -214,7 +214,7 @@ class DataManager:
         names = [dest / map_set.noise_map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
-    def get_maps_simforTF_filenames(self, sub: int | None = None) -> list[Path]:
+    def get_maps_sim_for_TF_filenames(self, sub: int | None = None) -> list[Path]:
         """Get the list of filenames for the maps used for TF estimation.
 
         Different realizations (identified by an index) are put in separate subdirectories.

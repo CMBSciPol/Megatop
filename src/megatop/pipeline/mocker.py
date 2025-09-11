@@ -109,8 +109,8 @@ def save_simu(
         )
 
 
-@function_timer("save-TFsimu")
-def save_TFsimu(
+@function_timer("save-TFsims")
+def save_TFsims(
     manager: DataManager,
     unfiltered_maps_TEB: NDArray,
     filtered_maps_TEB: NDArray,
@@ -118,7 +118,7 @@ def save_TFsimu(
 ) -> None:
     """Save an unfiltered and filtered TF realization."""
     # get appropriate filenames based on type
-    filenames_unfiltered, filenames_filtered = manager.get_maps_simforTF_filenames(sub=id_sim)
+    filenames_unfiltered, filenames_filtered = manager.get_maps_sim_for_TF_filenames(sub=id_sim)
 
     # save the maps
     for f in range(len(filenames_unfiltered)):  # loop over frequencies
@@ -256,7 +256,7 @@ def func_TF_sims(
     _ = mask.apply_binary_mask(filtered_freq_map_pure_B, binary_mask, unseen=False)
 
     # save results
-    save_TFsimu(
+    save_TFsims(
         manager,
         np.array(
             [unfiltered_freq_map_pure_T, unfiltered_freq_map_pure_E, unfiltered_freq_map_pure_B]
