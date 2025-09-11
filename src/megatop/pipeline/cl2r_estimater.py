@@ -207,7 +207,13 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     sync_marg = config.cl2r_pars.sync_marg
 
     nhits_map = hp.read_map(manager.path_to_nhits_map)
+    nhits_map /= np.max(nhits_map)
     fsky_obs = np.mean(nhits_map)
+    # import IPython; IPython.embed()
+    # analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+    # analysis_mask = analysis_mask / np.max(analysis_mask)
+    # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
+    # fsky_obs = np.sqrt(mean_fsky)
 
     Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "CMBxCMB"
