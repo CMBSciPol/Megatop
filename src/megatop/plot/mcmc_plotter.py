@@ -299,7 +299,9 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     ax.plot(
         np.arange(0, 3 * config.nside),
         Cl_BB_prim_est,
-        label=r"$C_\ell^{prim, \rm est} = r^{\rm est} \cdot C_\ell^{\rm prim}(r=1)$ ",
+        label=r"$C_\ell^{prim, \rm est} = r^{\rm est} \cdot C_\ell^{\rm prim}(r=1)$ "
+        + r",  $r^{\rm est} = $"
+        f"{r_est:.3f}",
         color="darkcyan",
         linestyle="-",
         lw="0.75",
@@ -308,7 +310,9 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     ax.plot(
         np.arange(0, 3 * config.nside),
         Cl_BB_lensing_est,
-        label=r"$C_\ell^{lensing, \rm est} = A_{\rm lens}^{\rm est} \cdot C_\ell^{\rm prim}(r=0)$",
+        label=r"$C_\ell^{lensing, \rm est} = A_{\rm lens}^{\rm est} \cdot C_\ell^{\rm prim}(r=0)$"
+        + r",  $A_{\rm lens}^{\rm est} = $"
+        f"{A_lens_est:.3f}",
         color="seagreen",
         linestyle="-",
         lw="0.75",
@@ -346,7 +350,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     for l_bin in ls_bins_lminlmax_centre:
         ax.axvline(l_bin, color="gray", linestyle="--", linewidth=0.5, alpha=0.5)
 
-    ax.set_xscale("log")
+    # ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel(r"$\ell$", fontsize=14)
     ax.set_ylabel(r"$C_\ell^{BB} (\mu{\rm K}^2)$", fontsize=14)
