@@ -1,12 +1,21 @@
 import healpy as hp
 import numpy as np
 import pymaster as nmt
+from numpy.typing import NDArray
 
 from megatop import Config
+from megatop.utils import logger
 
 
 def compute_auto_cross_cl_from_maps_list(
-    maps_dict, mask, beam, workspace, purify_e=False, purify_b=True, n_iter=3
+    maps_dict,
+    mask,
+    beam,
+    workspace,
+    purify_e=True,
+    purify_b=True,
+    n_iter=3,
+    inverse_effective_transfer_function=None,
 ):
     # Create the fields
     fields = []
@@ -19,19 +28,39 @@ def compute_auto_cross_cl_from_maps_list(
 
     # Compute the power spectra
     cl_list = []
+    cl_matrix = None
     for i, f_a in enumerate(fields):
         for j, f_b in enumerate(fields):
             if i <= j:
                 cl_coupled = nmt.compute_coupled_cell(f_a, f_b)
                 cl_decoupled = workspace.decouple_cell(cl_coupled)
                 cl_list.append(cl_decoupled)
+                if cl_matrix is None:
+                    cl_matrix = np.zeros(
+                        (len(fields), len(fields), cl_decoupled.shape[0], cl_decoupled.shape[-1])
+                    )
+                if inverse_effective_transfer_function is not None:
+                    cl_matrix[i, j] = cl_decoupled
+                    if i != j:
+                        cl_matrix[j, i] = cl_decoupled
 
-    # Store in dictionary with key x key
     cl_dict = {}
-    for i, key in enumerate(maps_dict.keys()):
-        for j, key2 in enumerate(maps_dict.keys()):
-            if i <= j:
-                cl_dict[key + "x" + key2] = cl_list.pop(0)
+    if inverse_effective_transfer_function is None:
+        # Store in dictionary with key x key
+        for i, key in enumerate(maps_dict.keys()):
+            for j, key2 in enumerate(maps_dict.keys()):
+                if i <= j:
+                    cl_dict[key + "x" + key2] = cl_list.pop(0)
+
+    else:
+        logger.info("Applying effective transfer function to the spectra")
+        tf_corrected_cl_matrix = np.einsum(
+            "ckijl,ckjl->ckil", inverse_effective_transfer_function, cl_matrix
+        )
+        for i, key in enumerate(maps_dict.keys()):
+            for j, key2 in enumerate(maps_dict.keys()):
+                if i <= j:
+                    cl_dict[key + "x" + key2] = tf_corrected_cl_matrix[i, j]
 
     return cl_dict
 
@@ -120,17 +149,156 @@ def limit_namaster_output(all_Cls, bin_index_lminlmax):
     return all_Cls_limited
 
 
-def create_binning(nside, delta_ell, end_first_bin=None):
-    """ """
-    if end_first_bin is not None:
-        bin_low = np.arange(end_first_bin, 3 * nside, delta_ell)
-        bin_high = bin_low + delta_ell - 1
-        bin_low = np.concatenate(([0], bin_low))
-        bin_high = np.concatenate(([end_first_bin - 1], bin_high))
-    else:
-        bin_low = np.arange(0, 3 * nside, delta_ell)
-        bin_high = bin_low + delta_ell - 1
-    bin_high[-1] = 3 * nside - 1
-    bin_center = (bin_low + bin_high) / 2
+def spectra_from_namaster(
+    freq_noise_maps,
+    mask_analysis,
+    workspaceff,
+    nmt_bins,
+    compute_cross_freq=False,
+    purify_e=False,
+    purify_b=False,
+    beam=None,
+    return_all_spectra=False,
+):
+    """
+    Computes the auto and cross-spectra from the frequency noise maps using NaMaster.
+    Parameters
+    ----------
+    freq_noise_maps : np.ndarray
+        Frequency noise maps, shape (n_freq, 3, n_pix).
+        where 3 refers to the T, Q, U components.
+    mask_analysis : np.ndarray
+        Analysis mask, shape (n_pix,).
+    workspaceff : nmt.NmtWorkspace
+        NaMaster workspace for decoupling the spectra.
+    nmt_bins : nmt.NmtBin
+        NaMaster binning object for the spectra.
+    compute_cross_freq : bool, optional
+        Whether to compute cross-frequency spectra. Default is False.
+    purify_e : bool, optional
+        Whether to purify E-mode polarization. Default is False.
+    purify_b : bool, optional
+        Whether to purify B-mode polarization. Default is False.
+    beam : np.ndarray, optional
+        Beam correction factors, shape (n_freq, n_bins). If None, no beam correction is applied.
+        Default is None.
+    Returns
+    -------
+    cl_decoupled_freq : np.ndarray
+        Decoupled power spectra for each frequency, shape (n_freq, n_bins, 3).
+        Where 3 refers to the T, E, B components. And T is set to zero.
+    unbin_cl_decoupled_freq : np.ndarray
+        Unbinned decoupled power spectra for each frequency, shape (n_freq, n_bins, 3).
+        Where 3 refers to the T, E, B components. And T is set to zero.
 
-    return bin_low, bin_high, bin_center
+    Notes
+    -----
+    - The function computes the auto-spectra for each frequency noise map.
+    - The T component is set to zero in the output spectra.
+    - The EB cross-spectra are ignored in the output.
+    """
+
+    if compute_cross_freq:
+        msg = "Cross-frequency spectra computation is not implemented yet"
+        raise NotImplementedError(msg)
+
+    if beam is not None and beam.shape[0] != freq_noise_maps.shape[0]:
+        msg = f"Beam shape {beam.shape} does not match frequency noise maps shape {freq_noise_maps.shape}"
+        raise ValueError(msg)
+
+    # reset_workspace = True if workspaceff is None else False
+    reset_workspace = (
+        workspaceff is None
+    )  # returns bool depending on whether workspaceff is None or not
+
+    cl_decoupled_freq = []
+    unbin_cl_decoupled_freq = []
+    for f in range(freq_noise_maps.shape[0]):
+        beam_f = beam[f] if beam is not None else None
+
+        fields = nmt.NmtField(
+            mask_analysis,
+            freq_noise_maps[f, 1:],
+            beam=beam_f,
+            purify_e=purify_e,
+            purify_b=purify_b,
+            n_iter=10,
+        )
+        if reset_workspace:
+            workspaceff = nmt.NmtWorkspace.from_fields(fields, fields, nmt_bins)
+
+        cl_coupled = nmt.compute_coupled_cell(fields, fields)
+        cl_decoupled = workspaceff.decouple_cell(cl_coupled)
+        unbin_cl_decoupled = nmt_bins.unbin_cell(cl_decoupled)
+
+        if return_all_spectra:
+            # Append the full decoupled and unbinned spectra
+            cl_decoupled_freq.append(cl_decoupled)
+            unbin_cl_decoupled_freq.append(unbin_cl_decoupled)
+        else:
+            # Keeping only the TT, EE, BB components, setting T to zero
+            # Warning: we are ignoring the EB cross-spectra here
+            cl_decoupled_freq.append([cl_decoupled[0] * 0, cl_decoupled[0], cl_decoupled[3]])
+            unbin_cl_decoupled_freq.append(
+                [unbin_cl_decoupled[0] * 0, unbin_cl_decoupled[0], unbin_cl_decoupled[3]]
+            )
+
+    return np.array(cl_decoupled_freq), np.array(unbin_cl_decoupled_freq)
+
+
+def get_effective_transfer_function(
+    transfer_freq: NDArray, W_maxL: NDArray, binary_mask: NDArray | None = None
+) -> NDArray:
+    """
+    Computes the effective transfer function from the transfer functions at each frequency and
+    the maximum likelihood results for the component separation operator
+    Parameters
+    ----------
+    transfer_freq : np.ndarray
+        Frequency transfer functions, shape (n_freq, 9 , 9, n_bins). Where 9 refers to the T, E, B, and their cross-spectra (xy->wz).
+    W_maxL : np.ndarray
+        Component separation operator, shape (ncomp, nfreq, n_stokes, n_pix).
+    binary_mask : np.ndarray, optional
+        Binary mask, shape (n_pix,). If provided, the effective transfer function is computed
+        only over the observed pixels. Default is None, which means the effective transfer function is computed
+        over all pixels.
+    Returns
+    -------
+    effective_transfer_function : np.ndarray
+        Effective transfer function, shape (ncomp, ncomp, pol_spectra, pol_spectra ,nbin). pol_spectra refers EE, EB, BE, BB
+    """
+
+    #  Averaging W over observed pixels and stokes parameters:
+    if binary_mask is None:
+        pix_stokes_mean_W = np.mean(W_maxL, axis=(-2, -1))  # shape (ncomp, nfreq)
+    else:
+        pix_stokes_mean_W = np.mean(W_maxL[..., binary_mask], axis=(-2, -1))  # shape (ncomp, nfreq)
+
+    pol_transfer = transfer_freq[:, -4:, -4:]  # Keeping only polarised components (EE, EB, BE, BB)
+    # applying comp-sep operator on both sides of the transfer function
+    normalisation_factor = np.einsum(
+        "cf, fk -> ck", pix_stokes_mean_W, pix_stokes_mean_W.T
+    )  # shape (ncomp, pol_spectra, n_bins)
+
+    effective_transfer_function = np.einsum(
+        "cf,fsdl,fk->cksdl", pix_stokes_mean_W, pol_transfer, pix_stokes_mean_W.T
+    )  # shape (ncomp, pol_spectra, n_bins)
+
+    # applying normalisation_factor to each comp x comp in effective_transfer_function
+    # to get the effective transfer function
+    normalized_effective_transfer_function = (
+        effective_transfer_function
+        / normalisation_factor[(...,) + (np.newaxis,) * (effective_transfer_function.ndim - 2)]
+    )
+
+    # inverting over polarised spectra space:
+    inverse_effective_transfer_function = np.zeros_like(normalized_effective_transfer_function)
+    for i in range(normalized_effective_transfer_function.shape[0]):
+        for j in range(normalized_effective_transfer_function.shape[1]):
+            for ell in range(normalized_effective_transfer_function.shape[-1]):
+                # Inverting the transfer function for each ell over the spectra dimension
+                inverse_effective_transfer_function[i, j, :, :, ell] = np.linalg.inv(
+                    normalized_effective_transfer_function[i, j, :, :, ell]
+                )
+
+    return normalized_effective_transfer_function, inverse_effective_transfer_function

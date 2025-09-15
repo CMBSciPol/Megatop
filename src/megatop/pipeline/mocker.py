@@ -12,6 +12,7 @@ from megatop import Config, DataManager
 from megatop.config import NoiseOption
 from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
+from megatop.utils.TF_utils import get_alms_from_cls, power_law_cl
 
 _POOL_EXECUTOR_THRESHOLD = 2
 
@@ -108,6 +109,38 @@ def save_simu(
         )
 
 
+@function_timer("save-TFsims")
+def save_TFsims(
+    manager: DataManager,
+    unfiltered_maps_TEB: NDArray,
+    filtered_maps_TEB: NDArray,
+    id_sim: int | None = None,
+) -> None:
+    """Save an unfiltered and filtered TF realization."""
+    # get appropriate filenames based on type
+    filenames_unfiltered, filenames_filtered = manager.get_maps_sim_for_TF_filenames(sub=id_sim)
+
+    # save the maps
+    for f in range(len(filenames_unfiltered)):  # loop over frequencies
+        for j, s in enumerate(["T", "E", "B"]):  # loop over pure T, E, B
+            msg = f"Saving unfiltered TF pure_{s} simulation"
+            logger.info(f"{msg} to {filenames_unfiltered[f][j]}")
+            hp.write_map(
+                filenames_unfiltered[f][j],
+                unfiltered_maps_TEB[j, f],
+                dtype=["float64", "float64", "float64"],
+                overwrite=True,
+            )
+            msg = f"Saving filtered TF pure_{s} simulation"
+            logger.info(f"{msg} to {filenames_filtered[f][j]}")
+            hp.write_map(
+                filenames_filtered[f][j],
+                filtered_maps_TEB[j, f],
+                dtype=["float64", "float64", "float64"],
+                overwrite=True,
+            )
+
+
 def _map(func, iterable, comm: Comm, force_seq: bool = False):
     """Map function over iterable, using MPICommExecutor if available.
 
@@ -132,6 +165,107 @@ def _map(func, iterable, comm: Comm, force_seq: bool = False):
             logger.info(f"Distributing work to {executor.num_workers} processes")  # pyright: ignore[reportAttributeAccessIssue]
             for result in executor.map(func, iterable, unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
                 yield result
+
+
+# needs to be defined at the top level for pickling
+def func_TF_sims(
+    id_sim: int,
+    manager: DataManager,
+    config: Config,
+    binary_mask: NDArray,
+    *,
+    obsmat_funcs: dict | None = None,
+) -> int:
+    """Generate pure E and pure B map with power law spectra for Transfer Function Computation."""
+
+    # incorporate realization id into the seed if CMB is not fixed
+    if not config.map_sim_pars.single_cmb:
+        config.map_sim_pars.cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
+
+    # Getting power law spectra
+    logger.debug("Generating power law spectra for TF simulations")
+    ell = np.arange(3 * config.nside + 500)
+    pl_spectra = power_law_cl(
+        ell,
+        config.map_sim_pars.TF_power_law_amp,
+        config.map_sim_pars.TF_power_law_delta_ell,
+        config.map_sim_pars.TF_power_law_index,
+    )
+    pl_spectra_new_orderhp = np.array(
+        [
+            pl_spectra["TT"],
+            pl_spectra["EE"],
+            pl_spectra["BB"],
+            pl_spectra["TE"],
+            pl_spectra["EB"],
+            pl_spectra["TB"],
+        ]
+    )
+
+    # Generating alms from power law spectra
+    alms_TEB = get_alms_from_cls(
+        pl_spectra_new_orderhp, 3 * config.nside, seed=config.map_sim_pars.cmb_seed
+    )
+
+    logger.info(
+        f"Sum of difference between TT and EE alms / len(alms): {np.sum(alms_TEB[0] - alms_TEB[1]) / len(alms_TEB[0])}"
+    )
+    logger.info(f"alms T = {alms_TEB[0]}")
+    logger.info(f"alms E = {alms_TEB[1]}")
+    logger.info(f"alms B = {alms_TEB[2]}")
+
+    # Generating pure T, E and B maps from alms:
+    map_pure_T = hp.alm2map(alms_TEB * np.array([1, 0, 0])[:, None], nside=config.nside)
+    map_pure_E = hp.alm2map(alms_TEB * np.array([0, 1, 0])[:, None], nside=config.nside)
+    map_pure_B = hp.alm2map(alms_TEB * np.array([0, 0, 1])[:, None], nside=config.nside)
+
+    unfiltered_freq_map_pure_T = np.array([map_pure_T] * len(config.frequencies))
+    unfiltered_freq_map_pure_E = np.array([map_pure_E] * len(config.frequencies))
+    unfiltered_freq_map_pure_B = np.array([map_pure_B] * len(config.frequencies))
+
+    # apply filtering
+    if obsmat_funcs is not None:
+        with Timer("filter-pure-T-E-B-maps"):
+            filtered_freq_map_pure_T = unfiltered_freq_map_pure_T.copy()
+            filtered_freq_map_pure_E = unfiltered_freq_map_pure_E.copy()
+            filtered_freq_map_pure_B = unfiltered_freq_map_pure_B.copy()
+
+            for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+                logger.debug(f"Filtering {key} channel")
+                filtered_freq_map_pure_T[i_f] = mock.apply_observation_matrix(
+                    func, filtered_freq_map_pure_T[i_f]
+                )
+                filtered_freq_map_pure_E[i_f] = mock.apply_observation_matrix(
+                    func, filtered_freq_map_pure_E[i_f]
+                )
+                filtered_freq_map_pure_B[i_f] = mock.apply_observation_matrix(
+                    func, filtered_freq_map_pure_B[i_f]
+                )
+    else:
+        msg_no_obsmat = (
+            "No observation matrices provided for filtering. Please provide obsmat_funcs."
+        )
+        raise ValueError(msg_no_obsmat)
+
+    # mask unobserved pixels
+    _ = mask.apply_binary_mask(unfiltered_freq_map_pure_T, binary_mask, unseen=False)
+    _ = mask.apply_binary_mask(unfiltered_freq_map_pure_E, binary_mask, unseen=False)
+    _ = mask.apply_binary_mask(unfiltered_freq_map_pure_B, binary_mask, unseen=False)
+    _ = mask.apply_binary_mask(filtered_freq_map_pure_T, binary_mask, unseen=False)
+    _ = mask.apply_binary_mask(filtered_freq_map_pure_E, binary_mask, unseen=False)
+    _ = mask.apply_binary_mask(filtered_freq_map_pure_B, binary_mask, unseen=False)
+
+    # save results
+    save_TFsims(
+        manager,
+        np.array(
+            [unfiltered_freq_map_pure_T, unfiltered_freq_map_pure_E, unfiltered_freq_map_pure_B]
+        ),
+        np.array([filtered_freq_map_pure_T, filtered_freq_map_pure_E, filtered_freq_map_pure_B]),
+        id_sim=id_sim,
+    )
+
+    return id_sim
 
 
 # needs to be defined at the top level for pickling
@@ -255,7 +389,37 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
     func = partial(func_noise, manager, config, binary_mask, nhits_map)
 
     for result in _map(func, range(n_sim), comm):
-        logger.info(f"Finished sky realization {result + 1} / {n_sim}")
+        logger.info(f"Finished noise realization {result + 1} / {n_sim}")
+
+
+def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
+    """Generate pure T, E and pure B map with power law spectra for Transfer Function Computation."""
+    rank = comm.Get_rank()
+    n_sim = config.map_sim_pars.TF_n_sim
+
+    if n_sim == 0:
+        return
+
+    if rank == 0:
+        logger.info(f"Generating {n_sim} TF simulations")
+
+    # Load necessary data
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+
+    func = partial(
+        func_TF_sims,
+        manager=manager,
+        config=config,
+        binary_mask=binary_mask,
+    )
+
+    if filtering := config.map_sim_pars.filter_sims:
+        # Load the obsmat(s) for our map set(s)
+        obsmat_funcs = load_obsmat(manager, config)
+        func = partial(func, obsmat_funcs=obsmat_funcs)
+
+    for result in _map(func, range(n_sim), comm, force_seq=filtering):
+        logger.info(f"Finished TF simulation {result + 1} / {n_sim}")
 
 
 def main():
@@ -285,7 +449,7 @@ def main():
     # If not provided, generate a common one that will be shared by all groups
     cmb_seed = config.map_sim_pars.cmb_seed
     if cmb_seed is None:
-        if rank == 0 and num_groups > 1:
+        if rank == 0:
             # Process 0 generates the seed for everyone from a random source
             rng = np.random.default_rng()
             cmb_seed = rng.integers(2**32)
@@ -300,6 +464,9 @@ def main():
             manager.get_path_to_maps_sub(i).mkdir(parents=True, exist_ok=True)
         for i in range(config.noise_sim_pars.n_sim):
             manager.get_path_to_noise_maps_sub(i).mkdir(parents=True, exist_ok=True)
+        if config.map_sim_pars.generate_sims_for_TF:
+            for i in range(config.map_sim_pars.TF_n_sim):
+                manager.get_path_to_TF_sims_sub(i).mkdir(parents=True, exist_ok=True)
     world.Barrier()
 
     # Split the configuration
@@ -314,6 +481,9 @@ def main():
     manager = DataManager(sconf)
     process_signal(sconf, manager, scomm)
     process_noise(sconf, manager, scomm)
+
+    if config.map_sim_pars.generate_sims_for_TF:
+        process_TF_sims(sconf, manager, scomm)
 
 
 if __name__ == "__main__":

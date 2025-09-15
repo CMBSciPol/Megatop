@@ -69,6 +69,7 @@ def get_apodized_mask_from_nhits(
     apod_radius=10.0,
     apod_radius_point_source=4.0,
     apod_type="C1",
+    no_nhits_rescaling=False,
 ):
     """
     Produce an appropriately apodized mask from an nhits map as used in
@@ -80,7 +81,7 @@ def get_apodized_mask_from_nhits(
     * Apodize (binary * galactic)
     * (optional) multiply (binary * galactic) with point source mask
     * (optional) apodize (binary * galactic * point source)
-    * Multiply everything by (smoothed) nhits map
+    * Multiply everything by (smoothed) nhits map (if no_nhits_rescaling is False)
 
     Parameters
     ----------
@@ -100,6 +101,8 @@ def get_apodized_mask_from_nhits(
         Apodization radius for the point source mask (in degrees).
     apod_type : str, optional
         Type of apodization, default is "C1".
+    no_nhits_rescaling : bool, optional
+        If True, the apodized binary mask outputed is not resacled by nhits . Default is False.
 
     Returns
     -------
@@ -121,6 +124,8 @@ def get_apodized_mask_from_nhits(
         binary_mask *= hp.ud_grade(point_source_mask, nside)
         binary_mask = nmt.mask_apodization(binary_mask, apod_radius_point_source, apotype=apod_type)
 
+    if no_nhits_rescaling:
+        return binary_mask
     return nhits_map * binary_mask
 
 

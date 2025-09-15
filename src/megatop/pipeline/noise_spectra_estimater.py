@@ -11,12 +11,13 @@ from mpi4py import MPI
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
+from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
-    initialize_nmt_workspace,
+    get_effective_transfer_function,
     limit_namaster_output,
 )
 from megatop.utils.utils import MemoryUsage
@@ -44,6 +45,9 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 
     # Loading masks
     mask_analysis = hp.read_map(manager.path_to_analysis_mask)
+    logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
+    # TODO: remove after merge
+    mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
@@ -52,8 +56,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     ]
 
     # Loading bin info from map2cl step:
-    binning_info = np.load(manager.get_path_to_spectra_binning(sub=id_sim_sky), allow_pickle=True)
-    nmt_bins = nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
+    nmt_bins = load_nmt_binning(manager)
 
     # Getting effective beam TODO: add case for input maps (no preproc)
     effective_beam_CMB = get_common_beam_wpix(
@@ -65,16 +68,16 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     )
     # Initializing workspace
     with Timer("init-namaster-workspace"):
-        workspaceff = initialize_nmt_workspace(
-            nmt_bins,
-            manager.path_to_lensed_scalar,
-            config.nside,
+        fields_init_wsp = nmt.NmtField(
             mask_analysis,
-            effective_beam_CMB[:-1],
-            config.map2cl_pars.purify_e,
-            config.map2cl_pars.purify_b,
-            config.map2cl_pars.n_iter_namaster,
+            None,
+            spin=2,
+            beam=effective_beam_CMB[:-1],
+            purify_e=config.map2cl_pars.purify_e,
+            purify_b=config.map2cl_pars.purify_b,
+            n_iter=config.map2cl_pars.n_iter_namaster,
         )
+        workspaceff = nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
 
     sum_noise_spectra = {}
 
@@ -135,6 +138,21 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             "Noise_Synch": noise_map_post_compsep[2],
         }
 
+        if (
+            config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
+        ) and not config.parametric_sep_pars.alm2map:
+            logger.info("Computing effective Transfer Function after component separation")
+            transfer_freq = []
+            for tf_path in manager.get_TF_filenames():
+                transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
+                transfer_freq.append(transfer)
+            transfer_freq = np.array(transfer_freq)
+            effective_transfer_function, inverse_effective_transfer_function = (
+                get_effective_transfer_function(transfer_freq, W_maxL, binary_mask)
+            )
+        else:
+            inverse_effective_transfer_function = None
+
         # Computing auto and cross spectra
         noise_Cls = compute_auto_cross_cl_from_maps_list(
             noise_comp_dict,
@@ -144,6 +162,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
+            inverse_effective_transfer_function=inverse_effective_transfer_function,
         )
 
         # Summing the noise spectra
@@ -161,13 +180,16 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         sum_noise_spectra_recvbuf = sum_noise_spectra
 
     if rank == root:
+        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
+            "bin_index_lminlmax"
+        ]
+
         # Average noise spectra over nsims
         mean_noise_spectra = {}
         for key in sum_noise_spectra:
             mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_n_sim_noise
-        mean_noise_spectra = limit_namaster_output(
-            mean_noise_spectra, binning_info["bin_index_lminlmax"]
-        )
+
+        mean_noise_spectra = limit_namaster_output(mean_noise_spectra, bin_index_lminlmax)
 
     else:
         mean_noise_spectra = None
