@@ -93,12 +93,15 @@ class DataDirsConfig:
     beams: str = "beams"
     passbands: str = "passbands"
     noise_maps: str = "noise_maps"
+    TF_sims_maps: str = "TF_sims_maps"
 
 
 @define
 class OutputDirsConfig:
     root: Path = field(converter=Path)
     masks: str = "masks"
+    binning: str = "binning"
+    transfer_functions: str = "transfer_functions"
     preproc: str = "preproc"
     covar: str = "covar"
     plots: str = "plots"
@@ -122,7 +125,9 @@ class MapSetConfig:
     exp_tag: str
     file_prefix: str = ""
     noise_prefix: str = "noise_"
+    simfoTF_prefix: str = "simforTF_"
     obsmat_path: Path = field(converter=Path, default=".")
+    TF_path: Path = field(converter=Path, default=".")
     passband_filename: str = ""
     nhits_map_path: str | Path | None = field(default=None)
     depth_map_path: Path | None = field(default=None)
@@ -144,6 +149,10 @@ class MapSetConfig:
     @property
     def noise_map_filename(self) -> str:
         return self.noise_prefix + self.name
+
+    @property
+    def simforTF_map_filename(self) -> str:
+        return [self.simfoTF_prefix + f"pure{s}_" + self.name for s in ["T", "E", "B"]]
 
 
 @define
@@ -169,6 +178,9 @@ class MasksConfig:
     mock_nsources: int = 100
     mock_sources_hole_radius: float = 4
 
+    # DEBUG_output_apod_binary_mask: bool = False
+    # DEBUGapod_binary_mask_name: str = "apod_binary_mask"
+
     @gal_key.validator  # pyright: ignore[reportOptionalMemberAccess]
     def _check_gal_key(self, attribute, value):
         """Check that gal_key is set if include_galactic is True."""
@@ -179,7 +191,7 @@ class MasksConfig:
 
 @define
 class GeneralConfig:
-    nside: int = 512
+    nside: int = 128
     lmin: int = 30
     lmax: int = field(default=1000)
 
@@ -195,11 +207,14 @@ class GeneralConfig:
 class PreProcessingConfig:
     common_beam_correction: float = 100
     beam_fwhms: list[float] | None = None
+    DEBUGskippreproc: bool = False
+    correct_for_TF: bool = False
+    sum_TF_column: bool = True
 
 
 @define
 class NoiseCovmatConfig:
-    save_preprocessed_noise_maps: bool = False
+    save_preprocessed_noise_maps: bool = True
 
 
 @define
@@ -213,6 +228,12 @@ class _MinimizeOptions:
 
 @define
 class CompSepConfig:
+    use_harmonic_compsep: bool = False
+    harmonic_lmax: int = 2 * 128  # TODO: use config.nside
+    harmonic_lmin: int = 30
+    harmonic_delta_ell: int = 10  # TODO: harmonize with binning from map2cl
+    alm2map: bool = False
+
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
@@ -264,6 +285,11 @@ class MapSimConfig:
     single_cmb: bool = False
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
+    generate_sims_for_TF: bool = False
+    TF_power_law_amp: float = 1.0
+    TF_power_law_index: float = 2.0  # minus sign is added in soopercool
+    TF_power_law_delta_ell: int = 1
+    TF_n_sim: int = 1
     passband_int: bool = False
 
     @sky_model.validator
@@ -295,10 +321,26 @@ class NoiseSimConfig:
     #        raise ValueError(msg)
 
 
+def default_prior_bounds() -> dict[str, list[float]]:
+    return {
+        "r": [-0.02, 1.0],
+        "A_{lens}": [0.0, 2.0],
+        "A_{dust}": [0.0, 1.0],
+        "A_{sync}": [0.0, 1.0],
+    }
+
+
 @define
 class Cl2rConfig:
     dust_marg: bool = False
     sync_marg: bool = False
+    prior_bounds: dict[str, list] = Factory(default_prior_bounds)
+    load_model_spectra: bool = True
+    n_walkers: int = 200
+    n_steps: int = 10000
+    n_steps_burnin: int = 2000
+    lmin_cosmo_analysis: int | None = None
+    lmax_cosmo_analysis: int | None = None
 
 
 @define
