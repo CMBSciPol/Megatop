@@ -29,8 +29,8 @@ def test_shape_spectra_noise_map():
 
 def test_shape_fg_map():
     map_sets = [
-        MapSetConfig(freq_tag=100, exp_tag="test"),
-        MapSetConfig(freq_tag=200, exp_tag="test"),
+        MapSetConfig(freq_tag=100, exp_tag="test", nhits_map_path="SO"),
+        MapSetConfig(freq_tag=200, exp_tag="test", nhits_map_path="SO"),
     ]
     map_sets[0].frequency = 100
     map_sets[0].weight = 1
@@ -47,14 +47,14 @@ def test_hit_map():
     binary = np.ones(hp.nside2npix(NSIDE))
     nhits_map = RNG.random(hp.nside2npix(NSIDE))
     noise_maps_rescaled = mock.include_hits_noise(
-        noise_maps=noise_maps, nhits_map=nhits_map, binary_mask=binary
+        noise_maps=noise_maps, nhits_maps=nhits_map, binary_mask=binary
     )
     assert np.all(noise_maps_rescaled >= np.ones((2, 3, hp.nside2npix(NSIDE))))
     assert np.all(np.isfinite(noise_maps_rescaled))
     assert noise_maps_rescaled.shape == (2, 3, hp.nside2npix(NSIDE))
     nhits_map[RNG.integers(0, hp.nside2npix(NSIDE))] = 0.0
     with pytest.raises(FloatingPointError):
-        _ = mock.include_hits_noise(noise_maps=noise_maps, nhits_map=nhits_map, binary_mask=binary)
+        _ = mock.include_hits_noise(noise_maps=noise_maps, nhits_maps=nhits_map, binary_mask=binary)
 
 
 def test_beam():

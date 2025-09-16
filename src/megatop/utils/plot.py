@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -151,6 +149,7 @@ def plotTTEEBB(
     use_D_ell=True,
     lims_x=(2, 2000),
     lims_y=(1e-2, 1e7),
+    ell=None,
 ):
     """
     This function plots the Cls. It directly saves the plot directly.
@@ -165,9 +164,10 @@ def plotTTEEBB(
         use_D_ell (bool): If True, the Cls are multiplied by ell*(ell+1)/2/pi.
         lims_x (tuple): The limits for the x axis of the plot.
         lims_y (tuple): The limits for the y axis of the plot.
+        ell (ndarray): The ell values to use for the x axis. If None, it will be set to np.arange(0, Cl.shape[-1]).
     """
-
-    ell = np.arange(0, Cl.shape[-1])
+    if ell is None:
+        ell = np.arange(0, Cl.shape[-1])
     norm = ell * (ell + 1) / 2 / np.pi
 
     if not use_D_ell:
@@ -508,96 +508,96 @@ def plot_all_Cls_diff(
     plt.close()
 
 
-def test_quick_plot_obsmat(path_to_obsmat=None, plot_dir=None):
-    """
-    This function plots a quick visual on the observation matrix with matspy.
+# def quick_plot_obsmat_test(path_to_obsmat=None, plot_dir=None):
+#     """
+#     This function plots a quick visual on the observation matrix with matspy.
 
-    Args:
-        (/Future) path_to_obsmat: path to the real observation matrix.
-        plot_dir: provide your own plot_dir or None(in the current directory).
+#     Args:
+#         (/Future) path_to_obsmat: path to the real observation matrix.
+#         plot_dir: provide your own plot_dir or None(in the current directory).
 
-    Returns:
-        None
-    """
+#     Returns:
+#         None
+#     """
 
-    # On NERSC for MSS2 simulations:
-    sim_dir = Path("/global/cfs/projectdirs/sobs/awg_bb/")
-    obsmat_dir = "bbmaster_paper/obs_mat_nside128_fpthin8"
-    f_name = "obsmat_coadd-full.npz"
-    path_to_obsmat = sim_dir / obsmat_dir / f_name
+#     # On NERSC for MSS2 simulations:
+#     sim_dir = Path("/global/cfs/projectdirs/sobs/awg_bb/")
+#     obsmat_dir = "bbmaster_paper/obs_mat_nside128_fpthin8"
+#     f_name = "obsmat_coadd-full.npz"
+#     path_to_obsmat = sim_dir / obsmat_dir / f_name
 
-    ##Load as SparseMat
-    import matspy
-    import scipy.sparse
+#     ##Load as SparseMat
+#     import matspy
+#     import scipy.sparse
 
-    P = scipy.sparse.load_npz(path_to_obsmat)
-    fig, ax = matspy.spy_to_mpl(P)
+#     P = scipy.sparse.load_npz(path_to_obsmat)
+#     fig, ax = matspy.spy_to_mpl(P)
 
-    fig.savefig(plot_dir / "ObsMat.png", dpi=300, bbox_inches="tight")
-    plt.close()
+#     fig.savefig(plot_dir / "ObsMat.png", dpi=300, bbox_inches="tight")
+#     plt.close()
 
 
-def test_single_pixel_obsmat(theta, phi, path_to_obsmat=None, nside=128, pol="TT"):
-    """
-    This function plots a histogram and a healpix mollview of the observation matrix for one specific pixel at location (theta,phi).
-    For information purposes, the largest value (the pixel itself) is removed from the histogram and marked separately in the mollview.
-    Args follows healpix convention where theta phi are in degrees (passed as lonlat=True.) and nside default as 128.
+# def single_pixel_obsmat_test(theta, phi, path_to_obsmat=None, nside=128, pol="TT"):
+#     """
+#     This function plots a histogram and a healpix mollview of the observation matrix for one specific pixel at location (theta,phi).
+#     For information purposes, the largest value (the pixel itself) is removed from the histogram and marked separately in the mollview.
+#     Args follows healpix convention where theta phi are in degrees (passed as lonlat=True.) and nside default as 128.
 
-    Args:
-        theta, phi = angular coordinates of the pixel.
-        nside = healpix nside definition.
-        pol = polarization element of the matrix. default is TT. options: ['TT','QQ','UU']
-        ##2025-March: the MSS2 simulation has T,E,B components to be the same.
+#     Args:
+#         theta, phi = angular coordinates of the pixel.
+#         nside = healpix nside definition.
+#         pol = polarization element of the matrix. default is TT. options: ['TT','QQ','UU']
+#         ##2025-March: the MSS2 simulation has T,E,B components to be the same.
 
-    Returns:
-        None
-    """
+#     Returns:
+#         None
+#     """
 
-    import scipy.sparse
+#     import scipy.sparse
 
-    # Load Observation matrix(takes minutes)
-    OBS = scipy.sparse.load_npz(path_to_obsmat)
-    print("Loading the observation matrix...(this could take minutes)")
-    npix = hp.nside2npix(nside)
+#     # Load Observation matrix(takes minutes)
+#     OBS = scipy.sparse.load_npz(path_to_obsmat)
+#     print("Loading the observation matrix...(this could take minutes)")
+#     npix = hp.nside2npix(nside)
 
-    pols = ["T", "Q", "U"]
-    pol1, pol2 = pol
-    ind1, ind2 = pols.index(pol1), pols.index(pol2)
-    OBS_pol = OBS[npix * ind1 : npix * (ind1 + 1), npix * ind2 : npix * (ind2 + 1)]
+#     pols = ["T", "Q", "U"]
+#     pol1, pol2 = pol
+#     ind1, ind2 = pols.index(pol1), pols.index(pol2)
+#     OBS_pol = OBS[npix * ind1 : npix * (ind1 + 1), npix * ind2 : npix * (ind2 + 1)]
 
-    print("Obsermation matrix loaded for the specific polarization.")
+#     print("Obsermation matrix loaded for the specific polarization.")
 
-    # Transfer to healpix labelling
-    pix_label = hp.ang2pix(nside, theta, phi, nest=True, lonlat=True)
-    pixel_dense = OBS_pol[pix_label].toarray().flatten()
-    min_val, max_val = np.sort(pixel_dense)[0], np.sort(pixel_dense)[-2]
+#     # Transfer to healpix labelling
+#     pix_label = hp.ang2pix(nside, theta, phi, nest=True, lonlat=True)
+#     pixel_dense = OBS_pol[pix_label].toarray().flatten()
+#     min_val, max_val = np.sort(pixel_dense)[0], np.sort(pixel_dense)[-2]
 
-    # Create figure
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6), gridspec_kw={"width_ratios": [1, 3]})
-    ax1.set_xticks([])
-    ax1.set_yticks([])
+#     # Create figure
+#     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6), gridspec_kw={"width_ratios": [1, 3]})
+#     ax1.set_xticks([])
+#     ax1.set_yticks([])
 
-    # Left subplot: Histogram
-    ax1 = fig.add_subplot(1, 2, 1)
-    ax1.hist(pixel_dense, bins=50, range=(min_val, max_val), density=False)
-    ax1.set_yscale("log")
+#     # Left subplot: Histogram
+#     ax1 = fig.add_subplot(1, 2, 1)
+#     ax1.hist(pixel_dense, bins=50, range=(min_val, max_val), density=False)
+#     ax1.set_yscale("log")
 
-    # Right subplot: healpix mollview
-    plt.sca(ax2)
-    pixel_dense_masked = pixel_dense.copy()
-    pixel_dense_masked[np.where(pixel_dense == 0)] = hp.UNSEEN
-    hp.mollview(
-        pixel_dense_masked,
-        nest=True,
-        hold=True,
-        title=f"Obsmat for One Pixel at location theta:{theta} phi:{phi}",
-        min=min_val,
-        max=max_val,
-    )  # , norm = 'log')
-    # Label the center
-    hp.projscatter(theta, phi, lonlat=True, marker="+", color="red", s=25)
-    hp.graticule()
+#     # Right subplot: healpix mollview
+#     plt.sca(ax2)
+#     pixel_dense_masked = pixel_dense.copy()
+#     pixel_dense_masked[np.where(pixel_dense == 0)] = hp.UNSEEN
+#     hp.mollview(
+#         pixel_dense_masked,
+#         nest=True,
+#         hold=True,
+#         title=f"Obsmat for One Pixel at location theta:{theta} phi:{phi}",
+#         min=min_val,
+#         max=max_val,
+#     )  # , norm = 'log')
+#     # Label the center
+#     hp.projscatter(theta, phi, lonlat=True, marker="+", color="red", s=25)
+#     hp.graticule()
 
-    # plt.tight_layout()
-    plt.savefig(f"Pixel_{theta}_{phi}_obsmat.png", bbox_inches="tight")
-    plt.close()
+#     # plt.tight_layout()
+#     plt.savefig(f"Pixel_{theta}_{phi}_obsmat.png", bbox_inches="tight")
+#     plt.close()

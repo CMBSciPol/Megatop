@@ -19,9 +19,9 @@ def plotter(manager: DataManager, config: Config):
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     # Plotting hits map
-    nhits = hp.read_map(manager.path_to_nhits_map)
+    nhits = hp.read_map(manager.path_to_common_nhits_map)
     plt.figure(figsize=(16, 9))
-    hp.mollview(nhits, cmap=cmap, cbar=True, title="Hits map")
+    hp.mollview(nhits, cmap=cmap, cbar=True, title="Commin hits map")
     hp.graticule()
     plt.savefig(plot_dir / "nhits_map.png")
     plt.clf()
@@ -85,6 +85,20 @@ def plotter(manager: DataManager, config: Config):
     hp.graticule()
     plt.savefig(plot_dir / "analysis_mask_second.png")
     plt.clf()
+
+    # if config.masks_pars.DEBUG_output_apod_binary_mask:
+    #     apod_binary_mask = hp.read_map(manager.path_to_apod_binary_mask)
+
+    #     plt.figure(figsize=(16, 9))
+    #     hp.mollview(
+    #         apod_binary_mask,
+    #         cmap=cmap,
+    #         cbar=True,
+    #         title="Apodized binary mask (no nhits rescaling)",
+    #     )
+    #     hp.graticule()
+    #     plt.savefig(plot_dir / "apodized_binary_mask.png")
+    #     plt.clf()
 
 
 def main():

@@ -126,11 +126,10 @@ def get_noise_map_from_noise_spectra(frequencies, nside: int, n_ell):
     return noise_maps
 
 
-def include_hits_noise(noise_maps, nhits_map, binary_mask):
+def include_hits_noise(noise_maps, nhits_maps, binary_mask):
     logger.debug("Rescaling the noise maps by the hits count")
-    nhits_map_rescaled = nhits_map / max(nhits_map)
     mask_indices = np.where(binary_mask == 1)[0]
-    if np.any(nhits_map_rescaled[mask_indices] == 0):
+    if np.any(nhits_maps[..., mask_indices] == 0):
         logger.error("Division by 0 in noise map nhit rescaling.")
         logger.error("The binary mask does not cover all areas where nhits = 0.")
         logger.error(
@@ -138,7 +137,7 @@ def include_hits_noise(noise_maps, nhits_map, binary_mask):
         )
         logger.error("Exiting...")
     with np.errstate(divide="raise", invalid="raise"):
-        noise_maps[..., mask_indices] /= np.sqrt(nhits_map_rescaled[mask_indices])
+        noise_maps[..., mask_indices] /= np.sqrt(nhits_maps[..., mask_indices])
 
     return noise_maps
 
