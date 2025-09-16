@@ -137,7 +137,7 @@ def include_hits_noise(noise_maps, nhits_maps, binary_mask):
         )
         logger.error("Exiting...")
     with np.errstate(divide="raise", invalid="raise"):
-        noise_maps[..., mask_indices] /= np.sqrt(nhits_maps[..., mask_indices])
+        noise_maps[..., mask_indices] /= np.sqrt(nhits_maps[..., np.newaxis, mask_indices])
 
     return noise_maps
 
