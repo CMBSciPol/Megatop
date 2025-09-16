@@ -191,7 +191,7 @@ class MasksConfig:
 
 @define
 class GeneralConfig:
-    nside: int = 128
+    nside: int = 512
     lmin: int = 30
     lmax: int = field(default=1000)
 
