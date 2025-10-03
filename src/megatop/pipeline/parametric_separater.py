@@ -113,6 +113,17 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     A_maxL = A_ev(res.x)  # pyright: ignore[reportCallIssue]
     res.A_maxL = A_maxL
 
+    AtNA_ell = np.einsum("cf,lmfn,nk->lmck", A_maxL.T, invN, A_maxL)
+    invAtNA_ell = np.zeros_like(AtNA_ell)
+    invAtNA_ell[config.parametric_sep_pars.harmonic_lmin + 1 :, 1:] = np.linalg.inv(
+        AtNA_ell[config.parametric_sep_pars.harmonic_lmin + 1 :, 1:]
+    )
+    res.invAtNA_ell = invAtNA_ell.T[:, :, 1:]  # removing TT
+    W_maxL_ell = np.einsum(
+        "ckml, kf, lmfn -> cnml", res.invAtNA_ell, A_maxL.T, invN[:, 1:]
+    )  # removing TT
+    res.W_maxL_ell = W_maxL_ell
+
     logger.info("Computing W matrix in PIXEL space from harmonic compsep outputs")
     logger.info("Importing pixel based covariance")
     with Timer("load-covmat"):
@@ -127,11 +138,6 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     res.invAtNA_map = np.linalg.inv(AtNA.T).T
     res.invAtNA_alm = res.invAtNA
     res.invAtNA = res.invAtNA_map
-
-    A = MixingMatrix(*components)
-    A_ev = A.evaluator(np.array(instrument["frequency"]))
-    A_maxL = A_ev(res.x)  # pyright: ignore[reportCallIssue]
-    res.A_maxL = A_maxL
 
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
     res.W_maxL = W_maxL
