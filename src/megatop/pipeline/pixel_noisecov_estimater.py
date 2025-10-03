@@ -4,6 +4,7 @@ from pathlib import Path
 
 import healpy as hp
 import numpy as np
+from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
@@ -12,6 +13,39 @@ from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
 from megatop.utils.utils import MemoryUsage
+
+
+def get_reduced_TF(transfer):
+    inv_sqrt_tf_full = np.linalg.inv([sqrtm(TF_ell.T) for TF_ell in transfer.T])[:, -4:, -4:]
+    inv_sqrt_tf_bin = np.zeros((2, 2, inv_sqrt_tf_full.shape[0]), dtype=np.complex128)
+    inv_sqrt_tf_bin[0, 0] = inv_sqrt_tf_full[:, 0, 0]
+    inv_sqrt_tf_bin[0, 1] = inv_sqrt_tf_full[:, 1, 1]
+    inv_sqrt_tf_bin[1, 0] = inv_sqrt_tf_full[:, 2, 2]
+    inv_sqrt_tf_bin[1, 1] = inv_sqrt_tf_full[:, 3, 3]
+
+    inv_tf_reduced = np.zeros((inv_sqrt_tf_full.shape[0], 4, 4), dtype=np.complex128)
+
+    inv_tf_reduced[:, 0, 0] = inv_sqrt_tf_bin[0, 0] ** 2
+    inv_tf_reduced[:, 0, 1] = inv_sqrt_tf_bin[0, 0] * inv_sqrt_tf_bin[0, 1]
+    inv_tf_reduced[:, 0, 2] = inv_sqrt_tf_bin[0, 1] * inv_sqrt_tf_bin[0, 0]
+    inv_tf_reduced[:, 0, 3] = inv_sqrt_tf_bin[0, 1] ** 2
+
+    inv_tf_reduced[:, 1, 0] = inv_sqrt_tf_bin[0, 0] * inv_sqrt_tf_bin[1, 0]
+    inv_tf_reduced[:, 1, 1] = inv_sqrt_tf_bin[0, 0] * inv_sqrt_tf_bin[1, 1]
+    inv_tf_reduced[:, 1, 2] = inv_sqrt_tf_bin[1, 0] * inv_sqrt_tf_bin[0, 1]
+    inv_tf_reduced[:, 1, 3] = inv_sqrt_tf_bin[0, 1] * inv_sqrt_tf_bin[1, 1]
+
+    inv_tf_reduced[:, 2, 0] = inv_sqrt_tf_bin[1, 0] * inv_sqrt_tf_bin[0, 0]
+    inv_tf_reduced[:, 2, 1] = inv_sqrt_tf_bin[0, 1] * inv_sqrt_tf_bin[1, 0]
+    inv_tf_reduced[:, 2, 2] = inv_sqrt_tf_bin[1, 1] * inv_sqrt_tf_bin[0, 0]
+    inv_tf_reduced[:, 2, 3] = inv_sqrt_tf_bin[1, 1] * inv_sqrt_tf_bin[0, 1]
+
+    inv_tf_reduced[:, 3, 0] = inv_sqrt_tf_bin[1, 0] ** 2
+    inv_tf_reduced[:, 3, 1] = inv_sqrt_tf_bin[1, 0] * inv_sqrt_tf_bin[1, 1]
+    inv_tf_reduced[:, 3, 2] = inv_sqrt_tf_bin[1, 1] * inv_sqrt_tf_bin[1, 0]
+    inv_tf_reduced[:, 3, 3] = inv_sqrt_tf_bin[1, 1] ** 2
+
+    return np.real(inv_tf_reduced)
 
 
 def pixel_noisecov_estimation(manager: DataManager, config: Config):
@@ -137,7 +171,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         MemoryUsage(f"Memory for noise realisation {id_real + 1}: ")
 
         noise_cov_preprocessed += noise_freq_maps_preprocessed**2
-
+        # import IPython; IPython.embed()
         if config.parametric_sep_pars.use_harmonic_compsep:
             # Computing the noise spectra from the preprocessed noise maps using namaster
             if config.parametric_sep_pars.harmonic_delta_ell != 1:
@@ -156,7 +190,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     beam=beam4namaster,
                     return_all_spectra=config.pre_proc_pars.correct_for_TF,
                 )
-
+                # import IPython; IPython.embed()
                 if config.pre_proc_pars.correct_for_TF:
                     logger.warning("DEBUG: Including transfer function in the pre-processed alms. ")
 
@@ -204,9 +238,14 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                             else:
                                 inv_tf_[:, 0, 0] = inv_tf[:, 0, 0]
                                 inv_tf_[:, 1, 1] = inv_tf[:, 1, 1]
+                                # inv_tf_[:, 1, 1] = inv_tf[:, 0, -1]
                                 inv_tf_[:, 2, 2] = inv_tf[:, 2, 2]
+                                # inv_tf_[:, 2, 2] = inv_tf[:, -1, 0]
                                 inv_tf_[:, 3, 3] = inv_tf[:, 3, 3]
                             inv_tf = inv_tf_
+
+                            inv_tf_reduced = get_reduced_TF(transfer)
+                            inv_tf = inv_tf_reduced
 
                         noise_spectra_TF_corrected = np.einsum(
                             "lij,jl->il",
