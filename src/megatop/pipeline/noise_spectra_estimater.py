@@ -196,21 +196,6 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         if config.parametric_sep_pars.include_synchrotron:
             noise_comp_dict["Noise_Synch"] = noise_map_post_compsep[2]
 
-        if (
-            config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
-        ) and not config.parametric_sep_pars.alm2map:
-            logger.info("Computing effective Transfer Function after component separation")
-            transfer_freq = []
-            for tf_path in manager.get_TF_filenames():
-                transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
-                transfer_freq.append(transfer)
-            transfer_freq = np.array(transfer_freq)
-            effective_transfer_function, inverse_effective_transfer_function = (
-                get_effective_transfer_function(transfer_freq, W_maxL, binary_mask)
-            )
-        else:
-            inverse_effective_transfer_function = None
-
         # Computing auto and cross spectra
         noise_Cls = compute_auto_cross_cl_from_maps_list(
             noise_comp_dict,
