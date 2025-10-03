@@ -81,6 +81,41 @@ def plot_compsep_stats(manager: DataManager, config: Config):
     return
 
 
+def plot_compsep_stats(manager: DataManager, config: Config):
+    if config.map_sim_pars.n_sim == 0 or config.map_sim_pars.n_sim is None:
+        logger.info("No sky simulations, skipping component separation statistics plotter.")
+        return
+
+    param_res_list = []
+    for sky_sims_id in range(config.map_sim_pars.n_sim):
+        fname_compsepresults = manager.get_path_to_compsep_results(sub=sky_sims_id)
+        param_res_compsep = np.load(fname_compsepresults, allow_pickle=True)["x"]
+        param_res_list.append(param_res_compsep)
+    param_res_list = np.array(param_res_list)
+
+    # Plotting the statistics of the component separation results
+    plot_dir = manager.path_to_components_plots
+    res_compsep_last = np.load(fname_compsepresults, allow_pickle=True)
+
+    # plotting histograms of result parameters
+    fig, axes = plt.subplots(1, res_compsep_last["params"].shape[0], figsize=(12, 5))
+    for i, (ax, param_name) in enumerate(zip(axes, res_compsep_last["params"], strict=False)):
+        ax.hist(param_res_list[:, i], density=True)
+
+        ax.set_xlabel(param_name)
+        # title showing mean and std:
+        mean_param = np.mean(param_res_list[:, i])
+        std_param = np.std(param_res_list[:, i])
+        title = f"{param_name} = {mean_param:.5} +/- {std_param:.5}" + i * "\n"
+        # adding i*"\n" allows to hack around overlapping titles...
+        ax.set_title(title)
+
+    plt.savefig(plot_dir / Path("statistics_compsep.png"))  # , bbox_inches='tight')
+    plt.close()
+
+    return
+
+
 def main():
     parser = argparse.ArgumentParser(description="Plotter for component separation output")
     parser.add_argument("--config", type=Path, help="config file")
