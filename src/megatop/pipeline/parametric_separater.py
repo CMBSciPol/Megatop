@@ -7,12 +7,30 @@ import healpy as hp
 import numpy as np
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
+from fgbuster.separation_recipes import _format_alms
 from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask, passband
 from megatop.utils.compsep import set_alm_tozero_below_lmin
 from megatop.utils.mpi import get_world
+
+
+def _test_N_alm_format(N_alm):
+    inv_N_alm = 1 / N_alm
+
+    # format to have real representation of alm covariance
+    inv_N_alm_real = _format_alms(inv_N_alm.astype(np.complex128))
+
+    shape_N_alm_freq_diag = inv_N_alm_real.shape
+    shape_N_alm_freq_diag += ((inv_N_alm_real.shape[-1]),)
+    inv_N_alm_freq_diag = np.zeros(shape_N_alm_freq_diag)
+    for i in range(inv_N_alm_real.shape[-1]):
+        inv_N_alm_freq_diag[..., i, i] = inv_N_alm_real[..., i]
+
+    inv_N_alm_freq_diag[np.where(np.isinf(inv_N_alm_freq_diag))] = 0
+
+    return inv_N_alm_freq_diag
 
 
 def get_and_format_inv_Nl(manager: DataManager, config: Config):
@@ -80,6 +98,10 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     invN = get_and_format_inv_Nl(manager, config)
     invNlm = None
 
+    # cov_alm = np.load(manager.path_to_noisecov_alm)
+    # invNlm = _test_N_alm_format(cov_alm)
+    # invN = None
+
     instrument["fwhm"] = [None] * 6  # we don't correct for the beam inside the harmonic compsep
     std_instr = fg.observation_helpers.standardize_instrument(instrument)
 
@@ -91,7 +113,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     data_alms_lmin = set_alm_tozero_below_lmin(
         data_alms.copy(), config.parametric_sep_pars.harmonic_lmin
     )
-
+    # import IPython; IPython.embed()
     res = fg.separation_recipes.harmonic_comp_sep(
         components,
         std_instr,
@@ -141,6 +163,24 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
 
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
     res.W_maxL = W_maxL
+    # import IPython; IPython.embed()
+
+    # cov_alm = np.load(manager.path_to_noisecov_alm)
+    # inv_cov_alm = 1/cov_alm
+    # shape_N_alm_freq_diag = (inv_cov_alm.shape[0]),
+    # shape_N_alm_freq_diag += inv_cov_alm.shape
+    # # inv_cov_alm[np.where(np.isinf(inv_cov_alm))] = 0
+    # AtNA_alm_native = np.einsum("cf,fsl,fk->lsck", A_maxL.T, inv_cov_alm, A_maxL)
+    # inv_AtNA_alm_native = np.linalg.inv(AtNA_alm_native)
+    # inv_AtNA_alm_native[np.where(np.isinf(inv_AtNA_alm_native))] = 0
+    # inv_AtNA_alm_native[np.where(np.isnan(inv_AtNA_alm_native))] = 0
+    # W_maxL_alm = np.einsum("lsck,cf,fsl->cfsl", inv_AtNA_alm_native, A_maxL.T, inv_cov_alm)
+    # W_maxL_alm[np.where(np.isnan(W_maxL_alm))] = 0
+
+    # shape_TEB = np.array(W_maxL_alm.shape)
+    # shape_TEB[-2] += 1  # adding T
+    # W_maxL_alm_TEB = np.zeros(shape_TEB)
+    # W_maxL_alm_TEB[:, :, 1:, :] = W_maxL_alm
 
     if config.parametric_sep_pars.alm2map:
         logger.info(
