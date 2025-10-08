@@ -12,10 +12,7 @@ def plot_map2cl(manager, id_sim=None):
     plot_dir = manager.path_to_spectra_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    path_binning = manager.get_path_to_spectra_binning(sub=id_sim)
-    binning_info = np.load(path_binning, allow_pickle=True)
-
-    bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
+    bin_centre_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_centre_lminlmax"]
 
     path_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
     all_Cls = np.load(path_all_Cls, allow_pickle=True)
