@@ -256,8 +256,20 @@ class DataManager:
             fname = self.path_to_preproc / fname
         return fname.with_suffix(".npy")
 
+    def get_path_to_preprocessed_reduced_TF(self) -> Path:
+        fname = "freq_TF_preprocessed_reduced"
+        fname = self.path_to_preproc / fname
+        return fname.with_suffix(".npz")
+
     def get_path_to_preprocessed_noise_maps(self, sub: int | None = None) -> Path:
         fname = "noise_maps_preprocessed"
+        if sub is not None:
+            fname += f"_{sub:04d}"
+        fname = self.path_to_covar / fname
+        return fname.with_suffix(".npy")
+
+    def get_path_to_preprocessed_noise_alms(self, sub: int | None = None) -> Path:
+        fname = "noise_alms_preprocessed"
         if sub is not None:
             fname += f"_{sub:04d}"
         fname = self.path_to_covar / fname
@@ -331,6 +343,11 @@ class DataManager:
     @property
     def path_to_nl_noisecov_unbinned(self) -> Path:
         fname = self.path_to_covar / "covar_cl_unbinned"
+        return fname.with_suffix(".npy")
+
+    @property
+    def path_to_noisecov_alm(self) -> Path:
+        fname = self.path_to_covar / "covar_alm"
         return fname.with_suffix(".npy")
 
     @property
