@@ -104,6 +104,7 @@ class OutputDirsConfig:
     transfer_functions: str = "transfer_functions"
     preproc: str = "preproc"
     prepoc_diag_precond: str = "diag_precond"  # Modification megabuster
+    precomputation: str = "precomputation"  # Modification megabuster
     covar: str = "covar"
     plots: str = "plots"
     components: str = "components"

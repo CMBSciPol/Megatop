@@ -81,6 +81,10 @@ class DataManager:
     def path_to_binning(self) -> Path:
         return self.path_to_output / self._config.output_dirs.binning / Path("binning.npz")
 
+    @property
+    def path_to_precomputation(self) -> Path:
+        return self.path_to_output / self._config.output_dirs.precomputation
+
     # Paths to the plot directories (in output)
     # -----------------------------------------
 
@@ -226,7 +230,8 @@ class DataManager:
             msg = f"Invalid attribute '{attribute}'. Must be one of {valid_attributes}."
             raise ValueError(msg)
         names = [
-            Path(str(map_set.obsmat_path).replace(".npz", "") + getattr(map_set, attribute))
+            self.path_to_precomputation
+            / Path(str(map_set.obsmat_path.name).replace(".npz", "") + getattr(map_set, attribute))
             if getattr(map_set, attribute) != ""
             else None
             for map_set in self._config.map_sets
