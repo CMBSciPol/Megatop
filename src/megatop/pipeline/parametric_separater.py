@@ -18,6 +18,7 @@ from megatop import Config, DataManager  # noqa: E402
 from megatop.utils import Timer, logger, mask, passband  # noqa: E402
 from megatop.utils.compsep import set_alm_tozero_below_lmin  # noqa: E402
 from megatop.utils.mpi import get_world  # noqa: E402
+from megatop.utils.utils import MemoryUsage  # noqa: E402
 
 
 def get_and_format_inv_Nl(manager: DataManager, config: Config):
@@ -304,6 +305,8 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
             npix = binary_mask.size
             indices_mask = np.arange(npix)[hp.reorder(binary_mask, r2n=True) != 0]
             mask_stacked_nest = np.hstack((indices_mask + npix, indices_mask + 2 * npix))
+            MemoryUsage("Memory usage before build_obsmat_operator_from_flattened_matrices()")
+
             obsmat_operator_rhs = mb.io.build_obsmat_operator_from_flattened_matrices(
                 mb.io.load_all_obsmat(
                     obsmat_operator_fname,
@@ -419,7 +422,7 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
             #     continue # Skip callable attributes
             res_dict[attr] = getattr(res, attr)
 
-    if type(res_dict["W_maxL"]) is np.ndarray:
+    if type(res_dict["W_maxL"]) is not np.ndarray:
         # If W_maxL is a function, we can't pickle it, so we remove it
         logger.warning("W_maxL is a function, removing it from the results dictionary.")
         res_dict.pop("W_maxL")
