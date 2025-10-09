@@ -4,14 +4,49 @@ from pathlib import Path
 
 import healpy as hp
 import numpy as np
+from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
-from megatop.utils.preproc import common_beam_and_nside
+from megatop.utils.preproc import alm_common_beam, common_beam_and_nside
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
 from megatop.utils.utils import MemoryUsage
+
+
+def get_reduced_TF_for_Cl(inv_sqrt_tf_bin, transfer=None):
+    if inv_sqrt_tf_bin is None:
+        inv_sqrt_tf_full = np.linalg.inv([sqrtm(TF_ell.T) for TF_ell in transfer.T])[:, -4:, -4:]
+        inv_sqrt_tf_bin = np.zeros((2, 2, inv_sqrt_tf_full.shape[0]), dtype=np.complex128)
+        inv_sqrt_tf_bin[0, 0] = inv_sqrt_tf_full[:, 0, 0]
+        inv_sqrt_tf_bin[0, 1] = inv_sqrt_tf_full[:, 1, 1]
+        inv_sqrt_tf_bin[1, 0] = inv_sqrt_tf_full[:, 2, 2]
+        inv_sqrt_tf_bin[1, 1] = inv_sqrt_tf_full[:, 3, 3]
+
+    inv_tf_reduced = np.zeros((inv_sqrt_tf_bin.shape[-1], 4, 4), dtype=np.complex128)
+
+    inv_tf_reduced[:, 0, 0] = inv_sqrt_tf_bin[0, 0] ** 2
+    inv_tf_reduced[:, 0, 1] = inv_sqrt_tf_bin[0, 0] * inv_sqrt_tf_bin[0, 1]
+    inv_tf_reduced[:, 0, 2] = inv_sqrt_tf_bin[0, 1] * inv_sqrt_tf_bin[0, 0]
+    inv_tf_reduced[:, 0, 3] = inv_sqrt_tf_bin[0, 1] ** 2
+
+    inv_tf_reduced[:, 1, 0] = inv_sqrt_tf_bin[0, 0] * inv_sqrt_tf_bin[1, 0]
+    inv_tf_reduced[:, 1, 1] = inv_sqrt_tf_bin[0, 0] * inv_sqrt_tf_bin[1, 1]
+    inv_tf_reduced[:, 1, 2] = inv_sqrt_tf_bin[1, 0] * inv_sqrt_tf_bin[0, 1]
+    inv_tf_reduced[:, 1, 3] = inv_sqrt_tf_bin[0, 1] * inv_sqrt_tf_bin[1, 1]
+
+    inv_tf_reduced[:, 2, 0] = inv_sqrt_tf_bin[1, 0] * inv_sqrt_tf_bin[0, 0]
+    inv_tf_reduced[:, 2, 1] = inv_sqrt_tf_bin[0, 1] * inv_sqrt_tf_bin[1, 0]
+    inv_tf_reduced[:, 2, 2] = inv_sqrt_tf_bin[1, 1] * inv_sqrt_tf_bin[0, 0]
+    inv_tf_reduced[:, 2, 3] = inv_sqrt_tf_bin[1, 1] * inv_sqrt_tf_bin[0, 1]
+
+    inv_tf_reduced[:, 3, 0] = inv_sqrt_tf_bin[1, 0] ** 2
+    inv_tf_reduced[:, 3, 1] = inv_sqrt_tf_bin[1, 0] * inv_sqrt_tf_bin[1, 1]
+    inv_tf_reduced[:, 3, 2] = inv_sqrt_tf_bin[1, 1] * inv_sqrt_tf_bin[1, 0]
+    inv_tf_reduced[:, 3, 3] = inv_sqrt_tf_bin[1, 1] ** 2
+
+    return np.real(inv_tf_reduced)
 
 
 def pixel_noisecov_estimation(manager: DataManager, config: Config):
@@ -37,6 +72,15 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
     logger.info(f"rank = {rank}, size = {size}")
     noise_cov_preprocessed = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
+    test_alm_TF_noise = True
+    if test_alm_TF_noise:
+        noise_cov_alm_preprocessed = np.zeros(
+            [
+                len(config.frequencies),
+                2,
+                hp.Alm.getsize(config.parametric_sep_pars.harmonic_lmax - 1),
+            ]
+        )
 
     if config.parametric_sep_pars.use_harmonic_compsep:
         nmt_bins = load_nmt_binning(manager)
@@ -167,6 +211,10 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                         [len(config.frequencies), 3, noise_spectra_unbined.shape[-1]]
                     )
 
+                    reduced_TF_from_preproc = np.load(
+                        manager.get_path_to_preprocessed_reduced_TF(),
+                        allow_pickle=True,
+                    )
                     for f, tf_path in enumerate(manager.get_TF_filenames()):
                         if tf_path == Path():
                             logger.warning(
@@ -179,19 +227,13 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                             output_noise_spectra_unbined[f, 1] = noise_spectra_unbined[f, 0]
                             output_noise_spectra_unbined[f, 2] = noise_spectra_unbined[f, 3]
                             continue
-                        logger.info(f"Loading transfer function from {tf_path}")
-                        transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
-
-                        inv_tf = np.linalg.inv([T_ell.T for T_ell in transfer.T])[
-                            :, -4:, -4:
-                        ]  # taking only polarised components
-                        # careful with the transpose here, transfer is not symetric
 
                         reduced_TF = True
                         # TODO: remove reduced_TF option, or if needed, make it a parameter in config
                         if reduced_TF:
                             # Using the same limited elements as for the preproc step
                             # Since preproc uses alms and not spectra we only have alm_E, and alm_B
+                            """
                             inv_tf_ = np.zeros_like(inv_tf)
                             if config.pre_proc_pars.sum_TF_column:
                                 inv_tf_sum = np.sum(
@@ -204,9 +246,26 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                             else:
                                 inv_tf_[:, 0, 0] = inv_tf[:, 0, 0]
                                 inv_tf_[:, 1, 1] = inv_tf[:, 1, 1]
+                                # inv_tf_[:, 1, 1] = inv_tf[:, 0, -1]
                                 inv_tf_[:, 2, 2] = inv_tf[:, 2, 2]
+                                # inv_tf_[:, 2, 2] = inv_tf[:, -1, 0]
                                 inv_tf_[:, 3, 3] = inv_tf[:, 3, 3]
                             inv_tf = inv_tf_
+
+                            inv_tf_reduced = get_reduced_TF_for_Cl(None, transfer)
+                            inv_tf = inv_tf_reduced
+                            """
+                            inv_tf = get_reduced_TF_for_Cl(
+                                reduced_TF_from_preproc["inv_sqrt_tf_bin_freq"][f], None
+                            )
+                        else:
+                            logger.info(f"Loading transfer function from {tf_path}")
+                            transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
+
+                            inv_tf = np.linalg.inv([T_ell.T for T_ell in transfer.T])[
+                                :, -4:, -4:
+                            ]  # taking only polarised components
+                            # careful with the transpose here, transfer is not symetric
 
                         noise_spectra_TF_corrected = np.einsum(
                             "lij,jl->il",
@@ -248,6 +307,46 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 ..., ell_min_namaster:ell_max_namaster
             ]
 
+            if test_alm_TF_noise:
+                analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+                logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
+                # TODO: remove after merge
+                analysis_mask /= np.max(analysis_mask)
+
+                freq_beams = config.beams
+                common_beam = config.pre_proc_pars.common_beam_correction
+                if config.pre_proc_pars.DEBUGskippreproc:
+                    freq_beams = np.array([0.0] * len(config.frequencies))
+                    common_beam = 0.0
+
+                freq_alms_convolved = alm_common_beam(
+                    nside=config.nside,
+                    common_beam=common_beam,
+                    frequency_beams=freq_beams,
+                    freq_maps=np.array(noise_freq_maps),
+                    analysis_mask=analysis_mask,
+                    harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
+                )
+
+                freq_alms_convolved_TF_corrected = np.einsum(
+                    "fijl,fjl->fil",
+                    reduced_TF_from_preproc["inv_sqrt_tf_lm_freq"],
+                    freq_alms_convolved,
+                )
+
+                noise_cov_alm_preprocessed += np.real(
+                    freq_alms_convolved_TF_corrected * np.conj(freq_alms_convolved_TF_corrected)
+                )
+
+                manager.get_path_to_preprocessed_noise_alms(sub=id_real).parent.mkdir(
+                    exist_ok=True, parents=True
+                )
+                logger.info("Saving pre-processed noise alms to disk")
+                np.save(
+                    manager.get_path_to_preprocessed_noise_alms(sub=id_real),
+                    freq_alms_convolved_TF_corrected,
+                )
+
     if comm is not None:
         noise_cov_preprocessed_recvbuf = MPISUM(noise_cov_preprocessed, comm, rank, root)
         if config.parametric_sep_pars.use_harmonic_compsep:
@@ -255,11 +354,17 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             noise_cov_preprocessed_recvbuf_cl_unbinned = MPISUM(
                 cl_noise_cov_preprocessed_unbinned, comm, rank, root
             )
+            if test_alm_TF_noise:
+                noise_cov_preprocessed_recvbuf_alm = MPISUM(
+                    noise_cov_alm_preprocessed, comm, rank, root
+                )
     else:
         noise_cov_preprocessed_recvbuf = noise_cov_preprocessed
         if config.parametric_sep_pars.use_harmonic_compsep:
             noise_cov_preprocessed_recvbuf_cl = cl_noise_cov_preprocessed
             noise_cov_preprocessed_recvbuf_cl_unbinned = cl_noise_cov_preprocessed_unbinned
+            if test_alm_TF_noise:
+                noise_cov_preprocessed_recvbuf_alm = noise_cov_alm_preprocessed
 
     if rank == root:
         # Average noise_cov and noise_cov_preprocessed over nsims
@@ -269,12 +374,16 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             noise_cov_preprocessed_recvbuf_cl_unbinned = (
                 noise_cov_preprocessed_recvbuf_cl_unbinned / int_n_sim
             )
+            if test_alm_TF_noise:
+                noise_cov_preprocessed_mean_alm = noise_cov_preprocessed_recvbuf_alm / int_n_sim
 
     else:
         noise_cov_preprocessed_mean = None
         if config.parametric_sep_pars.use_harmonic_compsep:
             noise_cov_preprocessed_mean_cl = None
             noise_cov_preprocessed_recvbuf_cl_unbinned = None
+            if test_alm_TF_noise:
+                noise_cov_preprocessed_mean_alm = None
 
     if rank == root:
         manager.path_to_covar.mkdir(exist_ok=True, parents=True)
@@ -284,6 +393,8 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             np.save(
                 manager.path_to_nl_noisecov_unbinned, noise_cov_preprocessed_recvbuf_cl_unbinned
             )
+            if test_alm_TF_noise:
+                np.save(manager.path_to_noisecov_alm, noise_cov_preprocessed_mean_alm)
 
     if rank == root:
         logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")

@@ -10,11 +10,15 @@ def create_binning(nside, delta_ell, end_first_bin=None):
     if end_first_bin is not None:
         bin_low = np.arange(end_first_bin, 3 * nside, delta_ell)
         bin_high = bin_low + delta_ell - 1
-        bin_low = np.concatenate(([0], bin_low))
+        bin_low = np.concatenate(([2], bin_low))
         bin_high = np.concatenate(([end_first_bin - 1], bin_high))
     else:
         bin_low = np.arange(0, 3 * nside, delta_ell)
         bin_high = bin_low + delta_ell - 1
+
+        bin_low[0] = 2  # forcing to start at ell=2 without shifting all the other bins by 2
+        # This must be done after defing bin_high to avoid overlap of zeroth and first bin
+
     bin_high[-1] = 3 * nside - 1
     bin_center = (bin_low + bin_high) / 2
 
