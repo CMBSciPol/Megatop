@@ -226,8 +226,8 @@ class _MinimizeOptions:
 class _MEGABUSTEROptions:  # Modification megabuster
     max_steps_CG: int = 200
     tol_CG: float = 1e-6
-    use_preconditioner_diag: bool = True
-    use_preconditioner_pinv: bool = False
+    use_preconditioner_diag: bool = False
+    use_preconditioner_pinv: bool = True
 
 
 @define
