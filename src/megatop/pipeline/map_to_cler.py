@@ -67,7 +67,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
         W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim), allow_pickle=True)[
             "W_maxL"
         ]
-        # import IPython; IPython.embed()
+
         Cl_WmaxL = np.zeros(
             (W_maxL.shape[0], W_maxL.shape[0], W_maxL.shape[1], 4, nmt_bins.get_n_bands())
         )
@@ -108,6 +108,14 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
                         normalized_Cl_effective_TF[i, j, :, :, ell]
                     )
 
+        path = manager.get_path_to_spectra(sub=id_sim)
+        path.mkdir(parents=True, exist_ok=True)
+        fname_Cl_WmaxL = path / Path("Cl_WmaxL.npy")
+        fname_Cl_effective_TF = path / Path("Cl_effective_TF_normalized.npy")
+        fname_Cl_effective_TF_inv = path / Path("Cl_effective_TF_inv_normalized.npy")
+        np.save(fname_Cl_WmaxL, Cl_WmaxL)
+        np.save(fname_Cl_effective_TF, normalized_Cl_effective_TF)
+        np.save(fname_Cl_effective_TF_inv, inverse_normalized_Cl_effective_TF)
         # import IPython; IPython.embed()
         # effective_transfer_function, inverse_effective_transfer_function = (
         #     get_effective_transfer_function(transfer_freq, W_maxL, binary_mask))
