@@ -105,6 +105,8 @@ def preprocess_map(
                 #  EE->EE  ;  EB->EB
                 #  BE->BE  ;  BB->BB
                 #
+                # import IPython; IPython.embed()
+                """
                 inv_sqrt_tf = np.zeros((2, 2, nmt_bins_native.lmax + 1), dtype=np.complex128)
                 inv_sqrt_tf[0, 0] = homemade_unbin_cell(
                     inv_sqrt_tf_full[:, 0, 0], nmt_bins_native
@@ -112,12 +114,32 @@ def preprocess_map(
                 inv_sqrt_tf[0, 1] = homemade_unbin_cell(
                     inv_sqrt_tf_full[:, 1, 1], nmt_bins_native
                 )  # EB->EB
+                # inv_sqrt_tf[0, 1] = homemade_unbin_cell(
+                #     inv_sqrt_tf_full[:, 0, -1], nmt_bins_native
+                # )  # EB->EB
                 inv_sqrt_tf[1, 0] = homemade_unbin_cell(
                     inv_sqrt_tf_full[:, 2, 2], nmt_bins_native
                 )  # BE->BE
+                # inv_sqrt_tf[1, 0] = homemade_unbin_cell(
+                #     inv_sqrt_tf_full[:, -1, 0], nmt_bins_native
+                # )  # BE->BE
                 inv_sqrt_tf[1, 1] = homemade_unbin_cell(
                     inv_sqrt_tf_full[:, 3, 3], nmt_bins_native
                 )  # BB->BB
+                inv_sqrt_tf = inv_sqrt_tf[..., : config.parametric_sep_pars.harmonic_lmax]
+                """
+                inv_sqrt_tf_bin = np.zeros((2, 2, inv_sqrt_tf_full.shape[0]), dtype=np.complex128)
+                inv_sqrt_tf_bin[0, 0] = inv_sqrt_tf_full[:, 0, 0]
+                inv_sqrt_tf_bin[0, 1] = inv_sqrt_tf_full[:, 1, 1]
+                inv_sqrt_tf_bin[1, 0] = inv_sqrt_tf_full[:, 2, 2]
+                inv_sqrt_tf_bin[1, 1] = inv_sqrt_tf_full[:, 3, 3]
+
+                inv_sqrt_tf = np.zeros((2, 2, nmt_bins_native.lmax + 1), dtype=np.complex128)
+                for i in range(2):
+                    for j in range(2):
+                        inv_sqrt_tf[i, j] = homemade_unbin_cell(
+                            inv_sqrt_tf_bin[i, j], nmt_bins_native
+                        )
                 inv_sqrt_tf = inv_sqrt_tf[..., : config.parametric_sep_pars.harmonic_lmax]
 
                 if config.pre_proc_pars.sum_TF_column:

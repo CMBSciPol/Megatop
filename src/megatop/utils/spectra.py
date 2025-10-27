@@ -302,3 +302,61 @@ def get_effective_transfer_function(
                 )
 
     return normalized_effective_transfer_function, inverse_effective_transfer_function
+
+
+def get_effective_transfer_function_WCl(
+    transfer_freq: NDArray, W_maxL: NDArray, binary_mask: NDArray | None = None
+) -> NDArray:
+    """
+    Computes the effective transfer function from the transfer functions at each frequency and
+    the maximum likelihood results for the component separation operator
+    Parameters
+    ----------
+    transfer_freq : np.ndarray
+        Frequency transfer functions, shape (n_freq, 9 , 9, n_bins). Where 9 refers to the T, E, B, and their cross-spectra (xy->wz).
+    W_maxL : np.ndarray
+        Component separation operator, shape (ncomp, nfreq, n_stokes, n_pix).
+    binary_mask : np.ndarray, optional
+        Binary mask, shape (n_pix,). If provided, the effective transfer function is computed
+        only over the observed pixels. Default is None, which means the effective transfer function is computed
+        over all pixels.
+    Returns
+    -------
+    effective_transfer_function : np.ndarray
+        Effective transfer function, shape (ncomp, ncomp, pol_spectra, pol_spectra ,nbin). pol_spectra refers EE, EB, BE, BB
+    """
+
+    #  Averaging W over observed pixels and stokes parameters:
+    if binary_mask is None:
+        pix_stokes_mean_W = np.mean(W_maxL, axis=(-2, -1))  # shape (ncomp, nfreq)
+    else:
+        pix_stokes_mean_W = np.mean(W_maxL[..., binary_mask], axis=(-2, -1))  # shape (ncomp, nfreq)
+
+    pol_transfer = transfer_freq[:, -4:, -4:]  # Keeping only polarised components (EE, EB, BE, BB)
+    # applying comp-sep operator on both sides of the transfer function
+    normalisation_factor = np.einsum(
+        "cf, fk -> ck", pix_stokes_mean_W, pix_stokes_mean_W.T
+    )  # shape (ncomp, pol_spectra, n_bins)
+
+    effective_transfer_function = np.einsum(
+        "cf,fsdl,fk->cksdl", pix_stokes_mean_W, pol_transfer, pix_stokes_mean_W.T
+    )  # shape (ncomp, pol_spectra, n_bins)
+
+    # applying normalisation_factor to each comp x comp in effective_transfer_function
+    # to get the effective transfer function
+    normalized_effective_transfer_function = (
+        effective_transfer_function
+        / normalisation_factor[(...,) + (np.newaxis,) * (effective_transfer_function.ndim - 2)]
+    )
+
+    # inverting over polarised spectra space:
+    inverse_effective_transfer_function = np.zeros_like(normalized_effective_transfer_function)
+    for i in range(normalized_effective_transfer_function.shape[0]):
+        for j in range(normalized_effective_transfer_function.shape[1]):
+            for ell in range(normalized_effective_transfer_function.shape[-1]):
+                # Inverting the transfer function for each ell over the spectra dimension
+                inverse_effective_transfer_function[i, j, :, :, ell] = np.linalg.inv(
+                    normalized_effective_transfer_function[i, j, :, :, ell]
+                )
+
+    return normalized_effective_transfer_function, inverse_effective_transfer_function

@@ -13,7 +13,10 @@ from megatop.utils.mpi import get_world
 
 def binning_maker(manager: DataManager, config: Config):
     bin_low, bin_high, bin_centre = create_binning(
-        config.nside, config.map2cl_pars.delta_ell, end_first_bin=config.lmin
+        config.nside,
+        config.map2cl_pars.delta_ell,
+        config.map2cl_pars.delta_ell,
+        # end_first_bin=config.lmin
     )
     bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
 
