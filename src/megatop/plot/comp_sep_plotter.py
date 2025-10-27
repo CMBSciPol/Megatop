@@ -35,13 +35,14 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
         "dust_post_compsep_maps",
         component="Dust post-compsep",
     )
-    freq_maps_plotter(
-        config,
-        np.array([comp_maps[2]]),
-        plot_dir,
-        "synch_post_compsep_maps",
-        component="Synch post-compsep",
-    )
+    if config.parametric_sep_pars.include_synchrotron:
+        freq_maps_plotter(
+            config,
+            np.array([comp_maps[2]]),
+            plot_dir,
+            "synch_post_compsep_maps",
+            component="Synch post-compsep",
+        )
 
 
 def plot_compsep_stats(manager: DataManager, config: Config):
@@ -62,6 +63,7 @@ def plot_compsep_stats(manager: DataManager, config: Config):
 
     # plotting histograms of result parameters
     fig, axes = plt.subplots(1, res_compsep_last["params"].shape[0], figsize=(12, 5))
+    axes = np.atleast_1d(axes)
     for i, (ax, param_name) in enumerate(zip(axes, res_compsep_last["params"], strict=False)):
         ax.hist(param_res_list[:, i], density=True)
 
