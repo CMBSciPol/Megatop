@@ -71,11 +71,17 @@ def get_noise(config: Config, fsky_binary):
 
     if hasattr(config.noise_sim_pars, 'v3p1'):
         logger.debug("Using SO:UK V3calc new version (Summer 2025) to get white noise levels.")
-        import noisecalc_modified as ncal
+        from . import noisecalc_modified as ncal
+
+        extra = { 'name': config.noise_sim_pars.extra_name, 'bands': config.noise_sim_pars.extra_bands,
+                    'beams': config.noise_sim_pars.extra_beams,'sensitivities': config.noise_sim_pars.extra_sensitivities,
+                    'N_tubes': config.noise_sim_pars.extra_Ntubes,'Patmos_alpha': config.noise_sim_pars.extra_alpha, 
+                    'Patmos_ell': config.noise_sim_pars.extra_ell}
+
         nc = ncal.SOSatV3point1(sensitivity_mode=config.noise_sim_pars.v3_sensitivity_mode,
-                                N_tubes=[1, 9, 5],
-                                survey_years=1.0, one_over_f_mode=1)
-        _, _, n_ell = nc.get_noise_curves(fsky_binary, 3 * config.nside - 1, config.noise_sim_pars.v3_one_over_f_mode, deconv_beam=False)
+                                N_tubes=config.noise_sim_pars.Ntubes,
+                                survey_years=1.0, one_over_f_mode=config.noise_sim_pars.v3_one_over_f_mode, extra_instruments=extra)
+        _, _, n_ell = nc.get_noise_curves(fsky_binary, 3 * config.nside - 1, 1, deconv_beam=False)
     else:
         logger.debug("Using SO V3calc to get white noise levels.")
         idx_freqs = config.indexes_into_SO_freqs
