@@ -69,18 +69,27 @@ def get_noise(config: Config, fsky_binary):
     if config.noise_sim_pars.experiment != "SO":
         raise NotImplementedError
 
-    logger.debug("Using SO V3calc to get white noise levels.")
-    idx_freqs = config.indexes_into_SO_freqs
-    _, n_ell, white_noise_levels = V3.so_V3_SA_noise(
-        sensitivity_mode=config.noise_sim_pars.v3_sensitivity_mode,
-        one_over_f_mode=config.noise_sim_pars.v3_one_over_f_mode,
-        SAC_yrs_LF=config.noise_sim_pars.SAC_yrs_LF,
-        f_sky=fsky_binary,
-        ell_max=3 * config.nside - 1,
-        delta_ell=1,
-        beam_corrected=False,
-        remove_kluge=not config.noise_sim_pars.include_nhits,
-    )
+    if hasattr(config.noise_sim_pars, 'v3p1'):
+        logger.debug("Using SO:UK V3calc new version (Summer 2025) to get white noise levels.")
+        import noisecalc_modified as ncal
+        nc = ncal.SOSatV3point1(sensitivity_mode=config.noise_sim_pars.v3_sensitivity_mode,
+                                N_tubes=[1, 9, 5],
+                                survey_years=1.0, one_over_f_mode=1)
+        _, _, n_ell = nc.get_noise_curves(fsky_binary, 3 * config.nside - 1, config.noise_sim_pars.v3_one_over_f_mode, deconv_beam=False)
+    else:
+        logger.debug("Using SO V3calc to get white noise levels.")
+        idx_freqs = config.indexes_into_SO_freqs
+        _, n_ell, white_noise_levels = V3.so_V3_SA_noise(
+            sensitivity_mode=config.noise_sim_pars.v3_sensitivity_mode,
+            one_over_f_mode=config.noise_sim_pars.v3_one_over_f_mode,
+            SAC_yrs_LF=config.noise_sim_pars.SAC_yrs_LF,
+            f_sky=fsky_binary,
+            ell_max=3 * config.nside - 1,
+            delta_ell=1,
+            beam_corrected=False,
+            remove_kluge=not config.noise_sim_pars.include_nhits,
+        )
+
     white_noise_levels = white_noise_levels[idx_freqs]
     n_ell = n_ell[idx_freqs]
     logger.debug(
