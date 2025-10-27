@@ -50,22 +50,7 @@ def get_reduced_TF(transfer):
 
 def pixel_noisecov_estimation(manager: DataManager, config: Config):
     tracemalloc.start()
-
-    try:
-        from mpi4py import MPI
-
-        comm = MPI.COMM_WORLD
-        size = comm.Get_size()
-        rank = comm.rank
-        root = 0
-
-    except ImportError:
-        logger.info("Could not find MPI. Proceeding without.")
-
-        comm = None
-        root = 0
-        rank = 0
-        size = 1
+    comm, rank, size = get_world()
 
     MemoryUsage(f"rank = {rank} ")
 
@@ -398,11 +383,11 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             ]
 
     if comm is not None:
-        noise_cov_preprocessed_recvbuf = MPISUM(noise_cov_preprocessed, comm, rank, root)
+        noise_cov_preprocessed_recvbuf = MPISUM(noise_cov_preprocessed, comm, rank, 0)
         if config.parametric_sep_pars.use_harmonic_compsep:
-            noise_cov_preprocessed_recvbuf_cl = MPISUM(cl_noise_cov_preprocessed, comm, rank, root)
+            noise_cov_preprocessed_recvbuf_cl = MPISUM(cl_noise_cov_preprocessed, comm, rank, 0)
             noise_cov_preprocessed_recvbuf_cl_unbinned = MPISUM(
-                cl_noise_cov_preprocessed_unbinned, comm, rank, root
+                cl_noise_cov_preprocessed_unbinned, comm, rank, 0
             )
     else:
         noise_cov_preprocessed_recvbuf = noise_cov_preprocessed
@@ -410,7 +395,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             noise_cov_preprocessed_recvbuf_cl = cl_noise_cov_preprocessed
             noise_cov_preprocessed_recvbuf_cl_unbinned = cl_noise_cov_preprocessed_unbinned
 
-    if rank == root:
+    if rank == 0:
         # Average noise_cov and noise_cov_preprocessed over nsims
         noise_cov_preprocessed_mean = noise_cov_preprocessed_recvbuf / int_n_sim
         if config.parametric_sep_pars.use_harmonic_compsep:
@@ -425,7 +410,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             noise_cov_preprocessed_mean_cl = None
             noise_cov_preprocessed_recvbuf_cl_unbinned = None
 
-    if rank == root:
+    if rank == 0:
         manager.path_to_covar.mkdir(exist_ok=True, parents=True)
         np.save(manager.path_to_pixel_noisecov, noise_cov_preprocessed_mean)
         if config.parametric_sep_pars.use_harmonic_compsep:
@@ -434,7 +419,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 manager.path_to_nl_noisecov_unbinned, noise_cov_preprocessed_recvbuf_cl_unbinned
             )
 
-    if rank == root:
+    if rank == 0:
         logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
 
 

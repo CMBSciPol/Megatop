@@ -18,7 +18,7 @@ _POOL_EXECUTOR_THRESHOLD = 2
 
 
 @function_timer("get-noise-map")
-def get_noise(config: Config, binary_mask: NDArray, nhits_map: NDArray) -> NDArray:
+def get_noise(config: Config, binary_mask: NDArray, nhits_maps: NDArray) -> NDArray:
     noise_option = config.noise_sim_pars.noise_option
 
     if noise_option == NoiseOption.NOISELESS:
@@ -44,7 +44,7 @@ def get_noise(config: Config, binary_mask: NDArray, nhits_map: NDArray) -> NDArr
         logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
     if config.noise_sim_pars.include_nhits:
-        _ = mock.include_hits_noise(noise_freq_maps, nhits_map, binary_mask)
+        _ = mock.include_hits_noise(noise_freq_maps, nhits_maps, binary_mask)
 
     return noise_freq_maps
 
@@ -274,7 +274,7 @@ def func_signal(
     manager: DataManager,
     config: Config,
     binary_mask: NDArray,
-    nhits_map: NDArray,
+    nhits_maps: NDArray,
     *,
     obsmat_funcs: dict | None = None,
 ) -> int:
@@ -294,7 +294,7 @@ def func_signal(
     # generate the components
     cmb = get_cmb(manager, config)
     fg = get_foregrounds(config)
-    noise = get_noise(config, binary_mask, nhits_map)
+    noise = get_noise(config, binary_mask, nhits_maps)
 
     # broadcast CMB to all frequencies
     sky = cmb[None, ...] + fg
@@ -328,11 +328,11 @@ def func_noise(
     manager: DataManager,
     config: Config,
     binary_mask: NDArray,
-    nhits_map: NDArray,
+    nhits_maps: NDArray,
     id_sim: int,
 ) -> int:
     """Generate a noise realization."""
-    noise = get_noise(config, binary_mask, nhits_map)
+    noise = get_noise(config, binary_mask, nhits_maps)
     _ = mask.apply_binary_mask(noise, binary_mask, unseen=False)
     save_simu(manager, noise, id_sim=id_sim, is_noise=True)
     return id_sim
@@ -350,13 +350,14 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    nhits_map = hp.read_map(manager.path_to_nhits_map)
+    list_hitmapname = [m.nhits_map_path for m in config.map_sets]
+    nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
     func = partial(
         func_signal,
         manager=manager,
         config=config,
         binary_mask=binary_mask,
-        nhits_map=nhits_map,
+        nhits_maps=nhits_maps,
     )
 
     if filtering := config.map_sim_pars.filter_sims:
@@ -385,8 +386,9 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    nhits_map = hp.read_map(manager.path_to_nhits_map)
-    func = partial(func_noise, manager, config, binary_mask, nhits_map)
+    list_hitmapname = [m.nhits_map_path for m in config.map_sets]
+    nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
+    func = partial(func_noise, manager, config, binary_mask, nhits_maps)
 
     for result in _map(func, range(n_sim), comm):
         logger.info(f"Finished noise realization {result + 1} / {n_sim}")

@@ -137,8 +137,14 @@ class DataManager:
     # -------------------------
 
     @property
-    def path_to_nhits_map(self) -> Path:
-        fname = self.path_to_masks / self._config.masks_pars.nhits_map_name
+    def path_to_common_nhits_map(self) -> Path:
+        fname = self.path_to_masks / Path(f"{self._config.masks_pars.nhits_map_name}_common")
+        return fname.with_suffix(".fits")
+
+    def path_to_nhits_map(self, map_set) -> Path:
+        fname = self.path_to_masks / Path(
+            f"{self._config.masks_pars.nhits_map_name}_{map_set.name}"
+        )
         return fname.with_suffix(".fits")
 
     @property

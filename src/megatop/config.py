@@ -129,9 +129,18 @@ class MapSetConfig:
     obsmat_path: Path = field(converter=Path, default=".")
     TF_path: Path = field(converter=Path, default=".")
     passband_filename: str = ""
+    nhits_map_path: str | Path | None = field(default=None)
+    depth_map_path: Path | None = field(default=None)
 
     def __attrs_post_init__(self) -> None:
         self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
+
+    @nhits_map_path.validator
+    def check(self, attribute, value):
+        """Check that either nhits_map or depth_map are given"""
+        if self.depth_map_path is None and value is None:
+            msg = f"Need to give either a depth map or a nhits_map (which can be SO_nonimal) for {attribute.name} in config."
+            raise ValueError(msg)
 
     @property
     def map_filename(self) -> str:
@@ -148,8 +157,6 @@ class MapSetConfig:
 
 @define
 class MasksConfig:
-    input_nhits_map: Path | None = None
-
     nhits_map_name: str = "nhits_map"
     analysis_mask_name: str = "analysis_mask"
     binary_mask_name: str = "binary_mask"
@@ -158,6 +165,7 @@ class MasksConfig:
     apod_radius_point_source: float = 4
     apod_type: ValidApoType = "C1"
     binary_mask_zero_threshold: float = 1e-1
+    fwhm_arcmin_smooth_nhits: float = 60
 
     # TODO: option to give the direct path to the galactic mask?
     include_galactic: bool = False
@@ -183,9 +191,9 @@ class MasksConfig:
 
 @define
 class GeneralConfig:
-    nside: int = 128
+    nside: int = 512
     lmin: int = 30
-    lmax: int = field(default=256)
+    lmax: int = field(default=1000)
 
     @lmax.validator
     def check(self, attribute, value):
@@ -393,12 +401,12 @@ class Config:
             fiducial_cmb=FiducialCMBConfig(root="fiducial_cmb_root"),
             map_sets=[
                 # typical SO configuration
-                MapSetConfig(freq_tag=27, exp_tag="SAT4"),
-                MapSetConfig(freq_tag=39, exp_tag="SAT4"),
-                MapSetConfig(freq_tag=93, exp_tag="SAT1"),
-                MapSetConfig(freq_tag=145, exp_tag="SAT1"),
-                MapSetConfig(freq_tag=225, exp_tag="SAT3"),
-                MapSetConfig(freq_tag=280, exp_tag="SAT3"),
+                MapSetConfig(freq_tag=27, exp_tag="SAT4", nhits_map_path="SO"),
+                MapSetConfig(freq_tag=39, exp_tag="SAT4", nhits_map_path="SO"),
+                MapSetConfig(freq_tag=93, exp_tag="SAT1", nhits_map_path="SO"),
+                MapSetConfig(freq_tag=145, exp_tag="SAT1", nhits_map_path="SO"),
+                MapSetConfig(freq_tag=225, exp_tag="SAT3", nhits_map_path="SO"),
+                MapSetConfig(freq_tag=280, exp_tag="SAT3", nhits_map_path="SO"),
             ],
         )
 
@@ -458,13 +466,21 @@ class Config:
         """The list of components in the sky model"""
         return self.map_sim_pars.sky_model
 
-    @property
-    def use_input_nhits(self) -> bool:
-        return self.masks_pars.input_nhits_map is not None
+    # @property
+    # def use_input_nhits(self) -> bool:
+    #     return self.masks_pars.input_nhits_map is not None
 
     @property
     def use_input_point_sources(self) -> bool:
         return self.masks_pars.include_sources and self.masks_pars.input_sources_mask is not None
+
+    @property
+    def use_depth_maps(self) -> bool:
+        return all(m.depth_map_path is not None for m in self.map_sets)
+
+    @property
+    def use_nhits_maps(self) -> bool:
+        return not self.use_depth_maps
 
     @property
     def use_custom_beams(self) -> bool:
