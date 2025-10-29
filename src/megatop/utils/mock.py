@@ -63,26 +63,32 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
         maps_fgs.append(m)
     return np.array(maps_fgs)
 
-
 def get_noise(config: Config, fsky_binary):
+    
     # TODO move to manager ?
     if config.noise_sim_pars.experiment != "SO":
         raise NotImplementedError
 
     if hasattr(config.noise_sim_pars, 'v3p1'):
+        
         logger.debug("Using SO:UK V3calc new version (Summer 2025) to get white noise levels.")
         from . import noisecalc_modified as ncal
 
-        extra = { 'name': config.noise_sim_pars.extra_name, 'bands': config.noise_sim_pars.extra_bands,
-                    'beams': config.noise_sim_pars.extra_beams,'sensitivities': config.noise_sim_pars.extra_sensitivities,
-                    'N_tubes': config.noise_sim_pars.extra_Ntubes,'Patmos_alpha': config.noise_sim_pars.extra_alpha, 
-                    'Patmos_ell': config.noise_sim_pars.extra_ell}
+        idx_freqs = config.indexes_into_SO_freqs
+
+        extra = [{ 'name': config.noise_sim_pars.extra_name, 'bands': config.noise_sim_pars.extra_bands,
+                    'beams': config.noise_sim_pars.extra_beams, 'sensitivities': config.noise_sim_pars.extra_sensitivities,
+                    'Ntubes': config.noise_sim_pars.extra_Ntubes, 'Patmos_alpha': config.noise_sim_pars.extra_alpha, 
+                    'Patmos_ell': config.noise_sim_pars.extra_ell}]
 
         nc = ncal.SOSatV3point1(sensitivity_mode=config.noise_sim_pars.v3_sensitivity_mode,
                                 N_tubes=config.noise_sim_pars.Ntubes,
                                 survey_years=1.0, one_over_f_mode=config.noise_sim_pars.v3_one_over_f_mode, extra_instruments=extra)
-        _, _, n_ell = nc.get_noise_curves(fsky_binary, 3 * config.nside - 1, 1, deconv_beam=False)
+
+        _, _, n_ell, white_noise_levels = nc.get_noise_curves(fsky_binary, 3 * config.nside - 1, 1, deconv_beam=False)
+
     else:
+
         logger.debug("Using SO V3calc to get white noise levels.")
         idx_freqs = config.indexes_into_SO_freqs
         _, n_ell, white_noise_levels = V3.so_V3_SA_noise(
@@ -95,14 +101,14 @@ def get_noise(config: Config, fsky_binary):
             beam_corrected=False,
             remove_kluge=not config.noise_sim_pars.include_nhits,
         )
-
+    
     white_noise_levels = white_noise_levels[idx_freqs]
     n_ell = n_ell[idx_freqs]
     logger.debug(
         f"Map white noise level (Q,U) {', '.join(f'{lvl:.2f}' for lvl in white_noise_levels)} muK-arcmin"
     )
-    return n_ell, white_noise_levels
 
+    return n_ell, white_noise_levels
 
 def get_noise_map_from_white_noise(frequencies, nside: int, map_white_noise_levels):
     npix = hp.nside2npix(nside)
@@ -155,7 +161,6 @@ def include_hits_noise(noise_maps, nhits_maps, binary_mask):
         noise_maps[..., mask_indices] /= np.sqrt(nhits_maps[..., np.newaxis, mask_indices])
 
     return noise_maps
-
 
 def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float):
     lmax_convolution = 3 * nside  # here lmax seems to play an important role

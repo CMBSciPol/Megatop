@@ -89,17 +89,18 @@ def get_atmosphere_params(freqs, version=1, el=None):
         # Jam in a fake value for 20 GHz.
         data[20.] = 200.
     elif version == 1:
-        data_bands = np.array([ 20., 27., 39., 93., 145., 225., 280., 350, 410])
+        data_bands = np.array([ 20., 27., 39., 93., 145., 225., 280., 285, 350, 410])
         data_C = np.array([  3.45565594e+02 * 1.4,
                              6.00734484e+01 * 1.4,
                              1.45291936e+01 * 1.4,
                              6.81426710e+02 * 1.4,
                              1.20000000e+04,
                              2.66015359e+05,
-                             1.56040514e+06,1e9, 1e9])
+                             1.56040514e+06,1e9, 1e9, 1e9])
         data = {}
         for b,C in zip(data_bands, data_C):
             data[b] = C
+    
     return (np.array([data[f] * el_correction**2 for f in freqs]),
             np.array([-3.5 for f in freqs]))
 
@@ -302,9 +303,11 @@ class SOTel:
                    (P_low_noise[:,None,:] * P_low_noise[None,:,:])**.5)
 
         # Add in white noise on the diagonal.
+        Map_white_noise_levels = []
         for i in range(len(W)):
             T_noise[i,i] += W[i]
             P_noise[i,i] += W[i] * 2
+            Map_white_noise_levels.append( np.sqrt(P_noise[i,i])) 
 
         if rolloff_ell is not None:
             # Use the same simple rolloff for all bands, T & P.
@@ -331,7 +334,7 @@ class SOTel:
         if self.has_P:
             P_out = P_noise * self.get_survey_spread(f_sky, units='sr')
 
-        return (ell, T_out, P_out)
+        return (ell, T_out, P_out, Map_white_noise_levels)
 
 
 """ Elevation-dependent noise model for LAT is captured below.  Detector
@@ -617,16 +620,17 @@ class SOSatV3point1(SOTel):
                 bands = np.array(inst['bands'])
                 beams = np.array(inst['beams'])
                 sens_dict = inst['sensitivities']
-                weight = inst['N_tubes']
+                weight = inst['Ntubes']
                 Patmos_ell = inst['Patmos_ell']
                 Patmos_alpha = inst['Patmos_alpha']
 
                 self.bands = np.append(self.bands, bands)
                 self.beams = np.append(self.beams, beams)
-                self.tube_configs[name] = np.hstack((np.zeros_like(self.tube_configs['LF']), np.array(sens_dict[sensitivity_mode])))
+
+                self.tube_configs[name] = np.hstack((np.zeros_like(self.tube_configs['LF']), np.array(sens_dict)))
 
                 for k in self.tube_configs.keys(): 
-                    if k!=name: self.tube_configs[k]  = np.hstack((self.tube_configs[k], np.zeros_like(sens_dict[sensitivity_mode])))
+                    if k!=name: self.tube_configs[k]  = np.hstack((self.tube_configs[k], np.zeros_like(sens_dict)))
 
                 N_tubes.append((name, weight))
 

@@ -29,8 +29,7 @@ __all__ = [
     "ValidPlanckGalKey",
 ]
 
-
-SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
+SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280, 285, 350]
 SO_BEAMS_ARCMIN = {
     27: 91.0,
     39: 63.0,
@@ -38,6 +37,8 @@ SO_BEAMS_ARCMIN = {
     145: 17.0,
     225: 11.0,
     280: 9.0,
+    285: 9.0,
+    350: 7.0,
 }
 
 ValidApoType = Literal["C1", "C2", "Smooth"]
@@ -308,6 +309,16 @@ class NoiseSimConfig:
     SAC_yrs_LF: int = 1
 
     include_nhits: bool = True
+    
+    v3p1: bool=False
+    Ntubes: list[float] = field(factory=lambda: [1., 9., 5.]) 
+    extra_name: str = "xUHF"
+    extra_bands: list[float] = field(factory=lambda: [225, 285, 350]) 
+    extra_beams: list[float] = field(factory=lambda: [15., 10., 8.])
+    extra_sensitivities: list[float] = field(factory=lambda: [20., 10., 10.])
+    extra_Ntubes: float = 0.5
+    extra_alpha: list[float] = field(factory=lambda: [-3, -3, -3])
+    extra_ell: list[int] = field(factory=lambda: [40, 40, 40])
 
     # @noise_option.validator
     # def check(self, attribute, value):
