@@ -51,9 +51,10 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
-    W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
-        "W_maxL"
-    ]
+    if not config.parametric_sep_pars.use_megabuster:
+        W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
+            "W_maxL"
+        ]
 
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
@@ -69,72 +70,77 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     )
 
     if config.parametric_sep_pars.use_megabuster:
-        logger.warning(
-            "Using Megabuster for component separation, make sure to have the correct parameters set in the config file"
-        )
-
-        obsmat_operator_fname = manager.get_path_list_or_None("suffix_obsmat_scipy")
-
-        if np.all(np.array(obsmat_operator_fname) == Path()):
-            # TODO: how to handle this case?
-            logger.warning("No observation matrix file provided. Using identity matrix instead.")
-            obsmat_operator_rhs = None
-        elif np.any(np.array(obsmat_operator_fname) == Path()):
-            msg_any_obs = "Not all observation matrix files are provided. Provide either all or none, partial set of observation matrices is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
-            raise ValueError(msg_any_obs)
-        else:
-            logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
-            npix = binary_mask.size
-            indices_mask = np.arange(npix)[hp.reorder(binary_mask, r2n=True) != 0]
-            mask_stacked_nest = np.hstack((indices_mask + npix, indices_mask + 2 * npix))
-            obsmat_operator_rhs = mb.io.build_obsmat_operator_from_flattened_matrices(
-                mb.io.load_all_obsmat(
-                    obsmat_operator_fname,
-                    size_obsmat=3 * npix,
-                    kind="precomputations_scipy",
-                    mask_stacked=mask_stacked_nest,
-                ),
-                nstokes=2,
-                return_transpose=True,
-            )
-
-        path_eigen_decomp_fname = manager.get_path_list_or_None("suffix_eigen_decomp")
-        if np.all(np.array(path_eigen_decomp_fname) == Path()):
-            # TODO: how to handle this case?
+        with Timer("init-megabuster"):
             logger.warning(
-                "No observation matrix file provided for CG. Using identity matrix instead."
+                "Using Megabuster for component separation, make sure to have the correct parameters set in the config file"
             )
-            central_freq_op = None
-            matrix_precond = None
-        elif np.any(np.array(path_eigen_decomp_fname) == Path()):
-            msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
-            raise ValueError(msg_any_obs)
-        else:
-            logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
-            central_freq_op = mb.tools.get_dense_furax_operator_from_freq_array(
-                mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
+
+            obsmat_operator_fname = manager.get_path_list_or_None("suffix_obsmat_scipy")
+
+            if np.all(np.array(obsmat_operator_fname) == Path()):
+                # TODO: how to handle this case?
+                logger.warning(
+                    "No observation matrix file provided. Using identity matrix instead."
+                )
+                obsmat_operator_rhs = None
+            elif np.any(np.array(obsmat_operator_fname) == Path()):
+                msg_any_obs = "Not all observation matrix files are provided. Provide either all or none, partial set of observation matrices is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
+                raise ValueError(msg_any_obs)
+            else:
+                logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
+                npix = binary_mask.size
+                indices_mask = np.arange(npix)[hp.reorder(binary_mask, r2n=True) != 0]
+                mask_stacked_nest = np.hstack((indices_mask + npix, indices_mask + 2 * npix))
+                obsmat_operator_rhs = mb.io.build_obsmat_operator_from_flattened_matrices(
+                    mb.io.load_all_obsmat(
+                        obsmat_operator_fname,
+                        size_obsmat=3 * npix,
+                        kind="precomputations_scipy",
+                        mask_stacked=mask_stacked_nest,
+                    ),
+                    nstokes=2,
+                    return_transpose=True,
+                )
+
+            path_eigen_decomp_fname = manager.get_path_list_or_None("suffix_eigen_decomp")
+            if np.all(np.array(path_eigen_decomp_fname) == Path()):
+                # TODO: how to handle this case?
+                logger.warning(
+                    "No observation matrix file provided for CG. Using identity matrix instead."
+                )
+                central_freq_op = None
+                matrix_precond = None
+            elif np.any(np.array(path_eigen_decomp_fname) == Path()):
+                msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
+                raise ValueError(msg_any_obs)
+            else:
+                logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
+                central_freq_op = mb.tools.get_dense_furax_operator_from_freq_array(
+                    mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
+                )
+                matrix_precond = mb.io.load_matrix_precond(
+                    path_eigen_decomp_fname, power_diagonal=-1
+                )
+
+            with Timer("load-covmat"):
+                noisecov_fname = manager.path_to_pixel_noisecov
+                logger.debug(f"Loading covmat from {noisecov_fname}")
+                noisecov = np.load(noisecov_fname)
+
+            noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
+            inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
+            inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
+                1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
             )
-            matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
 
-        with Timer("load-covmat"):
-            noisecov_fname = manager.path_to_pixel_noisecov
-            logger.debug(f"Loading covmat from {noisecov_fname}")
-            noisecov = np.load(noisecov_fname)
-
-        noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
-        inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
-        inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
-            1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
-        )
-
-        # get the 'options' through the appropriate method which returns a dict
-        parameters_foregrounds_x = np.load(
-            manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True
-        )["x"]
-        parameters_foregrounds = {
-            "beta_dust": np.array(parameters_foregrounds_x[0]),
-            "beta_pl": np.array(parameters_foregrounds_x[1]),
-        }
+            # get the 'options' through the appropriate method which returns a dict
+            parameters_foregrounds_x = np.load(
+                manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True
+            )["x"]
+            parameters_foregrounds = {
+                "beta_dust": np.array(parameters_foregrounds_x[0]),
+                "beta_pl": np.array(parameters_foregrounds_x[1]),
+            }
 
     # Initializing workspace
     with Timer("init-namaster-workspace"):
@@ -251,7 +257,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                     frequency_beams=config.beams,
                     freq_maps=noise_freq_maps,
                 )
-
+        # import IPython; IPython.embed()
         # Applying component-separation operator
         if not config.parametric_sep_pars.use_megabuster:
             noise_map_post_compsep = np.einsum(
@@ -274,8 +280,8 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                 central_freq_op=central_freq_op,
                 matrix_precond=matrix_precond,
                 dictionary_parameters_CG={
-                    "max_steps_CG": megabuster_options.max_steps_CG,
-                    "tol_CG": megabuster_options.tol_CG,
+                    "max_steps_CG": megabuster_options["max_steps_CG"],
+                    "tol_CG": megabuster_options["tol_CG"],
                 },
                 ordering_parameter=["beta_dust", "beta_pl"],
                 ordering_component=["cmb", "dust", "synchrotron"],
