@@ -74,7 +74,8 @@ def get_noise(config: Config, fsky_binary):
         logger.debug("Using SO:UK V3calc new version (Summer 2025) to get white noise levels.")
         from . import noisecalc_modified as ncal
 
-        idx_freqs = config.indexes_into_SO_freqs
+        # idx_freqs = config.indexes_into_SO_freqs
+        idx_freqs = range( len(config.frequencies) )
 
         extra = [{ 'name': config.noise_sim_pars.extra_name, 'bands': config.noise_sim_pars.extra_bands,
                     'beams': config.noise_sim_pars.extra_beams, 'sensitivities': config.noise_sim_pars.extra_sensitivities,
@@ -101,7 +102,7 @@ def get_noise(config: Config, fsky_binary):
             beam_corrected=False,
             remove_kluge=not config.noise_sim_pars.include_nhits,
         )
-    
+
     white_noise_levels = white_noise_levels[idx_freqs]
     n_ell = n_ell[idx_freqs]
     logger.debug(

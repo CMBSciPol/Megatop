@@ -33,7 +33,7 @@ __all__ = [
     "ValidPlanckGalKey",
 ]
 
-SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280, 285, 350]
+SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
 SO_BEAMS_ARCMIN = {
     27: 91.0,
     39: 63.0,
@@ -41,8 +41,6 @@ SO_BEAMS_ARCMIN = {
     145: 17.0,
     225: 11.0,
     280: 9.0,
-    285: 9.0,
-    350: 7.0,
 }
 
 ValidApoType = Literal["C1", "C2", "Smooth"]
@@ -111,13 +109,11 @@ class OutputDirsConfig:
     noise_spectra: str = "noise_spectra"
     mcmc: str = "mcmc"
 
-
 @define
 class FiducialCMBConfig:
     root: Path = field(converter=Path)
     lensed_scalar: str = "lensed_scalar_cl"
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
-
 
 @define(slots=False)
 class MapSetConfig:
@@ -266,12 +262,10 @@ class Map2ClConfig:
             msg = f"Cannot purify both E and B modes spectra simultaneously. Set {attribute.name} to False in your config."
             raise ValueError(msg)
 
-
 @define
 class PlotsConfig:
     lmin_plot: int = 30
     lmax_plot: int = 1_000
-
 
 @define
 class MapSimConfig:
