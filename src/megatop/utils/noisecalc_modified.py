@@ -303,11 +303,10 @@ class SOTel:
                    (P_low_noise[:,None,:] * P_low_noise[None,:,:])**.5)
 
         # Add in white noise on the diagonal.
-        Map_white_noise_levels = []
+        Map_white_noise_levels = np.sqrt(W * 2)
         for i in range(len(W)):
             T_noise[i,i] += W[i]
             P_noise[i,i] += W[i] * 2
-            Map_white_noise_levels.append( np.sqrt(P_noise[i,i])) 
 
         if rolloff_ell is not None:
             # Use the same simple rolloff for all bands, T & P.
