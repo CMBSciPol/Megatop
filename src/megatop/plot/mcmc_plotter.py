@@ -7,6 +7,7 @@ from getdist import MCSamples, plots
 from matplotlib import pyplot as plt
 
 from megatop import Config, DataManager
+from megatop.config import NoiseOption
 from megatop.pipeline.cl2r_estimater import Cl_CMB_model, compute_generic_Cl
 from megatop.plot.r_stats_plotter import get_params_statistics
 from megatop.utils import logger
@@ -206,9 +207,14 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "DustxDust"
     ][3]
-    Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
-        "Noise_CMBxNoise_CMB"
-    ][3]
+    noise_option = config.noise_sim_pars.noise_option
+    if noise_option == NoiseOption.NOISELESS:
+        # TODO: this is a temporary fix, need to be done properly
+        Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
+    else:
+        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+            "Noise_CMBxNoise_CMB"
+        ][3]
 
     nmt_bins = load_nmt_binning(manager)
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
@@ -379,11 +385,11 @@ def main():
     if n_sim_sky == 0:
         id_sim = None
     else:
-        plot_all_cornerplots(manager, config)
         id_sim = 0
         logger.info(f"Plotting for sky simulation #{id_sim}")
         plot_single_cornerplot(manager, config, id_sim=id_sim)
         plot_spectra_comparison(manager, config, id_sim=id_sim)
+        plot_all_cornerplots(manager, config)
 
 
 if __name__ == "__main__":
