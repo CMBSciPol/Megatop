@@ -6,6 +6,8 @@ import jax
 
 jax.config.update("jax_enable_x64", True)
 
+from inspect import isfunction  # noqa: E402
+
 import fgbuster as fg  # noqa: E402
 import healpy as hp  # noqa: E402
 import megabuster as mb  # noqa: E402
@@ -461,17 +463,17 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
 
     res_dict = {}
     for attr in dir(res):
-        if (
-            not attr.startswith("__") and attr != "s"
+        if (not attr.startswith("__") and attr != "s") and not isfunction(
+            getattr(res, attr)
         ):  # remove component maps to avoid saving twice.
             # if isinstance(getattr(res, attr), callable):
             #     continue # Skip callable attributes
             res_dict[attr] = getattr(res, attr)
 
-    if type(res_dict["W_maxL"]) is not np.ndarray:
-        # If W_maxL is a function, we can't pickle it, so we remove it
-        logger.warning("W_maxL is a function, removing it from the results dictionary.")
-        res_dict.pop("W_maxL")
+    # if type(res_dict["W_maxL"]) is not np.ndarray:
+    #     # If W_maxL is a function, we can't pickle it, so we remove it
+    #     logger.warning("W_maxL is a function, removing it from the results dictionary.")
+    #     res_dict.pop("W_maxL")
 
     # Saving result dict
     logger.info(f"Saving compsep results to {fname_results}")
@@ -488,6 +490,7 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
 
 
 def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = None):
+    # import IPython; IPython.embed()
     with Timer("weighted-compsep"):
         if config.parametric_sep_pars.use_harmonic_compsep:
             res = harmonic_comp_sep_interface(manager, config, id_sim=id_sim)
