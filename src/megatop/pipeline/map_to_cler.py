@@ -180,9 +180,9 @@ def main():
     else:
         with MPICommExecutor() as executor:
             if executor is not None:
-                logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+                logger.info(f"Distributing work to {executor.num_workers} workers")
                 func = partial(map2cl_and_save, config, manager)
-                for result in executor.map(func, range(n_sim_sky), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                for result in executor.map(func, range(n_sim_sky), unordered=True):
                     logger.info(f"Finished Cl estimation on map {result + 1} / {n_sim_sky}")
 
 

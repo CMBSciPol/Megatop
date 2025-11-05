@@ -112,7 +112,7 @@ def mask_handler(manager: DataManager, config: Config):
 #     timer.start("point-sources")
 #     if config.use_input_point_sources:
 #         # Load from disk
-#         mask_path: Path = config.masks_pars.input_sources_mask  # pyright: ignore[reportAssignmentType]
+#         mask_path: Path = config.masks_pars.input_sources_mask
 #         logger.info(f"Using point source mask from {mask_path}")
 #         ps_mask = hp.read_map(mask_path)
 #         ps_mask = hp.ud_grade(ps_mask, config.nside)
