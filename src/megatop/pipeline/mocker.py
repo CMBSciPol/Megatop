@@ -158,13 +158,13 @@ def _map(func, iterable, comm: Comm, force_seq: bool = False):
         logger.info("Processing sequentially")
         for result in map(func, iterable):
             yield result
-
-    # Use CommExecutor for parallel processing
-    with MPICommExecutor(comm=comm) as executor:  # pyright: ignore[reportArgumentType]
-        if executor is not None:
-            logger.info(f"Distributing work to {executor.num_workers} processes")  # pyright: ignore[reportAttributeAccessIssue]
-            for result in executor.map(func, iterable, unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
-                yield result
+    else:
+        # Use CommExecutor for parallel processing
+        with MPICommExecutor(comm=comm) as executor:
+            if executor is not None:
+                logger.info(f"Distributing work to {executor.num_workers} processes")
+                for result in executor.map(func, iterable, unordered=True):
+                    yield result
 
 
 # needs to be defined at the top level for pickling
