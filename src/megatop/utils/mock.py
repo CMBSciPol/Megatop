@@ -53,7 +53,7 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
     sky = Sky(nside=nside, preset_strings=sky_model, output_unit=units.uK_CMB)
     maps_fgs = []
     for map_set in map_sets:
-        m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value  # pyright: ignore[reportAttributeAccessIssue])
+        m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value
         if input_coord != output_coord:
             logger.debug(
                 f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"

@@ -180,7 +180,7 @@ def func_TF_sims(
 
     # incorporate realization id into the seed if CMB is not fixed
     if not config.map_sim_pars.single_cmb:
-        config.map_sim_pars.cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
+        config.map_sim_pars.cmb_seed += id_sim
 
     # Getting power law spectra
     logger.debug("Generating power law spectra for TF simulations")
@@ -282,7 +282,7 @@ def func_signal(
 
     # incorporate realization id into the seed if CMB is not fixed
     if not config.map_sim_pars.single_cmb:
-        config.map_sim_pars.cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
+        config.map_sim_pars.cmb_seed += id_sim
 
     # construct passbands if necessary
     config.map_sets = passband.passband_constructor(
