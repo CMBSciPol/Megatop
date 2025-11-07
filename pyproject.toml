@@ -22,7 +22,7 @@ dependencies = [
     "camb",
     "cattrs",
     "emcee",
-    "fgbuster @ git+https://github.com/fgbuster/fgbuster.git@std_inst_bandpass",
+    "fgbuster @ git+https://github.com/fgbuster/fgbuster.git@672ac19e21833c3bf3d87b0ee0452219851b042e",
     "getdist",
     "healpy",
     "matplotlib",
