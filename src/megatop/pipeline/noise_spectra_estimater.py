@@ -15,6 +15,7 @@ from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import (
+    compute_auto_cross_cl_from_alms_list,
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
     limit_namaster_output,
@@ -53,7 +54,9 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
         "W_maxL"
     ]
-
+    W_maxL_lm = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
+        "W_maxL_lm"
+    ]
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
 
@@ -182,33 +185,60 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                     freq_maps=noise_freq_maps,
                 )
 
+        use_alms = True
         # Applying component-separation operator
-        noise_map_post_compsep = np.einsum(
-            "ifsp,fsp->isp", W_maxL, noise_freq_maps_preprocessed[:, 1:]
-        )  # slicing noise to remove T
-        noise_map_post_compsep *= binary_mask
+        if not use_alms:
+            noise_map_post_compsep = np.einsum(
+                "ifsp,fsp->isp", W_maxL, noise_freq_maps_preprocessed[:, 1:]
+            )  # slicing noise to remove T
+            noise_map_post_compsep *= binary_mask
 
-        # TODO: update keys wrt relevant components once implemented in compsep step
-        noise_comp_dict = {
-            "Noise_CMB": noise_map_post_compsep[0],
-            "Noise_Dust": noise_map_post_compsep[1],
-        }
-        if config.parametric_sep_pars.include_synchrotron:
-            noise_comp_dict["Noise_Synch"] = noise_map_post_compsep[2]
+            # TODO: update keys wrt relevant components once implemented in compsep step
+            noise_comp_dict = {
+                "Noise_CMB": noise_map_post_compsep[0],
+                "Noise_Dust": noise_map_post_compsep[1],
+            }
+            if config.parametric_sep_pars.include_synchrotron:
+                noise_comp_dict["Noise_Synch"] = noise_map_post_compsep[2]
 
-        # Computing auto and cross spectra
-        noise_Cls = compute_auto_cross_cl_from_maps_list(
-            noise_comp_dict,
-            mask_analysis,
-            effective_beam_CMB[:-1],
-            workspaceff,
-            purify_e=config.map2cl_pars.purify_e,
-            purify_b=config.map2cl_pars.purify_b,
-            n_iter=config.map2cl_pars.n_iter_namaster,
-            inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
-            # inverse_effective_transfer_function=inverse_effective_transfer_function,
-        )
-        # import IPython; IPython.embed()
+            # Computing auto and cross spectra
+            noise_Cls = compute_auto_cross_cl_from_maps_list(
+                noise_comp_dict,
+                mask_analysis,
+                effective_beam_CMB[:-1],
+                workspaceff,
+                purify_e=config.map2cl_pars.purify_e,
+                purify_b=config.map2cl_pars.purify_b,
+                n_iter=config.map2cl_pars.n_iter_namaster,
+                inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
+                # inverse_effective_transfer_function=inverse_effective_transfer_function,
+            )
+        else:
+            noise_freq_alms_preprocessed = np.load(
+                manager.get_path_to_preprocessed_noise_alms(id_real)
+            )
+
+            noise_alms_post_compsep = np.einsum(
+                "lqcf,fql->cql", W_maxL_lm.T, noise_freq_alms_preprocessed
+            )
+            # mean_fsky = np.mean(mask_analysis**2)  # the analysis mask must be normalized!
+            # mean_fsky_correction = np.sqrt(mean_fsky)
+            # noise_alms_post_compsep *= mean_fsky_correction
+            noise_comp_dict_alms = {
+                "Noise_CMB": noise_alms_post_compsep[0],
+                "Noise_Dust": noise_alms_post_compsep[1],
+                "Noise_Synch": noise_alms_post_compsep[2],
+            }
+
+            noise_Cls = compute_auto_cross_cl_from_alms_list(
+                noise_comp_dict_alms,
+                mask_analysis,
+                effective_beam_CMB[:-1],
+                workspaceff,
+                purify_e=config.map2cl_pars.purify_e,
+                purify_b=config.map2cl_pars.purify_b,
+                n_iter=config.map2cl_pars.n_iter_namaster,
+            )
         # Summing the noise spectra
         for key in noise_Cls:
             if key not in sum_noise_spectra:
