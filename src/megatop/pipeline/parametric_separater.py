@@ -7,7 +7,7 @@ import healpy as hp
 import numpy as np
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
-from fgbuster.separation_recipes import _format_alms
+from fgbuster.separation_recipes import _format_alms, _r_to_c_alms
 from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
@@ -165,6 +165,15 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     res.W_maxL = W_maxL
     # import IPython; IPython.embed()
 
+    ell_em = hp.Alm.getlm(
+        config.parametric_sep_pars.harmonic_lmax - 1, np.arange(data_alms_lmin.shape[-1])
+    )[0]
+    ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
+    invNlm = np.array([invN[ell_, 1:, :, :] for ell_ in ell_em])
+
+    W_maxL_lm = _r_to_c_alms((res.invAtNA_alm @ A_maxL.T @ invNlm).T)
+    res.W_maxL_lm = W_maxL_lm
+
     # cov_alm = np.load(manager.path_to_noisecov_alm)
     # inv_cov_alm = 1/cov_alm
     # shape_N_alm_freq_diag = (inv_cov_alm.shape[0]),
@@ -186,6 +195,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         logger.info(
             "Harmonic Compsep: Computing component map from output alms, this might induce some edge effect..."
         )
+        # import IPython; IPython.embed()
         res.s = np.array(
             [
                 hp.alm2map_spin(
