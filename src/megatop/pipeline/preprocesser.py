@@ -53,6 +53,25 @@ def get_reduced_tf(transfer, nmt_bins_native, sum_TF_column=False):
     return inv_sqrt_tf, inv_sqrt_tf_bin
 
 
+def get_reduced_tf_new(transfer, nmt_bins_native):
+    inv_transfer = np.linalg.inv(transfer[-4:, -4:].T).T
+
+    corner_TF = np.zeros((2, 2, inv_transfer.shape[2]))
+    corner_TF[0, 0, :] = inv_transfer[-4, -4, :]
+    corner_TF[1, 1, :] = inv_transfer[-1, -1, :]
+    corner_TF[0, 1, :] = inv_transfer[-4, -1, :]
+    corner_TF[1, 0, :] = inv_transfer[-1, -4, :]
+
+    reduced_inv_tf_binned = np.sqrt(corner_TF + 0j)  # element wise sqrt
+
+    reduced_inv_tf = np.zeros((2, 2, nmt_bins_native.lmax + 1), dtype=np.complex128)
+    for i in range(2):
+        for j in range(2):
+            reduced_inv_tf[i, j] = homemade_unbin_cell(reduced_inv_tf_binned[i, j], nmt_bins_native)
+
+    return reduced_inv_tf, reduced_inv_tf_binned
+
+
 def preprocess_map(
     manager: DataManager, config: Config, id_sim: int | None = None, mask_output=True
 ):
@@ -107,6 +126,8 @@ def preprocess_map(
             freq_maps=np.array(input_maps),
             analysis_mask=analysis_mask,
             harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
+            purify_e=config.map2cl_pars.purify_e,
+            purify_b=config.map2cl_pars.purify_b,
         )
         logger.info(f"Pre-processed alms have shape: {freq_alms_convolved.shape}")
 
@@ -181,9 +202,12 @@ def preprocess_map(
                         inv_sqrt_tf_sum[:, 3], nmt_bins_native
                     )  # BB->BB
                 """
-                inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf(
-                    transfer, nmt_bins_native, config.pre_proc_pars.sum_TF_column
-                )
+                # import IPython; IPython.embed()
+                # inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf(
+                #     transfer, nmt_bins_native, config.pre_proc_pars.sum_TF_column
+                # )
+                logger.warning("TESTING NEW METHOD FOR REDUCED TF REDUCTION")
+                inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf_new(transfer, nmt_bins_native)
                 inv_sqrt_tf = inv_sqrt_tf[..., : config.parametric_sep_pars.harmonic_lmax]
 
                 inv_sqrt_tf_bin_freq[f] = inv_sqrt_tf_bin
