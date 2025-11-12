@@ -38,7 +38,7 @@ def mask_handler(manager: DataManager, config: Config):
             )
         else:
             logger.info("Loading nhits maps")
-            list_hitmapname = [m.nhits_map_path for m in config.map_sets]
+            list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
             nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
             norm_nhits_maps = mask.norm_smooth_nhits_maps(
                 nhits_maps=nhits_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits

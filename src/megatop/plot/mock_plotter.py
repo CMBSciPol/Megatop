@@ -161,7 +161,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     binary_mask = hp.read_map(manager.path_to_binary_mask)
 
     fsky_binary = sum(binary_mask) / len(binary_mask)
-    list_hitmapname = [m.nhits_map_path for m in config.map_sets]
+    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
     nhits_maps = read_nhits_maps(list_hitmapname, nside=config.nside)
     nhits_maps_rescaled = nhits_maps / np.max(nhits_maps, axis=1, keepdims=True)
 

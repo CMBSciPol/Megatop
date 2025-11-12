@@ -352,7 +352,7 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    list_hitmapname = [m.nhits_map_path for m in config.map_sets]
+    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
     nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
     func = partial(
         func_signal,
@@ -388,7 +388,7 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    list_hitmapname = [m.nhits_map_path for m in config.map_sets]
+    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
     nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
     func = partial(func_noise, manager, config, binary_mask, nhits_maps)
 
