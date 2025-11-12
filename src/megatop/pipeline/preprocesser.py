@@ -61,14 +61,6 @@ def preprocess_map(
         )
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
-        # if config.masks_pars.DEBUG_output_apod_binary_mask:
-        #     logger.warning("DEBUG: Using apodized binary mask for harmonic component separation, ")
-        #     analysis_mask = hp.read_map(manager.path_to_apod_binary_mask)
-
-        logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-        # TODO: remove after merge
-        analysis_mask /= np.max(analysis_mask)  # normalize the mask to 1
-
         freq_beams = config.beams
         common_beam = config.pre_proc_pars.common_beam_correction
         if config.pre_proc_pars.DEBUGskippreproc:
