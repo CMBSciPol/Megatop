@@ -12,6 +12,7 @@ from megatop.utils import Timer, logger, mask
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 from megatop.utils.spectra import (
+    compute_auto_cross_cl_from_alms_list,
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
     limit_namaster_output,
@@ -127,24 +128,48 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
     # Testing the function
     # import IPython; IPython.embed()
     with Timer("estimate-spectra"):
-        comp_maps = mask.apply_binary_mask(comp_maps, binary_mask)
-        if config.parametric_sep_pars.include_synchrotron:
-            comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1], "Synch": comp_maps[2]}
-        else:
-            comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1]}
         # TODO: when components will be added in .yml for the comp-sep steps the keys of the dictionary should adapt to that
-        all_Cls = compute_auto_cross_cl_from_maps_list(
-            comp_dict,
-            mask_analysis,
-            effective_beam_CMB[:-1],
-            # None,
-            workspaceff,
-            purify_e=config.map2cl_pars.purify_e,
-            purify_b=config.map2cl_pars.purify_b,
-            n_iter=config.map2cl_pars.n_iter_namaster,
-            inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
-            # inverse_effective_transfer_function=inverse_effective_transfer_function,
-        )
+        # import IPython; IPython.embed()
+        use_alms = True
+        if use_alms:
+            comp_alms = np.load(manager.get_path_to_components_alms(sub=id_sim))
+            # mean_fsky = np.mean(mask_analysis**2)  # the analysis mask must be normalized!
+            # mean_fsky_correction = np.sqrt(mean_fsky)
+            # comp_alms *= mean_fsky_correction
+            comp_dict_alms = {"CMB": comp_alms[0], "Dust": comp_alms[1], "Synch": comp_alms[2]}
+        else:
+            comp_maps = mask.apply_binary_mask(comp_maps, binary_mask)
+            if config.parametric_sep_pars.include_synchrotron:
+                comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1], "Synch": comp_maps[2]}
+            else:
+                comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1]}
+
+        if use_alms:
+            all_Cls = compute_auto_cross_cl_from_alms_list(
+                comp_dict_alms,
+                mask_analysis,
+                effective_beam_CMB[:-1],
+                # None,
+                workspaceff,
+                purify_e=config.map2cl_pars.purify_e,
+                purify_b=config.map2cl_pars.purify_b,
+                n_iter=config.map2cl_pars.n_iter_namaster,
+                # inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
+                # inverse_effective_transfer_function=inverse_effective_transfer_function,
+            )
+        else:
+            all_Cls = compute_auto_cross_cl_from_maps_list(
+                comp_dict,
+                mask_analysis,
+                effective_beam_CMB[:-1],
+                # None,
+                workspaceff,
+                purify_e=config.map2cl_pars.purify_e,
+                purify_b=config.map2cl_pars.purify_b,
+                n_iter=config.map2cl_pars.n_iter_namaster,
+                inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
+                # inverse_effective_transfer_function=inverse_effective_transfer_function,
+            )
 
     # Limiting the output to the desired l range
     bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
