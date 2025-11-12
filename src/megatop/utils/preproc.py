@@ -152,10 +152,12 @@ def alm_common_beam(
     freq_maps: list[npt.ArrayLike],
     analysis_mask: npt.ArrayLike | None = None,
     harmonic_analysis_lmax: int | None = None,
+    purify_e: bool = False,
+    purify_b: bool = False,
 ):
-    mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
-    mean_fsky_correction = np.sqrt(mean_fsky)
-
+    # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
+    # mean_fsky_correction = np.sqrt(mean_fsky)
+    # import IPython; IPython.embed()
     data_alms = []
 
     for f in range(freq_maps.shape[0]):
@@ -163,13 +165,25 @@ def alm_common_beam(
             analysis_mask,
             freq_maps[f, 1:],
             beam=None,
-            purify_e=False,
-            purify_b=False,
+            purify_e=purify_e,
+            purify_b=purify_b,
             n_iter=10,
         )
         # The smooth mask (mask_analysis) is applied in the NmtField constructor
         data_alms.append(truncate_alm(fields.alm, lmax_new=harmonic_analysis_lmax - 1))
-    data_alms = np.array(data_alms) / mean_fsky_correction
+    data_alms = np.array(data_alms)  # / mean_fsky_correction
+
+    # data_alms_hp_maskanalysis = []
+    # analysis_mask_unseen = analysis_mask.copy()
+    # analysis_mask_unseen[analysis_mask == 0] = hp.UNSEEN
+    # for f in range(data_alms.shape[0]):
+    #     alm_TQU = hp.map2alm(
+    #         freq_maps[f]* analysis_mask_unseen,
+    #         lmax=3*nside-1,
+    #         iter=10,
+    #     )
+    #     data_alms_hp_maskanalysis.append(truncate_alm(alm_TQU[1:], lmax_new=harmonic_analysis_lmax - 1))  # keep only E and B
+    # data_alms_hp_maskanalysis = np.array(data_alms_hp_maskanalysis)
 
     common_beam_ell = hp.gauss_beam(
         np.radians(common_beam / 60.0),
