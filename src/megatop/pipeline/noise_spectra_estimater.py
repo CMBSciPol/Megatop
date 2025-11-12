@@ -44,9 +44,6 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 
     # Loading masks
     mask_analysis = hp.read_map(manager.path_to_analysis_mask)
-    logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-    # TODO: remove after merge
-    mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator

@@ -47,7 +47,7 @@ def plot_all_noise_spectra(manager, config):
             color="darkblue",
             alpha=0.2,
         )
-    average_noise_CMB /= config.map_sim_pars.n_sim
+    average_noise_CMB /= config.noise_sim_pars.n_sim
 
     ax_EE.plot(
         bin_centre_lminlmax,
@@ -183,7 +183,7 @@ def plot_all_spectra(manager, config):
             alpha=0.2,
         )
 
-    average_noise_CMB /= config.map_sim_pars.n_sim
+    average_noise_CMB /= config.noise_sim_pars.n_sim
 
     noise_option = config.noise_sim_pars.noise_option
     if noise_option == NoiseOption.NOISELESS:
@@ -241,7 +241,6 @@ def plot_all_spectra(manager, config):
     std_debiased_diff_BB = np.std(array_debiased_diff_model[:, 1, :], axis=0)
 
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    analysis_mask = analysis_mask / np.max(analysis_mask)
     fsky = np.mean(analysis_mask)
 
     cosmic_var_plus_noise_EE = (bined_Cl_cmb_model[1] + average_noise_CMB[0]) * (
