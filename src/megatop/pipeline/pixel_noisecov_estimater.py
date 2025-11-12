@@ -15,6 +15,32 @@ from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaste
 from megatop.utils.utils import MemoryUsage
 
 
+def rebuilt_from_reduced_conj(sqrt_corner_TF):
+    shape_out = (4, 4, sqrt_corner_TF.shape[2])
+    rebuilt_TF_manual = np.zeros(shape_out, dtype=complex)
+
+    rebuilt_TF_manual[0, 0] = sqrt_corner_TF[0, 0] * np.conjugate(sqrt_corner_TF[0, 0])
+    rebuilt_TF_manual[0, 1] = sqrt_corner_TF[0, 1] * np.conjugate(sqrt_corner_TF[0, 0])
+    rebuilt_TF_manual[0, 2] = sqrt_corner_TF[0, 0] * np.conjugate(sqrt_corner_TF[0, 1])
+    rebuilt_TF_manual[0, 3] = sqrt_corner_TF[0, 1] * np.conjugate(sqrt_corner_TF[0, 1])
+
+    rebuilt_TF_manual[1, 0] = sqrt_corner_TF[0, 0] * np.conjugate(sqrt_corner_TF[1, 0])
+    rebuilt_TF_manual[1, 1] = sqrt_corner_TF[0, 0] * np.conjugate(sqrt_corner_TF[1, 1])
+    rebuilt_TF_manual[1, 2] = sqrt_corner_TF[0, 1] * np.conjugate(sqrt_corner_TF[1, 0])
+    rebuilt_TF_manual[1, 3] = sqrt_corner_TF[0, 1] * np.conjugate(sqrt_corner_TF[1, 1])
+
+    rebuilt_TF_manual[2, 0] = sqrt_corner_TF[1, 0] * np.conjugate(sqrt_corner_TF[0, 0])
+    rebuilt_TF_manual[2, 1] = sqrt_corner_TF[1, 0] * np.conjugate(sqrt_corner_TF[0, 1])
+    rebuilt_TF_manual[2, 2] = sqrt_corner_TF[1, 1] * np.conjugate(sqrt_corner_TF[0, 0])
+    rebuilt_TF_manual[2, 3] = sqrt_corner_TF[1, 1] * np.conjugate(sqrt_corner_TF[0, 1])
+
+    rebuilt_TF_manual[3, 0] = sqrt_corner_TF[1, 0] * np.conjugate(sqrt_corner_TF[1, 0])
+    rebuilt_TF_manual[3, 1] = sqrt_corner_TF[1, 1] * np.conjugate(sqrt_corner_TF[1, 0])
+    rebuilt_TF_manual[3, 2] = sqrt_corner_TF[1, 0] * np.conjugate(sqrt_corner_TF[1, 1])
+    rebuilt_TF_manual[3, 3] = sqrt_corner_TF[1, 1] * np.conjugate(sqrt_corner_TF[1, 1])
+    return rebuilt_TF_manual
+
+
 def get_reduced_TF_for_Cl(inv_sqrt_tf_bin, transfer=None):
     if inv_sqrt_tf_bin is None:
         inv_sqrt_tf_full = np.linalg.inv([sqrtm(TF_ell.T) for TF_ell in transfer.T])[:, -4:, -4:]
@@ -109,8 +135,8 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 config.nside,
                 mask_analysis,
                 effective_beam=None,
-                purify_e=False,
-                purify_b=False,
+                purify_e=config.map2cl_pars.purify_e,
+                purify_b=config.map2cl_pars.purify_b,
                 n_iter=10,
             )
 
@@ -195,8 +221,10 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     workspaceff,
                     nmt_bins,
                     compute_cross_freq=False,
-                    purify_e=False,
-                    purify_b=False,
+                    purify_e=config.map2cl_pars.purify_e,
+                    # purify_e=False,
+                    purify_b=config.map2cl_pars.purify_b,
+                    # purify_b=False,
                     beam=beam4namaster,
                     return_all_spectra=config.pre_proc_pars.correct_for_TF,
                 )
@@ -255,8 +283,15 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                             inv_tf_reduced = get_reduced_TF_for_Cl(None, transfer)
                             inv_tf = inv_tf_reduced
                             """
-                            inv_tf = get_reduced_TF_for_Cl(
-                                reduced_TF_from_preproc["inv_sqrt_tf_bin_freq"][f], None
+                            # import IPython; IPython.embed()
+                            # inv_tf = get_reduced_TF_for_Cl(
+                            #     reduced_TF_from_preproc["inv_sqrt_tf_bin_freq"][f], None
+                            # )
+                            logger.warning("TESTING NEW METHOD FOR REDUCED TF REDUCTION")
+                            inv_tf = np.abs(
+                                rebuilt_from_reduced_conj(
+                                    reduced_TF_from_preproc["inv_sqrt_tf_bin_freq"][f]
+                                ).T
                             )
                         else:
                             logger.info(f"Loading transfer function from {tf_path}")
@@ -326,6 +361,8 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     freq_maps=np.array(noise_freq_maps),
                     analysis_mask=analysis_mask,
                     harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
+                    purify_e=config.map2cl_pars.purify_e,
+                    purify_b=config.map2cl_pars.purify_b,
                 )
 
                 freq_alms_convolved_TF_corrected = np.einsum(
