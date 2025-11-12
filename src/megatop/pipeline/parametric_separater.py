@@ -159,7 +159,6 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         )
         # remove binary mask to avoid double application when entering namaster:
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-        analysis_mask /= np.max(analysis_mask)  # normalize the mask to 1
         res.s[..., np.where(binary_mask != 0)] /= analysis_mask[np.where(binary_mask != 0)]
     else:
         logger.info("Harmonic Compsep: Computing component maps using W matrix and input maps")

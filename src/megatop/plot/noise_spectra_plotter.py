@@ -241,7 +241,6 @@ def plot_all_spectra(manager, config):
     std_debiased_diff_BB = np.std(array_debiased_diff_model[:, 1, :], axis=0)
 
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    analysis_mask = analysis_mask / np.max(analysis_mask)
     fsky = np.mean(analysis_mask)
 
     cosmic_var_plus_noise_EE = (bined_Cl_cmb_model[1] + average_noise_CMB[0]) * (

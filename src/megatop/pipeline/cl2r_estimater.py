@@ -210,7 +210,6 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     # nhits_map /= np.max(nhits_map)
     # fsky_obs = np.mean(nhits_map)
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    analysis_mask = analysis_mask / np.max(analysis_mask)
     fsky_obs = np.mean(analysis_mask)
     # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
     # fsky_obs = np.sqrt(mean_fsky)
