@@ -65,6 +65,89 @@ def compute_auto_cross_cl_from_maps_list(
     return cl_dict
 
 
+def compute_auto_cross_cl_from_alms_list(
+    alms_dict,
+    mask,
+    beam,
+    workspace,
+    purify_e=True,
+    purify_b=True,
+    n_iter=3,
+    # inverse_effective_transfer_function=None,
+):
+    # Create the fields
+    # import time
+    # import IPython; IPython.embed()
+    fields = []
+    for key in alms_dict:
+        fields.append(
+            nmt.NmtField(
+                mask,
+                [np.zeros_like(mask), np.zeros_like(mask)],
+                beam=beam,
+                purify_e=purify_e,
+                purify_b=purify_b,
+                n_iter=n_iter,
+            )
+        )
+        lmax_field = hp.Alm.getlmax(fields[-1].alm.shape[-1])
+        lmax_input_alm = hp.Alm.getlmax(alms_dict[key].shape[-1])
+        # lmax field is by default 3*nside -1 while alm out of compsep is lmax = 2*nside (or whatever harmonic_lmax is set to)
+        # we need to pad the alm to match the lmax of the field
+
+        # start = time.time()
+        if lmax_field > lmax_input_alm:
+            for ell in range(lmax_input_alm):
+                for m in range(ell + 1):
+                    fields[-1].alm[0, hp.Alm.getidx(lmax_field, ell, m)] = alms_dict[key][
+                        0, hp.Alm.getidx(lmax_input_alm, ell, m)
+                    ]
+                    fields[-1].alm[1, hp.Alm.getidx(lmax_field, ell, m)] = alms_dict[key][
+                        1, hp.Alm.getidx(lmax_input_alm, ell, m)
+                    ]
+        # print("Time to pad alms: ", time.time() - start)
+
+        # fields[-1].alm = alms_dict[key]
+
+    # Compute the power spectra
+    cl_list = []
+    # cl_matrix = None
+    for i, f_a in enumerate(fields):
+        for j, f_b in enumerate(fields):
+            if i <= j:
+                cl_coupled = nmt.compute_coupled_cell(f_a, f_b)
+                cl_decoupled = workspace.decouple_cell(cl_coupled)
+                cl_list.append(cl_decoupled)
+                # if cl_matrix is None:
+                #     cl_matrix = np.zeros(
+                #         (len(fields), len(fields), cl_decoupled.shape[0], cl_decoupled.shape[-1])
+                #     )
+                # # if inverse_effective_transfer_function is not None:
+                #     cl_matrix[i, j] = cl_decoupled
+                #     if i != j:
+                #         cl_matrix[j, i] = cl_decoupled
+
+    cl_dict = {}
+    # if inverse_effective_transfer_function is None:
+    # Store in dictionary with key x key
+    for i, key in enumerate(alms_dict.keys()):
+        for j, key2 in enumerate(alms_dict.keys()):
+            if i <= j:
+                cl_dict[key + "x" + key2] = cl_list.pop(0)
+
+    # else:
+    #     logger.info("Applying effective transfer function to the spectra")
+    #     tf_corrected_cl_matrix = np.einsum(
+    #         "ckijl,ckjl->ckil", inverse_effective_transfer_function, cl_matrix
+    #     )
+    #     for i, key in enumerate(alms_dict.keys()):
+    #         for j, key2 in enumerate(alms_dict.keys()):
+    #             if i <= j:
+    #                 cl_dict[key + "x" + key2] = tf_corrected_cl_matrix[i, j]
+
+    return cl_dict
+
+
 def get_common_beam_wpix(common_beam_fwhm_arcmin, nside):
     wpix_out = hp.pixwin(nside, pol=True, lmax=3 * nside)  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(
