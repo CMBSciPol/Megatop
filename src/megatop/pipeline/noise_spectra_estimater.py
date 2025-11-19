@@ -4,23 +4,27 @@ import tracemalloc
 # from mpi4py.futures import MPICommExecutor
 from pathlib import Path
 
-import healpy as hp
-import megabuster as mb
-import numpy as np
-import pymaster as nmt
-from mpi4py import MPI
+import jax
 
-from megatop import Config, DataManager
-from megatop.utils import Timer, logger, mask
-from megatop.utils.binning import load_nmt_binning
-from megatop.utils.mpi import MPISUM, get_world
-from megatop.utils.preproc import common_beam_and_nside
-from megatop.utils.spectra import (
+jax.config.update("jax_enable_x64", True)
+
+import healpy as hp  # noqa: E402
+import megabuster as mb  # noqa: E402
+import numpy as np  # noqa: E402
+import pymaster as nmt  # noqa: E402
+from mpi4py import MPI  # noqa: E402
+
+from megatop import Config, DataManager  # noqa: E402
+from megatop.utils import Timer, logger, mask  # noqa: E402
+from megatop.utils.binning import load_nmt_binning  # noqa: E402
+from megatop.utils.mpi import MPISUM, get_world  # noqa: E402
+from megatop.utils.preproc import common_beam_and_nside  # noqa: E402
+from megatop.utils.spectra import (  # noqa: E402
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
     limit_namaster_output,
 )
-from megatop.utils.utils import MemoryUsage
+from megatop.utils.utils import MemoryUsage  # noqa: E402
 
 
 def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: int | None = None):
@@ -68,6 +72,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
     )
+    MemoryUsage(f"rank = {rank} ")
 
     if config.parametric_sep_pars.use_megabuster:
         with Timer("init-megabuster"):
@@ -141,6 +146,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                 "beta_dust": np.array(parameters_foregrounds_x[0]),
                 "beta_pl": np.array(parameters_foregrounds_x[1]),
             }
+    MemoryUsage(f"rank = {rank} ")
 
     # Initializing workspace
     with Timer("init-namaster-workspace"):
@@ -211,10 +217,14 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     else:
         # inverse_effective_transfer_function = None
         inverse_normalized_Cl_effective_TF = None
+    MemoryUsage(f"rank = {rank} ")
 
     sum_noise_spectra = {}
+    MemoryUsage(f"rank = {rank} ")
 
     for id_realisation in rank_realisation_list:
+        MemoryUsage(f"rank = {rank} ")
+
         noise_freq_maps = []
 
         id_real = None if n_sim_noise is None else id_realisation
@@ -257,7 +267,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                     frequency_beams=config.beams,
                     freq_maps=noise_freq_maps,
                 )
-        # import IPython; IPython.embed()
+
         # Applying component-separation operator
         if not config.parametric_sep_pars.use_megabuster:
             noise_map_post_compsep = np.einsum(
@@ -314,6 +324,9 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             if key not in sum_noise_spectra:
                 sum_noise_spectra[key] = np.zeros_like(noise_Cls[key])
             sum_noise_spectra[key] += noise_Cls[key]
+        MemoryUsage(f"rank = {rank} ")
+        logger.info(f"Finished realisation {id_realisation} on rank {rank}\n")
+    logger.info("Finished all realisations assigned to this rank")
 
     # Perform the reduction
     if comm is not None:
