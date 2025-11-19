@@ -7,10 +7,6 @@ from attrs import Factory, asdict, define, evolve, field
 
 from megatop._converter import yaml_converter
 
-# pyright: reportAssignmentType = false
-# pyright: reportAttributeAccessIssue = false
-
-
 __all__ = [
     "CompSepConfig",
     "Config",
@@ -178,7 +174,7 @@ class MasksConfig:
     # DEBUG_output_apod_binary_mask: bool = False
     # DEBUGapod_binary_mask_name: str = "apod_binary_mask"
 
-    @gal_key.validator  # pyright: ignore[reportOptionalMemberAccess]
+    @gal_key.validator
     def _check_gal_key(self, attribute, value):
         """Check that gal_key is set if include_galactic is True."""
         if self.include_galactic and value is None:
@@ -458,7 +454,7 @@ class Config:
     def beams(self) -> list[float]:
         """The list of beam FWHMs (in arcminutes)"""
         if self.use_custom_beams:
-            return self.pre_proc_pars.beam_fwhms  # pyright: ignore[reportReturnType]
+            return self.pre_proc_pars.beam_fwhms
         return [SO_BEAMS_ARCMIN[freq] for freq in self.frequencies]
 
     @property

@@ -28,9 +28,6 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
 
     # Loading analysis mask
     mask_analysis = hp.read_map(manager.path_to_analysis_mask)
-    logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-    # TODO: remove after merge
-    mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Generating effective beam
@@ -180,9 +177,9 @@ def main():
     else:
         with MPICommExecutor() as executor:
             if executor is not None:
-                logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+                logger.info(f"Distributing work to {executor.num_workers} workers")
                 func = partial(map2cl_and_save, config, manager)
-                for result in executor.map(func, range(n_sim_sky), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                for result in executor.map(func, range(n_sim_sky), unordered=True):
                     logger.info(f"Finished Cl estimation on map {result + 1} / {n_sim_sky}")
 
 

@@ -50,13 +50,24 @@ def get_noise(config: Config, binary_mask: NDArray, nhits_maps: NDArray) -> NDAr
 
 
 @function_timer("get-cmb-map")
-def get_cmb(manager: DataManager, config: Config) -> NDArray:
+def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     # Performing the CMB simulation with synfast
     logger.debug("Computing CMB map from fiducial spectra")
+
+    # at this point, cmb_seed should be set in the config...
+    cmb_seed = config.map_sim_pars.cmb_seed
+    if cmb_seed is None:
+        msg = "The CMB seed must be set in the configuration beforehand!"
+        raise RuntimeError(msg)
+
+    # incorporate realization id into the seed if CMB is not fixed
+    seed = [cmb_seed]
+    if not config.map_sim_pars.single_cmb:
+        seed.append(id_sim)
+    logger.debug(f"CMB {seed = }")
+
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
-    cmb_map = mock.generate_map_cmb(
-        Cl_cmb_model, config.nside, cmb_seed=config.map_sim_pars.cmb_seed
-    )
+    cmb_map = mock.generate_map_cmb(Cl_cmb_model, config.nside, cmb_seed=seed)
     logger.debug(f"CMB map has shape {cmb_map.shape}")
     return cmb_map
 
@@ -158,13 +169,13 @@ def _map(func, iterable, comm: Comm, force_seq: bool = False):
         logger.info("Processing sequentially")
         for result in map(func, iterable):
             yield result
-
-    # Use CommExecutor for parallel processing
-    with MPICommExecutor(comm=comm) as executor:  # pyright: ignore[reportArgumentType]
-        if executor is not None:
-            logger.info(f"Distributing work to {executor.num_workers} processes")  # pyright: ignore[reportAttributeAccessIssue]
-            for result in executor.map(func, iterable, unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
-                yield result
+    else:
+        # Use CommExecutor for parallel processing
+        with MPICommExecutor(comm=comm) as executor:
+            if executor is not None:
+                logger.info(f"Distributing work to {executor.num_workers} processes")
+                for result in executor.map(func, iterable, unordered=True):
+                    yield result
 
 
 # needs to be defined at the top level for pickling
@@ -177,10 +188,6 @@ def func_TF_sims(
     obsmat_funcs: dict | None = None,
 ) -> int:
     """Generate pure E and pure B map with power law spectra for Transfer Function Computation."""
-
-    # incorporate realization id into the seed if CMB is not fixed
-    if not config.map_sim_pars.single_cmb:
-        config.map_sim_pars.cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
 
     # Getting power law spectra
     logger.debug("Generating power law spectra for TF simulations")
@@ -279,11 +286,6 @@ def func_signal(
     obsmat_funcs: dict | None = None,
 ) -> int:
     """Generate a sky realization."""
-
-    # incorporate realization id into the seed if CMB is not fixed
-    if not config.map_sim_pars.single_cmb:
-        config.map_sim_pars.cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
-
     # construct passbands if necessary
     config.map_sets = passband.passband_constructor(
         config, manager, passband_int=config.map_sim_pars.passband_int
@@ -292,7 +294,7 @@ def func_signal(
         logger.info("Using passband-integration for the mocker step.")
 
     # generate the components
-    cmb = get_cmb(manager, config)
+    cmb = get_cmb(manager, config, id_sim=id_sim)
     fg = get_foregrounds(config)
     noise = get_noise(config, binary_mask, nhits_maps)
 
@@ -350,7 +352,7 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    list_hitmapname = [m.nhits_map_path for m in config.map_sets]
+    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
     nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
     func = partial(
         func_signal,
@@ -386,7 +388,7 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    list_hitmapname = [m.nhits_map_path for m in config.map_sets]
+    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
     nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
     func = partial(func_noise, manager, config, binary_mask, nhits_maps)
 

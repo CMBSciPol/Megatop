@@ -32,7 +32,7 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     return np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0]])
 
 
-def generate_map_cmb(Cl_cmb_model, nside: int, cmb_seed: int | None = None):
+def generate_map_cmb(Cl_cmb_model, nside: int, cmb_seed: list[int] | int | None = None):
     # TODO write tests
     lmax = 3 * nside
 
@@ -53,7 +53,7 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
     sky = Sky(nside=nside, preset_strings=sky_model, output_unit=units.uK_CMB)
     maps_fgs = []
     for map_set in map_sets:
-        m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value  # pyright: ignore[reportAttributeAccessIssue])
+        m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value
         if input_coord != output_coord:
             logger.debug(
                 f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"

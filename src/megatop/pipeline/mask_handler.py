@@ -38,7 +38,7 @@ def mask_handler(manager: DataManager, config: Config):
             )
         else:
             logger.info("Loading nhits maps")
-            list_hitmapname = [m.nhits_map_path for m in config.map_sets]
+            list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
             nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
             norm_nhits_maps = mask.norm_smooth_nhits_maps(
                 nhits_maps=nhits_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits
@@ -112,7 +112,7 @@ def mask_handler(manager: DataManager, config: Config):
 #     timer.start("point-sources")
 #     if config.use_input_point_sources:
 #         # Load from disk
-#         mask_path: Path = config.masks_pars.input_sources_mask  # pyright: ignore[reportAssignmentType]
+#         mask_path: Path = config.masks_pars.input_sources_mask
 #         logger.info(f"Using point source mask from {mask_path}")
 #         ps_mask = hp.read_map(mask_path)
 #         ps_mask = hp.ud_grade(ps_mask, config.nside)
