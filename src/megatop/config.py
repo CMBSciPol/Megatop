@@ -25,8 +25,8 @@ __all__ = [
     "V3Noise",
     "V3Sensitivity",
     "ValidApoType",
-    "ValidExperimentType",
     "ValidPlanckGalKey",
+    "ValidExperimentConfig",
 ]
 
 SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
@@ -43,7 +43,6 @@ ValidApoType = Literal["C1", "C2", "Smooth"]
 ValidPlanckGalKey = Literal[
     "GAL020", "GAL040", "GAL060", "GAL070", "GAL080", "GAL090", "GAL097", "GAL099"
 ]
-ValidExperimentType = Literal["SO"]
 
 
 class NoiseOption(Enum):
@@ -105,17 +104,20 @@ class OutputDirsConfig:
     noise_spectra: str = "noise_spectra"
     mcmc: str = "mcmc"
 
+
 @define
 class FiducialCMBConfig:
     root: Path = field(converter=Path)
     lensed_scalar: str = "lensed_scalar_cl"
     unlensed_scalar_tensor_r1: str = "unlensed_scalar_tensor_r1_cl"
 
+
 @define(slots=False)
 class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
     exp_tag: str
+    beam: float
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     simfoTF_prefix: str = "simforTF_"
@@ -199,7 +201,7 @@ class GeneralConfig:
 @define
 class PreProcessingConfig:
     common_beam_correction: float = 100
-    beam_fwhms: list[float] | None = None
+    # beam_fwhms: list[float] | None = None
     DEBUGskippreproc: bool = False
     correct_for_TF: bool = False
     sum_TF_column: bool = True
@@ -258,10 +260,12 @@ class Map2ClConfig:
             msg = f"Cannot purify both E and B modes spectra simultaneously. Set {attribute.name} to False in your config."
             raise ValueError(msg)
 
+
 @define
 class PlotsConfig:
     lmin_plot: int = 30
     lmax_plot: int = 1_000
+
 
 @define
 class MapSimConfig:
@@ -292,34 +296,34 @@ class MapSimConfig:
 
 
 @define
-class NoiseSimConfig:
-    n_sim: int = 1
-    experiment: ValidExperimentType = "SO"
+class SOConfig:
+    usev3p1: bool
+    default_bands: list[float] = field(factory=lambda: [27, 39, 93, 145, 225, 280])
     noise_option: NoiseOption = field(default=NoiseOption.ONE_OVER_F)
-
-    # these three are required if experiment = 'SO'
     v3_sensitivity_mode: V3Sensitivity = V3Sensitivity.GOAL
     v3_one_over_f_mode: V3Noise = V3Noise.OPTIMISTIC
-    SAC_yrs_LF: int = 1
+    Ntubes: list[float] | None = field(factory=lambda: [1.0, 9.0, 5.0])
+    SAC_yrs_LF: float | None = 1.0
 
+
+@define
+class CustomSATConfig:
+    default_bands: float | list[float]
+    sensitivities: float | list[float]
+    Ntubes: float | int
+    alpha_knee: float | list[float]
+    ell_knee: float | list[float]
+    noise_option: NoiseOption
+
+
+ValidExperimentConfig = SOConfig | CustomSATConfig
+
+
+@define
+class NoiseSimConfig:
+    n_sim: int = 1
     include_nhits: bool = True
-    
-    v3p1: bool=False
-    Ntubes: list[float] = field(factory=lambda: [1., 9., 5.]) 
-    extra_name: str = "xUHF"
-    extra_bands: list[float] = field(factory=lambda: [225, 285, 350]) 
-    extra_beams: list[float] = field(factory=lambda: [15., 10., 8.])
-    extra_sensitivities: list[float] = field(factory=lambda: [20., 10., 10.])
-    extra_Ntubes: float = 0.5
-    extra_alpha: list[float] = field(factory=lambda: [-3, -3, -3])
-    extra_ell: list[int] = field(factory=lambda: [40, 40, 40])
-
-    # @noise_option.validator
-    # def check(self, attribute, value):
-    #    """Check that the noise option for the noise simulations is not no noise."""
-    #    if value == NoiseOption.NOISELESS:
-    #        msg = f"{attribute.name} cannot be {value} for noise simulations"
-    #        raise ValueError(msg)
+    experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict("SO", SOConfig))
 
 
 def default_prior_bounds() -> dict[str, list[float]]:
@@ -453,9 +457,7 @@ class Config:
     @property
     def beams(self) -> list[float]:
         """The list of beam FWHMs (in arcminutes)"""
-        if self.use_custom_beams:
-            return self.pre_proc_pars.beam_fwhms
-        return [SO_BEAMS_ARCMIN[freq] for freq in self.frequencies]
+        return [map_set.beam for map_set in self.map_sets]
 
     @property
     def maps(self) -> list[str]:
@@ -466,10 +468,6 @@ class Config:
     def sky_model(self) -> list[str]:
         """The list of components in the sky model"""
         return self.map_sim_pars.sky_model
-
-    # @property
-    # def use_input_nhits(self) -> bool:
-    #     return self.masks_pars.input_nhits_map is not None
 
     @property
     def use_input_point_sources(self) -> bool:
