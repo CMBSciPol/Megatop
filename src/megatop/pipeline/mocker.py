@@ -19,29 +19,11 @@ _POOL_EXECUTOR_THRESHOLD = 2
 
 @function_timer("get-noise-map")
 def get_noise(config: Config, binary_mask: NDArray, nhits_maps: NDArray) -> NDArray:
-    noise_option = config.noise_sim_pars.noise_option
-
-    if noise_option == NoiseOption.NOISELESS:
-        logger.debug("Simulation has NO NOISE")
-        return np.array(0)
-
     fsky_binary = binary_mask.mean()
-
-    if config.noise_sim_pars.noise_option == NoiseOption.WHITE:
-        logger.debug("Simulation has white noise only")
-        _, noise_levels = mock.get_noise(config, fsky_binary)
-        noise_freq_maps = mock.get_noise_map_from_white_noise(
-            config.frequencies, config.nside, noise_levels
-        )
-        logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
-
-    elif config.noise_sim_pars.noise_option == NoiseOption.ONE_OVER_F:
-        logger.debug("Simulation has noise from full spectra")
-        n_ell, _ = mock.get_noise(config, fsky_binary)
-        noise_freq_maps = mock.get_noise_map_from_noise_spectra(
-            config.frequencies, config.nside, n_ell
-        )
-        logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
+    noise_freq_maps = mock.get_full_sky_noise_freq_maps(
+        config.map_sets, config.noise_sim_pars, fsky_binary=fsky_binary, nside=config.nside
+    )
+    logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
     if config.noise_sim_pars.include_nhits:
         _ = mock.include_hits_noise(noise_freq_maps, nhits_maps, binary_mask)
