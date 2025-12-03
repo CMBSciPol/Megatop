@@ -302,7 +302,7 @@ class SOConfig:
     noise_option: NoiseOption = field(default=NoiseOption.ONE_OVER_F)
     v3_sensitivity_mode: V3Sensitivity = V3Sensitivity.GOAL
     v3_one_over_f_mode: V3Noise = V3Noise.OPTIMISTIC
-    Ntubes: list[float] | None = field(factory=lambda: [1.0, 9.0, 5.0])
+    Ntubes_years: list[float] | None = field(factory=lambda: [1.0, 9.0, 5.0])
     SAC_yrs_LF: float | None = 1.0
 
 
@@ -310,7 +310,7 @@ class SOConfig:
 class CustomSATConfig:
     default_bands: float | list[float]
     sensitivities: float | list[float]
-    Ntubes: float | int
+    Ntubes_years: float | int
     alpha_knee: float | list[float]
     ell_knee: float | list[float]
     noise_option: NoiseOption
