@@ -51,8 +51,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
 
-      - name: Install project
-        run: uv pip install .
+      - name: Install project with dev dependencies
+        run: uv pip install . --group dev
 
       - name: Run tests
         run: uv run pytest -vv
