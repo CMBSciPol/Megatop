@@ -110,15 +110,11 @@ def get_noise_experiment(
             logger.info(
                 f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using V3p1 calc"
             )
-            Ntubes = noise_config_exp.Ntubes
-            sensitivity_mode = noise_config_exp.v3_sensitivity_mode
-            one_over_f_mode = noise_config_exp.v3_one_over_f_mode
-            survey_years = 1.0
             nc = V3p1.SOSatV3point1(
-                sensitivity_mode=sensitivity_mode,
-                N_tubes=Ntubes,
-                survey_years=survey_years,
-                one_over_f_mode=one_over_f_mode,
+                sensitivity_mode=noise_config_exp.v3_sensitivity_mode,
+                N_tubes=noise_config_exp.Ntubes_years,
+                one_over_f_mode=noise_config_exp.v3_one_over_f_mode,
+                survey_years=1.0,  # The scaling wiht time is done through Ntubes_years
             )
             _, _, n_ell, white_noise_levels = nc.get_noise_curves(
                 f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
@@ -147,7 +143,7 @@ def get_noise_experiment(
         nc = V3p1.CustomSAT(
             bands=noise_config_exp.default_bands,
             sensitivities=noise_config_exp.sensitivities,
-            N_tubes=noise_config_exp.Ntubes,
+            N_tubes=noise_config_exp.Ntubes_years,
             ell_knee=noise_config_exp.ell_knee,
             alpha_knee=noise_config_exp.alpha_knee,
             survey_years=1.0,
