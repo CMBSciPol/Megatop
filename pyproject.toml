@@ -38,6 +38,10 @@ mpi = ["mpi4py"]
 
 [dependency-groups]
 dev = ["pytest"]
+docs = [
+    "zensical",
+    "mkdocstrings-python",
+]
 
 [project.scripts]
 "megatop-compsep-run" = "megatop.pipeline.parametric_separater:main"
