@@ -43,7 +43,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          pdoc --html megatop -o docs
+          uv run pdoc --html --output-dir docs megatop
           touch docs/.nojekyll  # Prevent GitHub Pages from ignoring files starting with underscores
 
       - name: Upload files as artifact
