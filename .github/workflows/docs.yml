@@ -1,0 +1,62 @@
+name: Build and Deploy Documentation
+
+on:
+  push:
+    branches:
+      - master
+      - fgbuster-master # temporary
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.12"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install namaster dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
+
+      - name: Install project
+        run: |
+          uv venv
+          uv pip install . --group docs
+
+      - name: Build documentation
+        run: |
+          pdoc --html megatop -o docs
+          touch docs/.nojekyll  # Prevent GitHub Pages from ignoring files starting with underscores
+
+      - name: Upload files as artifact
+        uses: actions/upload-pages-artifact@v4
+        id: deployment
+        with:
+          path: docs/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
