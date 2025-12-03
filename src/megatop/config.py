@@ -323,7 +323,7 @@ ValidExperimentConfig = SOConfig | CustomSATConfig
 class NoiseSimConfig:
     n_sim: int = 1
     include_nhits: bool = True
-    experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict("SO", SOConfig))
+    experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict(SO=SOConfig))
 
 
 def default_prior_bounds() -> dict[str, list[float]]:
@@ -406,12 +406,12 @@ class Config:
             fiducial_cmb=FiducialCMBConfig(root="fiducial_cmb_root"),
             map_sets=[
                 # typical SO configuration
-                MapSetConfig(freq_tag=27, exp_tag="SAT4", nhits_map_path="SO"),
-                MapSetConfig(freq_tag=39, exp_tag="SAT4", nhits_map_path="SO"),
-                MapSetConfig(freq_tag=93, exp_tag="SAT1", nhits_map_path="SO"),
-                MapSetConfig(freq_tag=145, exp_tag="SAT1", nhits_map_path="SO"),
-                MapSetConfig(freq_tag=225, exp_tag="SAT3", nhits_map_path="SO"),
-                MapSetConfig(freq_tag=280, exp_tag="SAT3", nhits_map_path="SO"),
+                MapSetConfig(freq_tag=27, exp_tag="SO", nhits_map_path="SO_nominal", beam=91.0),
+                MapSetConfig(freq_tag=39, exp_tag="SO", nhits_map_path="SO_nominal", beam=63.0),
+                MapSetConfig(freq_tag=93, exp_tag="SO", nhits_map_path="SO_nominal", beam=30.0),
+                MapSetConfig(freq_tag=145, exp_tag="SO", nhits_map_path="SO_nominal", beam=17.0),
+                MapSetConfig(freq_tag=225, exp_tag="SO", nhits_map_path="SO_nominal", beam=11.0),
+                MapSetConfig(freq_tag=280, exp_tag="SO", nhits_map_path="SO_nominal", beam=9.0),
             ],
         )
 
