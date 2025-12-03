@@ -39,7 +39,7 @@ jobs:
       - name: Install project
         run: |
           uv venv
-          uv pip install . --group docs
+          uv pip install .[mpi] --group docs
 
       - name: Build documentation
         run: |
