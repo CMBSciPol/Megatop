@@ -31,10 +31,10 @@ jobs:
           enable-cache: true
           python-version: "3.12"
 
-      - name: Install namaster dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
+          sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev libopenmpi-dev
 
       - name: Install project
         run: |
