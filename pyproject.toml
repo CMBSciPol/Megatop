@@ -35,6 +35,8 @@ dependencies = [
 
 [project.optional-dependencies]
 mpi = ["mpi4py"]
+
+[dependency-groups]
 dev = ["pytest"]
 
 [project.scripts]
