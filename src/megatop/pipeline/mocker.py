@@ -9,7 +9,6 @@ from mpi4py.MPI import Comm
 from numpy.typing import NDArray
 
 from megatop import Config, DataManager
-from megatop.config import NoiseOption
 from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
 from megatop.utils.TF_utils import get_alms_from_cls, power_law_cl
@@ -358,11 +357,6 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
     n_sim = config.noise_sim_pars.n_sim
 
     if n_sim == 0:
-        return
-
-    noise_option = config.noise_sim_pars.noise_option
-    if noise_option == NoiseOption.NOISELESS:
-        # In noiseless mode, do not simulate noise at all
         return
 
     if rank == 0:

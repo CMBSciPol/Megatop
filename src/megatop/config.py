@@ -29,15 +29,15 @@ __all__ = [
     "ValidExperimentConfig",
 ]
 
-SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
-SO_BEAMS_ARCMIN = {
-    27: 91.0,
-    39: 63.0,
-    93: 30.0,
-    145: 17.0,
-    225: 11.0,
-    280: 9.0,
-}
+# SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
+# SO_BEAMS_ARCMIN = {
+#     27: 91.0,
+#     39: 63.0,
+#     93: 30.0,
+#     145: 17.0,
+#     225: 11.0,
+#     280: 9.0,
+# }
 
 ValidApoType = Literal["C1", "C2", "Smooth"]
 ValidPlanckGalKey = Literal[
@@ -484,11 +484,3 @@ class Config:
     @property
     def use_custom_beams(self) -> bool:
         return self.pre_proc_pars.beam_fwhms is not None
-
-    @property
-    def indexes_into_SO_freqs(self) -> list[int]:
-        try:
-            return [SO_FREQUENCIES_GHZ.index(freq) for freq in self.frequencies]
-        except ValueError as exc:
-            msg = f"Invalid frequency in map_sets (expected subset of {SO_FREQUENCIES_GHZ})"
-            raise RuntimeError(msg) from exc
