@@ -72,6 +72,7 @@ custom_checkbox = true
 [project.theme]
 language = "en"
 icon.repo = "fontawesome/brands/github"
+logo = "logo.png"
 
 features = [
     # Zensical includes an announcement bar. This feature allows users to
