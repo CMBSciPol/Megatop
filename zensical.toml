@@ -71,6 +71,8 @@ custom_checkbox = true
 # ----------------------------------------------------------------------------
 [project.theme]
 language = "en"
+icon.repo = "fontawesome/brands/github"
+
 features = [
     # Zensical includes an announcement bar. This feature allows users to
     # dismiss it then they have read the announcement.
