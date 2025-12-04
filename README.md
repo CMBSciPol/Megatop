@@ -1,6 +1,16 @@
-# Megatop
+<div align="center">
+<img width="1024" height="283" alt="megatop_logo" src="https://github.com/user-attachments/assets/8fcb7af2-2a62-45d3-ab96-9ee68be1e4d0" />
+</div>
 
-A map-based CMB polarization data analysis pipeline, from maps to tensor-to-scalar ratio estimation.
+# A map-based CMB polarization data analysis pipeline
+
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![CI](https://github.com/CMBSciPol/Megatop/actions/workflows/ci.yml/badge.svg)](https://github.com/CMBSciPol/Megatop/actions/workflows/ci.yml)
+
+## What is Megatop?
+
+Megatop is a map-based data analysis pipeline for CMB polarization experiments.
+It takes frequency maps and performs component separation and estimation of cosmological parameters such as the tensor-to-scalar ratio.
 
 ## Installation
 
