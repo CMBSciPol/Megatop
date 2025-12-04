@@ -2,22 +2,23 @@
 site_name = "Megatop documentation"
 site_description = "A map-based CMB polarisation experiment data analysis pipeline."
 site_author = "Simon Biquard"
-#site_url = "https://cmbscipol.github.io/megatop"  # uncomment when docs get published to github pages
+site_url = "https://megatop.readthedocs.io/en"  # uncomment when docs get published to github pages
 copyright = "Copyright &copy; 2025 SciPol"
 repo_url = "https://github.com/CMBSciPol/Megatop"
 repo_name = "CMBSciPol/Megatop"  # should be useless when repo goes public
 
-# Zensical supports both implicit navigation and explicitly defined navigation.
-# If you decide not to define a navigation here then Zensical will simply
-# derive the navigation structure from the directory structure of your
-# "docs_dir". The definition below demonstrates how a navigation structure
-# can be defined using TOML syntax.
-#
-# Read more: https://zensical.org/docs/setup/navigation/
-# nav = [
-#   { "Get started" = "index.md" },
-#   { "Markdown in 5min" = "markdown.md" },
-# ]
+# https://zensical.org/docs/setup/navigation/
+nav = [
+  { "Home" = "index.md" },
+  "science.md",
+  { "Getting started" = [
+      "getting_started/installation.md",
+      "getting_started/tutorial.md"
+  ] },
+  { "API reference" = [
+      "api/megatop.md"
+  ] },
+]
 
 # https://zensical.org/docs/authoring/math/
 extra_javascript = [
