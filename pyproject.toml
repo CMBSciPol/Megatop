@@ -39,8 +39,9 @@ mpi = ["mpi4py"]
 [dependency-groups]
 dev = ["pytest"]
 docs = [
-    "zensical",
-    "mkdocstrings-python",
+    "zensical>=0.0.11",
+    "mkdocstrings-python>=2.0.1",
+    "griffe-fieldz>=0.3.0"
 ]
 
 [project.scripts]

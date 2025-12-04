@@ -36,6 +36,9 @@ paths = ["src"]
 docstring_style = "google"
 inherited_members = true
 show_source = true
+extensions = [
+    "griffe_fieldz",  # for attrs
+]
 
 # ----------------------------------------------------------------------------
 # Section for configuring markdown extensions

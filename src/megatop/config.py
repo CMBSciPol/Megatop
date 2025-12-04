@@ -393,7 +393,24 @@ class Cl2rConfig:
 
 @define
 class Config:
-    """Class holding the global configuration for Megatop."""
+    """Class holding the global configuration for Megatop.
+
+    Parameters:
+        data_dirs: Description.
+        output_dirs: Description.
+        fiducial_cmb: Description.
+        map_sets: Description.
+        masks_pars: Description.
+        general_pars: Description.
+        pre_proc_pars: Description.
+        noise_cov_pars: Description.
+        parametric_sep_pars: Description.
+        map2cl_pars: Description.
+        plot_pars: Description.
+        map_sim_pars: Description.
+        noise_sim_pars: Description.
+        cl2r_pars: Description.
+    """
 
     data_dirs: DataDirsConfig
     output_dirs: OutputDirsConfig
