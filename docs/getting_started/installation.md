@@ -2,68 +2,57 @@
 
 ## Installation
 
-First clone the repository, for example via https, and navigate to the directory:
+You can install the latest development version of `Megatop` directly from GitHub.
 
 ```bash
-git clone https://github.com/CMBSciPol/Megatop.git
-cd Megatop
+pip install git+https://github.com/CMBSciPol/Megatop.git
 ```
 
-`Megatop` depends on `NaMaster`, which is typically installed either from [PyPI](https://pypi.org/project/pymaster/)
-or [conda-forge](https://anaconda.org/conda-forge/namaster).
-Check the [NaMaster documentation](https://namaster.readthedocs.io/en/latest/source/installation.html) for more information.
+!!! note
 
-If you have the necessary dependencies to install `NaMaster`, you can simply install `Megatop` and its dependencies with pip:
+    Megatop depends on [NaMaster](https://github.com/LSSTDESC/NaMaster).
+    The method above will compile that package on your machine, and assumes you have installed its dependencies.
+    Otherwise, we suggest installing it from [conda-forge](https://anaconda.org/conda-forge/namaster) beforehand.
 
-```bash
-pip install .
-```
+    Check the [NaMaster documentation](https://namaster.readthedocs.io/en/latest/source/installation.html) for more information.
 
-Otherwise, we recommend starting with a conda environment and pip-installing the rest of the dependencies:
-
-```bash
-conda create -y -p ./conda_env python=3.10 namaster
-pip install .
-```
-
-If you intend to use functions calling MPI, you will need `mpi4py`, part of the `mpi` optional dependencies:
+Most of the pipeline steps use [MPI](https://en.wikipedia.org/wiki/Message_Passing_Interface).
+To run those, you will need the `mpi4py` package, an optional dependency.
 
 ```bash
-pip install .[mpi]
+pip install megatop[mpi] @ git+https://github.com/CMBSciPol/Megatop.git
 ```
 
 Refer to the [mpi4py documentation](https://mpi4py.readthedocs.io/en/stable/install.html) for more information.
 
-## Developing `Megatop`
+## Development
 
-After cloning, install in editable mode and with development dependencies:
+You should clone the [repository](https://github.com/CMBSciPol/Megatop) and install in editable mode with the `dev` dependency group.
 
 ```bash
-pip install -e .[dev]
+pip install -e .[mpi] --group dev
 ```
 
-For detailed installation instructions, refer to the previous section.
-
-We use [pytest](https://docs.pytest.org/en/stable/) for testing.
-You can run the tests with:
+The `dev` group includes [pytest](https://docs.pytest.org/en/stable/) for testing.
+You can simply run the tests with
 
 ```bash
 pytest
 ```
 
-To ensure that your code passes the quality checks,
-you can use our [pre-commit](https://pre-commit.com/) configuration:
+### Code quality checks
 
-1. Install `pre-commit`, for example via
+Our pre-commit hooks run automatically via GitHub actions.
+To run them locally, you can follow these steps.
 
-```bash
-pip install pre-commit
-```
+1. Install `prek` following the [documentation](https://prek.j178.dev/installation/).
+2. Install hooks with
 
-2. Install the pre-commit hooks with
-
-```bash
-pre-commit install
-```
+    ```bash
+    prek install
+    ```
 
 3. That's it! Every commit will trigger the code quality checks.
+
+!!! tip
+    You can run hooks on demand with `prek run`.
