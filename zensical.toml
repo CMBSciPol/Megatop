@@ -16,7 +16,9 @@ nav = [
       "getting_started/tutorial.md"
   ] },
   { "API reference" = [
-      "api/megatop.md"
+      "api/megatop.md",
+      "api/config.md",
+      "api/utils.md"
   ] },
 ]
 
