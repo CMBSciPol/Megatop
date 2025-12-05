@@ -2,7 +2,7 @@
 site_name = "Megatop documentation"
 site_description = "A map-based CMB polarisation experiment data analysis pipeline."
 site_author = "Simon Biquard"
-site_url = "https://megatop.readthedocs.io/en"  # uncomment when docs get published to github pages
+site_url = "https://megatop.readthedocs.io/en"
 copyright = "Copyright &copy; 2025 SciPol"
 repo_url = "https://github.com/CMBSciPol/Megatop"
 repo_name = "CMBSciPol/Megatop"  # should be useless when repo goes public
