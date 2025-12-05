@@ -15,6 +15,18 @@ nav = [
       "getting_started/installation.md",
       "getting_started/tutorial.md"
   ] },
+  { "Pipeline steps" = [
+      "pipeline/mask.md",
+      "pipeline/binning.md",
+      "pipeline/mock.md",
+      "pipeline/tf.md",
+      "pipeline/preprocess.md",
+      "pipeline/noise_covariance.md",
+      "pipeline/compsep.md",
+      "pipeline/map2cl.md",
+      "pipeline/noise_spectra.md",
+      "pipeline/cl2r.md",
+  ] },
   { "API reference" = [
       "api/megatop.md",
       "api/config.md",
