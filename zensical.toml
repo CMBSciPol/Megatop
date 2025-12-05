@@ -34,8 +34,8 @@ paths = ["src"]
 
 [project.plugins.mkdocstrings.handlers.python.options]
 docstring_style = "google"
-inherited_members = true
-show_source = true
+docstring_section_style = "list"
+show_root_members_full_path = true
 extensions = [
     "griffe_fieldz",  # for attrs
 ]
