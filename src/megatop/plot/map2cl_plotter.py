@@ -7,6 +7,7 @@ import numpy as np
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
+from megatop.utils.mock import get_Cl_CMB_model_from_manager
 from megatop.utils.plot import plot_all_Cls
 
 
@@ -26,6 +27,91 @@ def plot_map2cl(manager, id_sim=None):
         use_D_ell=False,
         y_axis_label=r"$C_{\ell}$",
     )
+
+
+def plot_all_spectra_nodebiasing(manager, config):
+    plot_dir = manager.path_to_spectra_plots
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Saving plots to %s", plot_dir)
+
+    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
+    bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
+    bin_index_lminlmax = binning_info["bin_index_lminlmax"]
+
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
+    nmt_bins = load_nmt_binning(manager)
+
+    bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, bin_index_lminlmax]
+
+    fig_EE, ax_EE = plt.subplots()
+    fig_BB, ax_BB = plt.subplots()
+
+    for id_sim in range(config.map_sim_pars.n_sim):
+        fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+        all_Cls = np.load(fname_all_Cls, allow_pickle=True)
+
+        cmb_cls = all_Cls["CMBxCMB"]
+
+        ax_EE.plot(
+            bin_centre_lminlmax,
+            cmb_cls[0],
+            label="Estimated CMB EE (noisy)" if id_sim == 0 else None,
+            linestyle="-",
+            color="darkblue",
+            alpha=0.2,  # if not negative_bins_in_EE else 1.0,
+        )
+        ax_BB.plot(
+            bin_centre_lminlmax,
+            cmb_cls[-1],
+            label="Estimated CMB BB (noisy)" if id_sim == 0 else None,
+            linestyle="-",
+            color="darkblue",
+            alpha=0.2,  # if not negative_bins_in_BB else 1.0,
+        )
+
+        negative_bins = cmb_cls[-1] < 0
+        ax_BB.plot(
+            bin_centre_lminlmax[negative_bins],
+            np.abs(cmb_cls[-1][negative_bins]),
+            label="ABS(Estimated CMB BB (noisy))" if id_sim == 0 else None,
+            linestyle="--",
+            color="green",
+            alpha=0.2,
+        )
+
+    ax_EE.plot(
+        bin_centre_lminlmax,
+        bined_Cl_cmb_model[1],
+        label="CMB EE model",
+        color="black",
+        linestyle="--",
+    )
+    ax_BB.plot(
+        bin_centre_lminlmax,
+        bined_Cl_cmb_model[2],
+        label="CMB BB model",
+        color="black",
+        linestyle="--",
+    )
+
+    ax_EE.set_xlabel(r"$\ell$")
+    ax_EE.set_ylabel(r"$C_{\ell}^{EE}$")
+    ax_EE.legend()
+    ax_EE.loglog()
+    ax_EE.set_title("CMB EE spectra")
+    fig_EE.savefig(plot_dir / "allskysims_CMB_EE_spectra.png")
+
+    ax_BB.set_xlabel(r"$\ell$")
+    ax_BB.set_ylabel(r"$C_{\ell}^{BB}$")
+    ax_BB.legend()
+    ax_BB.loglog()
+    ax_BB.set_title("CMB BB spectra")
+    fig_BB.savefig(plot_dir / "allskysims_CMB_BB_spectra.png")
+
+    # closing figures
+    plt.close(fig_EE)
+    plt.close(fig_BB)
 
 
 def plot_harmonic_byproducts(manager, id_sim=None):
@@ -234,8 +320,11 @@ def main():
         id_sim = 0
 
     plot_map2cl(manager, id_sim=id_sim)
+    plot_all_spectra_nodebiasing(manager, config)
 
-    if config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep:
+    if (
+        config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
+    ) and not config.parametric_sep_pars.alm2map:
         logger.info("Also plotting W_Cl and Effective Transfer Function outputs...")
         plot_harmonic_byproducts(manager, id_sim=id_sim)
 
