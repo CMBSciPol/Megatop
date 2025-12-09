@@ -147,10 +147,6 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         manager, config
     )
     invNlm = None
-    # import IPython; IPython.embed()
-    # cov_alm = np.load(manager.path_to_noisecov_alm)
-    # invNlm = _test_N_alm_format(cov_alm)
-    # invN = None
 
     instrument["fwhm"] = [None] * 6  # we don't correct for the beam inside the harmonic compsep
     std_instr = fg.observation_helpers.standardize_instrument(instrument)
