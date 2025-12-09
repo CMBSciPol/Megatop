@@ -45,7 +45,7 @@ def get_and_format_inv_Nl(manager: DataManager, config: Config):
     # Each C_ell in a bin is equal to C_bin
     # Cl_from_maps is a 3D array with shape (n_freq, n_auto_spectra, n_ell)
     # Where auto spectra are TT, EE, BB and TT is left null
-    # TODO: use full auto-cross spectra?
+    # If you want to use auto AND cross spectra, use get_and_format_inv_Nl_with_cross
     Cl_from_maps = np.load(manager.path_to_nl_noisecov_unbinned)
     # add 0 for first bins in the last dimension (ell)
     Cl_from_maps = np.pad(
@@ -74,6 +74,53 @@ def get_and_format_inv_Nl(manager: DataManager, config: Config):
     return inv_Cl_from_maps_diag.T
 
 
+def get_and_format_inv_Nl_with_cross(manager: DataManager, config: Config):
+    """
+    Loads noise Cl estimated from noise map simulations.
+    Makes sure that there is a value for each ell by adding concatenating 0 up to ell_min
+    Computes inverse noise covariance by inverting the 2x2 EE, EB, BE, BB matrix for each frequency and ell.
+    HERE THE INPUT IS ASSUMED TO HAVE CROSS-SPECTRA (TT, EE, EB, BE, BB)
+    """
+
+    # Importing noise Cl computer in pixel_noisecov_estimater.py
+    # Here we use the cl_unbinned from namaster wich is C_ell instead of C_bin
+    # Each C_ell in a bin is equal to C_bin
+    # Cl_from_maps is a 3D array with shape (n_freq, n_spectra, n_ell)
+
+    Cl_from_maps = np.load(
+        manager.path_to_nl_noisecov_unbinned.with_name("covar_cl_unbinned_with_cross.npy")
+    )
+    # add 0 for first bins in the last dimension (ell)
+    Cl_from_maps = np.pad(
+        Cl_from_maps,
+        ((0, 0), (0, 0), (config.parametric_sep_pars.harmonic_lmin, 0)),
+        mode="constant",
+        constant_values=0,
+    )
+
+    Cl_EBmatrix = np.zeros([Cl_from_maps.shape[0], 2, 2, Cl_from_maps.shape[2]])
+    Cl_EBmatrix[:, 0, 0] = Cl_from_maps[:, 1]  # EE
+    Cl_EBmatrix[:, 0, 1] = Cl_from_maps[:, 2]  # EB
+    Cl_EBmatrix[:, 1, 0] = Cl_from_maps[:, 3]  # BE
+    Cl_EBmatrix[:, 1, 1] = Cl_from_maps[:, 4]  # BB
+
+    non_zero_index = np.where(Cl_EBmatrix.swapaxes(1, -1) != np.zeros((2, 2)))
+    inv_ClEBmatrix = np.zeros_like(Cl_EBmatrix)
+    inv_ClEBmatrix[..., non_zero_index[1]] = np.linalg.inv(
+        Cl_EBmatrix.swapaxes(1, -1)[:, non_zero_index[1]]
+    ).swapaxes(1, -1)
+
+    invNl_diag_QU_diagfreq = np.zeros(
+        (Cl_from_maps.shape[-1], 3, Cl_from_maps.shape[0], Cl_from_maps.shape[0])
+    )
+
+    for i in range(Cl_from_maps.shape[0]):
+        invNl_diag_QU_diagfreq[:, 1, i, i] = inv_ClEBmatrix[i, 0, 0]
+        invNl_diag_QU_diagfreq[:, 2, i, i] = inv_ClEBmatrix[i, 1, 1]
+
+    return inv_ClEBmatrix, invNl_diag_QU_diagfreq
+
+
 def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: int | None = None):
     timer = Timer()
     timer.start("do-compsep")
@@ -95,9 +142,12 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
-    invN = get_and_format_inv_Nl(manager, config)
+    # invN = get_and_format_inv_Nl(manager, config)
+    invN_with_cross, invN_with_cross_diagQU_diagfreq = get_and_format_inv_Nl_with_cross(
+        manager, config
+    )
     invNlm = None
-
+    # import IPython; IPython.embed()
     # cov_alm = np.load(manager.path_to_noisecov_alm)
     # invNlm = _test_N_alm_format(cov_alm)
     # invN = None
@@ -113,14 +163,16 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     data_alms_lmin = set_alm_tozero_below_lmin(
         data_alms.copy(), config.parametric_sep_pars.harmonic_lmin
     )
-    # import IPython; IPython.embed()
+    data_alms_lmin_save = data_alms_lmin.copy()
+
     res = fg.separation_recipes.harmonic_comp_sep(
         components,
         std_instr,
         data_alms_lmin,
         config.nside,
         config.parametric_sep_pars.harmonic_lmax - 1,
-        invN=invN,
+        # invN=invN,
+        invN=invN_with_cross_diagQU_diagfreq,
         invNlm=invNlm,
         mask=None,
         data_is_alm=True,
@@ -128,24 +180,34 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         tol=tol,
         method=method,
     )
-    res.s_alm = res.s
+    # res.s_alm = res.s
+    res.s_alm_old = res.s
+    res.invAtNA_alm = res.invAtNA
 
     A = MixingMatrix(*components)
     A_ev = A.evaluator(np.array(instrument["frequency"]))
     A_maxL = A_ev(res.x)  # pyright: ignore[reportCallIssue]
     res.A_maxL = A_maxL
 
-    AtNA_ell = np.einsum("cf,lmfn,nk->lmck", A_maxL.T, invN, A_maxL)
-    invAtNA_ell = np.zeros_like(AtNA_ell)
-    invAtNA_ell[config.parametric_sep_pars.harmonic_lmin + 1 :, 1:] = np.linalg.inv(
-        AtNA_ell[config.parametric_sep_pars.harmonic_lmin + 1 :, 1:]
-    )
-    res.invAtNA_ell = invAtNA_ell.T[:, :, 1:]  # removing TT
-    W_maxL_ell = np.einsum(
-        "ckml, kf, lmfn -> cnml", res.invAtNA_ell, A_maxL.T, invN[:, 1:]
-    )  # removing TT
-    res.W_maxL_ell = W_maxL_ell
+    compute_W_maxL_ell = False
+    if compute_W_maxL_ell:
+        # AtNA_ell = np.einsum("cf,lmfn,nk->lmck", A_maxL.T, invN, A_maxL)
+        AtNA_ell = np.einsum("cf,lmfn,nk->lmck", A_maxL.T, invN_with_cross_diagQU_diagfreq, A_maxL)
+        invAtNA_ell = np.zeros_like(AtNA_ell)
+        invAtNA_ell[config.parametric_sep_pars.harmonic_lmin + 1 :, 1:] = np.linalg.inv(
+            AtNA_ell[config.parametric_sep_pars.harmonic_lmin + 1 :, 1:]
+        )
+        res.invAtNA_ell = invAtNA_ell.T[:, :, 1:]  # removing TT
+        W_maxL_ell = np.einsum(
+            # "ckml, kf, lmfn -> cnml", res.invAtNA_ell, A_maxL.T, invN[:, 1:]
+            "ckml, kf, lmfn -> cnml",
+            res.invAtNA_ell,
+            A_maxL.T,
+            invN_with_cross_diagQU_diagfreq[:, 1:],
+        )  # removing TT
+        res.W_maxL_ell = W_maxL_ell
 
+    """COMPUTING W in pixel space using pixel noise covariance"""
     logger.info("Computing W matrix in PIXEL space from harmonic compsep outputs")
     logger.info("Importing pixel based covariance")
     with Timer("load-covmat"):
@@ -157,45 +219,88 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     noisecov_QU_masked = noisecov_TQU_masked[:, 1:]
 
     AtNA = np.einsum("cf, fsp, fk->cksp", A_maxL.T, 1 / noisecov_QU_masked, A_maxL)
-    res.invAtNA_map = np.linalg.inv(AtNA.T).T
-    res.invAtNA_alm = res.invAtNA
-    res.invAtNA = res.invAtNA_map
+
+    res.invAtNA = np.linalg.inv(AtNA.T).T
 
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
     res.W_maxL = W_maxL
-    # import IPython; IPython.embed()
 
+    """COMPUTING W in lm space ignoring cross-spectra"""
     ell_em = hp.Alm.getlm(
         config.parametric_sep_pars.harmonic_lmax - 1, np.arange(data_alms_lmin.shape[-1])
     )[0]
     ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
-    invNlm = np.array([invN[ell_, 1:, :, :] for ell_ in ell_em])
+    # invNlm = np.array([invN[ell_, 1:, :, :] for ell_ in ell_em])
+    invNlm = np.array([invN_with_cross_diagQU_diagfreq[ell_, 1:, :, :] for ell_ in ell_em])
 
-    W_maxL_lm = _r_to_c_alms((res.invAtNA_alm @ A_maxL.T @ invNlm).T)
-    res.W_maxL_lm = W_maxL_lm
+    AtNA_ = np.einsum("cf,lmfn,nk->lmck", A_maxL.T, invNlm, A_maxL)
+    check_invAtNA = np.zeros_like(AtNA_)
+    check_invAtNA[np.where(AtNA_ != np.zeros((3, 3)))[0]] = np.linalg.inv(
+        AtNA_[np.where(AtNA_ != np.zeros((3, 3)))[0]]
+    )
+    print("Check invAtNA difference:", np.max(np.abs(check_invAtNA - res.invAtNA_alm)))
+    print("Allclose invAtNA difference:", np.allclose(check_invAtNA, res.invAtNA_alm))
 
-    # cov_alm = np.load(manager.path_to_noisecov_alm)
-    # inv_cov_alm = 1/cov_alm
-    # shape_N_alm_freq_diag = (inv_cov_alm.shape[0]),
-    # shape_N_alm_freq_diag += inv_cov_alm.shape
-    # # inv_cov_alm[np.where(np.isinf(inv_cov_alm))] = 0
-    # AtNA_alm_native = np.einsum("cf,fsl,fk->lsck", A_maxL.T, inv_cov_alm, A_maxL)
-    # inv_AtNA_alm_native = np.linalg.inv(AtNA_alm_native)
-    # inv_AtNA_alm_native[np.where(np.isinf(inv_AtNA_alm_native))] = 0
-    # inv_AtNA_alm_native[np.where(np.isnan(inv_AtNA_alm_native))] = 0
-    # W_maxL_alm = np.einsum("lsck,cf,fsl->cfsl", inv_AtNA_alm_native, A_maxL.T, inv_cov_alm)
-    # W_maxL_alm[np.where(np.isnan(W_maxL_alm))] = 0
+    W_maxL_lm_real = (res.invAtNA_alm @ A_maxL.T @ invNlm).T
+    W_maxL_lm = _r_to_c_alms(W_maxL_lm_real)
+    res.W_maxL_lm_NOcrossQU = W_maxL_lm
 
-    # shape_TEB = np.array(W_maxL_alm.shape)
-    # shape_TEB[-2] += 1  # adding T
-    # W_maxL_alm_TEB = np.zeros(shape_TEB)
-    # W_maxL_alm_TEB[:, :, 1:, :] = W_maxL_alm
+    """COMPUTING W in lm space WITH cross-spectra"""
+    ell_em = hp.Alm.getlm(
+        config.parametric_sep_pars.harmonic_lmax - 1, np.arange(data_alms_lmin.shape[-1])
+    )[0]
+    ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
+    invNlm_cross = np.array([invN_with_cross[..., ell_] for ell_ in ell_em])
+
+    AtNA_cross_ = np.einsum("cf,lfeb,fk->lebck", A_maxL.T, invNlm_cross, A_maxL)
+
+    check_invAtNA_cross_swapaxes_then_reshape = AtNA_cross_.swapaxes(-2, -3).reshape(
+        [
+            AtNA_cross_.shape[0],
+            AtNA_cross_.shape[-3] * AtNA_cross_.shape[-1],
+            AtNA_cross_.shape[-3] * AtNA_cross_.shape[-1],
+        ]
+    )  # we want to invert both QU and components indices
+    inv_check_invAtNA_cross_swapaxes_then_reshape = np.zeros_like(
+        check_invAtNA_cross_swapaxes_then_reshape
+    )
+    inv_check_invAtNA_cross_swapaxes_then_reshape[
+        np.where(check_invAtNA_cross_swapaxes_then_reshape != np.zeros((6, 6)))[0]
+    ] = np.linalg.inv(
+        check_invAtNA_cross_swapaxes_then_reshape[
+            np.where(check_invAtNA_cross_swapaxes_then_reshape != np.zeros((6, 6)))[0]
+        ]
+    )
+    inv_check_invAtNA_cross_swapaxes_then_reshape = (
+        inv_check_invAtNA_cross_swapaxes_then_reshape.reshape(
+            [AtNA_cross_.shape[i] for i in [0, 1, 3, 2, 4]]
+        ).swapaxes(-2, -3)
+    )
+    check_invAtNA_cross = inv_check_invAtNA_cross_swapaxes_then_reshape.copy()
+
+    W_maxL_lm_real_cross = np.einsum(
+        "lebck,kf,lfbt->letcf", check_invAtNA_cross, A_maxL.T, invNlm_cross
+    )
+
+    W_maxL_lm_cross = _r_to_c_alms(W_maxL_lm_real_cross.copy().T)
+
+    res.W_maxL_lm = W_maxL_lm_cross
+    res.W_maxL_lm_real = W_maxL_lm_real_cross
+
+    compute_alm_from_W_crossQU = True
+    if compute_alm_from_W_crossQU:
+        alm_postcompsep_real_cross = np.einsum(
+            "lebcf, lbf -> lec", W_maxL_lm_real_cross, _format_alms(data_alms_lmin_save.copy())
+        )
+        alm_postcompsep_cross = _r_to_c_alms(alm_postcompsep_real_cross.T)
+
+        res.s_alm = alm_postcompsep_cross
 
     if config.parametric_sep_pars.alm2map:
         logger.info(
             "Harmonic Compsep: Computing component map from output alms, this might induce some edge effect..."
         )
-        # import IPython; IPython.embed()
+
         res.s = np.array(
             [
                 hp.alm2map_spin(
@@ -207,10 +312,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
                 for i in range(res.s_alm.shape[0])
             ]
         )
-        # remove binary mask to avoid double application when entering namaster:
-        analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-        analysis_mask /= np.max(analysis_mask)  # normalize the mask to 1
-        res.s[..., np.where(binary_mask != 0)] /= analysis_mask[np.where(binary_mask != 0)]
+
     else:
         logger.info("Harmonic Compsep: Computing component maps using W matrix and input maps")
         logger.warning(
@@ -315,7 +417,6 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     A_maxL = A_ev(res.x)  # pyright: ignore[reportCallIssue]
     res.A_maxL = A_maxL
 
-    # W_maxL = algebra.W(A_maxL, invN=1 / noisecov_QU_masked)
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
 
     res.W_maxL = W_maxL
