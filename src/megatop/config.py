@@ -202,6 +202,7 @@ class PreProcessingConfig:
     DEBUGskippreproc: bool = False
     correct_for_TF: bool = False
     sum_TF_column: bool = True
+    DEBUGHARMONICuse_namaster_alms: bool = False
 
 
 @define
@@ -249,6 +250,7 @@ class Map2ClConfig:
     purify_e: bool = field(default=False)
     purify_b: bool = True
     n_iter_namaster: int = 3
+    use_harmonic_output_alm: bool = False
 
     @purify_e.validator
     def check(self, attribute, value):
