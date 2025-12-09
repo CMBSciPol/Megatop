@@ -154,56 +154,59 @@ def alm_common_beam(
     harmonic_analysis_lmax: int | None = None,
     purify_e: bool = False,
     purify_b: bool = False,
+    use_namaster_alms: bool = True,
 ):
-    # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
-    # mean_fsky_correction = np.sqrt(mean_fsky)
-    # import IPython; IPython.embed()
+    if analysis_mask is not None and not use_namaster_alms:
+        logger.warning(
+            "analysis_mask is provided but use_namaster_alms is False. Are you sure you want to apply the analysis mask?"
+        )
     data_alms = []
 
     for f in range(freq_maps.shape[0]):
-        fields = nmt.NmtField(
-            analysis_mask,
-            freq_maps[f, 1:],
-            beam=None,
-            purify_e=purify_e,
-            purify_b=purify_b,
-            n_iter=10,
-        )
-        # The smooth mask (mask_analysis) is applied in the NmtField constructor
-        data_alms.append(truncate_alm(fields.alm, lmax_new=harmonic_analysis_lmax - 1))
-    data_alms = np.array(data_alms)  # / mean_fsky_correction
+        if use_namaster_alms:
+            fields = nmt.NmtField(
+                analysis_mask,
+                freq_maps[f, 1:],
+                beam=None,
+                purify_e=purify_e,
+                purify_b=purify_b,
+                n_iter=10,
+            )
+            alms_QU = fields.alm
+        else:
+            alms_QU = hp.map2alm(
+                freq_maps[f] * analysis_mask,
+                lmax=3 * nside,
+                pol=True,
+                iter=10,
+            )[1:]  # keep only E and B
 
-    # data_alms_hp_maskanalysis = []
-    # analysis_mask_unseen = analysis_mask.copy()
-    # analysis_mask_unseen[analysis_mask == 0] = hp.UNSEEN
-    # for f in range(data_alms.shape[0]):
-    #     alm_TQU = hp.map2alm(
-    #         freq_maps[f]* analysis_mask_unseen,
-    #         lmax=3*nside-1,
-    #         iter=10,
-    #     )
-    #     data_alms_hp_maskanalysis.append(truncate_alm(alm_TQU[1:], lmax_new=harmonic_analysis_lmax - 1))  # keep only E and B
-    # data_alms_hp_maskanalysis = np.array(data_alms_hp_maskanalysis)
+        # The smooth mask (mask_analysis) is applied in the NmtField constructor
+        data_alms.append(truncate_alm(alms_QU, lmax_new=harmonic_analysis_lmax - 1))
+    data_alms = np.array(data_alms)  # / mean_fsky_correction
 
     common_beam_ell = hp.gauss_beam(
         np.radians(common_beam / 60.0),
         lmax=3 * nside,
         pol=True,
     )[
-        :-1, 1
+        # :-1, 1
+        :, 1
     ]  # taking only the GRAD/ELECTRIC/E polarization beam (it is equal to the  CURL/MAGNETIC/B polarization beam)
 
     beam4namaster = np.array(
         [
-            hp.gauss_beam(np.radians(beam / 60), lmax=3 * nside, pol=True)[:-1, 1] / common_beam_ell
+            hp.gauss_beam(np.radians(beam / 60), lmax=3 * nside, pol=True)[:, 1] / common_beam_ell
+            # hp.gauss_beam(np.radians(beam / 60), lmax=3 * nside, pol=True)[:-1, 1] / common_beam_ell
             for beam in frequency_beams
         ]
     )
-    beam4namaster = beam4namaster[..., : harmonic_analysis_lmax - 1]
+    # beam4namaster = beam4namaster[..., : harmonic_analysis_lmax - 1]
+    beam4namaster = beam4namaster[..., :harmonic_analysis_lmax]
 
-    assert beam4namaster.shape[-1] == hp.Alm.getlmax(data_alms.shape[-1]), (
-        f"beam4namaster shape {beam4namaster.shape} does not match data_alms shape {data_alms.shape}"
-    )
+    # assert beam4namaster.shape[-1] == hp.Alm.getlmax(data_alms.shape[-1]), (
+    #     f"beam4namaster shape {beam4namaster.shape} does not match data_alms shape {data_alms.shape}"
+    # )
 
     for f in range(data_alms.shape[0]):
         data_alms[f, 0] = hp.almxfl(data_alms[f, 0], 1 / beam4namaster[f])
