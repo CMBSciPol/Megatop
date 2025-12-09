@@ -149,6 +149,12 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         cl_noise_cov_preprocessed = np.zeros((len(config.frequencies), 3, ell_total))
 
+        cl_noise_cov_preprocessed_unbinned_with_cross = np.zeros(
+            (len(config.frequencies), 5, ell_max_namaster - ell_min_namaster)
+        )
+
+        cl_noise_cov_preprocessed_with_cross = np.zeros((len(config.frequencies), 5, ell_total))
+
     # Importing noise maps
     n_sim = config.noise_sim_pars.n_sim
 
@@ -238,6 +244,12 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     output_noise_spectra_unbined = np.zeros(
                         [len(config.frequencies), 3, noise_spectra_unbined.shape[-1]]
                     )
+                    output_noise_spectra_with_cross = np.zeros(
+                        [len(config.frequencies), 5, nmt_bins.get_n_bands()]
+                    )
+                    output_noise_spectra_unbined_with_cross = np.zeros(
+                        [len(config.frequencies), 5, noise_spectra_unbined.shape[-1]]
+                    )
 
                     reduced_TF_from_preproc = np.load(
                         manager.get_path_to_preprocessed_reduced_TF(),
@@ -283,7 +295,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                             inv_tf_reduced = get_reduced_TF_for_Cl(None, transfer)
                             inv_tf = inv_tf_reduced
                             """
-                            # import IPython; IPython.embed()
                             # inv_tf = get_reduced_TF_for_Cl(
                             #     reduced_TF_from_preproc["inv_sqrt_tf_bin_freq"][f], None
                             # )
@@ -320,6 +331,31 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                         )
                         output_noise_spectra_unbined[f, 1] = noise_spectra_TF_corrected_unbined[0]
                         output_noise_spectra_unbined[f, 2] = noise_spectra_TF_corrected_unbined[3]
+
+                        output_noise_spectra_with_cross[f, 0] = noise_spectra_TF_corrected[0] * 0
+                        output_noise_spectra_with_cross[f, 1] = noise_spectra_TF_corrected[0]
+                        output_noise_spectra_with_cross[f, 2] = noise_spectra_TF_corrected[1]
+                        output_noise_spectra_with_cross[f, 3] = noise_spectra_TF_corrected[2]
+                        output_noise_spectra_with_cross[f, 4] = noise_spectra_TF_corrected[3]
+
+                        output_noise_spectra_unbined_with_cross[f, 0] = (
+                            noise_spectra_TF_corrected_unbined[0] * 0
+                        )
+                        output_noise_spectra_unbined_with_cross[f, 1] = (
+                            noise_spectra_TF_corrected_unbined[0]
+                        )
+                        output_noise_spectra_unbined_with_cross[f, 2] = (
+                            noise_spectra_TF_corrected_unbined[1]
+                        )
+                        output_noise_spectra_unbined_with_cross[f, 3] = (
+                            noise_spectra_TF_corrected_unbined[2]
+                        )
+                        output_noise_spectra_unbined_with_cross[f, 4] = (
+                            noise_spectra_TF_corrected_unbined[3]
+                        )
+
+                        noise_spectra_with_cross = output_noise_spectra_with_cross
+                        noise_spectra_unbined_with_cross = output_noise_spectra_unbined_with_cross
                     noise_spectra = output_noise_spectra
                     noise_spectra_unbined = output_noise_spectra_unbined
 
@@ -335,10 +371,16 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 )
                 noise_spectra_unbined = noise_spectra.copy()
             noise_spectra = noise_spectra[..., bin_index_lminlmax]
+            noise_spectra_with_cross = noise_spectra_with_cross[..., bin_index_lminlmax]
 
             # Adding the noise spectra to the ones from previous realisations
             cl_noise_cov_preprocessed += noise_spectra
             cl_noise_cov_preprocessed_unbinned += noise_spectra_unbined[
+                ..., ell_min_namaster:ell_max_namaster
+            ]
+
+            cl_noise_cov_preprocessed_with_cross += noise_spectra_with_cross
+            cl_noise_cov_preprocessed_unbinned_with_cross += noise_spectra_unbined_with_cross[
                 ..., ell_min_namaster:ell_max_namaster
             ]
 
@@ -347,6 +389,10 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
                 # TODO: remove after merge
                 analysis_mask /= np.max(analysis_mask)
+                if config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms:
+                    mask_alm_computation = analysis_mask
+                else:
+                    mask_alm_computation = hp.read_map(manager.path_to_binary_mask)
 
                 freq_beams = config.beams
                 common_beam = config.pre_proc_pars.common_beam_correction
@@ -359,10 +405,11 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     common_beam=common_beam,
                     frequency_beams=freq_beams,
                     freq_maps=np.array(noise_freq_maps),
-                    analysis_mask=analysis_mask,
+                    analysis_mask=mask_alm_computation,
                     harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
                     purify_e=config.map2cl_pars.purify_e,
                     purify_b=config.map2cl_pars.purify_b,
+                    use_namaster_alms=config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms,
                 )
 
                 freq_alms_convolved_TF_corrected = np.einsum(
@@ -391,6 +438,13 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             noise_cov_preprocessed_recvbuf_cl_unbinned = MPISUM(
                 cl_noise_cov_preprocessed_unbinned, comm, rank, root
             )
+            noise_cov_preprocessed_recvbuf_cl_with_cross = MPISUM(
+                cl_noise_cov_preprocessed_with_cross, comm, rank, root
+            )
+            noise_cov_preprocessed_recvbuf_cl_unbinned_with_cross = MPISUM(
+                cl_noise_cov_preprocessed_unbinned_with_cross, comm, rank, root
+            )
+
             if test_alm_TF_noise:
                 noise_cov_preprocessed_recvbuf_alm = MPISUM(
                     noise_cov_alm_preprocessed, comm, rank, root
@@ -400,6 +454,10 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         if config.parametric_sep_pars.use_harmonic_compsep:
             noise_cov_preprocessed_recvbuf_cl = cl_noise_cov_preprocessed
             noise_cov_preprocessed_recvbuf_cl_unbinned = cl_noise_cov_preprocessed_unbinned
+            noise_cov_preprocessed_recvbuf_cl_with_cross = cl_noise_cov_preprocessed_with_cross
+            noise_cov_preprocessed_recvbuf_cl_unbinned_with_cross = (
+                cl_noise_cov_preprocessed_unbinned_with_cross
+            )
             if test_alm_TF_noise:
                 noise_cov_preprocessed_recvbuf_alm = noise_cov_alm_preprocessed
 
@@ -411,6 +469,12 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             noise_cov_preprocessed_recvbuf_cl_unbinned = (
                 noise_cov_preprocessed_recvbuf_cl_unbinned / int_n_sim
             )
+            noise_cov_preprocessed_mean_cl_with_cross = (
+                noise_cov_preprocessed_recvbuf_cl_with_cross / int_n_sim
+            )
+            noise_cov_preprocessed_recvbuf_cl_unbinned_with_cross = (
+                noise_cov_preprocessed_recvbuf_cl_unbinned_with_cross / int_n_sim
+            )
             if test_alm_TF_noise:
                 noise_cov_preprocessed_mean_alm = noise_cov_preprocessed_recvbuf_alm / int_n_sim
 
@@ -419,6 +483,8 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         if config.parametric_sep_pars.use_harmonic_compsep:
             noise_cov_preprocessed_mean_cl = None
             noise_cov_preprocessed_recvbuf_cl_unbinned = None
+            noise_cov_preprocessed_mean_cl_with_cross = None
+            noise_cov_preprocessed_recvbuf_cl_unbinned_with_cross = None
             if test_alm_TF_noise:
                 noise_cov_preprocessed_mean_alm = None
 
@@ -429,6 +495,15 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             np.save(manager.path_to_nl_noisecov, noise_cov_preprocessed_mean_cl)
             np.save(
                 manager.path_to_nl_noisecov_unbinned, noise_cov_preprocessed_recvbuf_cl_unbinned
+            )
+
+            np.save(
+                manager.path_to_nl_noisecov.with_name("nl_nu_covariance_with_cross.npy"),
+                noise_cov_preprocessed_mean_cl_with_cross,
+            )
+            np.save(
+                manager.path_to_nl_noisecov_unbinned.with_name("covar_cl_unbinned_with_cross.npy"),
+                noise_cov_preprocessed_recvbuf_cl_unbinned_with_cross,
             )
             if test_alm_TF_noise:
                 np.save(manager.path_to_noisecov_alm, noise_cov_preprocessed_mean_alm)
