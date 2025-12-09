@@ -106,28 +106,32 @@ def preprocess_map(
         )
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
-        # if config.masks_pars.DEBUG_output_apod_binary_mask:
-        #     logger.warning("DEBUG: Using apodized binary mask for harmonic component separation, ")
-        #     analysis_mask = hp.read_map(manager.path_to_apod_binary_mask)
-
         logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
         # TODO: remove after merge
         analysis_mask /= np.max(analysis_mask)  # normalize the mask to 1
+        binary_mask = hp.read_map(manager.path_to_binary_mask)
+
+        if config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms:
+            mask_alm_computation = analysis_mask
+        else:
+            mask_alm_computation = binary_mask
 
         freq_beams = config.beams
         common_beam = config.pre_proc_pars.common_beam_correction
         if config.pre_proc_pars.DEBUGskippreproc:
             freq_beams = np.array([0.0] * len(config.frequencies))
             common_beam = 0.0
+
         freq_alms_convolved = alm_common_beam(
             nside=config.nside,
             common_beam=common_beam,
             frequency_beams=freq_beams,
             freq_maps=np.array(input_maps),
-            analysis_mask=analysis_mask,
+            analysis_mask=mask_alm_computation,
             harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
+            use_namaster_alms=config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms,
         )
         logger.info(f"Pre-processed alms have shape: {freq_alms_convolved.shape}")
 
