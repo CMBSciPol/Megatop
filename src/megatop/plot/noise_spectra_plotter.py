@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from megatop import Config, DataManager
-from megatop.config import NoiseOption
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mock import get_Cl_CMB_model_from_manager
@@ -47,7 +46,7 @@ def plot_all_noise_spectra(manager, config):
             color="darkblue",
             alpha=0.2,
         )
-    average_noise_CMB /= config.map_sim_pars.n_sim
+    average_noise_CMB /= config.noise_sim_pars.n_sim
 
     ax_EE.plot(
         bin_centre_lminlmax,
@@ -88,6 +87,8 @@ def plot_all_spectra(manager, config):
 
     logger.info("Saving plots to %s", plot_dir)
 
+    logger.info("Saving plots to %s", plot_dir)
+
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
     bin_index_lminlmax = binning_info["bin_index_lminlmax"]
@@ -103,8 +104,13 @@ def plot_all_spectra(manager, config):
     fig_BB_debiased, ax_BB_debiased = plt.subplots()
     fig_EE_debiased_diff, ax_EE_debiased_diff = plt.subplots()
     fig_BB_debiased_diff, ax_BB_debiased_diff = plt.subplots()
+    fig_EE_debiased, ax_EE_debiased = plt.subplots()
+    fig_BB_debiased, ax_BB_debiased = plt.subplots()
+    fig_EE_debiased_diff, ax_EE_debiased_diff = plt.subplots()
+    fig_BB_debiased_diff, ax_BB_debiased_diff = plt.subplots()
 
     average_noise_CMB = np.zeros([4, len(bin_centre_lminlmax)])
+    array_debiased_diff_model = np.zeros([config.map_sim_pars.n_sim, 2, len(bin_centre_lminlmax)])
     array_debiased_diff_model = np.zeros([config.map_sim_pars.n_sim, 2, len(bin_centre_lminlmax)])
     for id_sim in range(config.map_sim_pars.n_sim):
         fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
@@ -115,10 +121,13 @@ def plot_all_spectra(manager, config):
 
         cmb_cls = all_Cls["CMBxCMB"]
         debiased_cmb_cls = all_Cls["CMBxCMB"] - all_noise_Cls["Noise_CMBxNoise_CMB"]
+        cmb_cls = all_Cls["CMBxCMB"]
+        debiased_cmb_cls = all_Cls["CMBxCMB"] - all_noise_Cls["Noise_CMBxNoise_CMB"]
         average_noise_CMB += all_noise_Cls["Noise_CMBxNoise_CMB"]
 
         ax_EE.plot(
             bin_centre_lminlmax,
+            cmb_cls[0],
             cmb_cls[0],
             label="Estimated CMB EE (noisy)" if id_sim == 0 else None,
             linestyle="-",
@@ -127,6 +136,7 @@ def plot_all_spectra(manager, config):
         )
         ax_BB.plot(
             bin_centre_lminlmax,
+            cmb_cls[-1],
             cmb_cls[-1],
             label="Estimated CMB BB (noisy)" if id_sim == 0 else None,
             linestyle="-",
@@ -174,8 +184,49 @@ def plot_all_spectra(manager, config):
         )
 
         negative_bins = cmb_cls[-1] < 0
+        ax_EE_debiased.plot(
+            bin_centre_lminlmax,
+            debiased_cmb_cls[0],
+            label="Estimated CMB EE noise debiased" if id_sim == 0 else None,
+            linestyle="-",
+            color="darkblue",
+            alpha=0.2,  # if not negative_bins_in_EE else 1.0,
+        )
+
+        ax_BB_debiased.plot(
+            bin_centre_lminlmax,
+            debiased_cmb_cls[-1],
+            label="Estimated CMB BB noise debiased" if id_sim == 0 else None,
+            linestyle="-",
+            color="darkblue",
+            alpha=0.2,  # if not negative_bins_in_BB else 1.0,
+        )
+
+        diff_debiased_model_EE = debiased_cmb_cls[0] - bined_Cl_cmb_model[1]
+        diff_debiased_model_BB = debiased_cmb_cls[-1] - bined_Cl_cmb_model[2]
+        array_debiased_diff_model[id_sim, 0, :] = diff_debiased_model_EE
+        array_debiased_diff_model[id_sim, 1, :] = diff_debiased_model_BB
+        ax_EE_debiased_diff.plot(
+            bin_centre_lminlmax,
+            diff_debiased_model_EE,
+            label="Estimated CMB EE noise debiased - model" if id_sim == 0 else None,
+            linestyle="-",
+            color="darkblue",
+            alpha=0.2,  # if not negative_bins_in_EE else 1.0,
+        )
+        ax_BB_debiased_diff.plot(
+            bin_centre_lminlmax,
+            diff_debiased_model_BB,
+            label="Estimated CMB BB noise debiased - model" if id_sim == 0 else None,
+            linestyle="-",
+            color="darkblue",
+            alpha=0.2,  # if not negative_bins_in_BB else 1.0,
+        )
+
+        negative_bins = cmb_cls[-1] < 0
         ax_BB.plot(
             bin_centre_lminlmax[negative_bins],
+            np.abs(cmb_cls[-1][negative_bins]),
             np.abs(cmb_cls[-1][negative_bins]),
             label="ABS(Estimated CMB BB (noisy))" if id_sim == 0 else None,
             linestyle="--",
@@ -183,12 +234,12 @@ def plot_all_spectra(manager, config):
             alpha=0.2,
         )
 
-    average_noise_CMB /= config.map_sim_pars.n_sim
+    average_noise_CMB /= config.noise_sim_pars.n_sim
 
-    noise_option = config.noise_sim_pars.noise_option
-    if noise_option == NoiseOption.NOISELESS:
-        # TODO: this is a temporary fix, need to be done properly
-        average_noise_CMB = np.zeros_like(average_noise_CMB)
+    # noise_option = config.noise_sim_pars.noise_option
+    # if noise_option == NoiseOption.NOISELESS:
+    #     # TODO: this is a temporary fix, need to be done properly
+    #     average_noise_CMB = np.zeros_like(average_noise_CMB)
 
     ax_EE.plot(
         bin_centre_lminlmax,
@@ -332,9 +383,41 @@ def plot_all_spectra(manager, config):
     ax_BB_debiased_diff.set_title("CMB BB spectra difference to model")
     ax_BB_debiased_diff.set_xscale("log")
     fig_BB_debiased_diff.savefig(plot_dir / "allskysims_CMB_BB_debiased_spectra_diff_to_model.png")
+
+    ax_EE_debiased.set_xlabel(r"$\ell$")
+    ax_EE_debiased.set_ylabel(r"$C_{\ell}^{EE}$")
+    ax_EE_debiased.legend()
+    ax_EE_debiased.loglog()
+    ax_EE_debiased.set_title("CMB EE spectra")
+    fig_EE_debiased.savefig(plot_dir / "allskysims_CMB_EE_debiased_spectra.png")
+
+    ax_BB_debiased.set_xlabel(r"$\ell$")
+    ax_BB_debiased.set_ylabel(r"$C_{\ell}^{BB}$")
+    ax_BB_debiased.legend()
+    ax_BB_debiased.loglog()
+    ax_BB_debiased.set_title("CMB BB spectra")
+    fig_BB_debiased.savefig(plot_dir / "allskysims_CMB_BB_debiased_spectra.png")
+
+    ax_EE_debiased_diff.set_xlabel(r"$\ell$")
+    ax_EE_debiased_diff.set_ylabel(r"$C_{\ell}^{EE}$")
+    ax_EE_debiased_diff.legend()
+    ax_EE_debiased_diff.axhline(0, color="black", linestyle="--", linewidth=1)
+    ax_EE_debiased_diff.set_title("CMB EE spectra difference to model")
+    ax_EE_debiased_diff.set_xscale("log")
+    fig_EE_debiased_diff.savefig(plot_dir / "allskysims_CMB_EE_debiased_spectra_diff_to_model.png")
+
+    ax_BB_debiased_diff.set_xlabel(r"$\ell$")
+    ax_BB_debiased_diff.set_ylabel(r"$C_{\ell}^{BB}$")
+    ax_BB_debiased_diff.legend()
+    ax_BB_debiased_diff.axhline(0, color="black", linestyle="--", linewidth=1)
+    ax_BB_debiased_diff.set_title("CMB BB spectra difference to model")
+    ax_BB_debiased_diff.set_xscale("log")
+    fig_BB_debiased_diff.savefig(plot_dir / "allskysims_CMB_BB_debiased_spectra_diff_to_model.png")
     # closing figures
     plt.close(fig_EE)
     plt.close(fig_BB)
+    plt.close(fig_EE_debiased)
+    plt.close(fig_BB_debiased)
     plt.close(fig_EE_debiased)
     plt.close(fig_BB_debiased)
 

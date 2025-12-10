@@ -18,7 +18,7 @@ def truncate_alm(alm, lmax_new):
     """
     lmax_old = hp.Alm.getlmax(alm.shape[-1])
     assert lmax_new <= lmax_old, "New lmax must be <= original lmax"
-    new_shape = alm.shape[:-1] + (hp.Alm.getsize(lmax_new),)
+    new_shape = (*alm.shape[:-1], hp.Alm.getsize(lmax_new))
     alm_new = np.zeros(new_shape, dtype=alm.dtype)
 
     for ell in range(lmax_new + 1):

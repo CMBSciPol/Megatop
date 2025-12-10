@@ -7,10 +7,6 @@ from attrs import Factory, asdict, define, evolve, field
 
 from megatop._converter import yaml_converter
 
-# pyright: reportAssignmentType = false
-# pyright: reportAttributeAccessIssue = false
-
-
 __all__ = [
     "CompSepConfig",
     "Config",
@@ -29,26 +25,24 @@ __all__ = [
     "V3Noise",
     "V3Sensitivity",
     "ValidApoType",
-    "ValidExperimentType",
     "ValidPlanckGalKey",
+    "ValidExperimentConfig",
 ]
 
-
-SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
-SO_BEAMS_ARCMIN = {
-    27: 91.0,
-    39: 63.0,
-    93: 30.0,
-    145: 17.0,
-    225: 11.0,
-    280: 9.0,
-}
+# SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
+# SO_BEAMS_ARCMIN = {
+#     27: 91.0,
+#     39: 63.0,
+#     93: 30.0,
+#     145: 17.0,
+#     225: 11.0,
+#     280: 9.0,
+# }
 
 ValidApoType = Literal["C1", "C2", "Smooth"]
 ValidPlanckGalKey = Literal[
     "GAL020", "GAL040", "GAL060", "GAL070", "GAL080", "GAL090", "GAL097", "GAL099"
 ]
-ValidExperimentType = Literal["SO"]
 
 
 class NoiseOption(Enum):
@@ -123,15 +117,25 @@ class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
     exp_tag: str
+    beam: float
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     simfoTF_prefix: str = "simforTF_"
     obsmat_path: Path = field(converter=Path, default=".")
     TF_path: Path = field(converter=Path, default=".")
     passband_filename: str = ""
+    nhits_map_path: str | Path | None = field(default=None)
+    depth_map_path: Path | None = field(default=None)
 
     def __attrs_post_init__(self) -> None:
         self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
+
+    @nhits_map_path.validator
+    def check(self, attribute, value):
+        """Check that either nhits_map or depth_map are given"""
+        if self.depth_map_path is None and value is None:
+            msg = f"Need to give either a depth map or a nhits_map (which can be SO_nonimal) for {attribute.name} in config."
+            raise ValueError(msg)
 
     @property
     def map_filename(self) -> str:
@@ -148,8 +152,6 @@ class MapSetConfig:
 
 @define
 class MasksConfig:
-    input_nhits_map: Path | None = None
-
     nhits_map_name: str = "nhits_map"
     analysis_mask_name: str = "analysis_mask"
     binary_mask_name: str = "binary_mask"
@@ -158,6 +160,7 @@ class MasksConfig:
     apod_radius_point_source: float = 4
     apod_type: ValidApoType = "C1"
     binary_mask_zero_threshold: float = 1e-1
+    fwhm_arcmin_smooth_nhits: float = 60
 
     # TODO: option to give the direct path to the galactic mask?
     include_galactic: bool = False
@@ -173,7 +176,7 @@ class MasksConfig:
     # DEBUG_output_apod_binary_mask: bool = False
     # DEBUGapod_binary_mask_name: str = "apod_binary_mask"
 
-    @gal_key.validator  # pyright: ignore[reportOptionalMemberAccess]
+    @gal_key.validator
     def _check_gal_key(self, attribute, value):
         """Check that gal_key is set if include_galactic is True."""
         if self.include_galactic and value is None:
@@ -183,9 +186,9 @@ class MasksConfig:
 
 @define
 class GeneralConfig:
-    nside: int = 128
+    nside: int = 512
     lmin: int = 30
-    lmax: int = field(default=256)
+    lmax: int = field(default=1000)
 
     @lmax.validator
     def check(self, attribute, value):
@@ -198,7 +201,7 @@ class GeneralConfig:
 @define
 class PreProcessingConfig:
     common_beam_correction: float = 100
-    beam_fwhms: list[float] | None = None
+    # beam_fwhms: list[float] | None = None
     DEBUGskippreproc: bool = False
     correct_for_TF: bool = False
     sum_TF_column: bool = True
@@ -295,24 +298,34 @@ class MapSimConfig:
 
 
 @define
-class NoiseSimConfig:
-    n_sim: int = 1
-    experiment: ValidExperimentType = "SO"
+class SOConfig:
+    usev3p1: bool
+    default_bands: list[float] = field(factory=lambda: [27, 39, 93, 145, 225, 280])
     noise_option: NoiseOption = field(default=NoiseOption.ONE_OVER_F)
-
-    # these three are required if experiment = 'SO'
     v3_sensitivity_mode: V3Sensitivity = V3Sensitivity.GOAL
     v3_one_over_f_mode: V3Noise = V3Noise.OPTIMISTIC
-    SAC_yrs_LF: int = 1
+    Ntubes_years: list[float] | None = field(factory=lambda: [1.0, 9.0, 5.0])
+    SAC_yrs_LF: float | None = 1.0
 
+
+@define
+class CustomSATConfig:
+    default_bands: float | list[float]
+    sensitivities: float | list[float]
+    Ntubes_years: float | int
+    alpha_knee: float | list[float]
+    ell_knee: float | list[float]
+    noise_option: NoiseOption
+
+
+ValidExperimentConfig = SOConfig | CustomSATConfig
+
+
+@define
+class NoiseSimConfig:
+    n_sim: int = 1
     include_nhits: bool = True
-
-    # @noise_option.validator
-    # def check(self, attribute, value):
-    #    """Check that the noise option for the noise simulations is not no noise."""
-    #    if value == NoiseOption.NOISELESS:
-    #        msg = f"{attribute.name} cannot be {value} for noise simulations"
-    #        raise ValueError(msg)
+    experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict(SO=SOConfig))
 
 
 def default_prior_bounds() -> dict[str, list[float]]:
@@ -395,12 +408,12 @@ class Config:
             fiducial_cmb=FiducialCMBConfig(root="fiducial_cmb_root"),
             map_sets=[
                 # typical SO configuration
-                MapSetConfig(freq_tag=27, exp_tag="SAT4"),
-                MapSetConfig(freq_tag=39, exp_tag="SAT4"),
-                MapSetConfig(freq_tag=93, exp_tag="SAT1"),
-                MapSetConfig(freq_tag=145, exp_tag="SAT1"),
-                MapSetConfig(freq_tag=225, exp_tag="SAT3"),
-                MapSetConfig(freq_tag=280, exp_tag="SAT3"),
+                MapSetConfig(freq_tag=27, exp_tag="SO", nhits_map_path="SO_nominal", beam=91.0),
+                MapSetConfig(freq_tag=39, exp_tag="SO", nhits_map_path="SO_nominal", beam=63.0),
+                MapSetConfig(freq_tag=93, exp_tag="SO", nhits_map_path="SO_nominal", beam=30.0),
+                MapSetConfig(freq_tag=145, exp_tag="SO", nhits_map_path="SO_nominal", beam=17.0),
+                MapSetConfig(freq_tag=225, exp_tag="SO", nhits_map_path="SO_nominal", beam=11.0),
+                MapSetConfig(freq_tag=280, exp_tag="SO", nhits_map_path="SO_nominal", beam=9.0),
             ],
         )
 
@@ -446,9 +459,7 @@ class Config:
     @property
     def beams(self) -> list[float]:
         """The list of beam FWHMs (in arcminutes)"""
-        if self.use_custom_beams:
-            return self.pre_proc_pars.beam_fwhms  # pyright: ignore[reportReturnType]
-        return [SO_BEAMS_ARCMIN[freq] for freq in self.frequencies]
+        return [map_set.beam for map_set in self.map_sets]
 
     @property
     def maps(self) -> list[str]:
@@ -461,21 +472,17 @@ class Config:
         return self.map_sim_pars.sky_model
 
     @property
-    def use_input_nhits(self) -> bool:
-        return self.masks_pars.input_nhits_map is not None
-
-    @property
     def use_input_point_sources(self) -> bool:
         return self.masks_pars.include_sources and self.masks_pars.input_sources_mask is not None
 
     @property
-    def use_custom_beams(self) -> bool:
-        return self.pre_proc_pars.beam_fwhms is not None
+    def use_depth_maps(self) -> bool:
+        return all(m.depth_map_path is not None for m in self.map_sets)
 
     @property
-    def indexes_into_SO_freqs(self) -> list[int]:
-        try:
-            return [SO_FREQUENCIES_GHZ.index(freq) for freq in self.frequencies]
-        except ValueError as exc:
-            msg = f"Invalid frequency in map_sets (expected subset of {SO_FREQUENCIES_GHZ})"
-            raise RuntimeError(msg) from exc
+    def use_nhits_maps(self) -> bool:
+        return not self.use_depth_maps
+
+    @property
+    def use_custom_beams(self) -> bool:
+        return self.pre_proc_pars.beam_fwhms is not None

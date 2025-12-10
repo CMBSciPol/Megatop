@@ -9,7 +9,6 @@ from mpi4py.MPI import Comm
 from numpy.typing import NDArray
 
 from megatop import Config, DataManager
-from megatop.config import NoiseOption
 from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
 from megatop.utils.TF_utils import get_alms_from_cls, power_law_cl
@@ -18,45 +17,38 @@ _POOL_EXECUTOR_THRESHOLD = 2
 
 
 @function_timer("get-noise-map")
-def get_noise(config: Config, binary_mask: NDArray, nhits_map: NDArray) -> NDArray:
-    noise_option = config.noise_sim_pars.noise_option
-
-    if noise_option == NoiseOption.NOISELESS:
-        logger.debug("Simulation has NO NOISE")
-        return np.array(0)
-
+def get_noise(config: Config, binary_mask: NDArray, nhits_maps: NDArray) -> NDArray:
     fsky_binary = binary_mask.mean()
-
-    if config.noise_sim_pars.noise_option == NoiseOption.WHITE:
-        logger.debug("Simulation has white noise only")
-        _, noise_levels = mock.get_noise(config, fsky_binary)
-        noise_freq_maps = mock.get_noise_map_from_white_noise(
-            config.frequencies, config.nside, noise_levels
-        )
-        logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
-
-    elif config.noise_sim_pars.noise_option == NoiseOption.ONE_OVER_F:
-        logger.debug("Simulation has noise from full spectra")
-        n_ell, _ = mock.get_noise(config, fsky_binary)
-        noise_freq_maps = mock.get_noise_map_from_noise_spectra(
-            config.frequencies, config.nside, n_ell
-        )
-        logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
+    noise_freq_maps = mock.get_full_sky_noise_freq_maps(
+        config.map_sets, config.noise_sim_pars, fsky_binary=fsky_binary, nside=config.nside
+    )
+    logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
     if config.noise_sim_pars.include_nhits:
-        _ = mock.include_hits_noise(noise_freq_maps, nhits_map, binary_mask)
+        _ = mock.include_hits_noise(noise_freq_maps, nhits_maps, binary_mask)
 
     return noise_freq_maps
 
 
 @function_timer("get-cmb-map")
-def get_cmb(manager: DataManager, config: Config) -> NDArray:
+def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     # Performing the CMB simulation with synfast
     logger.debug("Computing CMB map from fiducial spectra")
+
+    # at this point, cmb_seed should be set in the config...
+    cmb_seed = config.map_sim_pars.cmb_seed
+    if cmb_seed is None:
+        msg = "The CMB seed must be set in the configuration beforehand!"
+        raise RuntimeError(msg)
+
+    # incorporate realization id into the seed if CMB is not fixed
+    seed = [cmb_seed]
+    if not config.map_sim_pars.single_cmb:
+        seed.append(id_sim)
+    logger.debug(f"CMB {seed = }")
+
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
-    cmb_map = mock.generate_map_cmb(
-        Cl_cmb_model, config.nside, cmb_seed=config.map_sim_pars.cmb_seed
-    )
+    cmb_map = mock.generate_map_cmb(Cl_cmb_model, config.nside, cmb_seed=seed)
     logger.debug(f"CMB map has shape {cmb_map.shape}")
     return cmb_map
 
@@ -158,13 +150,13 @@ def _map(func, iterable, comm: Comm, force_seq: bool = False):
         logger.info("Processing sequentially")
         for result in map(func, iterable):
             yield result
-
-    # Use CommExecutor for parallel processing
-    with MPICommExecutor(comm=comm) as executor:  # pyright: ignore[reportArgumentType]
-        if executor is not None:
-            logger.info(f"Distributing work to {executor.num_workers} processes")  # pyright: ignore[reportAttributeAccessIssue]
-            for result in executor.map(func, iterable, unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
-                yield result
+    else:
+        # Use CommExecutor for parallel processing
+        with MPICommExecutor(comm=comm) as executor:
+            if executor is not None:
+                logger.info(f"Distributing work to {executor.num_workers} processes")
+                for result in executor.map(func, iterable, unordered=True):
+                    yield result
 
 
 # needs to be defined at the top level for pickling
@@ -177,10 +169,6 @@ def func_TF_sims(
     obsmat_funcs: dict | None = None,
 ) -> int:
     """Generate pure E and pure B map with power law spectra for Transfer Function Computation."""
-
-    # incorporate realization id into the seed if CMB is not fixed
-    if not config.map_sim_pars.single_cmb:
-        config.map_sim_pars.cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
 
     # Getting power law spectra
     logger.debug("Generating power law spectra for TF simulations")
@@ -274,16 +262,11 @@ def func_signal(
     manager: DataManager,
     config: Config,
     binary_mask: NDArray,
-    nhits_map: NDArray,
+    nhits_maps: NDArray,
     *,
     obsmat_funcs: dict | None = None,
 ) -> int:
     """Generate a sky realization."""
-
-    # incorporate realization id into the seed if CMB is not fixed
-    if not config.map_sim_pars.single_cmb:
-        config.map_sim_pars.cmb_seed += id_sim  # pyright: ignore[reportOperatorIssue]
-
     # construct passbands if necessary
     config.map_sets = passband.passband_constructor(
         config, manager, passband_int=config.map_sim_pars.passband_int
@@ -292,9 +275,9 @@ def func_signal(
         logger.info("Using passband-integration for the mocker step.")
 
     # generate the components
-    cmb = get_cmb(manager, config)
+    cmb = get_cmb(manager, config, id_sim=id_sim)
     fg = get_foregrounds(config)
-    noise = get_noise(config, binary_mask, nhits_map)
+    noise = get_noise(config, binary_mask, nhits_maps)
 
     # broadcast CMB to all frequencies
     sky = cmb[None, ...] + fg
@@ -328,11 +311,11 @@ def func_noise(
     manager: DataManager,
     config: Config,
     binary_mask: NDArray,
-    nhits_map: NDArray,
+    nhits_maps: NDArray,
     id_sim: int,
 ) -> int:
     """Generate a noise realization."""
-    noise = get_noise(config, binary_mask, nhits_map)
+    noise = get_noise(config, binary_mask, nhits_maps)
     _ = mask.apply_binary_mask(noise, binary_mask, unseen=False)
     save_simu(manager, noise, id_sim=id_sim, is_noise=True)
     return id_sim
@@ -350,13 +333,14 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    nhits_map = hp.read_map(manager.path_to_nhits_map)
+    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
+    nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
     func = partial(
         func_signal,
         manager=manager,
         config=config,
         binary_mask=binary_mask,
-        nhits_map=nhits_map,
+        nhits_maps=nhits_maps,
     )
 
     if filtering := config.map_sim_pars.filter_sims:
@@ -375,18 +359,14 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
     if n_sim == 0:
         return
 
-    noise_option = config.noise_sim_pars.noise_option
-    if noise_option == NoiseOption.NOISELESS:
-        # In noiseless mode, do not simulate noise at all
-        return
-
     if rank == 0:
         logger.info(f"Generating {n_sim} noise realizations")
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    nhits_map = hp.read_map(manager.path_to_nhits_map)
-    func = partial(func_noise, manager, config, binary_mask, nhits_map)
+    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
+    nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
+    func = partial(func_noise, manager, config, binary_mask, nhits_maps)
 
     for result in _map(func, range(n_sim), comm):
         logger.info(f"Finished noise realization {result + 1} / {n_sim}")

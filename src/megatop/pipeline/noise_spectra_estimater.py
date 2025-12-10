@@ -45,9 +45,6 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 
     # Loading masks
     mask_analysis = hp.read_map(manager.path_to_analysis_mask)
-    logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-    # TODO: remove after merge
-    mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
@@ -65,6 +62,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         config.pre_proc_pars.common_beam_correction, config.nside
     )
     # effective_beam_CMB = np.ones_like(effective_beam_CMB)  # No beam for now
+    # effective_beam_CMB = np.ones_like(effective_beam_CMB)  # No beam for now
 
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
@@ -81,6 +79,63 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             n_iter=config.map2cl_pars.n_iter_namaster,
         )
         workspaceff = nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
+
+    if (
+        config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
+    ) and not config.parametric_sep_pars.alm2map:
+        logger.info("Computing effective Transfer Function after component separation")
+        transfer_freq = []
+        for tf_path in manager.get_TF_filenames():
+            transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
+            transfer_freq.append(transfer)
+        transfer_freq = np.array(transfer_freq)
+
+        Cl_WmaxL = np.zeros(
+            (W_maxL.shape[0], W_maxL.shape[0], W_maxL.shape[1], 4, nmt_bins.get_n_bands())
+        )
+        # for comp in range(W_maxL.shape[0]):
+        for freq in range(W_maxL.shape[1]):
+            dict_comp_WmaxL_freq = {"CMB": W_maxL[0, freq, :], "Dust": W_maxL[1, freq, :]}
+            if config.parametric_sep_pars.include_synchrotron:
+                dict_comp_WmaxL_freq["Synch"] = W_maxL[2, freq, :]
+            all_Cls_WmaxL_freq = compute_auto_cross_cl_from_maps_list(
+                dict_comp_WmaxL_freq,
+                mask_analysis,
+                effective_beam_CMB[:-1],
+                workspaceff,
+                purify_e=config.map2cl_pars.purify_e,
+                purify_b=config.map2cl_pars.purify_b,
+            )
+            Cl_WmaxL[0, 0, freq] = all_Cls_WmaxL_freq["CMBxCMB"]
+            Cl_WmaxL[0, 1, freq] = all_Cls_WmaxL_freq["CMBxDust"]
+            Cl_WmaxL[1, 0, freq] = all_Cls_WmaxL_freq["CMBxDust"]
+            Cl_WmaxL[1, 1, freq] = all_Cls_WmaxL_freq["DustxDust"]
+            if config.parametric_sep_pars.include_synchrotron:
+                Cl_WmaxL[0, 2, freq] = all_Cls_WmaxL_freq["CMBxSynch"]
+                Cl_WmaxL[2, 0, freq] = all_Cls_WmaxL_freq["CMBxSynch"]
+                Cl_WmaxL[1, 2, freq] = all_Cls_WmaxL_freq["DustxSynch"]
+                Cl_WmaxL[2, 1, freq] = all_Cls_WmaxL_freq["DustxSynch"]
+                Cl_WmaxL[2, 2, freq] = all_Cls_WmaxL_freq["SynchxSynch"]
+
+        Cl_effective_TF = np.einsum(
+            "ckfsl, fspl, lpfkc-> ckspl", Cl_WmaxL, transfer_freq[:, -4:, -4:], Cl_WmaxL.T
+        )  # keeping only polarised components
+        normalisation_WCl = np.einsum("ckfsl, lpfkc-> ckspl", Cl_WmaxL, Cl_WmaxL.T)
+        normalized_Cl_effective_TF = Cl_effective_TF / normalisation_WCl
+        inverse_normalized_Cl_effective_TF = np.zeros_like(normalized_Cl_effective_TF)
+        for i in range(normalized_Cl_effective_TF.shape[0]):
+            for j in range(normalized_Cl_effective_TF.shape[1]):
+                for ell in range(normalized_Cl_effective_TF.shape[-1]):
+                    # Inverting the transfer function for each ell over the spectra dimension
+                    inverse_normalized_Cl_effective_TF[i, j, :, :, ell] = np.linalg.inv(
+                        normalized_Cl_effective_TF[i, j, :, :, ell]
+                    )
+
+        # effective_transfer_function, inverse_effective_transfer_function = (
+        #     get_effective_transfer_function(transfer_freq, W_maxL, binary_mask))
+    else:
+        # inverse_effective_transfer_function = None
+        inverse_normalized_Cl_effective_TF = None
 
     if (
         config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep

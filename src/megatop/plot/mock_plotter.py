@@ -8,7 +8,7 @@ import numpy as np
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
 from megatop.utils import Timer, logger, mock, passband
-from megatop.utils.mask import apply_binary_mask
+from megatop.utils.mask import apply_binary_mask, read_nhits_maps
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
 from megatop.utils.preproc import read_input_maps
 
@@ -161,8 +161,9 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     binary_mask = hp.read_map(manager.path_to_binary_mask)
 
     fsky_binary = sum(binary_mask) / len(binary_mask)
-    nhits_map = hp.read_map(manager.path_to_nhits_map)
-    nhits_map_rescaled = nhits_map / max(nhits_map)
+    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
+    nhits_maps = read_nhits_maps(list_hitmapname, nside=config.nside)
+    nhits_maps_rescaled = nhits_maps / np.max(nhits_maps, axis=1, keepdims=True)
 
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
@@ -183,7 +184,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
     if config.noise_sim_pars.include_nhits:
         noise_freq_maps = mock.include_hits_noise(
-            noise_freq_maps, hp.read_map(manager.path_to_nhits_map), binary_mask
+            noise_freq_maps, nhits_maps_rescaled, binary_mask
         )  # TODO move reading of maps to manager
 
     if maps:
@@ -204,7 +205,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
         if config.noise_sim_pars.include_nhits:
             fsky_correction = (
-                nhits_map_rescaled[..., np.where(binary_mask == 1)[0]].mean() * fsky_binary
+                nhits_maps_rescaled[..., np.where(binary_mask == 1)[0]].mean() * fsky_binary
             )
         else:
             fsky_correction = 1.0

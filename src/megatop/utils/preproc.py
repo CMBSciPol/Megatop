@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 import pymaster as nmt
 
-from megatop.utils.compsep import truncate_alm
+from megatop.utils.compsep import set_alm_tozero_above_lmax, set_alm_tozero_below_lmin, truncate_alm
 
 from .logger import logger
 from .timer import function_timer
@@ -84,10 +84,6 @@ def common_beam_and_nside(
             logger.warning("WARNING WARNING WARNING WARNING WARNING WARNING")
             if DEBUGlm_range is not None:
                 lmin, lmax = DEBUGlm_range
-                from megatop.utils.compsep import (
-                    set_alm_tozero_above_lmax,
-                    set_alm_tozero_below_lmin,
-                )
 
                 alm_out_T = set_alm_tozero_above_lmax(alm_out_T, lmax)
                 alm_out_E = set_alm_tozero_above_lmax(alm_out_E, lmax)

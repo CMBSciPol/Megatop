@@ -3,9 +3,10 @@ import numpy as np
 import scipy as sp
 from pysm3 import Sky, units
 
-from ..config import Config
+from ..config import CustomSATConfig, NoiseOption, SOConfig, ValidExperimentConfig
 from ..data_manager import DataManager
 from . import V3calc as V3
+from . import V3p1calc as V3p1
 from .logger import logger
 
 
@@ -32,7 +33,7 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     return np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0]])
 
 
-def generate_map_cmb(Cl_cmb_model, nside: int, cmb_seed: int | None = None):
+def generate_map_cmb(Cl_cmb_model, nside: int, cmb_seed: list[int] | int | None = None):
     # TODO write tests
     lmax = 3 * nside
 
@@ -53,7 +54,7 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
     sky = Sky(nside=nside, preset_strings=sky_model, output_unit=units.uK_CMB)
     maps_fgs = []
     for map_set in map_sets:
-        m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value  # pyright: ignore[reportAttributeAccessIssue])
+        m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value
         if input_coord != output_coord:
             logger.debug(
                 f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"
@@ -64,73 +65,140 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
     return np.array(maps_fgs)
 
 
-def get_noise(config: Config, fsky_binary):
-    # TODO move to manager ?
-    if config.noise_sim_pars.experiment != "SO":
-        raise NotImplementedError
+def get_full_sky_noise_freq_maps(map_sets, noise_config: dict, fsky_binary: float, nside: int):
+    experiments_map_set = set([map_set.exp_tag for map_set in map_sets])
+    experiments_noiseconfig = [name for name in noise_config.experiments]
+    noise_experiment = {}
+    for exp in experiments_map_set:
+        try:
+            assert exp in experiments_noiseconfig
+        except AssertionError as e:
+            msg = f"No noise sim config for {exp}"
+            logger.error(msg)
+            raise RuntimeError(msg) from e
+        noise_experiment[exp] = get_noise_experiment(
+            exp, noise_config.experiments[exp], fsky_binary=fsky_binary, nside=nside
+        )
+    noise_freq_maps = np.zeros((len(map_sets), 3, hp.nside2npix(nside)))
+    for i_map_set, map_set in enumerate(map_sets):
+        exp = map_set.exp_tag
+        noise_config_exp = noise_config.experiments[exp]
+        idx_freq = noise_config_exp.default_bands.index(map_set.freq_tag)
+        logger.debug(f"Map {exp}_{map_set.freq_tag} has index {idx_freq}.")
+        if noise_config_exp.noise_option == NoiseOption.WHITE:
+            noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
+                noise_experiment[exp]["map_white_noise_levels"][idx_freq], nside
+            )
+        elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
+            noise_freq_maps[i_map_set] = get_noise_map_from_noise_spectra(
+                noise_experiment[exp]["noise_spectra"][idx_freq], nside
+            )
+        elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
+            noise_freq_maps[i_map_set, :, :] = 1e-25
+        else:
+            msg = f"Noise option {noise_config_exp.noise_option} for {exp} is not implemented"
+            logger.error(msg)
+            raise RuntimeError(msg)
+    return noise_freq_maps
 
-    logger.debug("Using SO V3calc to get white noise levels.")
-    idx_freqs = config.indexes_into_SO_freqs
-    _, n_ell, white_noise_levels = V3.so_V3_SA_noise(
-        sensitivity_mode=config.noise_sim_pars.v3_sensitivity_mode,
-        one_over_f_mode=config.noise_sim_pars.v3_one_over_f_mode,
-        SAC_yrs_LF=config.noise_sim_pars.SAC_yrs_LF,
-        f_sky=fsky_binary,
-        ell_max=3 * config.nside - 1,
-        delta_ell=1,
-        beam_corrected=False,
-        remove_kluge=not config.noise_sim_pars.include_nhits,
-    )
-    white_noise_levels = white_noise_levels[idx_freqs]
-    n_ell = n_ell[idx_freqs]
-    logger.debug(
-        f"Map white noise level (Q,U) {', '.join(f'{lvl:.2f}' for lvl in white_noise_levels)} muK-arcmin"
-    )
-    return n_ell, white_noise_levels
+
+def get_noise_experiment(
+    exp: str, noise_config_exp: ValidExperimentConfig, fsky_binary: float, nside: int
+):
+    if type(noise_config_exp) is SOConfig:
+        if noise_config_exp.usev3p1:
+            logger.info(
+                f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using V3p1 calc"
+            )
+            nc = V3p1.SOSatV3point1(
+                sensitivity_mode=noise_config_exp.v3_sensitivity_mode,
+                N_tubes=noise_config_exp.Ntubes_years,
+                one_over_f_mode=noise_config_exp.v3_one_over_f_mode,
+                survey_years=1.0,  # The scaling wiht time is done through Ntubes_years
+            )
+            _, _, n_ell, white_noise_levels = nc.get_noise_curves(
+                f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
+            )
+        else:
+            logger.info(
+                f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using V3 calc"
+            )
+            sensitivity_mode = noise_config_exp.v3_sensitivity_mode
+            one_over_f_mode = noise_config_exp.v3_one_over_f_mode
+            _, n_ell, white_noise_levels = V3.so_V3_SA_noise(
+                sensitivity_mode=sensitivity_mode,
+                one_over_f_mode=one_over_f_mode,
+                SAC_yrs_LF=noise_config_exp.SAC_yrs_LF,
+                f_sky=fsky_binary,
+                ell_max=3 * nside - 1,
+                delta_ell=1,
+                beam_corrected=False,
+                remove_kluge=False,
+            )
+
+    elif type(noise_config_exp) is CustomSATConfig:
+        logger.info(
+            f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using v3p1 calc with customSAT"
+        )
+        nc = V3p1.CustomSAT(
+            bands=noise_config_exp.default_bands,
+            sensitivities=noise_config_exp.sensitivities,
+            N_tubes=noise_config_exp.Ntubes_years,
+            ell_knee=noise_config_exp.ell_knee,
+            alpha_knee=noise_config_exp.alpha_knee,
+            survey_years=1.0,
+        )
+        _, _, n_ell, white_noise_levels = nc.get_noise_curves(
+            f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
+        )
+        n_ell = n_ell
+        white_noise_levels
+
+    return {"noise_spectra": n_ell, "map_white_noise_levels": white_noise_levels}
 
 
-def get_noise_map_from_white_noise(frequencies, nside: int, map_white_noise_levels):
+def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int):
+    logger.debug(f"Map white noise level (Q,U) {map_white_noise_level} muK-arcmin")
     npix = hp.nside2npix(nside)
-    nlev_map = np.zeros((len(frequencies), 3, npix))
-    for i_f, _ in enumerate(frequencies):
-        nlev_map[i_f] = np.array(
-            [
-                map_white_noise_levels[i_f] / np.sqrt(2),
-                map_white_noise_levels[i_f],
-                map_white_noise_levels[i_f],
-            ]
-        )[:, np.newaxis] * np.ones((3, npix))
+    nlev_map = np.array(
+        [
+            map_white_noise_level / np.sqrt(2),
+            map_white_noise_level,
+            map_white_noise_level,
+        ]
+    )[:, np.newaxis] * np.ones((3, npix))
     nlev_map /= hp.nside2resol(nside, arcmin=True)
     rng = np.random.default_rng()
-    return rng.normal(np.zeros_like(nlev_map), nlev_map, (len(frequencies), 3, npix))
+    return rng.normal(np.zeros_like(nlev_map), nlev_map, (3, npix))
 
 
-def get_noise_map_from_noise_spectra(frequencies, nside: int, n_ell):
-    noise_maps = np.zeros((len(frequencies), 3, hp.nside2npix(nside)))
-    noise_spectra = np.zeros((len(frequencies), 3, 3 * nside - 1))
-    noise_spectra[:, 0, 2:] = n_ell / 2
-    noise_spectra[:, 1, 2:] = n_ell
-    noise_spectra[:, 2, 2:] = n_ell
-    for i_f, _ in enumerate(frequencies):
-        noise_maps[i_f] = hp.synfast(
-            (
-                noise_spectra[i_f, 0],
-                noise_spectra[i_f, 1],
-                noise_spectra[i_f, 2],
-                np.zeros_like(noise_spectra[i_f, 2]),
-            ),
-            new=True,
-            pixwin=False,
-            nside=nside,
-        )
+def get_noise_map_from_noise_spectra(n_ell, nside: int):
+    noise_maps = np.zeros((3, hp.nside2npix(nside)))
+    noise_spectra = np.zeros((3, 3 * nside - 1))
+    logger.warning(
+        "Do not trust the temperature noise spectra (ell_knee and alpha_knee are polarisation ones)"
+    )
+    noise_spectra[0, 2:] = n_ell / 2
+    noise_spectra[1, 2:] = n_ell
+    noise_spectra[2, 2:] = n_ell
+    noise_maps = hp.synfast(
+        (
+            noise_spectra[0],
+            noise_spectra[1],
+            noise_spectra[2],
+            np.zeros_like(noise_spectra[2]),
+        ),
+        new=True,
+        pixwin=False,
+        nside=nside,
+    )
     return noise_maps
 
 
-def include_hits_noise(noise_maps, nhits_map, binary_mask):
+def include_hits_noise(noise_maps, nhits_maps, binary_mask):
     logger.debug("Rescaling the noise maps by the hits count")
-    nhits_map_rescaled = nhits_map / max(nhits_map)
     mask_indices = np.where(binary_mask == 1)[0]
-    if np.any(nhits_map_rescaled[mask_indices] == 0):
+    if np.any(nhits_maps[..., mask_indices] == 0):
         logger.error("Division by 0 in noise map nhit rescaling.")
         logger.error("The binary mask does not cover all areas where nhits = 0.")
         logger.error(
@@ -138,7 +206,7 @@ def include_hits_noise(noise_maps, nhits_map, binary_mask):
         )
         logger.error("Exiting...")
     with np.errstate(divide="raise", invalid="raise"):
-        noise_maps[..., mask_indices] /= np.sqrt(nhits_map_rescaled[mask_indices])
+        noise_maps[..., mask_indices] /= np.sqrt(nhits_maps[..., np.newaxis, mask_indices])
 
     return noise_maps
 

@@ -77,23 +77,8 @@ def get_reduced_TF_for_Cl(inv_sqrt_tf_bin, transfer=None):
 
 def pixel_noisecov_estimation(manager: DataManager, config: Config):
     tracemalloc.start()
-
-    try:
-        from mpi4py import MPI
-
-        comm = MPI.COMM_WORLD
-        size = comm.Get_size()
-        rank = comm.rank
-        root = 0
-
-    except ImportError:
-        logger.info("Could not find MPI. Proceeding without.")
-
-        comm = None
-        root = 0
-        rank = 0
-        size = 1
-
+    comm, rank, size = get_world()
+    root = 0
     MemoryUsage(f"rank = {rank} ")
 
     logger.info(f"rank = {rank}, size = {size}")
@@ -118,15 +103,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         ell_max_namaster = config.parametric_sep_pars.harmonic_lmax
 
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
-
-        # if config.masks_pars.DEBUG_output_apod_binary_mask:
-        #     logger.warning(
-        #         "DEBUG: Using apodized binary mask for harmonic component separation (PIXEL NOISE COV step) "
-        #     )
-        #     mask_analysis = hp.read_map(manager.path_to_apod_binary_mask)
-        logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-        # TODO: remove after merge
-        mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
 
         with Timer("init-namaster-workspace"):
             workspaceff = initialize_nmt_workspace(
@@ -234,7 +210,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     beam=beam4namaster,
                     return_all_spectra=config.pre_proc_pars.correct_for_TF,
                 )
-
+                # import IPython; IPython.embed()
                 if config.pre_proc_pars.correct_for_TF:
                     logger.warning("DEBUG: Including transfer function in the pre-processed alms. ")
 

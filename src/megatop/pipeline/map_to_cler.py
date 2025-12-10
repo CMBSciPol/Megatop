@@ -29,19 +29,31 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
 
     # Loading analysis mask
     mask_analysis = hp.read_map(manager.path_to_analysis_mask)
-    logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-    # TODO: remove after merge
-    mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Generating effective beam
     # TODO: If input maps are used instead of preprocessed ones, the effective beam after compsep must be computed.
     # import IPython; IPython.embed()
+    # import IPython; IPython.embed()
     effective_beam_CMB = get_common_beam_wpix(
         config.pre_proc_pars.common_beam_correction, config.nside
     )
     # effective_beam_CMB = np.ones_like(effective_beam_CMB)  # No beam for now
+    # effective_beam_CMB = np.ones_like(effective_beam_CMB)  # No beam for now
     # TODO: deconvolve the beam by hand, namaster implementation is not well tested / supported, although no clear sign of issues for now...
+
+    # Initializing workspace
+    with Timer("init-namaster-workspace"):
+        fields_init_wsp = nmt.NmtField(
+            mask_analysis,
+            None,
+            spin=2,
+            beam=effective_beam_CMB[:-1],
+            purify_e=config.map2cl_pars.purify_e,
+            purify_b=config.map2cl_pars.purify_b,
+            n_iter=config.map2cl_pars.n_iter_namaster,
+        )
+        workspaceff = nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
 
     # Initializing workspace
     with Timer("init-namaster-workspace"):
@@ -202,9 +214,9 @@ def main():
     else:
         with MPICommExecutor() as executor:
             if executor is not None:
-                logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+                logger.info(f"Distributing work to {executor.num_workers} workers")
                 func = partial(map2cl_and_save, config, manager)
-                for result in executor.map(func, range(n_sim_sky), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                for result in executor.map(func, range(n_sim_sky), unordered=True):
                     logger.info(f"Finished Cl estimation on map {result + 1} / {n_sim_sky}")
 
 

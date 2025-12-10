@@ -29,9 +29,10 @@ def requires_mpi4py(func: Callable[Param, ReturnType]) -> Callable[Param, Return
     return deferred_func
 
 
-@requires_mpi4py
 def get_world() -> tuple["MPI.Comm", int, int]:
-    return (c := MPI.COMM_WORLD), c.Get_rank(), c.Get_size()
+    if find_spec("mpi4py") is not None:
+        return (c := MPI.COMM_WORLD), c.Get_rank(), c.Get_size()
+    return None, 0, 1
 
 
 @requires_mpi4py

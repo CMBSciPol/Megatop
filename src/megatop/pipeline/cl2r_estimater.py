@@ -257,12 +257,12 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     # 2. init mcmc parameters:
     if not dust_marg and not sync_marg:
         param_names = ["r", "A_{lens}"]
-        theta_init_guess = [0.005, 1.1]
-        theta_offsets = [0.001, 0.1]
+        theta_init_guess = [0.005, 0.5]
+        theta_offsets = [0.005, 0.1]
     if dust_marg and not sync_marg:
         param_names = ["r", "A_{lens}", "A_{dust}"]
-        theta_init_guess = [0.005, 1.1, 0.01]
-        theta_offsets = [0.001, 0.1, 0.005]
+        theta_init_guess = [0.005, 0.5, 0.01]
+        theta_offsets = [0.005, 0.1, 0.005]
     if not dust_marg and sync_marg:
         param_names = ["r", "A_{lens}", "A_{sync}"]
         theta_init_guess = None
@@ -312,8 +312,10 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     logger.info(f"Running burn-in for sky sim {id_sim + 1}...")
     with np.errstate(invalid="ignore", divide="ignore"):
         theta_0, _, _ = sampler.run_mcmc(
-            theta_0, n_steps_burnin, skip_initial_state_check=True
-        )  # progress = True, skip_initial_state_check=True
+            theta_0,
+            n_steps_burnin,
+            skip_initial_state_check=True,
+        )  # progress = True,
     sampler.reset()
     logger.info(f"Running production for sky sim {id_sim + 1}...")
     with np.errstate(invalid="ignore", divide="ignore"):
