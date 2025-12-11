@@ -10,6 +10,7 @@ from camb import initialpower
 from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
+from megatop.config import NoiseOption
 from megatop.utils import logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
@@ -219,14 +220,18 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "DustxDust"
     ][3]
-    Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
-        "Noise_CMBxNoise_CMB"
-    ][3]
 
-    # noise_option = config.noise_sim_pars.noise_option
-    # if noise_option == NoiseOption.NOISELESS:
-    #     # TODO: this is a temporary fix, need to be done properly
-    #     Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
+    all_noise_options = [
+        config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
+        for map_set in config.map_sets
+    ]
+    if not np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+        # TODO: test case when only one experiment is noiseless?
+        Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
+    else:
+        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+            "Noise_CMBxNoise_CMB"
+        ][3]
 
     nmt_bins = load_nmt_binning(manager)
 
