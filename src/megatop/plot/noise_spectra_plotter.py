@@ -46,7 +46,8 @@ def plot_all_noise_spectra(manager, config):
             color="darkblue",
             alpha=0.2,
         )
-    average_noise_CMB /= config.noise_sim_pars.n_sim
+    # WARNING: here we average the noise Nl (already averaged over noise sims) over the different sky sims
+    average_noise_CMB /= config.map_sim_pars.n_sim
 
     ax_EE.plot(
         bin_centre_lminlmax,
@@ -181,8 +182,8 @@ def plot_all_spectra(manager, config):
             color="green",
             alpha=0.2,
         )
-
-    average_noise_CMB /= config.noise_sim_pars.n_sim
+    # WARNING: here we average the noise Nl (already averaged over noise sims) over the different sky sims
+    average_noise_CMB /= config.map_sim_pars.n_sim
 
     # noise_option = config.noise_sim_pars.noise_option
     # if noise_option == NoiseOption.NOISELESS:
