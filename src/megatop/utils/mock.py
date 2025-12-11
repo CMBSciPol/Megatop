@@ -94,7 +94,7 @@ def get_full_sky_noise_freq_maps(map_sets, noise_config: dict, fsky_binary: floa
                 noise_experiment[exp]["noise_spectra"][idx_freq], nside
             )
         elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
-            noise_freq_maps[i_map_set, :, :] = 1e-25
+            noise_freq_maps[i_map_set, :, :] = 1e-10
         else:
             msg = f"Noise option {noise_config_exp.noise_option} for {exp} is not implemented"
             logger.error(msg)
