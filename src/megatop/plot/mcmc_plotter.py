@@ -208,7 +208,12 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         "DustxDust"
     ][3]
 
-    if config.noise_sim_pars.noise_option == NoiseOption.NOISELESS:
+    all_noise_options = [
+        config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
+        for map_set in config.map_sets
+    ]
+    if not np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+        # TODO: test case when only one experiment is noiseless?
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
     else:
         Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
