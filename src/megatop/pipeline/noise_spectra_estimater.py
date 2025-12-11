@@ -51,9 +51,15 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
         "W_maxL"
     ]
-    W_maxL_lm = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
-        "W_maxL_lm"
-    ]
+    use_alm = (
+        config.map2cl_pars.use_harmonic_output_alm
+        and config.parametric_sep_pars.use_harmonic_compsep
+    )
+
+    if use_alm:
+        W_maxL_lm = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
+            "W_maxL_lm"
+        ]
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
 
@@ -241,10 +247,6 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                 )
 
         # use_alms = config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms
-        use_alm = (
-            config.map2cl_pars.use_harmonic_output_alm
-            and config.parametric_sep_pars.use_harmonic_compsep
-        )
 
         # Applying component-separation operator
         if not use_alm:
