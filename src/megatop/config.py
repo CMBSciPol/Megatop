@@ -29,15 +29,6 @@ __all__ = [
     "ValidExperimentConfig",
 ]
 
-# SO_FREQUENCIES_GHZ = [27, 39, 93, 145, 225, 280]
-# SO_BEAMS_ARCMIN = {
-#     27: 91.0,
-#     39: 63.0,
-#     93: 30.0,
-#     145: 17.0,
-#     225: 11.0,
-#     280: 9.0,
-# }
 
 ValidApoType = Literal["C1", "C2", "Smooth"]
 ValidPlanckGalKey = Literal[
@@ -49,6 +40,7 @@ class NoiseOption(Enum):
     NOISELESS = "no_noise"
     WHITE = "white_noise"
     ONE_OVER_F = "noise_spectra"
+    NOISE_MAP = "noise_map"
 
 
 class V3Sensitivity(IntEnum):
@@ -316,7 +308,18 @@ class CustomSATConfig:
     noise_option: NoiseOption
 
 
-ValidExperimentConfig = SOConfig | CustomSATConfig
+@define
+class ExternalNoiseMapconfig:
+    default_bands: float | list[float]
+    root: Path
+    prefix: str
+    suffix: str
+    noise_option: NoiseOption = field(default=NoiseOption.NOISE_MAP)
+    correction: float = 1.0
+
+
+ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig
+# ValidExperimentConfig = SOConfig | ExternalNoiseMapconfig
 
 
 @define
