@@ -283,7 +283,7 @@ def func_signal(
     # generate the components
     cmb = get_cmb(manager, config, id_sim=id_sim)
     fg = get_foregrounds(config)
-    noise = get_noise(config, binary_mask, nhits_maps)
+    noise = get_noise(config, binary_mask, nhits_maps, id_sim=id_sim)
 
     # broadcast CMB to all frequencies
     sky = cmb[None, ...] + fg
@@ -321,7 +321,7 @@ def func_noise(
     id_sim: int,
 ) -> int:
     """Generate a noise realization."""
-    noise = get_noise(config, binary_mask, nhits_maps)
+    noise = get_noise(config, binary_mask, nhits_maps, id_sim=id_sim)
     _ = mask.apply_binary_mask(noise, binary_mask, unseen=False)
     save_simu(manager, noise, id_sim=id_sim, is_noise=True)
     return id_sim
