@@ -306,6 +306,30 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         if config.parametric_sep_pars.include_synchrotron:
             noise_comp_dict["Noise_Synch"] = noise_map_post_compsep[2]
 
+        # test_cut_scales = True
+        if config.map2cl_pars.DEBUG_cut_scales:
+            logger.warning("TEST: Applying smooth cut at large scales to noise maps")
+
+            def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
+                ell = np.arange(lmax + 1)
+                smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
+                smooth_cut[:lmin] = 0.0
+                return smooth_cut
+
+            cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
+            noise_comp_cut_dict = {}
+            for key in noise_comp_dict:
+                alm_comp = hp.map2alm(
+                    [noise_comp_dict[key][0] * 0, noise_comp_dict[key][0], noise_comp_dict[key][1]],
+                    lmax=3 * config.nside,
+                )
+                for s in range(alm_comp.shape[0]):
+                    hp.almxfl(alm_comp[s], cut_array, inplace=True)
+                noise_comp_cut_dict[key] = hp.alm2map(
+                    alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
+                )[1:]  # removing temperature
+            noise_comp_dict = noise_comp_cut_dict
+
         # Computing auto and cross spectra
         noise_Cls = compute_auto_cross_cl_from_maps_list(
             noise_comp_dict,

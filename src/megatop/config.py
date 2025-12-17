@@ -267,6 +267,7 @@ class Map2ClConfig:
     purify_e: bool = field(default=False)
     purify_b: bool = True
     n_iter_namaster: int = 3
+    DEBUG_cut_scales: bool = False
 
     @purify_e.validator
     def check(self, attribute, value):

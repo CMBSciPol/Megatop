@@ -124,6 +124,31 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1], "Synch": comp_maps[2]}
         else:
             comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1]}
+
+        # test_cut_scales = True
+        if config.map2cl_pars.DEBUG_cut_scales:
+            logger.warning("TEST: Applying smooth cut at large scales to noise maps")
+
+            def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
+                ell = np.arange(lmax + 1)
+                smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
+                smooth_cut[:lmin] = 0.0
+                return smooth_cut
+
+            cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
+            comp_cut_dict = {}
+            for key in comp_dict:
+                alm_comp = hp.map2alm(
+                    [comp_dict[key][0] * 0, comp_dict[key][0], comp_dict[key][1]],
+                    lmax=3 * config.nside,
+                )
+                for s in range(alm_comp.shape[0]):
+                    hp.almxfl(alm_comp[s], cut_array, inplace=True)
+                comp_cut_dict[key] = hp.alm2map(
+                    alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
+                )[1:]  # removing temperature
+            comp_dict = comp_cut_dict
+
         # TODO: when components will be added in .yml for the comp-sep steps the keys of the dictionary should adapt to that
         all_Cls = compute_auto_cross_cl_from_maps_list(
             comp_dict,
