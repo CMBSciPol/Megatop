@@ -444,6 +444,8 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
         },
         ordering_parameter=["beta_dust", "beta_pl"],
         ordering_component=components,
+        dust_nu0=150.0,
+        synchrotron_nu0=150.0,
     )
 
     logger.info(f"Success: {res.success} -> {res.message}")
