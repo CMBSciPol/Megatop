@@ -23,7 +23,7 @@ def test_lmax_validator():
 
 def test_map_set_name():
     """Check that the map set name is set and correctly formatted."""
-    map_set = MapSetConfig(freq_tag=27, exp_tag="SAT4", nhits_map_path="SO")
+    map_set = MapSetConfig(freq_tag=27, exp_tag="SAT4", nhits_map_path="SO_nominal", beam=30)
     assert hasattr(map_set, "name")
     assert map_set.name == "SAT4_f027"
 

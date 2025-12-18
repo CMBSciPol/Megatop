@@ -7,8 +7,10 @@ import numpy as np
 
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
+from megatop.pipeline.mocker import get_noise
 from megatop.utils import Timer, logger, mock, passband
 from megatop.utils.mask import apply_binary_mask, read_nhits_maps
+from megatop.utils.mock import get_noise_experiment, get_noise_map_from_white_noise
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
 from megatop.utils.preproc import read_input_maps
 
@@ -167,25 +169,26 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
+    noise_freq_maps = get_noise(config, binary_mask, nhits_maps)
 
-    if config.noise_sim_pars.noise_option == NoiseOption.WHITE:
-        n_ell, map_white_noise_levels = mock.get_noise(config, fsky_binary)
-        noise_freq_maps = mock.get_noise_map_from_white_noise(
-            config.frequencies, config.nside, map_white_noise_levels
-        )
+    # if config.noise_sim_pars.noise_option == NoiseOption.WHITE:
+    #     n_ell, map_white_noise_levels = mock.get_noise(config, fsky_binary)
+    #     noise_freq_maps = mock.get_noise_map_from_white_noise(
+    #         config.frequencies, config.nside, map_white_noise_levels
+    #     )
 
-    elif config.noise_sim_pars.noise_option == NoiseOption.ONE_OVER_F:
-        n_ell, map_white_noise_levels = mock.get_noise(config, fsky_binary)
-        noise_freq_maps = mock.get_noise_map_from_noise_spectra(
-            config.frequencies, config.nside, n_ell
-        )
+    # elif config.noise_sim_pars.noise_option == NoiseOption.ONE_OVER_F:
+    #     n_ell, map_white_noise_levels = mock.get_noise(config, fsky_binary)
+    #     noise_freq_maps = mock.get_noise_map_from_noise_spectra(
+    #         config.frequencies, config.nside, n_ell
+    #     )
 
     noise_freq_maps = apply_binary_mask(noise_freq_maps, binary_mask, unseen=True)
 
-    if config.noise_sim_pars.include_nhits:
-        noise_freq_maps = mock.include_hits_noise(
-            noise_freq_maps, nhits_maps_rescaled, binary_mask
-        )  # TODO move reading of maps to manager
+    # if config.noise_sim_pars.include_nhits:
+    #     noise_freq_maps = mock.include_hits_noise(
+    #         noise_freq_maps, nhits_maps_rescaled, binary_mask
+    #     )  # TODO move reading of maps to manager
 
     if maps:
         freq_maps_plotter(
@@ -203,34 +206,82 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
             cls.append(hp.anafast(noise_freq_maps[i_f]))
         cls = np.array(cls)
 
-        if config.noise_sim_pars.include_nhits:
-            fsky_correction = (
-                nhits_maps_rescaled[..., np.where(binary_mask == 1)[0]].mean() * fsky_binary
-            )
-        else:
-            fsky_correction = 1.0
+        # if config.noise_sim_pars.include_nhits:
+        #     fsky_correction = (
+        #         nhits_maps_rescaled[..., np.where(binary_mask == 1)[0]].mean() * fsky_binary
+        #     )
+        # else:
+        #     fsky_correction = 1.0
+        fsky_from_nhits = np.sqrt(np.mean(nhits_maps_rescaled**2, axis=-1))
+        # import IPython; IPython.embed()
+        cl_model = np.ones_like(cls)
+        noise_config = config.noise_sim_pars
 
-        if config.noise_sim_pars.noise_option == NoiseOption.WHITE:
-            cl_model = np.ones_like(cls)
-            cl_model[:, 0] = (
-                (map_white_noise_levels[:, np.newaxis] / np.sqrt(2) * np.pi / 180 / 60) ** 2
-                * fsky_binary
-                / fsky_correction
+        experiments_map_set = set([map_set.exp_tag for map_set in config.map_sets])
+        experiments_noiseconfig = [name for name in noise_config.experiments]
+        noise_experiment = {}
+        for exp in experiments_map_set:
+            try:
+                assert exp in experiments_noiseconfig
+            except AssertionError as e:
+                msg = f"No noise sim config for {exp}"
+                logger.error(msg)
+                raise RuntimeError(msg) from e
+            noise_experiment[exp] = get_noise_experiment(
+                exp, noise_config.experiments[exp], fsky_binary=fsky_binary, nside=config.nside
             )
-            cl_model[:, 1] = (
-                (map_white_noise_levels[:, np.newaxis] * np.pi / 180 / 60) ** 2
-                * fsky_binary
-                / fsky_correction
-            )
-            cl_model[:, 2] = (
-                (map_white_noise_levels[:, np.newaxis] * np.pi / 180 / 60) ** 2
-                * fsky_binary
-                / fsky_correction
-            )
-        elif config.noise_sim_pars.noise_option == NoiseOption.ONE_OVER_F:
-            cl_model = np.zeros_like(cls)
-            cl_model[:, 1, 2:-1] = n_ell * fsky_binary / fsky_correction
-            cl_model[:, 2, 2:-1] = n_ell * fsky_binary / fsky_correction
+        for i_map_set, map_set in enumerate(config.map_sets):
+            exp = map_set.exp_tag
+            noise_config_exp = noise_config.experiments[exp]
+            idx_freq = noise_config_exp.default_bands.index(map_set.freq_tag)
+            logger.debug(f"Map {exp}_{map_set.freq_tag} has index {idx_freq}.")
+            # TODO: WHY THIS FSKY CORRECTION???
+            logger.warning("Check fsky correction in noise plots!")
+            if noise_config_exp.noise_option == NoiseOption.WHITE:
+                white_noise_level = noise_experiment[exp]["map_white_noise_levels"][idx_freq]
+                noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
+                    noise_experiment[exp]["map_white_noise_levels"][idx_freq], config.nside
+                )
+
+                cl_model[i_map_set, 0] = (
+                    (white_noise_level[np.newaxis] / np.sqrt(2) * np.pi / 180 / 60) ** 2
+                    # (white_noise_level[np.newaxis] / np.sqrt(2) / hp.nside2resol(config.nside, arcmin=True)) ** 2
+                    # * fsky_binary
+                    # / fsky_correction
+                    * fsky_from_nhits[i_map_set] ** 1
+                    / 2
+                )
+                cl_model[i_map_set, 1] = (
+                    (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
+                    # (white_noise_level[np.newaxis] / hp.nside2resol(config.nside, arcmin=True)) ** 2
+                    # * fsky_binary
+                    # / fsky_correction
+                    * fsky_from_nhits[i_map_set] ** 1
+                    / 2
+                )
+                cl_model[i_map_set, 2] = (
+                    (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
+                    # (white_noise_level[np.newaxis] / hp.nside2resol(config.nside, arcmin=True)) ** 2
+                    # * fsky_binary
+                    # / fsky_correction
+                    * fsky_from_nhits[i_map_set] ** 1
+                    / 2
+                )
+            elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
+                n_ell = noise_experiment[exp]["noise_spectra"][idx_freq]
+                cl_model[:, 1, 2:-1] = (
+                    n_ell * fsky_from_nhits[i_map_set] ** 1 / 2
+                )  # * fsky_binary / fsky_correction
+                cl_model[:, 2, 2:-1] = (
+                    n_ell * fsky_from_nhits[i_map_set] ** 1 / 2
+                )  # * fsky_binary / fsky_correction
+            elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
+                cl_model[i_map_set] = 0.0
+            else:
+                raise NotImplementedError(
+                    f"Noise option {noise_config_exp.noise_option} not implemented."
+                )
+            # import IPython; IPython.embed()
 
         plotTTEEBB_diff(
             plot_dir=plot_dir,
@@ -309,7 +360,13 @@ def main():
         plot_fiducial_spectra(manager)
         plot_fg_sims(manager, config)
         plot_cmb_sims(manager, config)
-        if config.noise_sim_pars.noise_option != NoiseOption.NOISELESS:
+
+        all_noise_options = [
+            config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
+            for map_set in config.map_sets
+        ]
+        if not np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+            # TODO: test case when only one experiment is noiseless?
             plot_noise_sims(manager, config)
         plot_saved_sims(manager, config, id_sim)
 

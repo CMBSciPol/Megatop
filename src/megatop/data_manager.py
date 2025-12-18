@@ -120,17 +120,17 @@ class DataManager:
     # ---------------------------
 
     @property
-    def path_to_fiducial_cmb_root(self) -> Path:
-        return self._config.fiducial_cmb.root
+    def path_to_fiducial_cmb(self) -> Path:
+        return self.path_to_output / self._config.output_dirs.fiducial_cmb
 
     @property
     def path_to_lensed_scalar(self) -> Path:
-        fname = self.path_to_fiducial_cmb_root / self._config.fiducial_cmb.lensed_scalar
+        fname = self.path_to_fiducial_cmb / "fiducial_lensed_scalar"
         return fname.with_suffix(".fits")
 
     @property
     def path_to_unlensed_scalar_tensor_r1(self) -> Path:
-        fname = self.path_to_fiducial_cmb_root / self._config.fiducial_cmb.unlensed_scalar_tensor_r1
+        fname = self.path_to_fiducial_cmb / "fiducial_unlensed_scalar_tensor_r1"
         return fname.with_suffix(".fits")
 
     # Paths to the output files

@@ -220,14 +220,18 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "DustxDust"
     ][3]
-    Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
-        "Noise_CMBxNoise_CMB"
-    ][3]
 
-    noise_option = config.noise_sim_pars.noise_option
-    if noise_option == NoiseOption.NOISELESS:
-        # TODO: this is a temporary fix, need to be done properly
+    all_noise_options = [
+        config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
+        for map_set in config.map_sets
+    ]
+    if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+        # TODO: test case when only one experiment is noiseless?
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
+    else:
+        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+            "Noise_CMBxNoise_CMB"
+        ][3]
 
     nmt_bins = load_nmt_binning(manager)
 
@@ -278,7 +282,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     )
 
     rng = np.random.default_rng()
-    theta_0 = np.array(theta_init_guess) + np.array(theta_offsets) * rng.standard_normal(
+    theta_init = np.array(theta_init_guess) + np.array(theta_offsets) * rng.standard_normal(
         (n_walkers, n_dim)
     )
 
@@ -309,8 +313,8 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     logger.info(f"Running burn-in for sky sim {id_sim + 1}...")
     with np.errstate(invalid="ignore", divide="ignore"):
-        theta_0, _, _ = sampler.run_mcmc(
-            theta_0,
+        theta_after_burnin, _, _ = sampler.run_mcmc(
+            theta_init,
             n_steps_burnin,
             skip_initial_state_check=True,
         )  # progress = True,
@@ -318,7 +322,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     logger.info(f"Running production for sky sim {id_sim + 1}...")
     with np.errstate(invalid="ignore", divide="ignore"):
         pos, prob, state = sampler.run_mcmc(
-            theta_0, n_steps, skip_initial_state_check=True
+            theta_after_burnin, n_steps, skip_initial_state_check=True
         )  # , progress=True
     chains = sampler.get_chain(flat=True)
     log_prob = sampler.get_log_prob(flat=True)
