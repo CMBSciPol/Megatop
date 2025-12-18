@@ -446,7 +446,9 @@ class Config:
         return cls(
             data_dirs=DataDirsConfig(root="data_root"),
             output_dirs=OutputDirsConfig(root="output_root"),
-            fiducial_cmb=FiducialCMBConfig(root="fiducial_cmb_root"),
+            fiducial_cmb=FiducialCMBConfig(
+                compute_from_camb=True, camb_cosmo_pars=_CAMBCosmoPars()
+            ),
             map_sets=[
                 # typical SO configuration
                 MapSetConfig(freq_tag=27, exp_tag="SO", nhits_map_path="SO_nominal", beam=91.0),
