@@ -16,7 +16,6 @@ from megatop.utils.spectra import compute_spectra_from_camb
 def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
     if config.fiducial_cmb.compute_from_camb:
         camb_cosmo_pars_dict = config.fiducial_cmb.get_camb_cosmo_pars_as_dict()
-        camb_cosmo_pars_dict["Alens"] = config.map_sim_pars.A_lens
         logger.info(
             f"Generating spectra from CAMB (unlensed scalar+tensor r=1) for parameters {camb_cosmo_pars_dict}."
         )
