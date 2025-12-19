@@ -8,8 +8,8 @@ from attrs import Factory, asdict, define, evolve, field
 from megatop._converter import yaml_converter
 
 __all__ = [
-    "CompSepConfig",
     "Config",
+    "CompSepConfig",
     "DataDirsConfig",
     "FiducialCMBConfig",
     "GeneralConfig",
