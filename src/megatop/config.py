@@ -303,21 +303,30 @@ class PlotsConfig:
 class MapSimConfig:
     n_sim: int = 1
     sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
+    """Pysm sky models included in the foreground simulations."""
     cmb_sim_no_pysm: bool = True
     # noise_option: NoiseOption = NoiseOption.ONE_OVER_F
     r_input: float = 0
+    """Tensor to scalar ratio value in the generated CMB simulations"""
     A_lens: float = 1
+    """A_lens value in the generated CMB simulations"""
     cmb_seed: int | None = None
     """Optional integer seed for the CMB."""
     single_cmb: bool = False
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
+    """If True, the Observation Matrices provided in map_sets will be applied on the CMB + Foreground maps generated in the mocker."""
     generate_sims_for_TF: bool = False
+    """If True, power law simulations will be generated and filtered for the Transfer Function pipeline step"""
     TF_power_law_amp: float = 1.0
+    """The amplitude for the power law used in TF simulations"""
     TF_power_law_index: float = 2.0  # minus sign is added in soopercool
+    """ABSOLUTE value of the spectral index of the TF simulation power law. WARNING: a minus sign is already added inside the code (in SOOPERCOOL)"""
     TF_power_law_delta_ell: int = 1
     TF_n_sim: int = 1
+    """Number of simulation generated for the TF computation."""
     passband_int: bool = False
+    """If True, sky maps will be integrated over the passbands provided in the map_sets. Passbands will also be included in the SED computation in the component separation."""
 
     @sky_model.validator
     def check(self, attribute, value):
@@ -381,14 +390,21 @@ def default_prior_bounds() -> dict[str, list[float]]:
 @define
 class Cl2rConfig:
     dust_marg: bool = False
+    """If True, the cosmological likelihood is marginalised over dust amplitude which scales the dust power spectrum computed from the dust map obtained from the component separation step"""
     sync_marg: bool = False
+    """If True, the cosmological likelihood is marginalised over synchrotron amplitude which scales the synchrotron power spectrum computed from the synchrotron map obtained from the component separation step"""
     prior_bounds: dict[str, list] = Factory(default_prior_bounds)
     load_model_spectra: bool = True
     n_walkers: int = 200
+    """Number of walkers used in the MCMC of the cosmological likelihood"""
     n_steps: int = 10000
+    """Number of steps in the MCMC of the cosmological likelihood"""
     n_steps_burnin: int = 2000
+    """Number of burnin steps in the MCMC of the cosmological likelihood"""
     lmin_cosmo_analysis: int | None = None
+    """Minimum multipole ell used in the cosmological analysis."""
     lmax_cosmo_analysis: int | None = None
+    """Maximum multipole ell used in the cosmological analysis."""
 
 
 @define
