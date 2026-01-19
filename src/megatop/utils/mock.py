@@ -20,7 +20,6 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     # TODO make this a method of DataManager
     logger.debug(f"Lensing B-mode path: {manager.path_to_lensed_scalar}")
     logger.debug(f"Primordial B-mode (r=1): {manager.path_to_unlensed_scalar_tensor_r1}")
-
     r_input = manager._config.map_sim_pars.r_input
     A_lens = manager._config.map_sim_pars.A_lens
     logger.debug(f"CMB simulation has r={r_input} and A_lens={A_lens}")

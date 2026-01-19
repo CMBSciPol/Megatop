@@ -5,7 +5,8 @@ PARAM_FILE="../paramfiles/default_config.yaml"
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 
 conda init bash
-source ~/.bashrc
+#source ~/.bashrc
+source ~/.zshrc
 conda activate megatop
 
 

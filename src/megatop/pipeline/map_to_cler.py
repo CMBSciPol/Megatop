@@ -126,13 +126,11 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             comp_dict,
             mask_analysis,
             effective_beam_CMB[:-1],
-            # None,
             workspaceff,
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
-            # inverse_effective_transfer_function=inverse_effective_transfer_function,
         )
 
     # Limiting the output to the desired l range

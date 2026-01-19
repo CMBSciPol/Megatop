@@ -101,6 +101,7 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     # Load true parameters:
     r_sim = config.map_sim_pars.r_input
     A_lens_sim = config.map_sim_pars.A_lens
+    Birefringence = config.map_sim_pars.Birefringence
     n_sim_sky = config.map_sim_pars.n_sim
 
     all_samples = []
@@ -142,7 +143,7 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
         contour_colors=["darkblue"] * n_sim_sky,
         contour_args=[{"lw": 1.0, "color": "darkblue", "alpha": 0.4} for i in range(n_sim_sky)],
         # contour_colors=colors,
-        markers={"r": r_sim, "A_{lens}": A_lens_sim},
+        markers={"r": r_sim, "A_{lens}": A_lens_sim,"Birefringence": Birefringence},
     )
 
     stats_params_dict = get_params_statistics(manager, config)
@@ -162,6 +163,7 @@ def plot_single_cornerplot(manager: DataManager, config: Config, id_sim: int | N
     # Load parameters and mcmc chains:
     r_sim = config.map_sim_pars.r_input
     A_lens_sim = config.map_sim_pars.A_lens
+    Birefringence = config.map_sim_pars.Birefringence
 
     fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
     mcmc = np.load(fname_chains, allow_pickle=True)
@@ -181,7 +183,8 @@ def plot_single_cornerplot(manager: DataManager, config: Config, id_sim: int | N
         legend_loc="upper right",
         line_args=[{"lw": 1.5, "color": "darkblue"}],
         contour_colors=["darkblue"],
-        markers={"r": r_sim, "A_{lens}": A_lens_sim},
+        markers={"r": r_sim, "A_{lens}": A_lens_sim,"Birefringence": Birefringence},
+        
     )
 
     # Save figure:
@@ -201,24 +204,51 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     sky_model = "".join(config.map_sim_pars.sky_model)
 
     # Load spectra data
+    Cl_CMBxCMB_EE_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+        "CMBxCMB"
+    ][0]
     Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "CMBxCMB"
     ][3]
+    Cl_CMBxCMB_EB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+        "CMBxCMB"
+    ][1]
+    Cl_CMBxCMB_BE_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+        "CMBxCMB"
+    ][2]
+    #Cl_DustxDust_EE_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+    #    "DustxDust"
+    #][0]
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "DustxDust"
     ][3]
+    Cl_DustxDust_EB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+        "DustxDust"
+    ][1]
 
     all_noise_options = [
         config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
         for map_set in config.map_sets
     ]
-    if not np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+    if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
         # TODO: test case when only one experiment is noiseless?
+        Nl_CMBxCMB_EE_est = np.zeros_like(Cl_CMBxCMB_EE_est)
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
+        Nl_CMBxCMB_EB_est = np.zeros_like(Cl_CMBxCMB_EB_est)
+        Nl_CMBxCMB_BE_est = np.zeros_like(Cl_CMBxCMB_BE_est)
     else:
-        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
-            "Noise_CMBxNoise_CMB"
-        ][3]
+        Nl_CMBxCMB_EE_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+        "Noise_CMBxNoise_CMB"
+    ][0]
+    Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+        "Noise_CMBxNoise_CMB"
+    ][3]
+    Nl_CMBxCMB_EB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+        "Noise_CMBxNoise_CMB"
+    ][1]
+    Nl_CMBxCMB_BE_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+        "Noise_CMBxNoise_CMB"
+    ][2]
 
     nmt_bins = load_nmt_binning(manager)
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
@@ -228,11 +258,12 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
 
     if config.cl2r_pars.load_model_spectra:
         Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: 3 * config.nside]
+        Cl_EE = hp.read_cl(manager.path_to_lensed_scalar)[1][: 3 * config.nside]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
             : 3 * config.nside
         ]
     else:
-        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
+        Cl_EE, Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
 
     # Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
 
@@ -245,13 +276,13 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     theta_est = samples.getMeans()
 
     if not dust_marg and not sync_marg:
-        r_est, A_lens_est = theta_est
+        r_est, A_lens_est, Birefringence = theta_est
     if dust_marg and not sync_marg:
-        r_est, A_lens_est, A_dust_est = theta_est
+        r_est, A_lens_est, Birefringence, A_dust_est = theta_est
     if not dust_marg and sync_marg:
-        r_est, A_lens_est, A_sync_est = theta_est
+        r_est, A_lens_est, Birefringence, A_sync_est = theta_est
     if dust_marg and sync_marg:
-        r_est, A_lens_est, A_dust_est, A_sync_est = theta_est
+        r_est, A_lens_est, Birefringence, A_dust_est, A_sync_est = theta_est
 
     # Compute individual Cl components
     Cl_BB_prim_est = r_est * Cl_BB_prim_generic
@@ -264,13 +295,17 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         theta_est,
         dust_marg,
         sync_marg,
+        Cl_EE,
         Cl_BB_prim_generic,
         Cl_BB_lensing_generic,
         Cl_DustxDust_BB_est,
+        Nl_CMBxCMB_EE_est,
         Nl_CMBxCMB_BB_est,
+        Nl_CMBxCMB_EB_est,
+        Nl_CMBxCMB_BE_est,
         ls_bins_lminlmax_idx,
         nmt_bins,
-    )
+    )[1,1,:]
 
     # Plot spectra
     fig, ax = plt.subplots(figsize=(12, 6))

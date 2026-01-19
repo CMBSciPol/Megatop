@@ -307,6 +307,7 @@ class MapSimConfig:
     # noise_option: NoiseOption = NoiseOption.ONE_OVER_F
     r_input: float = 0
     A_lens: float = 1
+    Birefringence: float = 0
     cmb_seed: int | None = None
     """Optional integer seed for the CMB."""
     single_cmb: bool = False

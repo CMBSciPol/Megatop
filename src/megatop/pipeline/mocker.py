@@ -54,8 +54,15 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     logger.debug(f"CMB {seed = }")
 
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
-    cmb_map = mock.generate_map_cmb(Cl_cmb_model, config.nside, cmb_seed=seed)
+    cmb_map_brut = mock.generate_map_cmb(Cl_cmb_model, config.nside, cmb_seed=seed)
+    cmb_map = cmb_map_brut
     logger.debug(f"CMB map has shape {cmb_map.shape}")
+
+    #Birefringence mixing E & B maps
+    Beta = (np.pi/180)*manager._config.map_sim_pars.Birefringence
+    cmb_map[1,:] = np.cos(2*Beta)*cmb_map_brut[1,:] - np.sin(2*Beta)*cmb_map_brut[2,:]
+    cmb_map[2,:] = np.sin(2*Beta)*cmb_map_brut[1,:] + np.cos(2*Beta)*cmb_map_brut[2,:]
+
     return cmb_map
 
 
