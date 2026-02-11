@@ -338,7 +338,7 @@ class MapSimConfig:
 
 @define
 class SOConfig:
-    usev3p1: bool
+    usev3p1: bool = True
     default_bands: list[float] = field(factory=lambda: [27, 39, 93, 145, 225, 280])
     noise_option: NoiseOption = field(default=NoiseOption.ONE_OVER_F)
     v3_sensitivity_mode: V3Sensitivity = V3Sensitivity.GOAL
@@ -375,7 +375,7 @@ ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig
 class NoiseSimConfig:
     n_sim: int = 1
     include_nhits: bool = True
-    experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict(SO=SOConfig))
+    experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict(SO=SOConfig()))
 
 
 def default_prior_bounds() -> dict[str, list[float]]:
