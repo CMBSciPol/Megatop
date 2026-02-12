@@ -4,6 +4,7 @@ from pathlib import Path
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
+import megabuster as mb  # noqa: E402
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger

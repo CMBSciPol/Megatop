@@ -89,6 +89,8 @@ class OutputDirsConfig:
     binning: str = "binning"
     transfer_functions: str = "transfer_functions"
     preproc: str = "preproc"
+    prepoc_diag_precond: str = "diag_precond"  # Modification megabuster
+    precomputation: str = "precomputation"  # Modification megabuster
     covar: str = "covar"
     plots: str = "plots"
     components: str = "components"
@@ -155,6 +157,8 @@ class MapSetConfig:
     simfoTF_prefix: str = "simforTF_"
     obsmat_path: Path = field(converter=Path, default=".")
     TF_path: Path = field(converter=Path, default=".")
+    suffix_obsmat_scipy: str = ""  # Modification megabuster
+    suffix_eigen_decomp: str = ""  # Modification megabuster
     passband_filename: str = ""
     nhits_map_path: str | Path | None = field(default=None)
     depth_map_path: Path | None = field(default=None)
@@ -252,10 +256,17 @@ class _MinimizeOptions:
     maxiter: int = 100
     ftol: float = 1e-12
 
+@define
+class _MEGABUSTEROptions:  # Modification megabuster
+    max_steps_CG: int = 200
+    tol_CG: float = 1e-6
+    use_preconditioner_diag: bool = False
+    use_preconditioner_pinv: bool = False
 
 @define
 class CompSepConfig:
     use_harmonic_compsep: bool = False
+    use_megabuster: bool = True  # Modification megabuster
     harmonic_lmax: int = 2 * 128  # TODO: use config.nside
     harmonic_lmin: int = 30
     harmonic_delta_ell: int = 10  # TODO: harmonize with binning from map2cl
@@ -265,6 +276,7 @@ class CompSepConfig:
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
+    megabuster_options: _MEGABUSTEROptions = Factory(_MEGABUSTEROptions)  # Modification megabuster
     passband_int: bool = False
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
@@ -276,6 +288,10 @@ class CompSepConfig:
         if self.minimize_method == "TNC":
             options["maxfun"] = options.pop("maxiter")
         return options
+    
+    def get_megabuster_options_as_dict(self) -> dict[str, Any]:
+        """Return the megabuster options as a dictionary."""
+        return asdict(self.megabuster_options)
 
 
 @define

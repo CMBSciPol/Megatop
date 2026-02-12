@@ -29,7 +29,7 @@ data_dirs:
   maps: maps
   noise_maps: noise
   passbands: passbands
-  root: /Users/landais/Desktop/UV/Megatop/data
+  root: /Users/landais/Desktop/UV/ProtoMegatop/Megatop/data
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2.0e-09
@@ -63,6 +63,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 0.0
   depth_map_path: null
@@ -74,6 +76,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 0.0
   depth_map_path: null
@@ -85,6 +89,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 0.0
   depth_map_path: null
@@ -96,6 +102,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 0.0
   depth_map_path: null
@@ -107,6 +115,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 0.0
   depth_map_path: null
@@ -118,6 +128,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 map_sim_pars:
   A_lens: 1.0
   Birefringence: 0.35
@@ -185,8 +197,10 @@ output_dirs:
   mcmc: mcmc
   noise_spectra: noise_spectra
   plots: plots
+  precomputation: precomputation
+  prepoc_diag_precond: diag_precond
   preproc: preproc
-  root: /Users/landais/Desktop/UV/Megatop/outputs
+  root: /Users/landais/Desktop/UV/ProtoMegatop/Megatop/outputs
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:
@@ -195,6 +209,11 @@ parametric_sep_pars:
   harmonic_lmax: 256
   harmonic_lmin: 30
   include_synchrotron: true
+  megabuster_options:
+    max_steps_CG: 200
+    tol_CG: 1.0e-06
+    use_preconditioner_diag: false
+    use_preconditioner_pinv: false
   minimize_method: TNC
   minimize_options:
     disp: false
@@ -205,6 +224,7 @@ parametric_sep_pars:
   minimize_tol: 1.0e-18
   passband_int: false
   use_harmonic_compsep: false
+  use_megabuster: true
 plot_pars:
   lmax_plot: 300
   lmin_plot: 30
