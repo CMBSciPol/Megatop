@@ -93,15 +93,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
 
-        # if config.masks_pars.DEBUG_output_apod_binary_mask:
-        #     logger.warning(
-        #         "DEBUG: Using apodized binary mask for harmonic component separation (PIXEL NOISE COV step) "
-        #     )
-        #     mask_analysis = hp.read_map(manager.path_to_apod_binary_mask)
-        logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-        # TODO: remove after merge
-        mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
-
         with Timer("init-namaster-workspace"):
             workspaceff = initialize_nmt_workspace(
                 nmt_bins,
@@ -181,6 +172,131 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         MemoryUsage(f"Memory for noise realisation {id_real + 1}: ")
 
         noise_cov_preprocessed += noise_freq_maps_preprocessed**2
+        # import IPython; IPython.embed()
+        if config.parametric_sep_pars.use_harmonic_compsep:
+            # Computing the noise spectra from the preprocessed noise maps using namaster
+            if config.parametric_sep_pars.harmonic_delta_ell != 1:
+                # use_beam = True
+                beam4namaster = None
+                input_namaster_noise_maps = noise_freq_maps_preprocessed
+
+                noise_spectra, noise_spectra_unbined = spectra_from_namaster(
+                    input_namaster_noise_maps,
+                    mask_analysis,
+                    workspaceff,
+                    nmt_bins,
+                    compute_cross_freq=False,
+                    purify_e=False,
+                    purify_b=False,
+                    beam=beam4namaster,
+                    return_all_spectra=config.pre_proc_pars.correct_for_TF,
+                )
+                # import IPython; IPython.embed()
+                if config.pre_proc_pars.correct_for_TF:
+                    logger.warning("DEBUG: Including transfer function in the pre-processed alms. ")
+
+                    output_noise_spectra = np.zeros(
+                        [len(config.frequencies), 3, nmt_bins.get_n_bands()]
+                    )
+                    output_noise_spectra_unbined = np.zeros(
+                        [len(config.frequencies), 3, noise_spectra_unbined.shape[-1]]
+                    )
+
+                    reduced_TF_from_preproc = np.load(
+                        manager.get_path_to_preprocessed_reduced_TF(),
+                        allow_pickle=True,
+                    )
+                    for f, tf_path in enumerate(manager.get_TF_filenames()):
+                        if tf_path == Path():
+                            logger.warning(
+                                f"DEBUG: Transfer function for frequency p{config.frequencies[f]} is not provided, skipping."
+                            )
+                            output_noise_spectra[f, 0] = noise_spectra[f, 0] * 0
+                            output_noise_spectra[f, 1] = noise_spectra[f, 0]
+                            output_noise_spectra[f, 2] = noise_spectra[f, 3]
+                            output_noise_spectra_unbined[f, 0] = noise_spectra_unbined[f, 0] * 0
+                            output_noise_spectra_unbined[f, 1] = noise_spectra_unbined[f, 0]
+                            output_noise_spectra_unbined[f, 2] = noise_spectra_unbined[f, 3]
+                            continue
+
+                        reduced_TF = True
+                        # TODO: remove reduced_TF option, or if needed, make it a parameter in config
+                        if reduced_TF:
+                            # Using the same limited elements as for the preproc step
+                            # Since preproc uses alms and not spectra we only have alm_E, and alm_B
+                            """
+                            inv_tf_ = np.zeros_like(inv_tf)
+                            if config.pre_proc_pars.sum_TF_column:
+                                inv_tf_sum = np.sum(
+                                    inv_tf, axis=1
+                                )  # summing over column to get all the contribution xy-->ab (EE-->EE + EB-->EE + BE-->EE + BB-->EE etc)
+                                inv_tf_[:, 0, 0] = inv_tf_sum[:, 0]  # EE->EE
+                                inv_tf_[:, 1, 1] = inv_tf_sum[:, 1]  # EB->EB
+                                inv_tf_[:, 2, 2] = inv_tf_sum[:, 2]  # BE->BE
+                                inv_tf_[:, 3, 3] = inv_tf_sum[:, 3]  # BB->BB
+                            else:
+                                inv_tf_[:, 0, 0] = inv_tf[:, 0, 0]
+                                inv_tf_[:, 1, 1] = inv_tf[:, 1, 1]
+                                # inv_tf_[:, 1, 1] = inv_tf[:, 0, -1]
+                                inv_tf_[:, 2, 2] = inv_tf[:, 2, 2]
+                                # inv_tf_[:, 2, 2] = inv_tf[:, -1, 0]
+                                inv_tf_[:, 3, 3] = inv_tf[:, 3, 3]
+                            inv_tf = inv_tf_
+
+                            inv_tf_reduced = get_reduced_TF_for_Cl(None, transfer)
+                            inv_tf = inv_tf_reduced
+                            """
+                            inv_tf = get_reduced_TF_for_Cl(
+                                reduced_TF_from_preproc["inv_sqrt_tf_bin_freq"][f], None
+                            )
+                        else:
+                            logger.info(f"Loading transfer function from {tf_path}")
+                            transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
+
+                            inv_tf = np.linalg.inv([T_ell.T for T_ell in transfer.T])[
+                                :, -4:, -4:
+                            ]  # taking only polarised components
+                            # careful with the transpose here, transfer is not symetric
+
+                        noise_spectra_TF_corrected = np.einsum(
+                            "lij,jl->il",
+                            inv_tf,
+                            noise_spectra[f],
+                        )
+
+                        noise_spectra_TF_corrected_unbined = nmt_bins.unbin_cell(
+                            noise_spectra_TF_corrected
+                        )
+                        output_noise_spectra[f, 0] = noise_spectra_TF_corrected[0] * 0
+                        output_noise_spectra[f, 1] = noise_spectra_TF_corrected[0]
+                        output_noise_spectra[f, 2] = noise_spectra_TF_corrected[3]
+
+                        output_noise_spectra_unbined[f, 0] = (
+                            noise_spectra_TF_corrected_unbined[0] * 0
+                        )
+                        output_noise_spectra_unbined[f, 1] = noise_spectra_TF_corrected_unbined[0]
+                        output_noise_spectra_unbined[f, 2] = noise_spectra_TF_corrected_unbined[3]
+                    noise_spectra = output_noise_spectra
+                    noise_spectra_unbined = output_noise_spectra_unbined
+
+            else:
+                logger.warning(
+                    "Using harmonic delta ell = 1, this is not recommended for noise spectra estimation. Healpy is used in this case."
+                )
+                noise_spectra = np.array(
+                    [
+                        hp.anafast(noise_freq_maps_preprocessed[i])[:3]
+                        for i in range(len(config.frequencies))
+                    ]
+                )
+                noise_spectra_unbined = noise_spectra.copy()
+            noise_spectra = noise_spectra[..., bin_index_lminlmax]
+
+            # Adding the noise spectra to the ones from previous realisations
+            cl_noise_cov_preprocessed += noise_spectra
+            cl_noise_cov_preprocessed_unbinned += noise_spectra_unbined[
+                ..., ell_min_namaster:ell_max_namaster
+            ]
 
         if config.parametric_sep_pars.use_harmonic_compsep:
             # Computing the noise spectra from the preprocessed noise maps using namaster
@@ -348,9 +464,9 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 )
 
     if comm is not None:
-        noise_cov_preprocessed_recvbuf = MPISUM(noise_cov_preprocessed, comm, rank, root)
+        noise_cov_preprocessed_recvbuf = MPISUM(noise_cov_preprocessed, comm, rank, 0)
         if config.parametric_sep_pars.use_harmonic_compsep:
-            noise_cov_preprocessed_recvbuf_cl = MPISUM(cl_noise_cov_preprocessed, comm, rank, root)
+            noise_cov_preprocessed_recvbuf_cl = MPISUM(cl_noise_cov_preprocessed, comm, rank, 0)
             noise_cov_preprocessed_recvbuf_cl_unbinned = MPISUM(
                 cl_noise_cov_preprocessed_unbinned, comm, rank, root
             )
@@ -366,7 +482,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             if test_alm_TF_noise:
                 noise_cov_preprocessed_recvbuf_alm = noise_cov_alm_preprocessed
 
-    if rank == root:
+    if rank == 0:
         # Average noise_cov and noise_cov_preprocessed over nsims
         noise_cov_preprocessed_mean = noise_cov_preprocessed_recvbuf / int_n_sim
         if config.parametric_sep_pars.use_harmonic_compsep:
@@ -385,7 +501,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             if test_alm_TF_noise:
                 noise_cov_preprocessed_mean_alm = None
 
-    if rank == root:
+    if rank == 0:
         manager.path_to_covar.mkdir(exist_ok=True, parents=True)
         np.save(manager.path_to_pixel_noisecov, noise_cov_preprocessed_mean)
         if config.parametric_sep_pars.use_harmonic_compsep:
@@ -396,7 +512,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             if test_alm_TF_noise:
                 np.save(manager.path_to_noisecov_alm, noise_cov_preprocessed_mean_alm)
 
-    if rank == root:
+    if rank == 0:
         logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
 
 

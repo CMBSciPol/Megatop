@@ -1,5 +1,8 @@
+from pathlib import Path
+
 import pytest
 
+from megatop import DataManager
 from megatop.config import (
     Config,
     GeneralConfig,
@@ -23,7 +26,7 @@ def test_lmax_validator():
 
 def test_map_set_name():
     """Check that the map set name is set and correctly formatted."""
-    map_set = MapSetConfig(freq_tag=27, exp_tag="SAT4")
+    map_set = MapSetConfig(freq_tag=27, exp_tag="SAT4", nhits_map_path="SO_nominal", beam=30)
     assert hasattr(map_set, "name")
     assert map_set.name == "SAT4_f027"
 
@@ -52,3 +55,20 @@ def test_split_map_sets_more_groups(n_groups: int, example_config: Config) -> No
     # check that the total number of map sets is conserved
     total_sets = sum(len(sc.map_sets) for sc in sub_configs)
     assert total_sets == num_sets
+
+
+def test_get_default_config(example_config: Config, tmp_path: Path) -> None:
+    manager = DataManager(example_config)
+    out_file = tmp_path / "default_config.yaml"
+    manager.dump_config(out_file)
+
+    assert out_file.exists()
+
+    # Check that the file is not empty
+    content = out_file.read_text()
+    assert content.strip() != ""
+
+    # Checking for the presence of a couple of key words, not sure if useful...
+    content = out_file.read_text()
+    assert "output_dirs" in content
+    assert "data_dirs" in content

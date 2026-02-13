@@ -140,7 +140,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
 
     A = MixingMatrix(*components)
     A_ev = A.evaluator(np.array(instrument["frequency"]))
-    A_maxL = A_ev(res.x)  # pyright: ignore[reportCallIssue]
+    A_maxL = A_ev(res.x)
     res.A_maxL = A_maxL
 
     AtNA_ell = np.einsum("cf,lmfn,nk->lmck", A_maxL.T, invN, A_maxL)
@@ -207,7 +207,6 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         )
         # remove binary mask to avoid double application when entering namaster:
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-        analysis_mask /= np.max(analysis_mask)  # normalize the mask to 1
         res.s[..., np.where(binary_mask != 0)] /= analysis_mask[np.where(binary_mask != 0)]
     else:
         logger.info("Harmonic Compsep: Computing component maps using W matrix and input maps")
@@ -310,7 +309,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         instrument = {"frequency": config.frequencies}
         A_ev = A.evaluator(np.array(instrument["frequency"]))
 
-    A_maxL = A_ev(res.x)  # pyright: ignore[reportCallIssue]
+    A_maxL = A_ev(res.x)
     res.A_maxL = A_maxL
 
     # W_maxL = algebra.W(A_maxL, invN=1 / noisecov_QU_masked)
@@ -522,9 +521,9 @@ def main():
     else:
         with MPICommExecutor() as executor:
             if executor is not None:
-                logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+                logger.info(f"Distributing work to {executor.num_workers} workers")
                 func = partial(compsep_and_save, config, manager)
-                for result in executor.map(func, range(n_sim_sky), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                for result in executor.map(func, range(n_sim_sky), unordered=True):
                     logger.info(f"Finished component separation on map {result + 1} / {n_sim_sky}")
 
 

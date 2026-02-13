@@ -49,9 +49,6 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 
     # Loading masks
     mask_analysis = hp.read_map(manager.path_to_analysis_mask)
-    logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-    # TODO: remove after merge
-    mask_analysis /= np.max(mask_analysis)  # normalize the mask to 1
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
@@ -217,7 +214,6 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     else:
         # inverse_effective_transfer_function = None
         inverse_normalized_Cl_effective_TF = None
-    MemoryUsage(f"rank = {rank} ")
 
     sum_noise_spectra = {}
     MemoryUsage(f"rank = {rank} ")
@@ -342,6 +338,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
             # inverse_effective_transfer_function=inverse_effective_transfer_function,
         )
+        # import IPython; IPython.embed()
         # import IPython; IPython.embed()
         # Summing the noise spectra
         for key in noise_Cls:

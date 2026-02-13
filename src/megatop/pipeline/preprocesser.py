@@ -87,14 +87,6 @@ def preprocess_map(
         )
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
-        # if config.masks_pars.DEBUG_output_apod_binary_mask:
-        #     logger.warning("DEBUG: Using apodized binary mask for harmonic component separation, ")
-        #     analysis_mask = hp.read_map(manager.path_to_apod_binary_mask)
-
-        logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-        # TODO: remove after merge
-        analysis_mask /= np.max(analysis_mask)  # normalize the mask to 1
-
         freq_beams = config.beams
         common_beam = config.pre_proc_pars.common_beam_correction
         if config.pre_proc_pars.DEBUGskippreproc:
@@ -158,6 +150,20 @@ def preprocess_map(
                         inv_sqrt_tf[i, j] = homemade_unbin_cell(
                             inv_sqrt_tf_bin[i, j], nmt_bins_native
 )
+                inv_sqrt_tf = inv_sqrt_tf[..., : config.parametric_sep_pars.harmonic_lmax]
+
+                inv_sqrt_tf_bin = np.zeros((2, 2, inv_sqrt_tf_full.shape[0]), dtype=np.complex128)
+                inv_sqrt_tf_bin[0, 0] = inv_sqrt_tf_full[:, 0, 0]
+                inv_sqrt_tf_bin[0, 1] = inv_sqrt_tf_full[:, 1, 1]
+                inv_sqrt_tf_bin[1, 0] = inv_sqrt_tf_full[:, 2, 2]
+                inv_sqrt_tf_bin[1, 1] = inv_sqrt_tf_full[:, 3, 3]
+
+                inv_sqrt_tf = np.zeros((2, 2, nmt_bins_native.lmax + 1), dtype=np.complex128)
+                for i in range(2):
+                    for j in range(2):
+                        inv_sqrt_tf[i, j] = homemade_unbin_cell(
+                            inv_sqrt_tf_bin[i, j], nmt_bins_native
+                        )
                 inv_sqrt_tf = inv_sqrt_tf[..., : config.parametric_sep_pars.harmonic_lmax]
 
                 if config.pre_proc_pars.sum_TF_column:
@@ -270,9 +276,9 @@ def main():
     else:
         with MPICommExecutor() as executor:
             if executor is not None:
-                logger.info(f"Distributing work to {executor.num_workers} workers")  # pyright: ignore[reportAttributeAccessIssue]
+                logger.info(f"Distributing work to {executor.num_workers} workers")
                 func = partial(preproc_and_save, config, manager)
-                for result in executor.map(func, range(n_sim_sky), unordered=True):  # pyright: ignore[reportAttributeAccessIssue]
+                for result in executor.map(func, range(n_sim_sky), unordered=True):
                     logger.info(f"Finished preprocessing map {result + 1} / {n_sim_sky}")
 
 
