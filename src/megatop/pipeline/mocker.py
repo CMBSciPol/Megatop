@@ -107,6 +107,28 @@ def save_simu(
         )
 
 
+@function_timer("DEBUGsave-truenoisesimu")
+def DEBUG_save_TRUEnoise_simulation(
+    manager: DataManager,
+    simulated_maps: NDArray,
+    id_sim: int | None = None,
+) -> None:
+    """Save a sky realization."""
+    # get appropriate filenames based on type
+    filenames = manager.get_TRUE_noise_maps_filenames(sub=id_sim)
+
+    # save the maps
+    for i, fname in enumerate(filenames):
+        msg = "DEBUG Saving TRUE noise simulation"
+        logger.debug(f"{msg} to {fname}")
+        hp.write_map(
+            fname,
+            simulated_maps[i],
+            dtype=["float64", "float64", "float64"],
+            overwrite=True,
+        )
+
+
 @function_timer("save-TFsims")
 def save_TFsims(
     manager: DataManager,
@@ -308,6 +330,9 @@ def func_signal(
 
     # save results
     save_simu(manager, sky, id_sim=id_sim, is_noise=False)
+
+    if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+        DEBUG_save_TRUEnoise_simulation(manager, noise, id_sim=id_sim)
 
     return id_sim
 
