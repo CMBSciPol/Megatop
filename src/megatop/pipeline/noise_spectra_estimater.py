@@ -41,7 +41,11 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 
     # The None case of nreal is useful when calling get_innoise_map_filename
     # so we need to handle it when creating the list of realisations to loop over
-    int_n_sim_noise = 1 if n_sim_noise is None else n_sim_noise
+    int_n_sim_noise = (
+        1
+        if n_sim_noise is None or config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations
+        else n_sim_noise
+    )
     realisation_list = np.arange(int_n_sim_noise)
 
     # splitting the list of simulation between the ranks of the process:
@@ -70,6 +74,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
     )
     MemoryUsage(f"rank = {rank} ")
+    # import IPython; IPython.embed()
 
     if config.parametric_sep_pars.use_megabuster:
         with Timer("init-megabuster"):
@@ -231,10 +236,15 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         if config.noise_cov_pars.save_preprocessed_noise_maps:
             # TODO if use input maps for compsep then can also just import input noise maps here
             logger.info("Loading pre-processed noise maps")
-
-            noise_freq_maps_preprocessed = np.load(
-                manager.get_path_to_preprocessed_noise_maps(id_real)
-            )
+            if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+                logger.info("Loading TRUE noise simulations saved during preproc step")
+                noise_freq_maps_preprocessed = np.load(
+                    manager.get_path_to_preprocessed_TRUE_noise_maps(id_real)
+                )
+            else:
+                noise_freq_maps_preprocessed = np.load(
+                    manager.get_path_to_preprocessed_noise_maps(id_real)
+                )
 
         else:
             nside_in_list = []

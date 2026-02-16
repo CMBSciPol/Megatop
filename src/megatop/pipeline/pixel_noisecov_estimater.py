@@ -127,6 +127,8 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
     for id_realisation in rank_realisation_list:
         noise_freq_maps = []
+        if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            TRUE_noise_freq_maps = []
 
         id_real = None if n_sim is None else id_realisation
 
@@ -136,6 +138,11 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         for noise_filename in manager.get_noise_maps_filenames(id_real):
             logger.debug(f"Importing noise map: {noise_filename}")
             noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
+
+        if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            for true_noise_filename in manager.get_TRUE_noise_maps_filenames(id_real):
+                logger.debug(f"Importing TRUE noise map: {true_noise_filename}")
+                TRUE_noise_freq_maps.append(hp.read_map(true_noise_filename, field=None).tolist())
 
         if (
             np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams))
@@ -148,6 +155,8 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 "WARNING: this is mostly for testing it might not actually represent the real noise"
             )
             noise_freq_maps_preprocessed = np.array(noise_freq_maps)
+            if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+                TRUE_noise_freq_maps_preprocessed = np.array(TRUE_noise_freq_maps)
 
         else:
             noise_freq_maps = np.array(noise_freq_maps, dtype=object)
@@ -158,6 +167,15 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 frequency_beams=config.beams,
                 freq_maps=noise_freq_maps,
             )
+            if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+                TRUE_noise_freq_maps = np.array(TRUE_noise_freq_maps, dtype=object)
+
+                TRUE_noise_freq_maps_preprocessed = common_beam_and_nside(
+                    nside=config.nside,
+                    common_beam=config.pre_proc_pars.common_beam_correction,
+                    frequency_beams=config.beams,
+                    freq_maps=TRUE_noise_freq_maps,
+                )
 
         if config.noise_cov_pars.save_preprocessed_noise_maps:
             manager.get_path_to_preprocessed_noise_maps(sub=id_real).parent.mkdir(
@@ -168,6 +186,12 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 manager.get_path_to_preprocessed_noise_maps(sub=id_real),
                 noise_freq_maps_preprocessed,
             )
+            if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+                logger.info("Saving TRUE pre-processed noise maps to disk")
+                np.save(
+                    manager.get_path_to_preprocessed_TRUE_noise_maps(sub=id_real),
+                    TRUE_noise_freq_maps_preprocessed,
+                )
 
         MemoryUsage(f"Memory for noise realisation {id_real + 1}: ")
 
