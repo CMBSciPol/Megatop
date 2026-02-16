@@ -279,6 +279,21 @@ class DataManager:
         names = [dest / map_set.noise_map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
+    def get_TRUE_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
+        """Get the list of filenames for the TRUE noise maps.
+
+        Different realizations (identified by an index) are put in separate subdirectories.
+        """
+        dest = self.get_path_to_noise_maps_sub(sub) if sub is not None else self.path_to_noise_maps
+        names = [
+            dest
+            / Path(map_set.noise_map_filename).with_stem(
+                f"TRUE_{Path(map_set.noise_map_filename).stem}"
+            )
+            for map_set in self._config.map_sets
+        ]
+        return [name.with_suffix(".fits") for name in names]
+
     def get_maps_sim_for_TF_filenames(self, sub: int | None = None) -> list[Path]:
         """Get the list of filenames for the maps used for TF estimation.
 
@@ -328,6 +343,13 @@ class DataManager:
 
     def get_path_to_preprocessed_noise_maps(self, sub: int | None = None) -> Path:
         fname = "noise_maps_preprocessed"
+        if sub is not None:
+            fname += f"_{sub:04d}"
+        fname = self.path_to_covar / fname
+        return fname.with_suffix(".npy")
+
+    def get_path_to_preprocessed_TRUE_noise_maps(self, sub: int | None = None) -> Path:
+        fname = "TRUE_noise_maps_preprocessed"
         if sub is not None:
             fname += f"_{sub:04d}"
         fname = self.path_to_covar / fname

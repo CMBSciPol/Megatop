@@ -394,6 +394,8 @@ ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig
 class NoiseSimConfig:
     n_sim: int = 1
     include_nhits: bool = True
+
+    DEBUG_save_TRUEnoise_simulations: bool = False
     experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict(SO=SOConfig()))
 
 
@@ -458,6 +460,15 @@ class Config:
                 if not map_set.passband_filename:
                     msg = f"Map set '{map_set.name}' requires a non-empty passband_filename because passband_int=True."
                     raise ValueError(msg)
+
+        # Check that obsmat_path are all different
+        obsmat_paths = [map_set.obsmat_path for map_set in self.map_sets]
+        if (
+            len(obsmat_paths) != len(set(obsmat_paths))
+            and not np.all(np.array(obsmat_paths) == Path())
+        ) and self.parametric_sep_pars.use_megabuster:
+            msg = "All obsmat_path in map_sets must be different when using megabuster as compsep."
+            raise ValueError(msg)
 
     @classmethod
     def load_yaml(cls, path: str | Path) -> "Config":
