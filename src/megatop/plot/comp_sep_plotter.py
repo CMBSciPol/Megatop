@@ -52,14 +52,20 @@ def plot_compsep_stats(manager: DataManager, config: Config):
 
     param_res_list = []
     for sky_sims_id in range(config.map_sim_pars.n_sim):
-        fname_compsepresults = manager.get_path_to_compsep_results(sub=sky_sims_id)
-        param_res_compsep = np.load(fname_compsepresults, allow_pickle=True)["x"]
-        param_res_list.append(param_res_compsep)
+        try:
+            fname_compsepresults = manager.get_path_to_compsep_results(sub=sky_sims_id)
+            param_res_compsep = np.load(fname_compsepresults, allow_pickle=True)["x"]
+            param_res_list.append(param_res_compsep)
+        except FileNotFoundError:
+            logger.warning(
+                f"Component separation results for simulation {sky_sims_id} not found, skipping."
+            )
+            continue
     param_res_list = np.array(param_res_list)
 
     # Plotting the statistics of the component separation results
     plot_dir = manager.path_to_components_plots
-    res_compsep_last = np.load(fname_compsepresults, allow_pickle=True)
+    res_compsep_last = np.load(manager.get_path_to_compsep_results(sub=0), allow_pickle=True)
 
     # plotting histograms of result parameters
     fig, axes = plt.subplots(1, res_compsep_last["params"].shape[0], figsize=(12, 5))
