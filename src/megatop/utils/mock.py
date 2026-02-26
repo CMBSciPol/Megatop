@@ -99,7 +99,9 @@ def get_full_sky_noise_freq_maps(
         logger.debug(f"Map {exp}_{map_set.freq_tag} has index {idx_freq}.")
         if noise_config_exp.noise_option == NoiseOption.WHITE:
             noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
-                noise_experiment[exp]["map_white_noise_levels"][idx_freq], nside, id_sim
+                noise_experiment[exp]["map_white_noise_levels"][idx_freq],
+                nside,
+                [id_sim, i_map_set],
             )
         elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
             noise_freq_maps[i_map_set] = get_noise_map_from_noise_spectra(
@@ -193,7 +195,7 @@ def get_noise_experiment(
     return {"noise_spectra": n_ell, "map_white_noise_levels": white_noise_levels}
 
 
-def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int, id_sim: int):
+def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int, seed: list):
     logger.debug(f"Map white noise level (Q,U) {map_white_noise_level} muK-arcmin")
     npix = hp.nside2npix(nside)
     nlev_map = np.array(
@@ -208,7 +210,7 @@ def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int, id_
     logger.warning(
         "WARNING: DEBUG FIXING SEED OF WHITE NOISE TO ID_SIM!!!! THIS WILL GENERETATE ALSO THE EXACT SAME NOISE SIMS"
     )
-    rng = np.random.default_rng(seed=id_sim)
+    rng = np.random.default_rng(seed=seed)
     return rng.normal(np.zeros_like(nlev_map), nlev_map, (3, npix))
 
 
