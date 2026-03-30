@@ -53,7 +53,9 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
         seed.append(id_sim)
     logger.debug(f"CMB {seed = }")
 
-    Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
+    Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(
+        manager, DEBUG_noEmodes=config.map_sim_pars.DEBUG_noEmodes
+    )
     cmb_map = mock.generate_map_cmb(Cl_cmb_model, config.nside, cmb_seed=seed)
     logger.debug(f"CMB map has shape {cmb_map.shape}")
     return cmb_map
@@ -119,7 +121,7 @@ def DEBUG_save_TRUEnoise_simulation(
 
     # save the maps
     for i, fname in enumerate(filenames):
-        msg = "DEBUG Saving TRUE noise simulation"
+        msg = "DEBUG: Saving TRUE noise simulation"
         logger.debug(f"{msg} to {fname}")
         hp.write_map(
             fname,
@@ -346,7 +348,8 @@ def func_noise(
     id_sim: int,
 ) -> int:
     """Generate a noise realization."""
-    noise = get_noise(config, binary_mask, nhits_maps, id_sim=id_sim)
+    # Offseting id_sim by n_sim to avoid having the same noise seed as in func_signal
+    noise = get_noise(config, binary_mask, nhits_maps, id_sim=id_sim + config.map_sim_pars.n_sim)
     _ = mask.apply_binary_mask(noise, binary_mask, unseen=False)
     save_simu(manager, noise, id_sim=id_sim, is_noise=True)
     return id_sim
