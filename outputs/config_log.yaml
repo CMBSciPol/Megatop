@@ -3,9 +3,9 @@ cl2r_pars:
   lmax_cosmo_analysis: null
   lmin_cosmo_analysis: null
   load_model_spectra: true
-  n_steps: 10000
-  n_steps_burnin: 4000
-  n_walkers: 200
+  n_steps: 4000
+  n_steps_burnin: 1000
+  n_walkers: 100
   prior_bounds:
     A_{dust}:
     - 0.0
@@ -53,6 +53,8 @@ map2cl_pars:
   purify_e: false
 map_sets:
 - TF_path: .
+  angles_central_value_degrees: 1.0
+  angles_uncertainty_degrees: 0.1
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -66,6 +68,8 @@ map_sets:
   suffix_eigen_decomp: ''
   suffix_obsmat_scipy: ''
 - TF_path: .
+  angles_central_value_degrees: 5.0
+  angles_uncertainty_degrees: 0.1
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -79,6 +83,8 @@ map_sets:
   suffix_eigen_decomp: ''
   suffix_obsmat_scipy: ''
 - TF_path: .
+  angles_central_value_degrees: 10.0
+  angles_uncertainty_degrees: 0.1
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -92,6 +98,8 @@ map_sets:
   suffix_eigen_decomp: ''
   suffix_obsmat_scipy: ''
 - TF_path: .
+  angles_central_value_degrees: 20.0
+  angles_uncertainty_degrees: 0.1
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -105,6 +113,8 @@ map_sets:
   suffix_eigen_decomp: ''
   suffix_obsmat_scipy: ''
 - TF_path: .
+  angles_central_value_degrees: 40.0
+  angles_uncertainty_degrees: 0.1
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -118,6 +128,8 @@ map_sets:
   suffix_eigen_decomp: ''
   suffix_obsmat_scipy: ''
 - TF_path: .
+  angles_central_value_degrees: 60.0
+  angles_uncertainty_degrees: 0.1
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -187,7 +199,7 @@ noise_sim_pars:
       v3_one_over_f_mode: OPTIMISTIC
       v3_sensitivity_mode: GOAL
   include_nhits: true
-  n_sim: 10
+  n_sim: 1
 output_dirs:
   binning: binning
   components: components
@@ -195,7 +207,7 @@ output_dirs:
   fiducial_cmb: fiducial_cmb
   masks: masks
   mcmc: mcmc
-  noise_spectra: noise_spectra
+  noise_spectra: noise_spectras
   plots: plots
   precomputation: precomputation
   prepoc_diag_precond: diag_precond
@@ -210,18 +222,19 @@ parametric_sep_pars:
   harmonic_lmin: 30
   include_synchrotron: true
   megabuster_options:
-    max_steps_CG: 200
-    tol_CG: 1.0e-06
+    max_steps_CG: 4000
+    tol_CG: 1.0e-12
+    use_calibration_matrix: true
     use_preconditioner_diag: false
     use_preconditioner_pinv: false
   minimize_method: TNC
   minimize_options:
     disp: false
     eps: 1.0e-12
-    ftol: 1.0e-12
-    gtol: 1.0e-12
+    ftol: 1.0e-13
+    gtol: 1.0e-13
     maxiter: 100
-  minimize_tol: 1.0e-18
+  minimize_tol: 1.0e-19
   passband_int: false
   use_harmonic_compsep: false
   use_megabuster: true

@@ -28,6 +28,9 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 91.
   beam: 0.
+  angles_central_value_degrees : 1
+  angles_uncertainty_degrees : 0.1
+  # angle_incertanty_degrees = 0 Corresponds to no prior case and not ideal infinite precision case, as prior = 0 lead to divergence in the Likelihood.
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -35,6 +38,8 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 63.
   beam: 0.
+  angles_central_value_degrees : 5
+  angles_uncertainty_degrees : 0.1
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -42,6 +47,8 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 30.
   beam: 0.
+  angles_central_value_degrees : 10
+  angles_uncertainty_degrees : 0.1
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -49,6 +56,8 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 17.
   beam: 0.
+  angles_central_value_degrees : 20
+  angles_uncertainty_degrees : 0.1
 
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -56,6 +65,8 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 11.
   beam: 0.
+  angles_central_value_degrees : 40
+  angles_uncertainty_degrees : 0.1
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -63,6 +74,8 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 9.
   beam: 0.
+  angles_central_value_degrees : 60
+  angles_uncertainty_degrees : 0.1
 
 map_sim_pars:
   A_lens: 1
@@ -98,7 +111,7 @@ noise_cov_pars:
   save_preprocessed_noise_maps: true
 noise_sim_pars:
   include_nhits: true
-  n_sim: 10
+  n_sim: 1
   experiments: 
     SO-SAT:
       usev3p1: True
@@ -112,7 +125,7 @@ output_dirs:
   components: components
   covar: covar
   masks: masks
-  noise_spectra: noise_spectra
+  noise_spectra: noise_spectras
   plots: plots
   preproc: preproc
   spectra: spectra
@@ -125,19 +138,19 @@ parametric_sep_pars:
   minimize_options:
     disp: false
     eps: 1.0e-12
-    ftol: 1.0e-12
-    gtol: 1.0e-12
+    ftol: 1.0e-13
+    gtol: 1.0e-13
     maxiter: 100
-  minimize_tol: 1.0e-18
+  minimize_tol: 1.0e-19
   passband_int: false
   
 cl2r_pars:
   lmax_cosmo_analysis: null
   lmin_cosmo_analysis: null
   load_model_spectra: True
-  n_steps: 10000
-  n_steps_burnin: 4000
-  n_walkers: 200
+  n_steps: 4000
+  n_steps_burnin: 1000
+  n_walkers: 100
   prior_bounds:
     A_{dust}:
     - 0.0

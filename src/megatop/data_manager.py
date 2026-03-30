@@ -323,6 +323,14 @@ class DataManager:
     def get_path_to_mcmc_chains(self, sub: int | None = None) -> Path:
         fname = self.get_path_to_mcmc(sub=sub) / "mcmc_chains"
         return fname.with_suffix(".npz")
+    
+    def get_path_to_mcmc_chains_compsep(self, sub: int | None = None) -> Path:
+        fname = self.get_path_to_mcmc(sub=sub) / "mcmc_chains_compsep"
+        return fname.with_suffix(".npz")
+    
+    def get_path_to_mcmc_chains_compsep(self, sub: int | None = None) -> Path:
+        fname = self.get_path_to_mcmc(sub=sub) / "mcmc_chains_compsep"
+        return fname.with_suffix(".npz")
 
     @property
     def path_to_pixel_noisecov(self) -> Path:

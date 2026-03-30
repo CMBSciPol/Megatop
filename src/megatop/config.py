@@ -162,6 +162,8 @@ class MapSetConfig:
     passband_filename: str = ""
     nhits_map_path: str | Path | None = field(default=None)
     depth_map_path: Path | None = field(default=None)
+    angles_central_value_degrees: float = 0.0
+    angles_uncertainty_degrees: float = 0.0
 
     def __attrs_post_init__(self) -> None:
         self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
@@ -251,17 +253,18 @@ class NoiseCovmatConfig:
 @define
 class _MinimizeOptions:
     disp: bool = False
-    gtol: float = 1e-12
-    eps: float = 1e-12
-    maxiter: int = 100
-    ftol: float = 1e-12
+    gtol: float = 1e-13
+    eps: float = 1e-6
+    maxiter: int = 2000
+    ftol: float = 1e-13
 
 @define
 class _MEGABUSTEROptions:  # Modification megabuster
-    max_steps_CG: int = 200
-    tol_CG: float = 1e-6
+    max_steps_CG: int = 4000
+    tol_CG: float = 1e-12
     use_preconditioner_diag: bool = False
     use_preconditioner_pinv: bool = False
+    use_calibration_matrix: bool = True
 
 @define
 class CompSepConfig:
@@ -274,7 +277,7 @@ class CompSepConfig:
 
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
-    minimize_tol: float = 1e-18
+    minimize_tol: float = 1e-19
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
     megabuster_options: _MEGABUSTEROptions = Factory(_MEGABUSTEROptions)  # Modification megabuster
     passband_int: bool = False
@@ -520,6 +523,16 @@ class Config:
     def beams(self) -> list[float]:
         """The list of beam FWHMs (in arcminutes)"""
         return [map_set.beam for map_set in self.map_sets]
+
+    @property
+    def angle_central_value(self) -> list[float]:
+        """The list of angles (in degrees)"""
+        return [map_set.angles_central_value_degrees*np.pi/180 for map_set in self.map_sets]
+
+    @property
+    def angle_uncertainty(self) -> list[float]:
+        """The list of angle uncertainties (in degrees)"""
+        return [map_set.angles_uncertainty_degrees*np.pi/180 for map_set in self.map_sets]
 
     @property
     def maps(self) -> list[str]:

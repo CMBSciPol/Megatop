@@ -415,7 +415,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     # 4. save mcmc chains:
     path = manager.get_path_to_mcmc(sub=id_sim)
     path.mkdir(parents=True, exist_ok=True)
-    fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+    fname_chains = manager.get_path_to_mcmc_chains_compsep(sub=id_sim)
 
     np.savez(
         fname_chains,

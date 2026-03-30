@@ -10,7 +10,6 @@ from inspect import isfunction  # noqa: E402
 
 import fgbuster as fg
 import healpy as hp
-import numpy as np
 import megabuster as mb  # noqa: E402
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
@@ -361,6 +360,8 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
         # convert to picklable form
         res_dict[attr] = _make_picklable(val)
 
+    angles_uncertanties_dict = {}
+
     # Saving cleaned result dict
     logger.info(f"Saving compsep results to {fname_results}")
     np.savez_compressed(fname_results, **res_dict)
@@ -383,11 +384,10 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
     np.save(fname_compmaps, s_np)
 
     # Saving component maps
-    logger.info(f"Saving component maps to {fname_compmaps}")
-    np.save(fname_compmaps, res.s)
+    #logger.info(f"Saving component maps to {fname_compmaps}")
+    #np.save(fname_compmaps, res.s)
 
 def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
-    print('Oui !!')
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
         logger.debug(f"Loading covmat from {noisecov_fname}")
@@ -437,9 +437,25 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
         1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
     )
 
+    if any(x != 0 for x in config.angle_uncertainty):
+        angles_prior_dict = {"angle_central_value": config.angle_central_value, "angle_uncertainty": config.angle_uncertainty}
+        angles_names = [f'angle_{i}' for i in range(len(config.angle_uncertainty))]
+
+    # Miscalibration angles Operator X
+
+    #sky_map = Stokes.from_stokes(
+    #        Q=hp.reorder(sky_map[:, -2], r2n=True)[..., pixels_to_retain_nested], 
+    #        U=hp.reorder(sky_map[:, -1], r2n=True)[..., pixels_to_retain_nested]
+    #    )
+    #shape = sky_map.shape()
+    #in_structure_sed = sky_map.structure_for((sky_map.shape))
+
     max_iter = options["maxiter"] if method != "TNC" else options["maxfun"]
+    
     # import IPython; IPython.embed()
     res = mb.compsep.perform_compsep(
+        config,
+        manager, 
         first_guess_params={"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
         fixed_params={"temp_dust": 20.0},
         sky_map=freq_maps_preprocessed_QU_masked,
@@ -447,8 +463,11 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
         invN_matrix=inverse_noisecov_QU_masked,
         do_minimization=True,
         binary_mask=binary_mask,
-        obs_mat_operator=None,
-        obsmat_operator_rhs=None,
+        use_calibration_matrix=megabuster_options["use_calibration_matrix"],
+        angles_prior_dict = angles_prior_dict,
+        angles_names = angles_names,
+        obsmat_operator=None,
+        operator_rhs=None,
         use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
         use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
         central_freq_op=None,
@@ -458,12 +477,12 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
             "max_steps_CG": megabuster_options["max_steps_CG"],
             "tol_CG": megabuster_options["tol_CG"],
         },
+        #ordering_parameter=["beta_dust", "beta_pl"]+angles_names,
         ordering_parameter=["beta_dust", "beta_pl"],
         ordering_component=components,
         dust_nu0=150.0,
         synchrotron_nu0=150.0,
     )
-
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
     timer.stop("do-compsep")

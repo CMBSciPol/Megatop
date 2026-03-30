@@ -55,7 +55,7 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
 
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
     cmb_map_brut = mock.generate_map_cmb(Cl_cmb_model, config.nside, cmb_seed=seed)
-    cmb_map = cmb_map_brut
+    cmb_map = cmb_map_brut.copy()
     logger.debug(f"CMB map has shape {cmb_map.shape}")
 
     #Birefringence mixing E & B maps
@@ -299,6 +299,17 @@ def func_signal(
     with Timer("beam-freq-maps"):
         for i_f, _f in enumerate(config.frequencies):
             sky[i_f] = mock.beam_winpix_correction(config.nside, sky[i_f], config.beams[i_f])
+
+    sky_miscalibration = sky.copy()
+
+    for i_f, alpha in enumerate(config.angle_central_value):
+        if alpha == 0:
+            continue
+        else:
+            sky_miscalibration[i_f, 1, :] = np.cos(alpha)*sky[i_f, 1, :] - np.sin(alpha)*sky[i_f, 2, :]
+            sky_miscalibration[i_f, 2, :] = np.sin(alpha)*sky[i_f, 1, :] + np.cos(alpha)*sky[i_f, 2, :]
+
+    sky = sky_miscalibration
 
     # apply filtering
     if obsmat_funcs is not None:

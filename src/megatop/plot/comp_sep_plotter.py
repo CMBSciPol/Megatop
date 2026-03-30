@@ -5,6 +5,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 
+from getdist import MCSamples, plots
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mask import apply_binary_mask
@@ -62,7 +63,7 @@ def plot_compsep_stats(manager: DataManager, config: Config):
     res_compsep_last = np.load(fname_compsepresults, allow_pickle=True)
 
     # plotting histograms of result parameters
-    fig, axes = plt.subplots(1, res_compsep_last["params"].shape[0], figsize=(12, 5))
+    fig, axes = plt.subplots(1, res_compsep_last["params"].shape[0], figsize=(12*2, 5))
     axes = np.atleast_1d(axes)
     for i, (ax, param_name) in enumerate(zip(axes, res_compsep_last["params"], strict=False)):
         ax.hist(param_res_list[:, i], density=True)
@@ -79,6 +80,42 @@ def plot_compsep_stats(manager: DataManager, config: Config):
     plt.close()
 
     return
+
+def plot_single_cornerplot(manager: DataManager, config: Config, id_sim: int | None = None):
+    """Plot corner plot resulting from the MCMC for a single sky realization."""
+    # Load parameters and mcmc chains:
+    r_sim = config.map_sim_pars.r_input
+    A_lens_sim = config.map_sim_pars.A_lens
+    Birefringence = config.map_sim_pars.Birefringence
+
+    fname_chains = manager.get_path_to_mcmc_chains_compsep(sub=id_sim)
+    mcmc = np.load(fname_chains, allow_pickle=True)
+    chains = mcmc["mcmc_chains"]
+    param_names = mcmc["param_names"]
+
+    # Make plot:
+    samples = MCSamples(samples=chains, names=param_names, labels=param_names)
+
+    gd_plot = plots.get_subplot_plotter(width_inch=8)
+    gd_plot.settings.figure_legend_frame = False
+    gd_plot.settings.alpha_filled_add = 0.4
+
+    gd_plot.triangle_plot(
+        [samples],
+        filled=True,
+        legend_loc="upper right",
+        line_args=[{"lw": 1.5, "color": "darkblue"}],
+        contour_colors=["darkblue"],
+        #markers={"r": r_sim, "A_{lens}": A_lens_sim,"Birefringence": Birefringence},
+        
+    )
+
+    # Save figure:
+    plot_dir = manager.path_to_mcmc_plots
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    plot_name = f"corner_plot_skysim{id_sim}"
+    plt.savefig(plot_dir / plot_name, bbox_inches="tight")
+    plt.clf()
 
 
 def main():
