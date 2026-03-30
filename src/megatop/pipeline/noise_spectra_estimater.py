@@ -280,6 +280,36 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                 "ifsp,fsp->isp", W_maxL, noise_freq_maps_preprocessed[:, 1:]
             )  # slicing noise to remove T
         else:
+            if config.map2cl_pars.DEBUG_cut_scales:
+                logger.warning("TEST: Applying smooth cut at large scales to noise component maps")
+                logger.warning(
+                    "TEST: DOING IT AFTER PARAM ESTIMATION (can't do before for noise maps)"
+                )
+
+                def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
+                    ell = np.arange(lmax + 1)
+                    smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
+                    smooth_cut[:lmin] = 0.0
+                    return smooth_cut
+
+                cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
+                freq_maps_cut = np.zeros_like(noise_freq_maps_preprocessed)
+                for f in range(noise_freq_maps_preprocessed.shape[0]):
+                    alm_comp = hp.map2alm(
+                        [
+                            noise_freq_maps_preprocessed[f, 0],
+                            noise_freq_maps_preprocessed[f, 1],
+                            noise_freq_maps_preprocessed[f, 2],
+                        ],
+                        lmax=3 * config.nside,
+                    )
+                    for s in range(alm_comp.shape[0]):
+                        hp.almxfl(alm_comp[s], cut_array, inplace=True)
+                    freq_maps_cut[f] = hp.alm2map(
+                        alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
+                    )  # removing temperature
+                noise_freq_maps_preprocessed = freq_maps_cut
+
             megabuster_options = config.parametric_sep_pars.get_megabuster_options_as_dict()
             noise_map_post_compsep = mb.compsep.perform_compsep(
                 first_guess_params=parameters_foregrounds,
@@ -311,30 +341,30 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         }
         if config.parametric_sep_pars.include_synchrotron:
             noise_comp_dict["Noise_Synch"] = noise_map_post_compsep[2]
-
+        # import IPython; IPython.embed()
         # test_cut_scales = True
-        if config.map2cl_pars.DEBUG_cut_scales:
-            logger.warning("TEST: Applying smooth cut at large scales to noise maps")
+        # if config.map2cl_pars.DEBUG_cut_scales:
+        #     logger.warning("TEST: Applying smooth cut at large scales to noise maps")
 
-            def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
-                ell = np.arange(lmax + 1)
-                smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
-                smooth_cut[:lmin] = 0.0
-                return smooth_cut
+        #     def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
+        #         ell = np.arange(lmax + 1)
+        #         smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
+        #         smooth_cut[:lmin] = 0.0
+        #         return smooth_cut
 
-            cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
-            noise_comp_cut_dict = {}
-            for key in noise_comp_dict:
-                alm_comp = hp.map2alm(
-                    [noise_comp_dict[key][0] * 0, noise_comp_dict[key][0], noise_comp_dict[key][1]],
-                    lmax=3 * config.nside,
-                )
-                for s in range(alm_comp.shape[0]):
-                    hp.almxfl(alm_comp[s], cut_array, inplace=True)
-                noise_comp_cut_dict[key] = hp.alm2map(
-                    alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
-                )[1:]  # removing temperature
-            noise_comp_dict = noise_comp_cut_dict
+        #     cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
+        #     noise_comp_cut_dict = {}
+        #     for key in noise_comp_dict:
+        #         alm_comp = hp.map2alm(
+        #             [noise_comp_dict[key][0] * 0, noise_comp_dict[key][0], noise_comp_dict[key][1]],
+        #             lmax=3 * config.nside,
+        #         )
+        #         for s in range(alm_comp.shape[0]):
+        #             hp.almxfl(alm_comp[s], cut_array, inplace=True)
+        #         noise_comp_cut_dict[key] = hp.alm2map(
+        #             alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
+        #         )[1:]  # removing temperature
+        #     noise_comp_dict = noise_comp_cut_dict
 
         # Computing auto and cross spectra
         noise_Cls = compute_auto_cross_cl_from_maps_list(
@@ -377,6 +407,11 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         for key in sum_noise_spectra:
             mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_n_sim_noise
 
+        # mean_noise_spectra = limit_namaster_output(mean_noise_spectra, bin_index_lminlmax)
+        logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        logger.warning("CLS are not limited to the lmin lmax analysis range")
+        logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        bin_index_lminlmax = np.arange(len(mean_noise_spectra[key][0]))
         mean_noise_spectra = limit_namaster_output(mean_noise_spectra, bin_index_lminlmax)
 
     else:
