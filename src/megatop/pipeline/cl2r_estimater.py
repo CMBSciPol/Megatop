@@ -213,13 +213,14 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     fsky_obs = np.mean(analysis_mask)
     # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
     # fsky_obs = np.sqrt(mean_fsky)
+    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
     Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "CMBxCMB"
-    ][3]
+    ][3][binning_info["bin_index_lminlmax"]]
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "DustxDust"
-    ][3]
+    ][3][binning_info["bin_index_lminlmax"]]
 
     all_noise_options = [
         config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
@@ -231,7 +232,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     else:
         Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
             "Noise_CMBxNoise_CMB"
-        ][3]
+        ][3][binning_info["bin_index_lminlmax"]]
 
     nmt_bins = load_nmt_binning(manager)
 
