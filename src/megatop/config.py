@@ -303,6 +303,9 @@ class Map2ClConfig:
     purify_b: bool = True
     n_iter_namaster: int = 3
     DEBUG_cut_scales: bool = False
+    custom_binning_path: Path = field(converter=Path, default=".")
+    """Path to custon binning scheme sotred in an .npz file. Directory must contain three entries as lists of same size stored under: bin_low, bin_high.
+    If None, the create_binning() function will be used instead and create evenly spaced bins from delta_ell"""
 
     @purify_e.validator
     def check(self, attribute, value):
@@ -346,6 +349,8 @@ class MapSimConfig:
     """Number of simulation generated for the TF computation."""
     passband_int: bool = False
     """If True, sky maps will be integrated over the passbands provided in the map_sets. Passbands will also be included in the SED computation in the component separation."""
+    DEBUG_noEmodes: bool = False
+    """Debuging param: sets EE and TE CMB power spectra to 0 in the mocker, in particular in the mock.get_Cl_CMB_model_from_manager() function"""
 
     @sky_model.validator
     def check(self, attribute, value):
