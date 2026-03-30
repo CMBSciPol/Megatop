@@ -101,12 +101,30 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
 
 
 def binning_maker(manager: DataManager, config: Config):
-    bin_low, bin_high, bin_centre = create_binning(
-        config.nside,
-        config.map2cl_pars.delta_ell,
-        config.map2cl_pars.delta_ell,
-        # end_first_bin=config.lmin
-    )
+    if config.map2cl_pars.custom_binning_path != Path():
+        logger.info(
+            f"Custom bin path has been provided, loading from {config.map2cl_pars.custom_binning_path}"
+        )
+        custom_bins = np.load(config.map2cl_pars.custom_binning_path, allow_pickle=True)
+        bin_low = custom_bins["bin_low"]
+        bin_high = custom_bins["bin_high"]
+        if "bin_centre" in custom_bins:
+            bin_centre = custom_bins["bin_centre"]
+        elif "bin_center" in custom_bins:
+            bin_centre = custom_bins["bin_center"]
+        else:
+            logger.error("No bin center in custom binning")
+            # TODO: proper error / assert
+            exit()
+
+    else:
+        logger.info("No custom bin provided, creating standard binning using create_binning()")
+        bin_low, bin_high, bin_centre = create_binning(
+            config.nside,
+            config.map2cl_pars.delta_ell,
+            config.map2cl_pars.delta_ell,
+            # end_first_bin=config.lmin
+        )
     bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
 
     path = manager.path_to_binning
