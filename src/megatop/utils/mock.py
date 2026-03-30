@@ -16,7 +16,7 @@ from . import V3p1calc as V3p1
 from .logger import logger
 
 
-def get_Cl_CMB_model_from_manager(manager: DataManager):
+def get_Cl_CMB_model_from_manager(manager: DataManager, DEBUG_noEmodes: bool = False):
     # TODO make this a method of DataManager
     logger.debug(f"Lensing B-mode path: {manager.path_to_lensed_scalar}")
     logger.debug(f"Primordial B-mode (r=1): {manager.path_to_unlensed_scalar_tensor_r1}")
@@ -32,6 +32,9 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     Cl_TT = Cl_lens[0]
     Cl_EE = Cl_lens[1]
     Cl_TE = Cl_lens[3]
+    if DEBUG_noEmodes:
+        Cl_EE *= 0
+        Cl_TE *= 0
 
     Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
 
@@ -100,7 +103,8 @@ def get_full_sky_noise_freq_maps(
         if noise_config_exp.noise_option == NoiseOption.WHITE:
             noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
                 noise_experiment[exp]["map_white_noise_levels"][idx_freq],
-                nside,  # , id_sim
+                nside,
+                [id_sim, i_map_set],
             )
         elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
             noise_freq_maps[i_map_set] = get_noise_map_from_noise_spectra(
@@ -194,10 +198,7 @@ def get_noise_experiment(
     return {"noise_spectra": n_ell, "map_white_noise_levels": white_noise_levels}
 
 
-def get_noise_map_from_white_noise(
-    map_white_noise_level: float,
-    nside: int,  # , id_sim: int
-):
+def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int, seed: list):
     logger.debug(f"Map white noise level (Q,U) {map_white_noise_level} muK-arcmin")
     npix = hp.nside2npix(nside)
     nlev_map = np.array(
@@ -208,11 +209,11 @@ def get_noise_map_from_white_noise(
         ]
     )[:, np.newaxis] * np.ones((3, npix))
     nlev_map /= hp.nside2resol(nside, arcmin=True)
-    rng = np.random.default_rng()
-    # logger.warning(
-    #     "WARNING: DEBUG FIXING SEED OF WHITE NOISE TO ID_SIM!!!! THIS WILL GENERETATE ALSO THE EXACT SAME NOISE SIMS"
-    # )
-    # rng = np.random.default_rng(seed=id_sim)
+    # rng = np.random.default_rng()
+    logger.warning(
+        "WARNING: DEBUG FIXING SEED OF WHITE NOISE TO ID_SIM!!!! THIS WILL GENERETATE ALSO THE EXACT SAME NOISE SIMS"
+    )
+    rng = np.random.default_rng(seed=seed)
     return rng.normal(np.zeros_like(nlev_map), nlev_map, (3, npix))
 
 
