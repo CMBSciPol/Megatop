@@ -25,14 +25,14 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
         config,
         np.array([comp_maps[0]]),
         plot_dir,
-        "CMB_post_compsep_maps",
+        f"CMB_post_compsep_maps_{id_sim}",
         component="CMB post-compsep",
     )
     freq_maps_plotter(
         config,
         np.array([comp_maps[1]]),
         plot_dir,
-        "dust_post_compsep_maps",
+        f"dust_post_compsep_maps_{id_sim}",
         component="Dust post-compsep",
     )
     if config.parametric_sep_pars.include_synchrotron:
@@ -40,7 +40,7 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
             config,
             np.array([comp_maps[2]]),
             plot_dir,
-            "synch_post_compsep_maps",
+            f"synch_post_compsep_maps_{id_sim}",
             component="Synch post-compsep",
         )
 
