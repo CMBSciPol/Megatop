@@ -199,20 +199,21 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     # lmin = config.general_pars.lmin
     # lmax = config.general_pars.lmax
     sky_model = "".join(config.map_sim_pars.sky_model)
-
+    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
+    ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
     # Load spectra data
     Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "CMBxCMB"
-    ][3]
+    ][3][ls_bins_lminlmax_idx]
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
         "DustxDust"
-    ][3]
+    ][3][ls_bins_lminlmax_idx]
 
     all_noise_options = [
         config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
         for map_set in config.map_sets
     ]
-    if not np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+    if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
         # TODO: test case when only one experiment is noiseless?
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
     else:
