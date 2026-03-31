@@ -1,3 +1,4 @@
+import camb
 import healpy as hp
 import numpy as np
 import pymaster as nmt
@@ -5,6 +6,51 @@ from numpy.typing import NDArray
 
 from megatop import Config
 from megatop.utils import logger
+
+
+def compute_spectra_from_camb(r, cosmo_params_dict, which="total"):
+    """
+    Compute CMB TT, EE, BB, TE spectra from CAMB.
+    Parameters
+    ----------
+    r : float
+        Tensor-to-scalar ratio.
+    cosmo_params_dict : dict
+        Dictionary of cosmological parameters passed to camb.set_params().
+    which : str
+        One of the spectra keys returned by results.get_cmb_power_spectra().
+    Returns
+    -------
+    TT, EE, BB, TE : array-like
+        Each with shape (LMAX+1,)
+    """
+
+    cosmo_params = camb.set_params(**cosmo_params_dict)
+
+    cosmo_params.set_for_lmax(2000, lens_potential_accuracy=1)
+    cosmo_params.WantTensors = True
+
+    infl_params = camb.initialpower.InitialPowerLaw()
+    infl_params.set_params(
+        ns=cosmo_params_dict["ns"],
+        r=r,
+        parameterization="tensor_param_indeptilt",
+        nt=0,
+        ntrun=0,
+    )
+    cosmo_params.InitPower = infl_params
+
+    results = camb.get_results(cosmo_params)
+    full_spectra = results.get_cmb_power_spectra(cosmo_params, CMB_unit="muK", raw_cl=True)
+
+    cmb = full_spectra[which]
+
+    TT = cmb[:, 0]
+    EE = cmb[:, 1]
+    BB = cmb[:, 2]
+    TE = cmb[:, 3]
+
+    return TT, EE, BB, TE
 
 
 def compute_auto_cross_cl_from_maps_list(

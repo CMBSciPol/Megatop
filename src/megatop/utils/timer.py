@@ -36,17 +36,20 @@ class Timer(metaclass=_SingletonReInit):
     A thread-safe singleton class that provides functionality to measure and log elapsed time.
     Can be used either as a context manager or with explicit start/stop calls.
 
-    Example:
+    Examples:
         Using as context manager:
+
         >>> with Timer(thread="my_operation"):
         >>>     # code to time
         >>>     ...
 
         Using with explicit start/stop:
+
         >>> timer = Timer(thread="my_operation")
         >>> timer.start()
         >>> # code to time
         >>> timer.stop()
+
     """
 
     __slots__ = [

@@ -3,7 +3,13 @@ import numpy as np
 import scipy as sp
 from pysm3 import Sky, units
 
-from ..config import CustomSATConfig, NoiseOption, SOConfig, ValidExperimentConfig
+from ..config import (
+    CustomSATConfig,
+    ExternalNoiseMapconfig,
+    NoiseOption,
+    SOConfig,
+    ValidExperimentConfig,
+)
 from ..data_manager import DataManager
 from . import V3calc as V3
 from . import V3p1calc as V3p1
@@ -65,7 +71,9 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
     return np.array(maps_fgs)
 
 
-def get_full_sky_noise_freq_maps(map_sets, noise_config: dict, fsky_binary: float, nside: int):
+def get_full_sky_noise_freq_maps(
+    map_sets, noise_config: dict, fsky_binary: float, nside: int, id_sim: int = 0
+):
     experiments_map_set = set([map_set.exp_tag for map_set in map_sets])
     experiments_noiseconfig = [name for name in noise_config.experiments]
     noise_experiment = {}
@@ -77,7 +85,11 @@ def get_full_sky_noise_freq_maps(map_sets, noise_config: dict, fsky_binary: floa
             logger.error(msg)
             raise RuntimeError(msg) from e
         noise_experiment[exp] = get_noise_experiment(
-            exp, noise_config.experiments[exp], fsky_binary=fsky_binary, nside=nside
+            exp,
+            noise_config.experiments[exp],
+            fsky_binary=fsky_binary,
+            nside=nside,
+            id_sim=id_sim,
         )
     noise_freq_maps = np.zeros((len(map_sets), 3, hp.nside2npix(nside)))
     for i_map_set, map_set in enumerate(map_sets):
@@ -87,7 +99,9 @@ def get_full_sky_noise_freq_maps(map_sets, noise_config: dict, fsky_binary: floa
         logger.debug(f"Map {exp}_{map_set.freq_tag} has index {idx_freq}.")
         if noise_config_exp.noise_option == NoiseOption.WHITE:
             noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
-                noise_experiment[exp]["map_white_noise_levels"][idx_freq], nside
+                noise_experiment[exp]["map_white_noise_levels"][idx_freq],
+                nside,
+                [id_sim, i_map_set],
             )
         elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
             noise_freq_maps[i_map_set] = get_noise_map_from_noise_spectra(
@@ -95,6 +109,10 @@ def get_full_sky_noise_freq_maps(map_sets, noise_config: dict, fsky_binary: floa
             )
         elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
             noise_freq_maps[i_map_set, :, :] = 1e-10
+        elif noise_config_exp.noise_option == NoiseOption.NOISE_MAP:
+            noise_freq_maps[i_map_set] = hp.ud_grade(
+                noise_experiment[exp]["noise_map"][idx_freq], nside_out=nside
+            )
         else:
             msg = f"Noise option {noise_config_exp.noise_option} for {exp} is not implemented"
             logger.error(msg)
@@ -103,7 +121,11 @@ def get_full_sky_noise_freq_maps(map_sets, noise_config: dict, fsky_binary: floa
 
 
 def get_noise_experiment(
-    exp: str, noise_config_exp: ValidExperimentConfig, fsky_binary: float, nside: int
+    exp: str,
+    noise_config_exp: ValidExperimentConfig,
+    fsky_binary: float,
+    nside: int,
+    id_sim: int = 0,
 ):
     if type(noise_config_exp) is SOConfig:
         if noise_config_exp.usev3p1:
@@ -151,13 +173,29 @@ def get_noise_experiment(
         _, _, n_ell, white_noise_levels = nc.get_noise_curves(
             f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
         )
-        n_ell = n_ell
-        white_noise_levels
+
+    elif type(noise_config_exp) is ExternalNoiseMapconfig:
+        logger.info(f"Reading noise map from {noise_config_exp.root} for {exp}.")
+        fname_list = [
+            noise_config_exp.root
+            / f"{id_sim:04d}"
+            / f"{noise_config_exp.prefix}{int(fr):03d}{noise_config_exp.suffix}.fits"
+            for fr in noise_config_exp.default_bands
+        ]  # FIXED FILE EXTENSION
+        external_map_list = [
+            noise_config_exp.correction * hp.read_map(fname) for fname in fname_list
+        ]
+        return {"noise_map": external_map_list}
+
+    else:
+        msg = f"Noise config {type(noise_config_exp)} for {exp} is not recognized"
+        logger.error(msg)
+        raise RuntimeError(msg)
 
     return {"noise_spectra": n_ell, "map_white_noise_levels": white_noise_levels}
 
 
-def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int):
+def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int, seed: list):
     logger.debug(f"Map white noise level (Q,U) {map_white_noise_level} muK-arcmin")
     npix = hp.nside2npix(nside)
     nlev_map = np.array(
@@ -168,7 +206,11 @@ def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int):
         ]
     )[:, np.newaxis] * np.ones((3, npix))
     nlev_map /= hp.nside2resol(nside, arcmin=True)
-    rng = np.random.default_rng()
+    # rng = np.random.default_rng()
+    logger.warning(
+        "WARNING: DEBUG FIXING SEED OF WHITE NOISE TO ID_SIM!!!! THIS WILL GENERETATE ALSO THE EXACT SAME NOISE SIMS"
+    )
+    rng = np.random.default_rng(seed=seed)
     return rng.normal(np.zeros_like(nlev_map), nlev_map, (3, npix))
 
 

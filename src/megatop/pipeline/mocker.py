@@ -17,10 +17,16 @@ _POOL_EXECUTOR_THRESHOLD = 2
 
 
 @function_timer("get-noise-map")
-def get_noise(config: Config, binary_mask: NDArray, nhits_maps: NDArray) -> NDArray:
+def get_noise(
+    config: Config, binary_mask: NDArray, nhits_maps: NDArray, id_sim: int = 0
+) -> NDArray:
     fsky_binary = binary_mask.mean()
     noise_freq_maps = mock.get_full_sky_noise_freq_maps(
-        config.map_sets, config.noise_sim_pars, fsky_binary=fsky_binary, nside=config.nside
+        config.map_sets,
+        config.noise_sim_pars,
+        fsky_binary=fsky_binary,
+        nside=config.nside,
+        id_sim=id_sim,
     )
     logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
@@ -277,7 +283,7 @@ def func_signal(
     # generate the components
     cmb = get_cmb(manager, config, id_sim=id_sim)
     fg = get_foregrounds(config)
-    noise = get_noise(config, binary_mask, nhits_maps)
+    noise = get_noise(config, binary_mask, nhits_maps, id_sim=id_sim)
 
     # broadcast CMB to all frequencies
     sky = cmb[None, ...] + fg
@@ -302,7 +308,8 @@ def func_signal(
 
     # save results
     save_simu(manager, sky, id_sim=id_sim, is_noise=False)
-
+    # save true noise
+    save_simu(manager, noise, id_sim=id_sim + 100, is_noise=True)
     return id_sim
 
 
@@ -315,7 +322,7 @@ def func_noise(
     id_sim: int,
 ) -> int:
     """Generate a noise realization."""
-    noise = get_noise(config, binary_mask, nhits_maps)
+    noise = get_noise(config, binary_mask, nhits_maps, id_sim=id_sim)
     _ = mask.apply_binary_mask(noise, binary_mask, unseen=False)
     save_simu(manager, noise, id_sim=id_sim, is_noise=True)
     return id_sim
@@ -442,7 +449,7 @@ def main():
         # Also create the directories for the noise and signal maps
         for i in range(config.map_sim_pars.n_sim):
             manager.get_path_to_maps_sub(i).mkdir(parents=True, exist_ok=True)
-        for i in range(config.noise_sim_pars.n_sim):
+        for i in range(config.noise_sim_pars.n_sim + 100):
             manager.get_path_to_noise_maps_sub(i).mkdir(parents=True, exist_ok=True)
         if config.map_sim_pars.generate_sims_for_TF:
             for i in range(config.map_sim_pars.TF_n_sim):
