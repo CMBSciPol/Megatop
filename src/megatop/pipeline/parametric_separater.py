@@ -324,16 +324,11 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     return res
 
 
-def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
+def load_megabuster_operators(manager: DataManager):
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
         logger.debug(f"Loading covmat from {noisecov_fname}")
         noisecov = np.load(noisecov_fname)
-
-    with Timer("load-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
-        logger.debug(f"Loading input maps from {preproc_maps_fname}")
-        freq_maps_preprocessed = np.load(preproc_maps_fname)
 
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
@@ -383,6 +378,52 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
             )
             matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
 
+    return noisecov, obsmat_operator_rhs, central_freq_op, matrix_precond
+
+
+def megabuster_comp_sep(
+    manager: DataManager,
+    config: Config,
+    noisecov,
+    obsmat_operator_rhs,
+    central_freq_op,
+    matrix_precond,
+    id_sim: int | None = None,
+):
+    with Timer("load-maps"):
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+        logger.debug(f"Loading input maps from {preproc_maps_fname}")
+        freq_maps_preprocessed = np.load(preproc_maps_fname)
+
+    binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
+    apply_before_paramestimation = False
+    if config.map2cl_pars.DEBUG_cut_scales and apply_before_paramestimation:
+        logger.warning("TEST: Applying smooth cut at large scales to component maps")
+
+        def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
+            ell = np.arange(lmax + 1)
+            smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
+            smooth_cut[:lmin] = 0.0
+            return smooth_cut
+
+        cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
+        freq_maps_cut = np.zeros_like(freq_maps_preprocessed)
+        for f in range(freq_maps_preprocessed.shape[0]):
+            alm_comp = hp.map2alm(
+                [
+                    freq_maps_preprocessed[f, 0],
+                    freq_maps_preprocessed[f, 1],
+                    freq_maps_preprocessed[f, 2],
+                ],
+                lmax=3 * config.nside,
+            )
+            for s in range(alm_comp.shape[0]):
+                hp.almxfl(alm_comp[s], cut_array, inplace=True)
+            freq_maps_cut[f] = hp.alm2map(
+                alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
+            )  # removing temperature
+        freq_maps_preprocessed = freq_maps_cut
+
     timer = Timer()
     timer.start("do-compsep")
 
@@ -398,8 +439,12 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
     # instrument = {"frequency": config.frequencies}
     if config.parametric_sep_pars.include_synchrotron:
         components = ["cmb", "dust", "synchrotron"]  # TODO move default to config
+        first_guess = {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)}
+        ordering_pars = ["beta_dust", "beta_pl"]
     else:
         components = ["cmb", "dust"]  # TODO move default to config
+        first_guess = {"beta_dust": np.array(1.54)}
+        ordering_pars = ["beta_dust"]
 
     # get the 'options' through the appropriate method which returns a dict
     options = config.parametric_sep_pars.get_minimize_options_as_dict()
@@ -421,9 +466,9 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
     )
 
     max_iter = options["maxiter"] if method != "TNC" else options["maxfun"]
-    # import IPython; IPython.embed()
+
     res = mb.compsep.perform_compsep(
-        first_guess_params={"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
+        first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
         fixed_params={"temp_dust": 20.0},
         sky_map=freq_maps_preprocessed_QU_masked,
         frequencies=np.array(config.frequencies),
@@ -441,11 +486,73 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
             "max_steps_CG": megabuster_options["max_steps_CG"],
             "tol_CG": megabuster_options["tol_CG"],
         },
-        ordering_parameter=["beta_dust", "beta_pl"],
+        ordering_parameter=ordering_pars,
         ordering_component=components,
         dust_nu0=150.0,
         synchrotron_nu0=150.0,
+        components_list=components,
     )
+    if config.map2cl_pars.DEBUG_cut_scales and not apply_before_paramestimation:
+        logger.warning("TEST: Applying smooth cut at large scales to component maps")
+        logger.warning("TEST: DOING IT AFTER PARAM ESTIMATION")
+
+        def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
+            ell = np.arange(lmax + 1)
+            smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
+            smooth_cut[:lmin] = 0.0
+            return smooth_cut
+
+        cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
+        freq_maps_cut = np.zeros_like(freq_maps_preprocessed)
+        for f in range(freq_maps_preprocessed.shape[0]):
+            alm_comp = hp.map2alm(
+                [
+                    freq_maps_preprocessed[f, 0],
+                    freq_maps_preprocessed[f, 1],
+                    freq_maps_preprocessed[f, 2],
+                ],
+                lmax=3 * config.nside,
+            )
+            for s in range(alm_comp.shape[0]):
+                hp.almxfl(alm_comp[s], cut_array, inplace=True)
+            freq_maps_cut[f] = hp.alm2map(
+                alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
+            )  # removing temperature
+        freq_maps_preprocessed = freq_maps_cut
+        freq_maps_preprocessed_QU_masked_cut = mask.apply_binary_mask(
+            freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
+        )
+
+        res_first_guess = (
+            {"beta_dust": res.x[0], "beta_pl": res.x[1]}
+            if config.parametric_sep_pars.include_synchrotron
+            else {"beta_dust": res.x[0]}
+        )
+        res_cut = mb.compsep.perform_compsep(
+            first_guess_params=res_first_guess,  # {"beta_dust": res.x[0], "beta_pl": res.x[1]},
+            fixed_params={"temp_dust": 20.0},
+            sky_map=freq_maps_preprocessed_QU_masked_cut,
+            frequencies=np.array(config.frequencies),
+            invN_matrix=inverse_noisecov_QU_masked,
+            do_minimization=False,
+            binary_mask=binary_mask,
+            obs_mat_operator=None,
+            obsmat_operator_rhs=obsmat_operator_rhs,
+            use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
+            use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
+            central_freq_op=central_freq_op,
+            matrix_precond=matrix_precond,
+            dictionary_parameters_minimization={"max_iter": max_iter, "tol": tol},
+            dictionary_parameters_CG={
+                "max_steps_CG": megabuster_options["max_steps_CG"],
+                "tol_CG": megabuster_options["tol_CG"],
+            },
+            ordering_parameter=ordering_pars,
+            ordering_component=components,
+            dust_nu0=150.0,
+            synchrotron_nu0=150.0,
+        )
+        res.s = res_cut.s
 
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
@@ -490,13 +597,30 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
     np.save(fname_compmaps, res.s)
 
 
-def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = None):
-    # import IPython; IPython.embed()
+def compsep_and_save(
+    config: Config,
+    manager: DataManager,
+    noisecov,
+    obsmat_operator_rhs,
+    central_freq_op,
+    matrix_precond,
+    id_sim: int | None = None,
+):
     with Timer("weighted-compsep"):
         if config.parametric_sep_pars.use_harmonic_compsep:
             res = harmonic_comp_sep_interface(manager, config, id_sim=id_sim)
         elif config.parametric_sep_pars.use_megabuster:
-            res = megabuster_comp_sep(manager, config, id_sim=id_sim)
+            MemoryUsage("Memory usage BEFORE megabuster_comp_sep()")
+            res = megabuster_comp_sep(
+                manager,
+                config,
+                noisecov,
+                obsmat_operator_rhs,
+                central_freq_op,
+                matrix_precond,
+                id_sim=id_sim,
+            )
+            MemoryUsage("Memory usage AFTER megabuster_comp_sep()/n/n")
         else:
             res = weighted_comp_sep(manager, config, id_sim=id_sim)
     save_compsep_results(manager, config, res, id_sim=id_sim)
@@ -515,14 +639,39 @@ def main():
     if rank == 0:
         manager.dump_config()
 
+    if config.parametric_sep_pars.use_megabuster:
+        noisecov, obsmat_operator_rhs, central_freq_op, matrix_precond = load_megabuster_operators(
+            manager
+        )
+    else:
+        noisecov = None
+        obsmat_operator_rhs = None
+        central_freq_op = None
+        matrix_precond = None
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data
-        compsep_and_save(config, manager, id_sim=None)
+        compsep_and_save(
+            config,
+            manager,
+            noisecov,
+            obsmat_operator_rhs,
+            central_freq_op,
+            matrix_precond,
+            id_sim=None,
+        )
     else:
         with MPICommExecutor() as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} workers")
-                func = partial(compsep_and_save, config, manager)
+                func = partial(
+                    compsep_and_save,
+                    config,
+                    manager,
+                    noisecov,
+                    obsmat_operator_rhs,
+                    central_freq_op,
+                    matrix_precond,
+                )
                 for result in executor.map(func, range(n_sim_sky), unordered=True):
                     logger.info(f"Finished component separation on map {result + 1} / {n_sim_sky}")
 
