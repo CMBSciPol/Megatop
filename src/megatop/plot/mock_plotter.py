@@ -220,6 +220,9 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
         experiments_map_set = set([map_set.exp_tag for map_set in config.map_sets])
         experiments_noiseconfig = [name for name in noise_config.experiments]
         noise_experiment = {}
+
+        # Fixing id_sim to 0 for seed (seed is changing from freq to freq)
+        id_sim = 0
         for exp in experiments_map_set:
             try:
                 assert exp in experiments_noiseconfig
@@ -240,7 +243,9 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
             if noise_config_exp.noise_option == NoiseOption.WHITE:
                 white_noise_level = noise_experiment[exp]["map_white_noise_levels"][idx_freq]
                 noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
-                    noise_experiment[exp]["map_white_noise_levels"][idx_freq], config.nside
+                    noise_experiment[exp]["map_white_noise_levels"][idx_freq],
+                    config.nside,
+                    [id_sim, i_map_set],
                 )
 
                 cl_model[i_map_set, 0] = (
