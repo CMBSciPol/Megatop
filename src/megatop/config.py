@@ -256,13 +256,13 @@ class _MinimizeOptions:
     maxiter: int = 100
     ftol: float = 1e-12
 
-
 @define
 class _MEGABUSTEROptions:  # Modification megabuster
     max_steps_CG: int = 200
     tol_CG: float = 1e-6
     use_preconditioner_diag: bool = False
     use_preconditioner_pinv: bool = True
+    solver_name: str = "optax_lbfgs"  # should be one of SOLVER_NAMES from furax_cs
 
 
 @define
@@ -287,7 +287,7 @@ class CompSepConfig:
         If the minimize method is 'TNC', rename 'maxiter' to 'maxfun'.
         """
         options = asdict(self.minimize_options)
-        if self.minimize_method == "TNC":
+        if self.minimize_method == "TNC" and self.use_megabuster == False:
             options["maxfun"] = options.pop("maxiter")
         return options
 
