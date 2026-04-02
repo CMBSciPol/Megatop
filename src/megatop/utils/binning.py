@@ -1,3 +1,4 @@
+import healpy as hp
 import numpy as np
 import pymaster as nmt
 
@@ -31,3 +32,23 @@ def load_nmt_binning(manager: DataManager):
     # TODO: allow different binning functions?
     logger.info(f"Loading binning from {manager.path_to_binning}")
     return nmt.NmtBin.from_edges(binning_info["bin_low"], binning_info["bin_high"] + 1)
+
+
+def compare_obsmat_vs_mask(obs_mat, binary_mask):
+    list_diff_stokes = []
+    for i in range(3):
+        diag_obsmat_stokes = obs_mat.diagonal(0).reshape((3, hp.nside2npix(128)))[i]
+        non_zero_diag_obsmat_stokes = diag_obsmat_stokes != 0
+        non_zero_diag_obsmat_stokes_nest2ring = hp.reorder(non_zero_diag_obsmat_stokes, n2r=True)
+
+        list_diff_stokes.append(np.sum(non_zero_diag_obsmat_stokes_nest2ring != binary_mask))
+
+    list_diff_stokes = np.array(list_diff_stokes)
+    bool_all_equal = np.all(list_diff_stokes == 0).astype(bool)
+    if not bool_all_equal:
+        logger.error(
+            "The observation matrix and mask are not overlapping correctly, for each stokes params there are:",
+            list_diff_stokes,
+            " pixels not matching. THIS WILL LEAD TO SERIOUS ISSUE IN THE COMPONENT SEPARATION",
+        )
+    return bool_all_equal
