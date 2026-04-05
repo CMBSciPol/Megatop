@@ -263,6 +263,7 @@ class _MEGABUSTEROptions:  # Modification megabuster
     use_preconditioner_diag: bool = False
     use_preconditioner_pinv: bool = True
     solver_name: str = "optax_lbfgs"  # should be one of SOLVER_NAMES from furax_cs
+    minimizer_options: dict[str, Any] = field(factory=lambda: {"cooldown": 5, "min_steps": 5})
 
 
 @define

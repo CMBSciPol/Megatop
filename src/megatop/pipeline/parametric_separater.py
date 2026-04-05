@@ -440,7 +440,12 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
         use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
         central_freq_op=central_freq_op,
         matrix_precond=matrix_precond,
-        dictionary_parameters_minimization={"max_iter": max_iter, "tol": tol},
+        dictionary_parameters_minimization={
+            "max_iter": max_iter, 
+            "tol": tol,
+            'solver_name': solver_name,
+            'options': megabuster_options.get("minimizer_options", dict()),
+        },
         dictionary_parameters_CG={
             "max_steps_CG": megabuster_options["max_steps_CG"],
             "tol_CG": megabuster_options["tol_CG"],
@@ -449,7 +454,6 @@ def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None
         ordering_component=components,
         dust_nu0=150.0,
         synchrotron_nu0=150.0,
-        solver_name=solver_name
     )
 
     logger.info(f"Success: {res.success} -> {res.message}")
