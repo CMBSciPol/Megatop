@@ -8,6 +8,7 @@ from ..config import (
     ExternalNoiseMapconfig,
     NoiseOption,
     SOConfig,
+    PLANCKConfig,
     ValidExperimentConfig,
 )
 from ..data_manager import DataManager
@@ -172,16 +173,36 @@ def get_noise_experiment(
             f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
         )
 
+    elif type(noise_config_exp) is PLANCKConfig:
+        logger.info(f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using PLANCKConfig")
+        manual = noise_config_exp.manual_white_noise_levels
+        if manual is None:
+            msg = f"PLANCKConfig for {exp} requires 'manual_white_noise_levels' (a dictionary) in YAML"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        white_noise_levels = np.array(
+            [
+                manual[fr] if fr in manual else manual[str(fr)]
+                for fr in noise_config_exp.default_bands
+            ],
+            dtype=float,
+        )
+        n_ell = np.zeros((len(white_noise_levels), 3 * nside - 1), dtype=float)
+
+
     elif type(noise_config_exp) is ExternalNoiseMapconfig:
         logger.info(f"Reading noise map from {noise_config_exp.root} for {exp}.")
         fname_list = [
             noise_config_exp.root
             / f"{id_sim:04d}"
-            / f"{noise_config_exp.prefix}{int(fr):03d}{noise_config_exp.suffix}.fits"
+            / "residual"  #added to support tree layout root/<realization>/residual/<mapfile>
+            / f"{noise_config_exp.prefix}{int(fr):03d}{noise_config_exp.suffix}.fits"    
+            
             for fr in noise_config_exp.default_bands
-        ]  # FIXED FILE EXTENSION
+        ]  
         external_map_list = [
-            noise_config_exp.correction * hp.read_map(fname) for fname in fname_list
+            hp.read_map(fname) for fname in fname_list
         ]
         return {"noise_map": external_map_list}
 

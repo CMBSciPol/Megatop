@@ -2,7 +2,7 @@ from pathlib import Path
 
 from attrs import define
 
-from .config import Config
+from .config import Config, ExternalNoiseMapconfig
 from .utils import logger
 
 __all__ = [
@@ -178,6 +178,28 @@ class DataManager:
 
         Different realizations (identified by an index) are put in separate subdirectories.
         """
+        if self._config.map_sim_pars.use_input_maps:
+            root = self._config.map_sim_pars.input_maps_root
+            if root is None:
+                msg = "map_sim_pars.input_maps_root must be set when use_input_maps=True"
+                raise ValueError(msg)
+
+            prefix = self._config.map_sim_pars.input_maps_prefix
+            suffix = self._config.map_sim_pars.input_maps_suffix
+
+            # External NPIPE maps are organized by realization directories root/0001, root/0002, ...
+            # while Megatop simulation ids start at 0.
+            if sub is not None:
+                dest = root / f"{sub + 1:04d}"
+            else:
+                dest = root
+
+            names = [
+                dest / f"{prefix}{map_set.freq_tag:03d}{suffix}"
+                for map_set in self._config.map_sets
+            ]
+            return [name.with_suffix(".fits") for name in names]
+
         dest = self.get_path_to_maps_sub(sub) if sub is not None else self.path_to_maps
         names = [dest / map_set.map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
@@ -211,11 +233,43 @@ class DataManager:
             # return [name.with_suffix(".npz") for name in names]
         return name_list
 
-    def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
+    def get_noise_maps_filenames(
+        self, sub: int | None = None
+    ) -> list[Path]:
         """Get the list of filenames for the noise maps.
 
         Different realizations (identified by an index) are put in separate subdirectories.
+        If ExternalNoiseMapconfig is configured, uses external root; otherwise uses data_root/noise_maps.
         """
+        # If external noise maps are configured, read those files directly.
+        # This supports running noisecov/noise-spectra without mocker outputs in data_root/noise_maps.
+        external_cfgs = [
+            cfg
+            for cfg in self._config.noise_sim_pars.experiments.values()
+            if type(cfg) is ExternalNoiseMapconfig
+        ]
+        if external_cfgs:
+            cfg = external_cfgs[0]
+
+            if sub is None:
+                folder = cfg.root
+            else:
+                # Try root/00xx first, then root/00(x+1) for datasets indexed from 1.
+                candidate = cfg.root / f"{sub:04d}"
+                if candidate.exists():
+                    folder = candidate
+                else:
+                    folder = cfg.root / f"{sub + 1:04d}"
+
+            residual_folder = folder / "residual"
+            base = residual_folder if residual_folder.exists() else folder
+
+            names = [
+                base / f"{cfg.prefix}{map_set.freq_tag:03d}{cfg.suffix}"
+                for map_set in self._config.map_sets
+            ]
+            return [name.with_suffix(".fits") for name in names]
+
         dest = self.get_path_to_noise_maps_sub(sub) if sub is not None else self.path_to_noise_maps
         names = [dest / map_set.noise_map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]

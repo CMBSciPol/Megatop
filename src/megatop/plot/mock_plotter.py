@@ -275,6 +275,15 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 cl_model[:, 2, 2:-1] = (
                     n_ell * fsky_from_nhits[i_map_set] ** 1 / 2
                 )  # * fsky_binary / fsky_correction
+
+            elif noise_config_exp.noise_option == NoiseOption.NOISE_MAP:
+                # Pas de modèle analytique pour des cartes de bruit externes.
+                # On évite le crash du plotter.
+                logger.warning(
+                    "NOISE_MAP selected: no analytic noise model in plotter, using data Cl as reference."
+                )
+                cl_model[i_map_set] = cls[i_map_set]
+                
             elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
                 cl_model[i_map_set] = 0.0
             else:

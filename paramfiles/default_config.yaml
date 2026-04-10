@@ -1,0 +1,211 @@
+cl2r_pars:
+  dust_marg: false
+  lmax_cosmo_analysis: null
+  lmin_cosmo_analysis: null
+  load_model_spectra: true
+  n_steps: 10000
+  n_steps_burnin: 2000
+  n_walkers: 200
+  prior_bounds:
+    A_{dust}:
+    - 0.0
+    - 1.0
+    A_{lens}:
+    - 0.0
+    - 2.0
+    A_{sync}:
+    - 0.0
+    - 1.0
+    r:
+    - -0.02
+    - 1.0
+  sync_marg: false
+data_dirs:
+  TF_sims_maps: TF_sims_maps
+  beams: beams
+  maps: maps
+  noise_maps: noise_maps
+  passbands: passbands
+  root: data_root
+fiducial_cmb:
+  camb_cosmo_pars:
+    As: 2.0e-09
+    H0: 67.5
+    extra_args: null
+    ns: 0.965
+    ombh2: 0.022
+    omch2: 0.122
+    tau: 0.06
+  compute_from_camb: true
+  fiducial_lensed_scalar: null
+  fiducial_unlensed_scalar_tensor_r1: null
+general_pars:
+  lmax: 300
+  lmin: 30
+  nside: 128
+map2cl_pars:
+  delta_ell: 10
+  n_iter_namaster: 3
+  purify_b: true
+  purify_e: false
+map_sets:
+- TF_path: .
+  beam: 91.0
+  depth_map_path: null
+  exp_tag: SO
+  file_prefix: ''
+  freq_tag: 27
+  nhits_map_path: SO_nominal
+  noise_prefix: noise_
+  obsmat_path: .
+  passband_filename: ''
+  simfoTF_prefix: simforTF_
+- TF_path: .
+  beam: 63.0
+  depth_map_path: null
+  exp_tag: SO
+  file_prefix: ''
+  freq_tag: 39
+  nhits_map_path: SO_nominal
+  noise_prefix: noise_
+  obsmat_path: .
+  passband_filename: ''
+  simfoTF_prefix: simforTF_
+- TF_path: .
+  beam: 30.0
+  depth_map_path: null
+  exp_tag: SO
+  file_prefix: ''
+  freq_tag: 93
+  nhits_map_path: SO_nominal
+  noise_prefix: noise_
+  obsmat_path: .
+  passband_filename: ''
+  simfoTF_prefix: simforTF_
+- TF_path: .
+  beam: 17.0
+  depth_map_path: null
+  exp_tag: SO
+  file_prefix: ''
+  freq_tag: 145
+  nhits_map_path: SO_nominal
+  noise_prefix: noise_
+  obsmat_path: .
+  passband_filename: ''
+  simfoTF_prefix: simforTF_
+- TF_path: .
+  beam: 11.0
+  depth_map_path: null
+  exp_tag: SO
+  file_prefix: ''
+  freq_tag: 225
+  nhits_map_path: SO_nominal
+  noise_prefix: noise_
+  obsmat_path: .
+  passband_filename: ''
+  simfoTF_prefix: simforTF_
+- TF_path: .
+  beam: 9.0
+  depth_map_path: null
+  exp_tag: SO
+  file_prefix: ''
+  freq_tag: 280
+  nhits_map_path: SO_nominal
+  noise_prefix: noise_
+  obsmat_path: .
+  passband_filename: ''
+  simfoTF_prefix: simforTF_
+map_sim_pars:
+  A_lens: 1
+  TF_n_sim: 1
+  TF_power_law_amp: 1.0
+  TF_power_law_delta_ell: 1
+  TF_power_law_index: 2.0
+  cmb_seed: null
+  cmb_sim_no_pysm: true
+  filter_sims: false
+  generate_sims_for_TF: false
+  n_sim: 1
+  passband_int: false
+  r_input: 0
+  single_cmb: false
+  sky_model:
+  - d0
+  - s0
+masks_pars:
+  analysis_mask_name: analysis_mask
+  apod_radius: 10
+  apod_radius_point_source: 4
+  apod_type: C1
+  binary_mask_name: binary_mask
+  binary_mask_zero_threshold: 0.1
+  fwhm_arcmin_smooth_nhits: 60
+  gal_key: null
+  galactic_mask_name: galactic_mask
+  include_galactic: false
+  include_sources: false
+  input_sources_mask: null
+  mock_nsources: 100
+  mock_sources_hole_radius: 4
+  nhits_map_name: nhits_map
+  sources_mask_name: sources_mask
+noise_cov_pars:
+  save_preprocessed_noise_maps: true
+noise_sim_pars:
+  experiments:
+    SO:
+      Ntubes_years:
+      - 1.0
+      - 9.0
+      - 5.0
+      SAC_yrs_LF: 1.0
+      default_bands:
+      - 27
+      - 39
+      - 93
+      - 145
+      - 225
+      - 280
+      noise_option: noise_spectra
+      usev3p1: true
+      v3_one_over_f_mode: OPTIMISTIC
+      v3_sensitivity_mode: GOAL
+  include_nhits: true
+  n_sim: 1
+output_dirs:
+  binning: binning
+  components: components
+  covar: covar
+  fiducial_cmb: fiducial_cmb
+  masks: masks
+  mcmc: mcmc
+  noise_spectra: noise_spectra
+  plots: plots
+  preproc: preproc
+  root: output_root
+  spectra: spectra
+  transfer_functions: transfer_functions
+parametric_sep_pars:
+  alm2map: false
+  harmonic_delta_ell: 10
+  harmonic_lmax: 256
+  harmonic_lmin: 30
+  include_synchrotron: true
+  minimize_method: TNC
+  minimize_options:
+    disp: false
+    eps: 1.0e-12
+    ftol: 1.0e-12
+    gtol: 1.0e-12
+    maxiter: 100
+  minimize_tol: 1.0e-18
+  passband_int: false
+  use_harmonic_compsep: false
+plot_pars:
+  lmax_plot: 1000
+  lmin_plot: 30
+pre_proc_pars:
+  DEBUGskippreproc: false
+  common_beam_correction: 100
+  correct_for_TF: false
+  sum_TF_column: true

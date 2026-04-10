@@ -187,6 +187,7 @@ class MasksConfig:
     nhits_map_name: str = "nhits_map"
     analysis_mask_name: str = "analysis_mask"
     binary_mask_name: str = "binary_mask"
+    rotate_G2C: bool = True
 
     apod_radius: float = 10
     apod_radius_point_source: float = 4
@@ -195,6 +196,10 @@ class MasksConfig:
     fwhm_arcmin_smooth_nhits: float = 60
 
     # TODO: option to give the direct path to the galactic mask?
+    galactic_mask_path: Path | None = field(
+        default=None, converter=lambda x: Path(x) if x is not None else None
+    )
+    
     include_galactic: bool = False
     galactic_mask_name: str = "galactic_mask"
     gal_key: ValidPlanckGalKey | None = field(default=None)
@@ -262,6 +267,7 @@ class CompSepConfig:
     alm2map: bool = False
 
     include_synchrotron: bool = True
+    dust_temp: float | None = 20.0
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
@@ -306,6 +312,8 @@ class MapSimConfig:
     """Pysm sky models included in the foreground simulations."""
     cmb_sim_no_pysm: bool = True
     # noise_option: NoiseOption = NoiseOption.ONE_OVER_F
+    output_coord_pysm_fg: Literal["G", "E", "C"] = "E"
+    """Coordinate system for the output foreground maps. 'G' for Galactic, 'E' for Equatorial, 'C' for Celestial. Only relevant if sky_model is not empty."""
     r_input: float = 0
     """Tensor to scalar ratio value in the generated CMB simulations"""
     A_lens: float = 1
@@ -327,12 +335,30 @@ class MapSimConfig:
     """Number of simulation generated for the TF computation."""
     passband_int: bool = False
     """If True, sky maps will be integrated over the passbands provided in the map_sets. Passbands will also be included in the SED computation in the component separation."""
+    use_input_maps: bool = False
+    """If True, load provided sky maps from input_maps_root instead of data_dirs.maps."""
+    input_maps_root: Path | None = field(
+        default=None, converter=lambda x: Path(x) if x is not None else None
+    )
+    """Root directory containing realization subdirectories (e.g. root/0000/residual/*.fits)."""
+    input_maps_prefix: str = ""
+    """Prefix used for provided map filenames (e.g. 'npipe6v20_')."""
+    input_maps_suffix: str = ""
+    """Suffix used for provided map filenames before extension (e.g. '_residual')."""
+    input_maps_correction: float = 1.0
+    """Multiplicative factor applied to loaded input maps (e.g. 1e6 for K -> uK)."""
 
     @sky_model.validator
     def check(self, attribute, value):
         """Check that the sky model only contains dust and/or synchrotron templates"""
         if not all(template.startswith(("d", "s")) for template in value):
             msg = f"{attribute.name} only supports 'd*' (dust) and 's*' (synchrotron) models"
+            raise ValueError(msg)
+
+    @input_maps_root.validator
+    def _check_input_maps_root(self, attribute, value):
+        if self.use_input_maps and value is None:
+            msg = f"{attribute.name} must not be None when use_input_maps=True"
             raise ValueError(msg)
 
 
@@ -365,9 +391,14 @@ class ExternalNoiseMapconfig:
     suffix: str
     noise_option: NoiseOption = field(default=NoiseOption.NOISE_MAP)
     correction: float = 1.0
+    
+@define 
+class PLANCKConfig:
+    manual_white_noise_levels: dict[int, float]  # mandatory first
+    default_bands: list[float] = field(factory=lambda: [30, 44, 70, 100, 143, 217, 353])
+    noise_option: NoiseOption = field(default=NoiseOption.WHITE)
 
-
-ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig
+ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig | PLANCKConfig
 # ValidExperimentConfig = SOConfig | ExternalNoiseMapconfig
 
 

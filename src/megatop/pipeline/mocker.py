@@ -67,6 +67,7 @@ def get_foregrounds(config: Config) -> NDArray:
         config.map_sets,
         config.nside,
         config.map_sim_pars.sky_model,
+        output_coord=config.map_sim_pars.output_coord_pysm_fg,
     )
     logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
     return fg_freq_maps

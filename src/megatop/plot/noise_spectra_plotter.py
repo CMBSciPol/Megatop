@@ -4,6 +4,7 @@ from pathlib import Path
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
+import IPython
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
@@ -86,7 +87,7 @@ def plot_all_spectra(manager, config):
     plot_dir = manager.path_to_spectra_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Saving plots to %s", plot_dir)
+    logger.info("Saving plots to %s", plot_dir) 
 
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
@@ -330,6 +331,9 @@ def plot_all_spectra(manager, config):
     ax_BB_debiased_diff.axhline(0, color="black", linestyle="--", linewidth=1)
     ax_BB_debiased_diff.set_title("CMB BB spectra difference to model")
     ax_BB_debiased_diff.set_xscale("log")
+
+    #IPython.embed()  # for debugging
+
     fig_BB_debiased_diff.savefig(plot_dir / "allskysims_CMB_BB_debiased_spectra_diff_to_model.png")
     # closing figures
     plt.close(fig_EE)

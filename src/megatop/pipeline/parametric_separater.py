@@ -67,7 +67,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
             Synchrotron(150.0),
         ]  # TODO move default to config
     else:
-        components = [CMB(), Dust(150.0, temp=20.0)]  # TODO move default to config
+        components = [CMB(), Dust(150.0, temp=config.parametric_sep_pars.dust_temp)]  # TODO move default to config
 
     # get the 'options' through the appropriate method which returns a dict
     options = config.parametric_sep_pars.get_minimize_options_as_dict()
@@ -215,11 +215,11 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     if config.parametric_sep_pars.include_synchrotron:
         components = [
             CMB(),
-            Dust(150.0, temp=20.0),
+            Dust(150.0, temp=config.parametric_sep_pars.dust_temp),
             Synchrotron(150.0),
         ]  # TODO move default to config
     else:
-        components = [CMB(), Dust(150.0, temp=20.0)]  # TODO move default to config
+        components = [CMB(), Dust(150.0, temp=config.parametric_sep_pars.dust_temp)]  # TODO move default to config
 
     # get the 'options' through the appropriate method which returns a dict
     options = config.parametric_sep_pars.get_minimize_options_as_dict()

@@ -10,6 +10,7 @@ import pymaster as nmt
 from mpi4py import MPI
 
 from megatop import Config, DataManager
+from megatop.config import ExternalNoiseMapconfig
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
@@ -33,6 +34,13 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     MemoryUsage(f"rank = {rank} ")
 
     n_sim_noise = config.noise_sim_pars.n_sim
+    map_noise_corrections = []
+    for map_set in config.map_sets:
+        cfg = config.noise_sim_pars.experiments.get(map_set.exp_tag)
+        if type(cfg) is ExternalNoiseMapconfig:
+            map_noise_corrections.append(cfg.correction)
+        else:
+            map_noise_corrections.append(1.0)
 
     # The None case of nreal is useful when calling get_innoise_map_filename
     # so we need to handle it when creating the list of realisations to loop over
@@ -153,9 +161,11 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 
         else:
             nside_in_list = []
-            for noise_filename in manager.get_noise_maps_filenames(id_real):
+            for i_noise, noise_filename in enumerate(manager.get_noise_maps_filenames(id_real)):
                 logger.debug(f"Importing noise map: {noise_filename}")
-                noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
+                correction = map_noise_corrections[i_noise]
+                noise_map = correction * hp.read_map(noise_filename, field=None)
+                noise_freq_maps.append(noise_map.tolist())
                 nside_in_list.append(hp.get_nside(noise_freq_maps[-1][-1]))
 
             if np.all(

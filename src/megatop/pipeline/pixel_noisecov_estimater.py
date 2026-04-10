@@ -7,6 +7,7 @@ import numpy as np
 from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
+from megatop.config import ExternalNoiseMapconfig
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
@@ -56,6 +57,13 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
 
     logger.info(f"rank = {rank}, size = {size}")
     noise_cov_preprocessed = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
+    map_noise_corrections = []
+    for map_set in config.map_sets:
+        cfg = config.noise_sim_pars.experiments.get(map_set.exp_tag)
+        if type(cfg) is ExternalNoiseMapconfig:
+            map_noise_corrections.append(cfg.correction)
+        else:
+            map_noise_corrections.append(1.0)
 
     if config.parametric_sep_pars.use_harmonic_compsep:
         nmt_bins = load_nmt_binning(manager)
@@ -108,9 +116,11 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         logger.info(f"Noise realisation {id_real + 1}/{n_sim}")
         logger.info(f"in = {rank_realisation_list}")  # debug in logger
 
-        for noise_filename in manager.get_noise_maps_filenames(id_real):
+        for i_noise, noise_filename in enumerate(manager.get_noise_maps_filenames(id_real)):
             logger.debug(f"Importing noise map: {noise_filename}")
-            noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
+            correction = map_noise_corrections[i_noise]
+            noise_map = correction * hp.read_map(noise_filename, field=None)
+            noise_freq_maps.append(noise_map.tolist())
 
         if (
             np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams))

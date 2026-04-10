@@ -66,33 +66,62 @@ def mask_handler(manager: DataManager, config: Config):
         galactic_mask = np.ones(hp.nside2npix(config.nside))
 
         if config.masks_pars.include_galactic:
-            # Download Planck galactic mask
             gal_key = config.masks_pars.gal_key
             index = get_args(ValidPlanckGalKey).index(gal_key)
             logger.info(f"Using Planck {gal_key!r} galactic mask ({index = })")
-            try:
-                logger.info(f"Downloading mask from {PLANCK_MASK_GALPLANE_URL}")
-                with urlopen(PLANCK_MASK_GALPLANE_URL) as _:
-                    # read only the requested field
-                    galactic_mask = hp.read_map(PLANCK_MASK_GALPLANE_URL, field=index)
-            except URLError as e:
-                msg = "Failed to acess URL for Planck galactic mask"
-                logger.error(msg)
-                raise RuntimeError(msg) from e
-            # Rotate from galactic to equatorial coordinates
-            r = hp.Rotator(coord=["G", "C"])
-            galactic_mask = r.rotate_map_pixel(galactic_mask)
+            galactic_mask_path = config.masks_pars.galactic_mask_path
+            if galactic_mask_path is not None:
+                logger.info(f"Reading galactic mask from {galactic_mask_path}")
+                galactic_mask = hp.read_map(galactic_mask_path, field=index)
+            else:
+                try:
+                    logger.info(f"Downloading mask from {PLANCK_MASK_GALPLANE_URL}")
+                    with urlopen(PLANCK_MASK_GALPLANE_URL) as _:
+                        # read only the requested field
+                        galactic_mask = hp.read_map(PLANCK_MASK_GALPLANE_URL, field=index)
+                except URLError as e:
+                    msg = "Failed to acess URL for Planck galactic mask"
+                    logger.error(msg)
+                    raise RuntimeError(msg) from e
+            if config.masks_pars.rotate_G2C:
+                logger.info("Rotating galactic mask from G to C")
+                r = hp.Rotator(coord=["G", "C"])
+                galactic_mask = r.rotate_map_pixel(galactic_mask)
             galactic_mask = hp.ud_grade(galactic_mask, config.nside)
             galactic_mask = np.where(galactic_mask > 0.5, 1, 0)
 
         hp.write_map(manager.path_to_galactic_mask, galactic_mask, dtype=np.float32, overwrite=True)
 
-    # Generate binary survey mask from the hits map and galactic mask
+    # Get the point sources mask before binary mask
+    # Start from galactic mask so point sources respect galactic plane
+    sources_mask = galactic_mask.copy()
 
+    if config.masks_pars.include_sources:
+        with Timer("point-sources"):
+            if config.masks_pars.input_sources_mask is not None:
+                # Load from disk and apply on top of galactic mask
+                mask_path: Path = config.masks_pars.input_sources_mask
+                logger.info(f"Using point source mask from {mask_path}")
+                ps_mask = hp.read_map(mask_path, field=0)
+                ps_mask = hp.ud_grade(ps_mask, config.nside)
+                ps_mask = np.where(ps_mask > 0.5, 1, 0)
+                sources_mask = sources_mask * ps_mask
+            else:
+                # Otherwise, generate random point source mask on galactic mask
+                n_sources = config.masks_pars.mock_nsources
+                hole_radius = config.masks_pars.mock_sources_hole_radius
+                logger.info(f"Generating mock sources mask with {n_sources = }, {hole_radius =} arcmin")
+                sources_mask = mask.random_src_mask(sources_mask, n_sources, hole_radius)
+
+            hp.write_map(manager.path_to_sources_mask, sources_mask, dtype=np.float32, overwrite=True)
+
+    # Generate binary survey mask from the hits map, galactic mask and point sources mask (if included)
+
+    # Generate binary survey mask from the hits map and sources mask (includes galactic + point sources if enabled)
     with Timer("binary-mask"):
         threshold = config.masks_pars.binary_mask_zero_threshold
         logger.info(f"Thresholding binary map with {threshold}")
-        binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
+        binary_mask = mask.get_binary_mask(common_norm_nhits_map, sources_mask, threshold)
         hp.write_map(manager.path_to_binary_mask, binary_mask, dtype=np.float32, overwrite=True)
 
     with Timer("apodize-custom"):
@@ -103,30 +132,6 @@ def mask_handler(manager: DataManager, config: Config):
             common_norm_nhits_map, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
         )
         hp.write_map(manager.path_to_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True)
-
-
-# Get the point sources mask
-
-# ps_mask = None
-
-# if config.use_input_nhits and config.masks_pars.include_sources:
-#     timer.start("point-sources")
-#     if config.use_input_point_sources:
-#         # Load from disk
-#         mask_path: Path = config.masks_pars.input_sources_mask
-#         logger.info(f"Using point source mask from {mask_path}")
-#         ps_mask = hp.read_map(mask_path)
-#         ps_mask = hp.ud_grade(ps_mask, config.nside)
-#         ps_mask *= binary_mask
-#     else:
-#         # Otherwise, generate random point source mask
-#         n_sources = config.masks_pars.mock_nsources
-#         hole_radius = config.masks_pars.mock_sources_hole_radius
-#         logger.info(f"Generating mock sources mask with {n_sources = }, {hole_radius =} arcmin")
-#         ps_mask = random_src_mask(binary_mask, n_sources, hole_radius)
-
-#     hp.write_map(manager.path_to_sources_mask, ps_mask, dtype=np.float32, overwrite=True)
-#     timer.stop("point-sources")
 
 # if config.masks_pars.DEBUG_output_apod_binary_mask:
 #     # This apodized mask is NOT multiplied by the hitmap

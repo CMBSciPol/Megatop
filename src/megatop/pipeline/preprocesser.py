@@ -8,6 +8,7 @@ from mpi4py.futures import MPICommExecutor
 from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
+from megatop.config import ExternalNoiseMapconfig, NoiseOption
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mask import apply_binary_mask
@@ -31,6 +32,34 @@ def preprocess_map(
     manager: DataManager, config: Config, id_sim: int | None = None, mask_output=True
 ):
     input_maps = read_input_maps(manager.get_maps_filenames(sub=id_sim))
+
+    if config.map_sim_pars.use_input_maps and config.map_sim_pars.input_maps_correction != 1.0:
+        corr = config.map_sim_pars.input_maps_correction
+        logger.info(f"Applying input map correction factor {corr}")
+        input_maps = [corr * np.array(m) for m in input_maps]
+
+    all_noiseless = all(
+        config.noise_sim_pars.experiments[map_set.exp_tag].noise_option == NoiseOption.NOISELESS
+        for map_set in config.map_sets
+    )
+    has_external_noise = any(
+        type(config.noise_sim_pars.experiments[map_set.exp_tag]) is ExternalNoiseMapconfig
+        for map_set in config.map_sets
+    )
+
+    # When running on provided sky maps in no_noise mode with external noise maps,
+    # use signal-only maps by subtracting the matched noise realization.
+    if config.map_sim_pars.use_input_maps and all_noiseless and has_external_noise:
+        noise_maps = read_input_maps(manager.get_noise_maps_filenames(sub=id_sim))
+        for i, map_set in enumerate(config.map_sets):
+            cfg = config.noise_sim_pars.experiments[map_set.exp_tag]
+            noise_correction = cfg.correction if type(cfg) is ExternalNoiseMapconfig else 1.0
+            input_maps[i] = np.asarray(input_maps[i], dtype="float64") - noise_correction * np.asarray(
+                noise_maps[i], dtype="float64"
+            )
+        logger.info(
+            "use_input_maps + no_noise detected with external noise maps: subtracting noise maps from input sky maps"
+        )
     logger.info(
         f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
     )
