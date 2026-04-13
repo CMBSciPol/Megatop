@@ -36,7 +36,7 @@ def common_beam_and_nside(
     freq_alms_out = []
     logger.info(f"Common beam correction -> {common_beam} arcmin and NSIDE -> {nside}")
     if lmax_convolution is None:
-        lmax_convolution = 3 * nside
+        lmax_convolution = 2 * nside
 
     wpix_out = hp.pixwin(
         nside, pol=True, lmax=lmax_convolution
