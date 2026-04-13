@@ -64,7 +64,8 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
                 f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"
             )
             r = hp.Rotator(coord=[input_coord, output_coord])
-            m = r.rotate_map_pixel(m)
+            # m = r.rotate_map_pixel(m)
+            m = r.rotate_map_alms(m)
         maps_fgs.append(m)
     return np.array(maps_fgs)
 
