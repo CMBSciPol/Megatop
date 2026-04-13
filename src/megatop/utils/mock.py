@@ -136,7 +136,7 @@ def get_noise_experiment(
                 survey_years=1.0,  # The scaling wiht time is done through Ntubes_years
             )
             _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-                f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
+                f_sky=fsky_binary, ell_max=2 * nside, delta_ell=1, deconv_beam=False
             )
         else:
             logger.info(
@@ -149,7 +149,7 @@ def get_noise_experiment(
                 one_over_f_mode=one_over_f_mode,
                 SAC_yrs_LF=noise_config_exp.SAC_yrs_LF,
                 f_sky=fsky_binary,
-                ell_max=3 * nside - 1,
+                ell_max=2 * nside,
                 delta_ell=1,
                 beam_corrected=False,
                 remove_kluge=False,
@@ -168,7 +168,7 @@ def get_noise_experiment(
             survey_years=1.0,
         )
         _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-            f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
+            f_sky=fsky_binary, ell_max=2 * nside, delta_ell=1, deconv_beam=False
         )
 
     elif type(noise_config_exp) is ExternalNoiseMapconfig:
@@ -209,7 +209,7 @@ def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int):
 
 def get_noise_map_from_noise_spectra(n_ell, nside: int):
     noise_maps = np.zeros((3, hp.nside2npix(nside)))
-    noise_spectra = np.zeros((3, 3 * nside - 1))
+    noise_spectra = np.zeros((3, 2 * nside))
     logger.warning(
         "Do not trust the temperature noise spectra (ell_knee and alpha_knee are polarisation ones)"
     )
@@ -247,7 +247,7 @@ def include_hits_noise(noise_maps, nhits_maps, binary_mask):
 
 
 def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float):
-    lmax_convolution = 3 * nside  # here lmax seems to play an important role
+    lmax_convolution = 2 * nside  # here lmax seems to play an important role
     logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
     alms_T, alms_Q, alms_U = hp.map2alm(freq_map, lmax=lmax_convolution, pol=True)
     Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam_FWHM / 60), lmax=lmax_convolution, pol=True)
