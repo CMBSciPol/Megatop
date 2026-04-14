@@ -1,0 +1,144 @@
+data_dirs:
+  beams: beams
+  maps: maps
+  passbands: passbands
+  noise_maps: noise
+  root: /Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/planck_test/data
+
+fiducial_cmb:
+  lensed_scalar: Cls_Planck2018_lensed_scalar
+  unlensed_scalar_tensor_r1: Cls_Planck2018_unlensed_scalar_and_tensor_r1
+  root: /Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/data/fiducial_cmb_spectra
+
+general_pars:
+  lmax: 250
+  lmin: 30
+  nside: 128
+
+map2cl_pars:
+  delta_ell: 10
+  n_iter_namaster: 3
+  purify_b: true
+  purify_e: false
+
+map_sets:
+- exp_tag: SAT
+  file_prefix: ''
+  freq_tag: 27
+  nhits_map_path: SO_nominal
+- exp_tag: SAT
+  file_prefix: ''
+  freq_tag: 39
+  nhits_map_path: SO_nominal
+- exp_tag: SAT
+  file_prefix: ''
+  freq_tag: 93
+  nhits_map_path: SO_nominal
+- exp_tag: SAT
+  file_prefix: ''
+  freq_tag: 145
+  nhits_map_path: SO_nominal
+- exp_tag: SAT
+  file_prefix: ''
+  freq_tag: 225
+  nhits_map_path: SO_nominal
+- exp_tag: SAT
+  file_prefix: ''
+  freq_tag: 280
+  nhits_map_path: SO_nominal
+
+map_sim_pars:
+  A_lens: 1.
+  cmb_seed: 1
+  cmb_sim_no_pysm: true
+  filter_sims: false
+  n_sim: 10
+  r_input: 0.0
+  single_cmb: false
+  sky_model:
+  - d0
+  - s0
+
+masks_pars:
+  analysis_mask_name: common_analysis_mask
+  binary_mask_name: common_binary_mask
+  galactic_mask_name: galactic_mask
+  nhits_map_name: nhits_map
+  sources_mask_name: sources_mask
+  include_galactic: false
+  include_sources: false
+  input_sources_mask: null
+  apod_radius: 10.0
+  apod_radius_point_source: 4.0
+  apod_type: C1
+  fwhm_arcmin_smooth_nhits: 60
+  binary_mask_zero_threshold: 1e-1
+  gal_key: null
+  mock_nsources: 100
+  mock_sources_hole_radius: 4.0
+
+noise_cov_pars:
+  save_preprocessed_noise_maps: true
+
+noise_sim_pars:
+  SAC_yrs_LF: 1
+  experiment: SO
+  include_nhits: true
+  n_sim: 10
+  noise_option: white_noise
+  v3_one_over_f_mode: OPTIMISTIC
+  v3_sensitivity_mode: GOAL
+
+output_dirs:
+  components: components
+  covar: covar
+  masks: masks
+  noise_spectra: noise_spectra
+  plots: plots
+  preproc: preproc
+  spectra: spectra
+  mcmc: mcmc
+  root: /Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/planck_test/outputs
+
+parametric_sep_pars:
+  include_synchrotron: true
+  minimize_method: TNC
+  minimize_options:
+    disp: false
+    eps: 1.0e-12
+    ftol: 1.0e-12
+    gtol: 1.0e-12
+    maxiter: 100
+  minimize_tol: 1.0e-18
+  passband_int: false
+
+cl2r_pars:
+  lmax_cosmo_analysis: null
+  lmin_cosmo_analysis: null
+  load_model_spectra: True
+  n_steps: 10000
+  n_steps_burnin: 2000
+  n_walkers: 200
+  prior_bounds:
+    A_{dust}:
+    - 0.0
+    - 1.0
+    A_{lens}:
+    - 0.0
+    - 10.0
+    A_{sync}:
+    - 0.0
+    - 1.0
+    r:
+    - -0.1
+    - 0.1
+  dust_marg: false
+  sync_marg: false
+
+plot_pars:
+  lmax_plot: 500
+  lmin_plot: 30
+
+pre_proc_pars:
+  beam_fwhms: null
+  common_beam_correction: 100.0
