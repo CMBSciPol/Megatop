@@ -48,13 +48,17 @@ def common_beam_and_nside(
         np.radians(common_beam / 60.0),
         lmax=lmax_convolution,
         pol=True,
+        datapath=HEALPY_DATA_PATH,
     )
 
     for i_beam, beam in enumerate(frequency_beams):
         # Input window function. WARNING: Must be done in the loop, as input map don't necessarily have the same nside (e.g. MSS2)
         logger.info(f"Input beam FWHM {beam} arcmin -> {common_beam} arcmin")
         wpix_in = hp.pixwin(
-            hp.get_nside(freq_maps[i_beam][0]), pol=True, lmax=lmax_convolution
+            hp.get_nside(freq_maps[i_beam][0]),
+            pol=True,
+            lmax=lmax_convolution,
+            datapath=HEALPY_DATA_PATH,
         )  # Pixel window function of input maps
         wpix_in[1][0:2] = 1.0  # in order not to divide by 0
 

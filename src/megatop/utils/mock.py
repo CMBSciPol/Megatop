@@ -1,3 +1,5 @@
+import os
+
 import healpy as hp
 import numpy as np
 import scipy as sp
@@ -14,6 +16,8 @@ from ..data_manager import DataManager
 from . import V3calc as V3
 from . import V3p1calc as V3p1
 from .logger import logger
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def get_Cl_CMB_model_from_manager(manager: DataManager):
@@ -65,7 +69,7 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
             )
             r = hp.Rotator(coord=[input_coord, output_coord])
             # m = r.rotate_map_pixel(m)
-            m = r.rotate_map_alms(m)
+            m = r.rotate_map_alms(m, datapath=HEALPY_DATA_PATH)
         maps_fgs.append(m)
     return np.array(maps_fgs)
 
@@ -249,10 +253,15 @@ def include_hits_noise(noise_maps, nhits_maps, binary_mask):
 def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float):
     lmax_convolution = 2 * nside  # here lmax seems to play an important role
     logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
-    alms_T, alms_Q, alms_U = hp.map2alm(freq_map, lmax=lmax_convolution, pol=True)
+    alms_T, alms_Q, alms_U = hp.map2alm(
+        freq_map, lmax=lmax_convolution, pol=True, datapath=HEALPY_DATA_PATH
+    )
     Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam_FWHM / 60), lmax=lmax_convolution, pol=True)
     wpix_in = hp.pixwin(
-        nside, pol=True, lmax=lmax_convolution
+        nside,
+        pol=True,
+        lmax=lmax_convolution,
+        datapath=HEALPY_DATA_PATH,
     )  # Pixel window function of input maps
 
     sm_corr_T = Bl_gauss_fwhm[:, 0] * wpix_in[0]

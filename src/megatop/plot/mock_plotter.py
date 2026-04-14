@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import Path
 
 import healpy as hp
@@ -13,6 +14,8 @@ from megatop.utils.mask import apply_binary_mask, read_nhits_maps
 from megatop.utils.mock import get_noise_experiment, get_noise_map_from_white_noise
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
 from megatop.utils.preproc import read_input_maps
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def plot_fiducial_spectra(manager: DataManager):
@@ -94,8 +97,8 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
         cls = []
         cls_beamed = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(fg_freq_maps[i_f]))
-            cls_beamed.append(hp.anafast(fg_freq_maps_beamed[i_f]))
+            cls.append(hp.anafast(fg_freq_maps[i_f], datapath=HEALPY_DATA_PATH))
+            cls_beamed.append(hp.anafast(fg_freq_maps_beamed[i_f], datapath=HEALPY_DATA_PATH))
         cls = np.array(cls)
         cls_beamed = np.array(cls_beamed)
 
@@ -142,7 +145,7 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
         )
 
     if cls:
-        cls = hp.anafast(cmb_map)
+        cls = hp.anafast(cmb_map, datapath=HEALPY_DATA_PATH)
         cls = np.array(cls)
 
         plotTTEEBB_diff(
@@ -203,17 +206,10 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(noise_freq_maps[i_f]))
+            cls.append(hp.anafast(noise_freq_maps[i_f], datapath=HEALPY_DATA_PATH))
         cls = np.array(cls)
 
-        # if config.noise_sim_pars.include_nhits:
-        #     fsky_correction = (
-        #         nhits_maps_rescaled[..., np.where(binary_mask == 1)[0]].mean() * fsky_binary
-        #     )
-        # else:
-        #     fsky_correction = 1.0
         fsky_from_nhits = np.sqrt(np.mean(nhits_maps_rescaled**2, axis=-1))
-        # import IPython; IPython.embed()
         cl_model = np.ones_like(cls)
         noise_config = config.noise_sim_pars
 
@@ -270,11 +266,11 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
             elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
                 n_ell = noise_experiment[exp]["noise_spectra"][idx_freq]
                 cl_model[:, 1, 2:-1] = (
-                    n_ell * fsky_from_nhits[i_map_set] ** 1 / 2
-                )  # * fsky_binary / fsky_correction
+                    n_ell  # * fsky_from_nhits[i_map_set] ** 1 / 2  # * fsky_binary / fsky_correction
+                )
                 cl_model[:, 2, 2:-1] = (
-                    n_ell * fsky_from_nhits[i_map_set] ** 1 / 2
-                )  # * fsky_binary / fsky_correction
+                    n_ell  # * fsky_from_nhits[i_map_set] ** 1 / 2  # * fsky_binary / fsky_correction
+                )
             elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
                 cl_model[i_map_set] = 0.0
             else:
@@ -319,7 +315,7 @@ def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(combined_maps[i_f]))
+            cls.append(hp.anafast(combined_maps[i_f], datapath=HEALPY_DATA_PATH))
         cls = np.array(cls)
 
         plotTTEEBB(
