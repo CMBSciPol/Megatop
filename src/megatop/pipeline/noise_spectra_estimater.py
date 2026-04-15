@@ -234,8 +234,6 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         mean_noise_spectra = None
 
     if rank == root:
-        path = manager.get_path_to_noise_spectra(id_sim_sky)
-        path.mkdir(parents=True, exist_ok=True)
         fname = manager.get_path_to_noise_spectra_cross_components(id_sim_sky)
         logger.info(f"Saving estimated noise spectra to {fname}")
         np.savez(fname, **mean_noise_spectra)
@@ -254,6 +252,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:

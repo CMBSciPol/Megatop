@@ -327,8 +327,6 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     logger.info(f"Mean parameters {param_names}: {np.mean(chains, axis=0)}")
     # 4. save mcmc chains:
-    path = manager.get_path_to_mcmc(id_sim)
-    path.mkdir(parents=True, exist_ok=True)
     fname_chains = manager.get_path_to_mcmc_chains(id_sim)
 
     np.savez(
@@ -352,6 +350,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:

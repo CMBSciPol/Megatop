@@ -139,8 +139,6 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
 
 
 def save_spectra(manager: DataManager, all_Cls: dict, id_sim: int | None = None):
-    path = manager.get_path_to_spectra(id_sim)
-    path.mkdir(parents=True, exist_ok=True)
     fname = manager.get_path_to_spectra_cross_components(id_sim)
     logger.info(f"Saving estimated spectra to {fname}")
     np.savez(fname, **all_Cls)
@@ -168,6 +166,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:

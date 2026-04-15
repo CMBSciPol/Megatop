@@ -443,14 +443,7 @@ def main():
     # Dump the full configuration including the generated seed, before splitting the map sets
     if rank == 0:
         manager.dump_config()
-        # Also create the directories for the noise and signal maps
-        for i in range(config.map_sim_pars.n_sim):
-            manager.get_path_to_maps_sub(i).mkdir(parents=True, exist_ok=True)
-        for i in range(config.noise_sim_pars.n_sim):
-            manager.get_path_to_noise_maps_sub(i).mkdir(parents=True, exist_ok=True)
-        if config.map_sim_pars.generate_sims_for_TF:
-            for i in range(config.map_sim_pars.TF_n_sim):
-                manager.get_path_to_TF_sims_sub(i).mkdir(parents=True, exist_ok=True)
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
     world.Barrier()
 
     # Split the configuration

@@ -192,6 +192,58 @@ class DataManager:
         """Directory where internally-generated transfer functions are saved."""
         return self.path_to_transfer_functions_parents / "transfer_functions_output"
 
+    def create_output_dirs(self, n_sim_sky: int, n_sim_noise: int) -> None:
+        """Create all output and data directories for a pipeline run.
+
+        Call once at the start of each pipeline step's ``main()``.
+        Safe to call repeatedly — all mkdir calls use ``exist_ok=True``.
+
+        Args:
+            n_sim_sky: Number of sky (signal) simulations. Pass 0 for real-data mode.
+            n_sim_noise: Number of noise simulations.
+        """
+        # Static directories (independent of sim count)
+        for path in [
+            self.path_to_masks,
+            self.path_to_fiducial_cmb,
+            self.path_to_binning.parent,
+            self.path_to_covar,
+        ]:
+            path.mkdir(parents=True, exist_ok=True)
+
+        # Per sky-simulation directories
+        if n_sim_sky == 0:
+            # Real-data mode: flat layout, no per-sim subdirectories
+            for path in [
+                self.path_to_preproc,
+                self.get_path_to_components(),
+                self.get_path_to_spectra(),
+                self.get_path_to_noise_spectra(),
+                self.get_path_to_mcmc(),
+            ]:
+                path.mkdir(parents=True, exist_ok=True)
+        else:
+            for i in range(n_sim_sky):
+                for path in [
+                    self.get_path_to_maps_sub(i),
+                    self.get_path_to_preprocessed_maps(i).parent,
+                    self.get_path_to_components(i),
+                    self.get_path_to_spectra(i),
+                    self.get_path_to_noise_spectra(i),
+                    self.get_path_to_mcmc(i),
+                ]:
+                    path.mkdir(parents=True, exist_ok=True)
+
+        # Per noise-simulation directories (in data)
+        for i in range(n_sim_noise):
+            self.get_path_to_noise_maps_sub(i).mkdir(parents=True, exist_ok=True)
+
+        # Transfer function simulation directories (internal TF pipeline only)
+        if self._config.map_sim_pars.generate_sims_for_TF:
+            self.path_to_TF_output_dir.mkdir(parents=True, exist_ok=True)
+            for i in range(self._config.map_sim_pars.TF_n_sim):
+                self.get_path_to_TF_sims_sub(i).mkdir(parents=True, exist_ok=True)
+
     def get_TF_filenames(self) -> list[Path | None]:
         """Get the list of filenames for the Transfer Functions.
 

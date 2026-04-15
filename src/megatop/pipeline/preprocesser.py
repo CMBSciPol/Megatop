@@ -177,14 +177,12 @@ def preprocess_map(
 
 def save_preprocessed_maps(manager: DataManager, freq_maps, id_sim: int | None = None):
     fname = manager.get_path_to_preprocessed_maps(id_sim)
-    fname.parent.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving pre-processed maps to {fname}")
     np.save(fname, freq_maps)
 
 
 def save_preprocessed_alms(manager: DataManager, freq_alms, id_sim: int | None = None):
     fname = manager.get_path_to_preprocessed_alms(id_sim)
-    fname.parent.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving pre-processed alms to {fname}")
     np.save(fname, freq_alms)
 
@@ -213,6 +211,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data

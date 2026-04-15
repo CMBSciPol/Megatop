@@ -277,8 +277,6 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
 
 
 def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int | None = None):
-    path = manager.get_path_to_components(id_sim)
-    path.mkdir(parents=True, exist_ok=True)
     fname_results = manager.get_path_to_compsep_results(id_sim)
     if config.parametric_sep_pars.use_harmonic_compsep:
         fname_compalms = manager.get_path_to_components_alms(id_sim)
@@ -325,6 +323,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data
