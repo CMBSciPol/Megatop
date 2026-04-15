@@ -35,8 +35,8 @@ class DataManager:
     def path_to_maps(self) -> Path:
         return self._config.data_dirs.root / self._config.data_dirs.maps
 
-    def get_path_to_maps_sub(self, sub: int) -> Path:
-        return self.path_to_maps / f"{sub:04d}"
+    def get_path_to_maps_sub(self, id_sim: int) -> Path:
+        return self.path_to_maps / f"{id_sim:04d}"
 
     @property
     def path_to_beams(self) -> Path:
@@ -173,12 +173,12 @@ class DataManager:
         fname = self.path_to_masks / self._config.masks_pars.sources_mask_name
         return fname.with_suffix(".fits")
 
-    def get_maps_filenames(self, sub: int | None = None) -> list[Path]:
+    def get_maps_filenames(self, id_sim: int | None = None) -> list[Path]:
         """Get the list of filenames for the maps.
 
         Different realizations (identified by an index) are put in separate subdirectories.
         """
-        dest = self.get_path_to_maps_sub(sub) if sub is not None else self.path_to_maps
+        dest = self.get_path_to_maps_sub(id_sim) if id_sim is not None else self.path_to_maps
         names = [dest / map_set.map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
@@ -211,21 +211,29 @@ class DataManager:
             # return [name.with_suffix(".npz") for name in names]
         return name_list
 
-    def get_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
+    def get_noise_maps_filenames(self, id_sim: int | None = None) -> list[Path]:
         """Get the list of filenames for the noise maps.
 
         Different realizations (identified by an index) are put in separate subdirectories.
         """
-        dest = self.get_path_to_noise_maps_sub(sub) if sub is not None else self.path_to_noise_maps
+        dest = (
+            self.get_path_to_noise_maps_sub(id_sim)
+            if id_sim is not None
+            else self.path_to_noise_maps
+        )
         names = [dest / map_set.noise_map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
-    def get_maps_sim_for_TF_filenames(self, sub: int | None = None) -> list[Path]:
+    def get_maps_sim_for_TF_filenames(self, id_sim: int | None = None):
         """Get the list of filenames for the maps used for TF estimation.
 
         Different realizations (identified by an index) are put in separate subdirectories.
         """
-        dest = self.get_path_to_TF_sims_sub(sub) if sub is not None else self.path_to_TF_sims_maps
+        dest = (
+            self.get_path_to_TF_sims_sub(id_sim)
+            if id_sim is not None
+            else self.path_to_TF_sims_maps
+        )
         # map_set.simforTF_map_filename is giving a list of filenames for T, E, B
         # so we need to expand it
         # TODO: clean
@@ -246,82 +254,82 @@ class DataManager:
         # names = [dest / map_set.simforTF_map_filename for map_set in self._config.map_sets]
         # return [name.with_suffix(".fits") for name in names]
 
-    def get_path_to_preprocessed_maps(self, sub: int | None = None) -> Path:
+    def get_path_to_preprocessed_maps(self, id_sim: int | None = None) -> Path:
         fname = "freq_maps_preprocessed"
-        if sub is not None:
-            fname = self.path_to_preproc / f"{sub:04d}" / fname
+        if id_sim is not None:
+            fname = self.path_to_preproc / f"{id_sim:04d}" / fname
         else:
             fname = self.path_to_preproc / fname
         return fname.with_suffix(".npy")
 
-    def get_path_to_preprocessed_alms(self, sub: int | None = None) -> Path:
+    def get_path_to_preprocessed_alms(self, id_sim: int | None = None) -> Path:
         fname = "freq_alms_preprocessed"
-        if sub is not None:
-            fname = self.path_to_preproc / f"{sub:04d}" / fname
+        if id_sim is not None:
+            fname = self.path_to_preproc / f"{id_sim:04d}" / fname
         else:
             fname = self.path_to_preproc / fname
         return fname.with_suffix(".npy")
 
-    def get_path_to_preprocessed_noise_maps(self, sub: int | None = None) -> Path:
+    def get_path_to_preprocessed_noise_maps(self, id_sim: int | None = None) -> Path:
         fname = "noise_maps_preprocessed"
-        if sub is not None:
-            fname += f"_{sub:04d}"
+        if id_sim is not None:
+            fname += f"_{id_sim:04d}"
         fname = self.path_to_covar / fname
         return fname.with_suffix(".npy")
 
-    def get_path_to_noise_maps_sub(self, sub: int) -> Path:
-        return self.path_to_noise_maps / f"{sub:04d}"
+    def get_path_to_noise_maps_sub(self, id_sim: int) -> Path:
+        return self.path_to_noise_maps / f"{id_sim:04d}"
 
-    def get_path_to_TF_sims_sub(self, sub: int) -> Path:
+    def get_path_to_TF_sims_sub(self, id_sim: int) -> Path:
         """Get the path to the subdirectory for the TF estimation maps."""
-        return self.path_to_TF_sims_maps / f"{sub:04d}"
+        return self.path_to_TF_sims_maps / f"{id_sim:04d}"
 
-    def get_path_to_components(self, sub: int | None = None) -> Path:
-        if sub is not None:
-            return self.path_to_output / self._config.output_dirs.components / f"{sub:04d}"
+    def get_path_to_components(self, id_sim: int | None = None) -> Path:
+        if id_sim is not None:
+            return self.path_to_output / self._config.output_dirs.components / f"{id_sim:04d}"
         return self.path_to_output / self._config.output_dirs.components
 
-    def get_path_to_components_maps(self, sub: int | None = None) -> Path:
-        fname = self.get_path_to_components(sub=sub) / "components_maps"
+    def get_path_to_components_maps(self, id_sim: int | None = None) -> Path:
+        fname = self.get_path_to_components(id_sim=id_sim) / "components_maps"
         return fname.with_suffix(".npy")
 
-    def get_path_to_components_alms(self, sub: int | None = None) -> Path:
-        fname = self.get_path_to_components(sub=sub) / "components_alms"
+    def get_path_to_components_alms(self, id_sim: int | None = None) -> Path:
+        fname = self.get_path_to_components(id_sim=id_sim) / "components_alms"
         return fname.with_suffix(".npy")
 
-    def get_path_to_compsep_results(self, sub: int | None = None) -> Path:
-        fname = self.get_path_to_components(sub=sub) / "compsep_results"
+    def get_path_to_compsep_results(self, id_sim: int | None = None) -> Path:
+        fname = self.get_path_to_components(id_sim=id_sim) / "compsep_results"
         return fname.with_suffix(".npz")
 
-    def get_path_to_spectra(self, sub: int | None = None) -> Path:
-        if sub is not None:
-            return self.path_to_output / self._config.output_dirs.spectra / f"{sub:04d}"
+    def get_path_to_spectra(self, id_sim: int | None = None) -> Path:
+        if id_sim is not None:
+            return self.path_to_output / self._config.output_dirs.spectra / f"{id_sim:04d}"
         return self.path_to_output / self._config.output_dirs.spectra
 
-    def get_path_to_spectra_cross_components(self, sub: int | None = None) -> Path:
-        fname = self.get_path_to_spectra(sub=sub) / "cross_components_Cls"
+    def get_path_to_spectra_cross_components(self, id_sim: int | None = None) -> Path:
+        fname = self.get_path_to_spectra(id_sim=id_sim) / "cross_components_Cls"
         return fname.with_suffix(".npz")
 
-    def get_path_to_spectra_binning(self, sub: int | None = None) -> Path:
-        fname = self.get_path_to_spectra(sub=sub) / "binning"
+    def get_path_to_spectra_binning(self, id_sim: int | None = None) -> Path:
+        fname = self.get_path_to_spectra(id_sim=id_sim) / "binning"
         return fname.with_suffix(".npz")
 
-    def get_path_to_noise_spectra(self, sub: int | None = None) -> Path:
-        if sub is not None:
-            return self.path_to_output / self._config.output_dirs.noise_spectra / f"{sub:04d}"
+    def get_path_to_noise_spectra(self, id_sim: int | None = None) -> Path:
+        if id_sim is not None:
+            return self.path_to_output / self._config.output_dirs.noise_spectra / f"{id_sim:04d}"
         return self.path_to_output / self._config.output_dirs.noise_spectra
 
-    def get_path_to_noise_spectra_cross_components(self, sub: int | None = None) -> Path:
-        fname = self.get_path_to_noise_spectra(sub=sub) / "noise_cross_components_Cls"
+    def get_path_to_noise_spectra_cross_components(self, id_sim: int | None = None) -> Path:
+        fname = self.get_path_to_noise_spectra(id_sim=id_sim) / "noise_cross_components_Cls"
         return fname.with_suffix(".npz")
 
-    def get_path_to_mcmc(self, sub: int | None = None) -> Path:
-        if sub is not None:
-            return self.path_to_output / self._config.output_dirs.mcmc / f"{sub:04d}"
+    def get_path_to_mcmc(self, id_sim: int | None = None) -> Path:
+        if id_sim is not None:
+            return self.path_to_output / self._config.output_dirs.mcmc / f"{id_sim:04d}"
         return self.path_to_output / self._config.output_dirs.mcmc
 
-    def get_path_to_mcmc_chains(self, sub: int | None = None) -> Path:
-        fname = self.get_path_to_mcmc(sub=sub) / "mcmc_chains"
+    def get_path_to_mcmc_chains(self, id_sim: int | None = None) -> Path:
+        fname = self.get_path_to_mcmc(id_sim=id_sim) / "mcmc_chains"
         return fname.with_suffix(".npz")
 
     @property

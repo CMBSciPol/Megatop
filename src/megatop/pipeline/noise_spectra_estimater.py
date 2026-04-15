@@ -47,9 +47,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
-    W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
-        "W_maxL"
-    ]
+    W_maxL = np.load(manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True)["W_maxL"]
 
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
@@ -236,9 +234,9 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         mean_noise_spectra = None
 
     if rank == root:
-        path = manager.get_path_to_noise_spectra(sub=id_sim_sky)
+        path = manager.get_path_to_noise_spectra(id_sim_sky)
         path.mkdir(parents=True, exist_ok=True)
-        fname = manager.get_path_to_noise_spectra_cross_components(sub=id_sim_sky)
+        fname = manager.get_path_to_noise_spectra_cross_components(id_sim_sky)
         logger.info(f"Saving estimated noise spectra to {fname}")
         np.savez(fname, **mean_noise_spectra)
 

@@ -30,7 +30,7 @@ def homemade_unbin_cell(binned_cell, nmt_bins):
 def preprocess_map(
     manager: DataManager, config: Config, id_sim: int | None = None, mask_output=True
 ):
-    input_maps = read_input_maps(manager.get_maps_filenames(sub=id_sim))
+    input_maps = read_input_maps(manager.get_maps_filenames(id_sim))
     logger.info(
         f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
     )
@@ -176,14 +176,14 @@ def preprocess_map(
 
 
 def save_preprocessed_maps(manager: DataManager, freq_maps, id_sim: int | None = None):
-    fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+    fname = manager.get_path_to_preprocessed_maps(id_sim)
     fname.parent.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving pre-processed maps to {fname}")
     np.save(fname, freq_maps)
 
 
 def save_preprocessed_alms(manager: DataManager, freq_alms, id_sim: int | None = None):
-    fname = manager.get_path_to_preprocessed_alms(sub=id_sim)
+    fname = manager.get_path_to_preprocessed_alms(id_sim)
     fname.parent.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving pre-processed alms to {fname}")
     np.save(fname, freq_alms)

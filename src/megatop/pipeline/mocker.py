@@ -90,9 +90,7 @@ def save_simu(
     """Save a sky realization."""
     # get appropriate filenames based on type
     filenames = (
-        manager.get_noise_maps_filenames(sub=id_sim)
-        if is_noise
-        else manager.get_maps_filenames(sub=id_sim)
+        manager.get_noise_maps_filenames(id_sim) if is_noise else manager.get_maps_filenames(id_sim)
     )
 
     # save the maps
@@ -116,7 +114,7 @@ def save_TFsims(
 ) -> None:
     """Save an unfiltered and filtered TF realization."""
     # get appropriate filenames based on type
-    filenames_unfiltered, filenames_filtered = manager.get_maps_sim_for_TF_filenames(sub=id_sim)
+    filenames_unfiltered, filenames_filtered = manager.get_maps_sim_for_TF_filenames(id_sim)
 
     # save the maps
     for f in range(len(filenames_unfiltered)):  # loop over frequencies
