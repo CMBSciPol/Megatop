@@ -26,7 +26,8 @@ data_dirs:
   maps: maps
   noise_maps: noise_maps
   passbands: bandpass_formatted
-  root: /lustre/work/SO-MEGATOP/NPIPE
+  passbands_root: /lustre/work/SO-MEGATOP/NPIPE
+  root: /lustre/work/cgubeno/Megatop/npipe_simu/npipe_noiseless_fsky70/data_root
 fiducial_cmb:
 fiducial_cmb:
   camb_cosmo_pars:
@@ -152,6 +153,7 @@ map_sim_pars:
   input_maps_prefix: npipe6v20_
   input_maps_suffix: _map
   input_maps_correction: 1e6
+  remove_input_maps_noise: true
   n_sim: 100  
   passband_int: false
   r_input: 0
@@ -168,14 +170,16 @@ masks_pars:
   binary_mask_name: binary_mask
   binary_mask_zero_threshold: 0.1
   fwhm_arcmin_smooth_nhits: 60
-  gal_key: null
+  gal_key: GAL070
   galactic_mask_name: galactic_mask
-  include_galactic: false
+  galactic_mask_path: /lustre/work/SO-MEGATOP/NPIPE/masks/HFI_Mask_GalPlane-apo0_2048_R2.00.fits
+  include_galactic: true
   include_sources: false
   input_sources_mask: null
   mock_nsources: 100
   mock_sources_hole_radius: 4
   nhits_map_name: nhits_map
+  rotate_G2C: false
   sources_mask_name: sources_mask
 noise_cov_pars:
   save_preprocessed_noise_maps: true
@@ -190,17 +194,18 @@ noise_sim_pars:
       correction: 1e6
   include_nhits: true
   n_sim: 100
+  prefer_external_noise_maps: false
 output_dirs:
   binning: binning
   components: components
-  covar: covar
+  covar: covar_noisy
   fiducial_cmb: fiducial_cmb
   masks: masks
   mcmc: mcmc
   noise_spectra: noise_spectra
   plots: plots
   preproc: preproc
-  root: /lustre/work/cgubeno/Megatop/npipe_simu/npipe_noiseless/output_root
+  root: /lustre/work/cgubeno/Megatop/npipe_simu/npipe_noiseless_fsky70/output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:

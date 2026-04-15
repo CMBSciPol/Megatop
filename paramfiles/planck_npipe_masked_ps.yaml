@@ -26,7 +26,8 @@ data_dirs:
   maps: maps
   noise_maps: noise_maps
   passbands: bandpass_formatted
-  root: /lustre/work/SO-MEGATOP/NPIPE
+  passbands_root: /lustre/work/SO-MEGATOP/NPIPE
+  root: /lustre/work/cgubeno/Megatop/npipe_simu/npipe_fsky66_ps_test/data_root
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2e-09
@@ -201,7 +202,7 @@ output_dirs:
   noise_spectra: noise_spectra
   plots: plots
   preproc: preproc
-  root:  /lustre/work/cgubeno/Megatop/npipe_simu/npipe_fsky66_ps/output_root
+  root:  /lustre/work/cgubeno/Megatop/npipe_simu/npipe_fsky66_ps_test/output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:

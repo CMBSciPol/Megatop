@@ -90,11 +90,17 @@ def save_simu(
 ) -> None:
     """Save a sky realization."""
     # get appropriate filenames based on type
-    filenames = (
-        manager.get_noise_maps_filenames(sub=id_sim)
-        if is_noise
-        else manager.get_maps_filenames(sub=id_sim)
-    )
+    if is_noise:
+        filenames = manager.get_noise_maps_filenames(sub=id_sim)
+    elif manager._config.map_sim_pars.use_input_maps:
+        # Never overwrite external input maps when mocker is run with use_input_maps=True.
+        dest = manager.get_path_to_maps_sub(id_sim) if id_sim is not None else manager.path_to_maps
+        filenames = [
+            (dest / map_set.map_filename).with_suffix(".fits")
+            for map_set in manager._config.map_sets
+        ]
+    else:
+        filenames = manager.get_maps_filenames(sub=id_sim)
 
     # save the maps
     for i, fname in enumerate(filenames):

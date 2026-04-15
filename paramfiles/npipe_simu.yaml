@@ -26,7 +26,8 @@ data_dirs:
   maps: maps
   noise_maps: noise_maps
   passbands: bandpass_formatted
-  root: /lustre/work/SO-MEGATOP/NPIPE
+  passbands_root: /lustre/work/SO-MEGATOP/NPIPE
+  root: /lustre/work/cgubeno/Megatop/npipe_simu/npipe_noiseless_fsky70/data_root
 fiducial_cmb:
 fiducial_cmb:
   camb_cosmo_pars:
@@ -203,7 +204,7 @@ parametric_sep_pars:
   harmonic_lmax: 256
   harmonic_lmin: 30
   include_synchrotron: true
-  dust_temp : 19.5
+  dust_temp : null
   minimize_method: TNC
   minimize_options:
     disp: false

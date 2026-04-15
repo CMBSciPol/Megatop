@@ -75,6 +75,13 @@ def structure_V3Noise(val: Any, _) -> V3Noise:
 @define
 class DataDirsConfig:
     root: Path = field(converter=Path)
+    maps_root: Path | None = field(default=None, converter=lambda x: Path(x) if x is not None else None)
+    noise_maps_root: Path | None = field(
+        default=None, converter=lambda x: Path(x) if x is not None else None
+    )
+    passbands_root: Path | None = field(
+        default=None, converter=lambda x: Path(x) if x is not None else None
+    )
     maps: str = "maps"
     beams: str = "beams"
     passbands: str = "passbands"
@@ -347,6 +354,8 @@ class MapSimConfig:
     """Suffix used for provided map filenames before extension (e.g. '_residual')."""
     input_maps_correction: float = 1.0
     """Multiplicative factor applied to loaded input maps (e.g. 1e6 for K -> uK)."""
+    remove_input_maps_noise: bool = False
+    """If True, the noise map provided in input_maps_root will be subtracted from the loaded maps."""
 
     @sky_model.validator
     def check(self, attribute, value):
@@ -406,6 +415,8 @@ ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig | PL
 class NoiseSimConfig:
     n_sim: int = 1
     include_nhits: bool = True
+    prefer_external_noise_maps: bool = True
+    """If True and external noise-map configs are present, read noise maps from their external root."""
     experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict(SO=SOConfig()))
 
 

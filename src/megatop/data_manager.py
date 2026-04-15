@@ -33,7 +33,8 @@ class DataManager:
 
     @property
     def path_to_maps(self) -> Path:
-        return self._config.data_dirs.root / self._config.data_dirs.maps
+        base = self._config.data_dirs.maps_root or self._config.data_dirs.root
+        return base / self._config.data_dirs.maps
 
     def get_path_to_maps_sub(self, sub: int) -> Path:
         return self.path_to_maps / f"{sub:04d}"
@@ -44,11 +45,13 @@ class DataManager:
 
     @property
     def path_to_passbands(self) -> Path:
-        return self._config.data_dirs.root / self._config.data_dirs.passbands
+        base = self._config.data_dirs.passbands_root or self._config.data_dirs.root
+        return base / self._config.data_dirs.passbands
 
     @property
     def path_to_noise_maps(self) -> Path:
-        return self._config.data_dirs.root / self._config.data_dirs.noise_maps
+        base = self._config.data_dirs.noise_maps_root or self._config.data_dirs.root
+        return base / self._config.data_dirs.noise_maps
 
     @property
     def path_to_TF_sims_maps(self) -> Path:
@@ -243,11 +246,13 @@ class DataManager:
         """
         # If external noise maps are configured, read those files directly.
         # This supports running noisecov/noise-spectra without mocker outputs in data_root/noise_maps.
-        external_cfgs = [
-            cfg
-            for cfg in self._config.noise_sim_pars.experiments.values()
-            if type(cfg) is ExternalNoiseMapconfig
-        ]
+        external_cfgs = []
+        if self._config.noise_sim_pars.prefer_external_noise_maps:
+            external_cfgs = [
+                cfg
+                for cfg in self._config.noise_sim_pars.experiments.values()
+                if type(cfg) is ExternalNoiseMapconfig
+            ]
         if external_cfgs:
             cfg = external_cfgs[0]
 

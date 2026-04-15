@@ -19,60 +19,60 @@ ENV_BIN="$HOME/.conda/envs/megatop/bin"
 export PATH="$ENV_BIN:$PATH"
 hash -r
 
-PARAM_FILE="/home/cgubeno/Megatop/paramfiles/planck_wn_600.yaml"
+PARAM_FILE="/home/cgubeno/Megatop/paramfiles/npipe_simu_noiseless.yaml"
 
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 
 
-echo "------------------------------------------------------------"
-echo "|                        MASK-HANDLER                      |"
-echo "------------------------------------------------------------"
-mpirun -n 1 megatop-mask-run --config ${PARAM_FILE}
-echo ""
-echo ""
-echo "Plotting mask outputs"
-mpirun -n 1 megatop-mask-plot --config ${PARAM_FILE}
+# echo "------------------------------------------------------------"
+# echo "|                        MASK-HANDLER                      |"
+# echo "------------------------------------------------------------"
+# mpirun -n 1 megatop-mask-run --config ${PARAM_FILE}
+# echo ""
+# echo ""
+# echo "Plotting mask outputs"
+# mpirun -n 1 megatop-mask-plot --config ${PARAM_FILE}
 
-echo "------------------------------------------------------------"
-echo "|                       BINNING-MAKER                      |"
-echo "------------------------------------------------------------"
-mpirun -n 1 megatop-binning-run --config ${PARAM_FILE}
-echo ""
-echo ""
+# echo "------------------------------------------------------------"
+# echo "|                       BINNING-MAKER                      |"
+# echo "------------------------------------------------------------"
+# mpirun -n 1 megatop-binning-run --config ${PARAM_FILE}
+# echo ""
+# echo ""
 
-echo "------------------------------------------------------------"
-echo "|                           MOCKER                         |"
-echo "------------------------------------------------------------"
-mpirun -n 50 megatop-mock-run --config ${PARAM_FILE}
-echo ""
-echo ""
-echo "Plotting mocker outputs"
-mpirun -n 1 megatop-mock-plot --config ${PARAM_FILE}
+# echo "------------------------------------------------------------"
+# echo "|                           MOCKER                         |"
+# echo "------------------------------------------------------------"
+# mpirun -n 50 megatop-mock-run --config ${PARAM_FILE}
+# echo ""
+# echo ""
+# echo "Plotting mocker outputs"
+# mpirun -n 1 megatop-mock-plot --config ${PARAM_FILE}
 
-echo "------------------------------------------------------------"
-echo "|            TRANSFER FUNCTION COMPUTATION                  |"
-echo "------------------------------------------------------------"
-mpirun -n 1 megatop-TFcomputing-run --config ${PARAM_FILE}
-echo ""
-echo ""
+# echo "------------------------------------------------------------"
+# echo "|            TRANSFER FUNCTION COMPUTATION                  |"
+# echo "------------------------------------------------------------"
+# mpirun -n 1 megatop-TFcomputing-run --config ${PARAM_FILE}
+# echo ""
+# echo ""
 
-echo "------------------------------------------------------------"
-echo "|                       PRE-PROCESSER                      |"
-echo "------------------------------------------------------------"
-mpirun -n 50 megatop-preproc-run --config ${PARAM_FILE}
-echo ""
-echo ""
-echo "Plotting pre-processer outputs"
-mpirun -n 1 megatop-preproc-plot --config ${PARAM_FILE}
+# echo "------------------------------------------------------------"
+# echo "|                       PRE-PROCESSER                      |"
+# echo "------------------------------------------------------------"
+# mpirun -n 50 megatop-preproc-run --config ${PARAM_FILE}
+# echo ""
+# echo ""
+# echo "Plotting pre-processer outputs"
+# mpirun -n 1 megatop-preproc-plot --config ${PARAM_FILE}
 
-echo "------------------------------------------------------------"
-echo "|                NOISE-COVARIANCE COMPUTATION              |"
-echo "------------------------------------------------------------"
-mpirun -n 50 megatop-noisecov-run --config ${PARAM_FILE}
-echo ""
-echo ""
-echo "Plotting noise covariance outputs"
-mpirun -n 1 megatop-noisecov-plot --config ${PARAM_FILE}
+# echo "------------------------------------------------------------"
+# echo "|                NOISE-COVARIANCE COMPUTATION              |"
+# echo "------------------------------------------------------------"
+# mpirun -n 50 megatop-noisecov-run --config ${PARAM_FILE}
+# echo ""
+# echo ""
+# echo "Plotting noise covariance outputs"
+# mpirun -n 1 megatop-noisecov-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                    COMPONENT SEPARATION                  |"

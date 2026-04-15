@@ -8,12 +8,38 @@ from mpi4py.futures import MPICommExecutor
 from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
-from megatop.config import ExternalNoiseMapconfig, NoiseOption
+from megatop.config import ExternalNoiseMapconfig
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.mpi import get_world
 from megatop.utils.preproc import alm_common_beam, common_beam_and_nside, read_input_maps
+
+
+def _get_external_noise_maps_filenames(config: Config, id_sim: int | None) -> list[Path]:
+    external_cfgs = [
+        cfg
+        for cfg in config.noise_sim_pars.experiments.values()
+        if type(cfg) is ExternalNoiseMapconfig
+    ]
+    if not external_cfgs:
+        msg = "No ExternalNoiseMapconfig found for fallback noise-map loading"
+        raise FileNotFoundError(msg)
+
+    cfg = external_cfgs[0]
+    if id_sim is None:
+        folder = cfg.root
+    else:
+        candidate = cfg.root / f"{id_sim:04d}"
+        folder = candidate if candidate.exists() else cfg.root / f"{id_sim + 1:04d}"
+
+    residual_folder = folder / "residual"
+    base = residual_folder if residual_folder.exists() else folder
+    names = [
+        base / f"{cfg.prefix}{map_set.freq_tag:03d}{cfg.suffix}"
+        for map_set in config.map_sets
+    ]
+    return [name.with_suffix(".fits") for name in names]
 
 
 def homemade_unbin_cell(binned_cell, nmt_bins):
@@ -38,27 +64,41 @@ def preprocess_map(
         logger.info(f"Applying input map correction factor {corr}")
         input_maps = [corr * np.array(m) for m in input_maps]
 
-    all_noiseless = all(
-        config.noise_sim_pars.experiments[map_set.exp_tag].noise_option == NoiseOption.NOISELESS
-        for map_set in config.map_sets
-    )
-    has_external_noise = any(
-        type(config.noise_sim_pars.experiments[map_set.exp_tag]) is ExternalNoiseMapconfig
-        for map_set in config.map_sets
-    )
+    # When requested, build signal-only maps by subtracting the matched noise realization
+    # from input maps.
+    if config.map_sim_pars.use_input_maps and config.map_sim_pars.remove_input_maps_noise:
+        has_external_noise_cfg = any(
+            type(config.noise_sim_pars.experiments[map_set.exp_tag]) is ExternalNoiseMapconfig
+            for map_set in config.map_sets
+        )
+        using_external_noise_maps = (
+            config.noise_sim_pars.prefer_external_noise_maps and has_external_noise_cfg
+        )
 
-    # When running on provided sky maps in no_noise mode with external noise maps,
-    # use signal-only maps by subtracting the matched noise realization.
-    if config.map_sim_pars.use_input_maps and all_noiseless and has_external_noise:
-        noise_maps = read_input_maps(manager.get_noise_maps_filenames(sub=id_sim))
+        try:
+            noise_maps = read_input_maps(manager.get_noise_maps_filenames(sub=id_sim))
+        except FileNotFoundError as err:
+            if not has_external_noise_cfg:
+                raise
+            logger.warning(
+                "Noise-map subtraction requested but internal noise maps are missing; "
+                "falling back to external noise maps"
+            )
+            noise_maps = read_input_maps(_get_external_noise_maps_filenames(config, id_sim))
+            using_external_noise_maps = True
+
         for i, map_set in enumerate(config.map_sets):
             cfg = config.noise_sim_pars.experiments[map_set.exp_tag]
-            noise_correction = cfg.correction if type(cfg) is ExternalNoiseMapconfig else 1.0
+            noise_correction = (
+                cfg.correction
+                if using_external_noise_maps and type(cfg) is ExternalNoiseMapconfig
+                else 1.0
+            )
             input_maps[i] = np.asarray(input_maps[i], dtype="float64") - noise_correction * np.asarray(
                 noise_maps[i], dtype="float64"
             )
         logger.info(
-            "use_input_maps + no_noise detected with external noise maps: subtracting noise maps from input sky maps"
+            "use_input_maps + remove_input_maps_noise detected: subtracting noise maps from input sky maps"
         )
     logger.info(
         f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"

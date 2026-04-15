@@ -29,13 +29,23 @@ data_dirs:
   root: /lustre/work/cgubeno/Megatop/White_Noise/wn_600noise_d1s1/data_root
 fiducial_cmb:
   camb_cosmo_pars:
-    As: 2.0e-09
+    As: 2e-09
     H0: 67.5
-    extra_args: null
     ns: 0.965
     ombh2: 0.022
     omch2: 0.122
     tau: 0.06
+    extra_args : { 
+      "Alens" : 1.0,
+      "mnu" : 0.06, 
+      "omk" : 0.0,
+      "halofit_version" :"mead",
+      "max_l_tensor": 2000,
+      "max_eta_k_tensor": 18000,
+      "nt": 0,
+      "ntrun": 0,
+      "parameterization": "tensor_param_indeptilt"
+      }
   compute_from_camb: true
   fiducial_lensed_scalar: null
   fiducial_unlensed_scalar_tensor_r1: null
