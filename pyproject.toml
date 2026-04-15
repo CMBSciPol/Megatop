@@ -35,6 +35,9 @@ dependencies = [
 
 [project.optional-dependencies]
 mpi = ["mpi4py"]
+snake = [
+    "snakemake",
+]
 
 [dependency-groups]
 dev = ["pytest"]
