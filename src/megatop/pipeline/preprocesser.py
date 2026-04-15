@@ -79,7 +79,7 @@ def preprocess_map(
         if config.pre_proc_pars.correct_for_TF:
             logger.warning("Including transfer function in the pre-processed alms. ")
             for f, tf_path in enumerate(manager.get_TF_filenames()):
-                if tf_path == Path():
+                if tf_path is None:
                     logger.warning(
                         f"DEBUG: Transfer function for frequency {config.frequencies[f]} is not provided, skipping."
                     )

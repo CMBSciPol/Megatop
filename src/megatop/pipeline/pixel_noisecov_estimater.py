@@ -178,7 +178,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     )
 
                     for f, tf_path in enumerate(manager.get_TF_filenames()):
-                        if tf_path == Path():
+                        if tf_path is None:
                             logger.warning(
                                 f"DEBUG: Transfer function for frequency p{config.frequencies[f]} is not provided, skipping."
                             )
@@ -293,7 +293,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     )
 
                     for f, tf_path in enumerate(manager.get_TF_filenames()):
-                        if tf_path == Path():
+                        if tf_path is None:
                             logger.warning(
                                 f"DEBUG: Transfer function for frequency p{config.frequencies[f]} is not provided, skipping."
                             )

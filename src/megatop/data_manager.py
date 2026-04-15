@@ -187,28 +187,33 @@ class DataManager:
         names = [map_set.obsmat_path for map_set in self._config.map_sets]
         return [name.with_suffix(".npz") for name in names]
 
-    def get_TF_filenames(self) -> list[Path]:
-        """Get the list of filenames for the Transfer Functions."""
+    @property
+    def path_to_TF_output_dir(self) -> Path:
+        """Directory where internally-generated transfer functions are saved."""
+        return self.path_to_transfer_functions_parents / "transfer_functions_output"
+
+    def get_TF_filenames(self) -> list[Path | None]:
+        """Get the list of filenames for the Transfer Functions.
+
+        Returns ``None`` for any map set whose ``TF_path`` is unset (the ``'.'``
+        sentinel in the config), signalling that no TF is available for that
+        frequency.
+        """
         if self._config.map_sim_pars.generate_sims_for_TF:
             logger.info("Internal TF used, generating TF path on the fly")
-            TF_dir = self.path_to_transfer_functions_parents / Path("transfer_functions_output")
-            TF_dir.mkdir(parents=True, exist_ok=True)
             name_list = []
             for map_set in self._config.map_sets:
                 file_name = f"transfer_function_{map_set.name}_x_{map_set.name}"
-                name = TF_dir / Path(file_name)
+                name = self.path_to_TF_output_dir / file_name
                 name_list.append(name.with_suffix(".npz"))
-
         else:
-            names = [map_set.TF_path for map_set in self._config.map_sets]
             name_list = []
-            for name in names:
-                #  if name is '.' then we just pass it on
+            for map_set in self._config.map_sets:
+                name = map_set.TF_path
                 if name == Path():
-                    name_list.append(name)
+                    name_list.append(None)
                 else:
                     name_list.append(name.with_suffix(".npz"))
-            # return [name.with_suffix(".npz") for name in names]
         return name_list
 
     def get_noise_maps_filenames(self, id_sim: int | None = None) -> list[Path]:

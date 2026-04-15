@@ -111,6 +111,9 @@ def create_and_run_soopercool_yaml(manager: DataManager, config: Config):
             check=False,
         )
 
+    if config.map_sim_pars.generate_sims_for_TF:
+        manager.path_to_TF_output_dir.mkdir(parents=True, exist_ok=True)
+
     logger.info("Computing Transfer Functions for each map sets")
     TF_paths_checks = manager.get_TF_filenames()
     for i, path_soop_config in enumerate(full_soopercool_config_path_list):
