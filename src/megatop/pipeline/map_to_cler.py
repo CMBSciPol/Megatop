@@ -5,7 +5,6 @@ from pathlib import Path
 import healpy as hp
 import numpy as np
 import pymaster as nmt
-from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask
@@ -158,6 +157,7 @@ def map2cl_and_save(config: Config, manager: DataManager, id_sim: int | None = N
 def main():
     parser = argparse.ArgumentParser(description="Map to CLs")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -168,10 +168,20 @@ def main():
         manager.dump_config()
         manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
+    if args.sim is not None:
+        map2cl_and_save(config, manager, id_sim=args.sim)
+        return
+
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:
         map2cl_and_save(config, manager, id_sim=None)
+    elif size < 2:
+        for i in range(n_sim_sky):
+            result = map2cl_and_save(config, manager, id_sim=i)
+            logger.info(f"Finished Cl estimation on map {result + 1} / {n_sim_sky}")
     else:
+        from mpi4py.futures import MPICommExecutor
+
         with MPICommExecutor() as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} workers")

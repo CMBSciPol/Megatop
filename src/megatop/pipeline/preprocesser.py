@@ -4,7 +4,6 @@ from pathlib import Path
 
 import healpy as hp
 import numpy as np
-from mpi4py.futures import MPICommExecutor
 from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
@@ -199,10 +198,9 @@ def preproc_and_save(config: Config, manager: DataManager, id_sim: int | None = 
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Preprocesser", epilog="mpi4py is required to run this script"
-    )
+    parser = argparse.ArgumentParser(description="Preprocesser")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -213,10 +211,20 @@ def main():
         manager.dump_config()
         manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
+    if args.sim is not None:
+        preproc_and_save(config, manager, id_sim=args.sim)
+        return
+
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data
         preproc_and_save(config, manager, id_sim=None)
+    elif size < 2:
+        for i in range(n_sim_sky):
+            result = preproc_and_save(config, manager, id_sim=i)
+            logger.info(f"Finished preprocessing map {result + 1} / {n_sim_sky}")
     else:
+        from mpi4py.futures import MPICommExecutor
+
         with MPICommExecutor() as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} workers")
