@@ -48,7 +48,6 @@ def common_beam_and_nside(
         np.radians(common_beam / 60.0),
         lmax=lmax_convolution,
         pol=True,
-        datapath=HEALPY_DATA_PATH,
     )
 
     for i_beam, beam in enumerate(frequency_beams):
