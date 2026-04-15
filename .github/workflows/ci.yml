@@ -56,3 +56,38 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -vv
+
+  e2e:
+    name: End-to-end pipeline check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v6
+
+      - name: Install uv and set Python version
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.3"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev libopenmpi-dev openmpi-bin
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install project with MPI and dev dependencies
+        run: uv pip install ".[mpi]" --group dev
+
+      - name: Cache pysm3 template data
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pysm3
+          key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
+          restore-keys: pysm3-${{ runner.os }}-
+
+      - name: Run e2e pipeline
+        run: source .venv/bin/activate && bash runfiles/run_e2e_check.sh paramfiles/e2e_check.yaml
