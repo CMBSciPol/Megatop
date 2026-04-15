@@ -75,7 +75,7 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
 
 
 def get_full_sky_noise_freq_maps(
-    map_sets, noise_config: dict, fsky_binary: float, nside: int, id_sim: int = 0
+    map_sets, noise_config: dict, fsky_nhits: float, nside: int, id_sim: int = 0
 ):
     experiments_map_set = set([map_set.exp_tag for map_set in map_sets])
     experiments_noiseconfig = [name for name in noise_config.experiments]
@@ -90,7 +90,7 @@ def get_full_sky_noise_freq_maps(
         noise_experiment[exp] = get_noise_experiment(
             exp,
             noise_config.experiments[exp],
-            fsky_binary=fsky_binary,
+            fsky_nhits=fsky_nhits,
             nside=nside,
             id_sim=id_sim,
         )
@@ -124,7 +124,7 @@ def get_full_sky_noise_freq_maps(
 def get_noise_experiment(
     exp: str,
     noise_config_exp: ValidExperimentConfig,
-    fsky_binary: float,
+    fsky_nhits: float,
     nside: int,
     id_sim: int = 0,
 ):
@@ -140,7 +140,7 @@ def get_noise_experiment(
                 survey_years=1.0,  # The scaling wiht time is done through Ntubes_years
             )
             _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-                f_sky=fsky_binary, ell_max=2 * nside, delta_ell=1, deconv_beam=False
+                f_sky=fsky_nhits, ell_max=2 * nside, delta_ell=1, deconv_beam=False
             )
         else:
             logger.info(
@@ -152,7 +152,7 @@ def get_noise_experiment(
                 sensitivity_mode=sensitivity_mode,
                 one_over_f_mode=one_over_f_mode,
                 SAC_yrs_LF=noise_config_exp.SAC_yrs_LF,
-                f_sky=fsky_binary,
+                f_sky=fsky_nhits,
                 ell_max=2 * nside,
                 delta_ell=1,
                 beam_corrected=False,
@@ -172,7 +172,7 @@ def get_noise_experiment(
             survey_years=1.0,
         )
         _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-            f_sky=fsky_binary, ell_max=2 * nside, delta_ell=1, deconv_beam=False
+            f_sky=fsky_nhits, ell_max=2 * nside, delta_ell=1, deconv_beam=False
         )
 
     elif type(noise_config_exp) is ExternalNoiseMapconfig:
@@ -234,10 +234,10 @@ def get_noise_map_from_noise_spectra(n_ell, nside: int):
     return noise_maps
 
 
-def include_hits_noise(noise_maps, nhits_maps, binary_mask):
+def include_hits_noise(noise_maps, common_nhits_map, binary_mask):
     logger.debug("Rescaling the noise maps by the hits count")
     mask_indices = np.where(binary_mask == 1)[0]
-    if np.any(nhits_maps[..., mask_indices] == 0):
+    if np.any(common_nhits_map[mask_indices] == 0):
         logger.error("Division by 0 in noise map nhit rescaling.")
         logger.error("The binary mask does not cover all areas where nhits = 0.")
         logger.error(
@@ -245,7 +245,7 @@ def include_hits_noise(noise_maps, nhits_maps, binary_mask):
         )
         logger.error("Exiting...")
     with np.errstate(divide="raise", invalid="raise"):
-        noise_maps[..., mask_indices] /= np.sqrt(nhits_maps[..., np.newaxis, mask_indices])
+        noise_maps[..., mask_indices] /= np.sqrt(common_nhits_map[np.newaxis, mask_indices])
 
     return noise_maps
 

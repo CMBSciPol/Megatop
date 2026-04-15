@@ -22,20 +22,20 @@ _POOL_EXECUTOR_THRESHOLD = 2
 
 @function_timer("get-noise-map")
 def get_noise(
-    config: Config, binary_mask: NDArray, nhits_maps: NDArray, id_sim: int = 0
+    config: Config, binary_mask: NDArray, common_nhits_map: NDArray, id_sim: int = 0
 ) -> NDArray:
-    fsky_binary = binary_mask.mean()
+    fnsky_nhits = common_nhits_map.mean()
     noise_freq_maps = mock.get_full_sky_noise_freq_maps(
         config.map_sets,
         config.noise_sim_pars,
-        fsky_binary=fsky_binary,
+        fnsky_nhits=fnsky_nhits,
         nside=config.nside,
         id_sim=id_sim,
     )
     logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
     if config.noise_sim_pars.include_nhits:
-        _ = mock.include_hits_noise(noise_freq_maps, nhits_maps, binary_mask)
+        _ = mock.include_hits_noise(noise_freq_maps, common_nhits_map, binary_mask)
 
     return noise_freq_maps
 
