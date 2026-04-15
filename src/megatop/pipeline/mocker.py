@@ -24,11 +24,11 @@ _POOL_EXECUTOR_THRESHOLD = 2
 def get_noise(
     config: Config, binary_mask: NDArray, common_nhits_map: NDArray, id_sim: int = 0
 ) -> NDArray:
-    fnsky_nhits = common_nhits_map.mean()
+    fsky_nhits = common_nhits_map.mean()
     noise_freq_maps = mock.get_full_sky_noise_freq_maps(
         config.map_sets,
         config.noise_sim_pars,
-        fnsky_nhits=fnsky_nhits,
+        fsky_nhits=fsky_nhits,
         nside=config.nside,
         id_sim=id_sim,
     )
