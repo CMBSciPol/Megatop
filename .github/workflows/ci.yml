@@ -93,3 +93,37 @@ jobs:
 
       - name: Run e2e pipeline
         run: source .venv/bin/activate && bash runfiles/run_e2e_check.sh paramfiles/e2e_check.yaml ${{ matrix.mpi && '--np 2' || '' }}
+
+  e2e-snakemake:
+    name: End-to-end pipeline check (Snakemake)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v6
+
+      - name: Install uv and set Python version
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.3"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
+
+      - name: Create virtual environment and install project
+        run: |
+          uv venv
+          uv pip install ".[snake]" --group dev
+
+      - name: Cache pysm3 template data
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pysm3
+          key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
+          restore-keys: pysm3-${{ runner.os }}-
+
+      - name: Run e2e pipeline via Snakemake
+        run: uv run snakemake --cores 4 --config megatop_config=paramfiles/e2e_check.yaml
