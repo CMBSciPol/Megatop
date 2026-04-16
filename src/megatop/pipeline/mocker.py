@@ -41,14 +41,8 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     # Performing the CMB simulation with synfast
     logger.debug("Computing CMB map from fiducial spectra")
 
-    # at this point, cmb_seed should be set in the config...
-    cmb_seed = config.map_sim_pars.cmb_seed
-    if cmb_seed is None:
-        msg = "The CMB seed must be set in the configuration beforehand!"
-        raise RuntimeError(msg)
-
     # incorporate realization id into the seed if CMB is not fixed
-    seed = [cmb_seed]
+    seed = [config.map_sim_pars.cmb_seed]
     if not config.map_sim_pars.single_cmb:
         seed.append(id_sim)
     logger.debug(f"CMB {seed = }")
@@ -429,18 +423,6 @@ def main():
     # Now split the configuration for the different groups
     num_groups = min(size, num_sets)
 
-    # We need to handle the CMB seed carefully
-    # If not provided, generate a common one that will be shared by all groups
-    cmb_seed = config.map_sim_pars.cmb_seed
-    if cmb_seed is None:
-        if rank == 0:
-            # Process 0 generates the seed for everyone from a random source
-            rng = np.random.default_rng()
-            cmb_seed = rng.integers(2**32)
-            logger.debug(f"Common CMB seed: {cmb_seed}")
-        config.map_sim_pars.cmb_seed = int(world.bcast(cmb_seed, root=0))
-
-    # Dump the full configuration including the generated seed, before splitting the map sets
     if rank == 0:
         manager.dump_config()
         manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
