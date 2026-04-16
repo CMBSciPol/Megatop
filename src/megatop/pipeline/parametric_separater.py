@@ -84,7 +84,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     std_instr = fg.observation_helpers.standardize_instrument(instrument)
 
     with Timer("load-alms"):
-        preproc_alms_fname = manager.get_path_to_preprocessed_alms(sub=id_sim)
+        preproc_alms_fname = manager.get_path_to_preprocessed_alms(id_sim)
         logger.debug(f"Loading input maps from {preproc_alms_fname}")
         data_alms = np.load(preproc_alms_fname)
 
@@ -166,7 +166,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
             "Beam and Transfer functions handling? "
         )  # TODO: Beam and Transfer functions handling?
         with Timer("load-maps"):
-            preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+            preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
             logger.debug(f"Loading input maps from {preproc_maps_fname}")
             freq_maps_preprocessed = np.load(preproc_maps_fname)
         freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
@@ -231,7 +231,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
     with Timer("load-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
 
@@ -277,12 +277,10 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
 
 
 def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int | None = None):
-    path = manager.get_path_to_components(sub=id_sim)
-    path.mkdir(parents=True, exist_ok=True)
-    fname_results = manager.get_path_to_compsep_results(sub=id_sim)
+    fname_results = manager.get_path_to_compsep_results(id_sim)
     if config.parametric_sep_pars.use_harmonic_compsep:
-        fname_compalms = manager.get_path_to_components_alms(sub=id_sim)
-    fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
+        fname_compalms = manager.get_path_to_components_alms(id_sim)
+    fname_compmaps = manager.get_path_to_components_maps(id_sim)
 
     res_dict = {}
     for attr in dir(res):
@@ -325,6 +323,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data

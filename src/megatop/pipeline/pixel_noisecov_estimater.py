@@ -135,12 +135,9 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             )
 
         if config.noise_cov_pars.save_preprocessed_noise_maps:
-            manager.get_path_to_preprocessed_noise_maps(sub=id_real).parent.mkdir(
-                exist_ok=True, parents=True
-            )
             logger.info("Saving pre-processed noise maps to disk")
             np.save(
-                manager.get_path_to_preprocessed_noise_maps(sub=id_real),
+                manager.get_path_to_preprocessed_noise_maps(id_real),
                 noise_freq_maps_preprocessed,
             )
 
@@ -178,7 +175,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     )
 
                     for f, tf_path in enumerate(manager.get_TF_filenames()):
-                        if tf_path == Path():
+                        if tf_path is None:
                             logger.warning(
                                 f"DEBUG: Transfer function for frequency p{config.frequencies[f]} is not provided, skipping."
                             )
@@ -293,7 +290,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     )
 
                     for f, tf_path in enumerate(manager.get_TF_filenames()):
-                        if tf_path == Path():
+                        if tf_path is None:
                             logger.warning(
                                 f"DEBUG: Transfer function for frequency p{config.frequencies[f]} is not provided, skipping."
                             )
@@ -402,7 +399,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
             noise_cov_preprocessed_recvbuf_cl_unbinned = None
 
     if rank == 0:
-        manager.path_to_covar.mkdir(exist_ok=True, parents=True)
         np.save(manager.path_to_pixel_noisecov, noise_cov_preprocessed_mean)
         if config.parametric_sep_pars.use_harmonic_compsep:
             np.save(manager.path_to_nl_noisecov, noise_cov_preprocessed_mean_cl)
@@ -427,6 +423,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     pixel_noisecov_estimation(manager, config)
 

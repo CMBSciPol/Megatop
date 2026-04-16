@@ -214,10 +214,8 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
     # fsky_obs = np.sqrt(mean_fsky)
 
-    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
-        "CMBxCMB"
-    ][3]
-    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][3]
+    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
         "DustxDust"
     ][3]
 
@@ -229,7 +227,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         # TODO: test case when only one experiment is noiseless?
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
     else:
-        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))[
             "Noise_CMBxNoise_CMB"
         ][3]
 
@@ -329,9 +327,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     logger.info(f"Mean parameters {param_names}: {np.mean(chains, axis=0)}")
     # 4. save mcmc chains:
-    path = manager.get_path_to_mcmc(sub=id_sim)
-    path.mkdir(parents=True, exist_ok=True)
-    fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+    fname_chains = manager.get_path_to_mcmc_chains(id_sim)
 
     np.savez(
         fname_chains,
@@ -354,6 +350,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:

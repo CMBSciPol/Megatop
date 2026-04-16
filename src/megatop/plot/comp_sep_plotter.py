@@ -15,7 +15,7 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
     plot_dir = manager.path_to_components_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
+    fname_compmaps = manager.get_path_to_components_maps(id_sim)
     comp_maps = np.load(fname_compmaps)
 
     binary_mask = hp.read_map(manager.path_to_binary_mask)
@@ -52,7 +52,7 @@ def plot_compsep_stats(manager: DataManager, config: Config):
 
     param_res_list = []
     for sky_sims_id in range(config.map_sim_pars.n_sim):
-        fname_compsepresults = manager.get_path_to_compsep_results(sub=sky_sims_id)
+        fname_compsepresults = manager.get_path_to_compsep_results(sky_sims_id)
         param_res_compsep = np.load(fname_compsepresults, allow_pickle=True)["x"]
         param_res_list.append(param_res_compsep)
     param_res_list = np.array(param_res_list)

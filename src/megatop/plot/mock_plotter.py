@@ -301,7 +301,7 @@ def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    combined_maps = np.array(read_input_maps(manager.get_maps_filenames(sub=id_sim)))
+    combined_maps = np.array(read_input_maps(manager.get_maps_filenames(id_sim)))
     binary_mask = hp.read_map(manager.path_to_binary_mask)
 
     combined_maps = apply_binary_mask(combined_maps, binary_mask, unseen=True)

@@ -17,7 +17,7 @@ def plot_preprocessed_maps(manager, config, id_sim=None, maps=True, cls=True):
     logger.info("Plotting pre-processing outputs")
 
     with Timer("load-freq-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
         binary_mask = hp.read_map(manager.path_to_binary_mask)
