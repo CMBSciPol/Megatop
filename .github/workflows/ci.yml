@@ -58,8 +58,11 @@ jobs:
         run: uv run pytest -vv
 
   e2e:
-    name: End-to-end pipeline check
+    name: End-to-end pipeline check (${{ matrix.mpi && 'MPI' || 'no MPI' }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mpi: [true, false]
     steps:
       - name: Checkout project
         uses: actions/checkout@v6
@@ -74,13 +77,12 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev libopenmpi-dev openmpi-bin
+          sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev ${{ matrix.mpi && 'libopenmpi-dev openmpi-bin' || '' }}
 
-      - name: Create virtual environment
-        run: uv venv
-
-      - name: Install project with MPI and dev dependencies
-        run: uv pip install ".[mpi]" --group dev
+      - name: Create virtual environment and install project
+        run: |
+          uv venv
+          uv pip install ${{ matrix.mpi && '".[mpi]"' || '.' }} --group dev
 
       - name: Cache pysm3 template data
         uses: actions/cache@v4
@@ -90,4 +92,4 @@ jobs:
           restore-keys: pysm3-${{ runner.os }}-
 
       - name: Run e2e pipeline
-        run: source .venv/bin/activate && bash runfiles/run_e2e_check.sh paramfiles/e2e_check.yaml
+        run: source .venv/bin/activate && bash runfiles/run_e2e_check.sh paramfiles/e2e_check.yaml ${{ matrix.mpi && '--np 2' || '' }}

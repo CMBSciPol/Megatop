@@ -1,17 +1,21 @@
+from __future__ import annotations
+
 import argparse
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import healpy as hp
 import numpy as np
-from mpi4py.futures import MPICommExecutor
-from mpi4py.MPI import Comm
 from numpy.typing import NDArray
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
 from megatop.utils.TF_utils import get_alms_from_cls, power_law_cl
+
+if TYPE_CHECKING:
+    from mpi4py.MPI import Comm
 
 _POOL_EXECUTOR_THRESHOLD = 2
 
@@ -143,13 +147,15 @@ def _map(func, iterable, comm: Comm, force_seq: bool = False):
     Yields:
         Results of mapping function over iterable.
     """
-    if force_seq or comm.Get_size() < _POOL_EXECUTOR_THRESHOLD:
+    if force_seq or comm is None or comm.Get_size() < _POOL_EXECUTOR_THRESHOLD:
         # Process sequentially
         logger.info("Processing sequentially")
         for result in map(func, iterable):
             yield result
     else:
         # Use CommExecutor for parallel processing
+        from mpi4py.futures import MPICommExecutor
+
         with MPICommExecutor(comm=comm) as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} processes")
@@ -320,7 +326,7 @@ def func_noise(
 
 
 def process_signal(config: Config, manager: DataManager, comm: Comm):
-    rank = comm.Get_rank()
+    rank = 0 if comm is None else comm.Get_rank()
     n_sim = config.map_sim_pars.n_sim
 
     if n_sim == 0:
@@ -351,7 +357,7 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
 
 
 def process_noise(config: Config, manager: DataManager, comm: Comm):
-    rank = comm.Get_rank()
+    rank = 0 if comm is None else comm.Get_rank()
     n_sim = config.noise_sim_pars.n_sim
 
     if n_sim == 0:
@@ -372,7 +378,7 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
 
 def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
     """Generate pure T, E and pure B map with power law spectra for Transfer Function Computation."""
-    rank = comm.Get_rank()
+    rank = 0 if comm is None else comm.Get_rank()
     n_sim = config.map_sim_pars.TF_n_sim
 
     if n_sim == 0:
@@ -400,10 +406,46 @@ def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
         logger.info(f"Finished TF simulation {result + 1} / {n_sim}")
 
 
+def _load_masks(manager: DataManager, config: Config):
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
+    nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
+    return binary_mask, nhits_maps
+
+
+def main_signal():
+    """Entry point for generating a single sky realization."""
+    parser = argparse.ArgumentParser(description="Generate a single sky realization")
+    parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, required=True, help="simulation index to generate")
+
+    args = parser.parse_args()
+    config = Config.load_yaml(args.config)
+    manager = DataManager(config)
+    manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    binary_mask, nhits_maps = _load_masks(manager, config)
+    func_signal(args.sim, manager, config, binary_mask, nhits_maps)
+
+
+def main_noise():
+    """Entry point for generating a single noise realization."""
+    parser = argparse.ArgumentParser(description="Generate a single noise realization")
+    parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, required=True, help="simulation index to generate")
+
+    args = parser.parse_args()
+    config = Config.load_yaml(args.config)
+    manager = DataManager(config)
+    manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    binary_mask, nhits_maps = _load_masks(manager, config)
+    func_noise(manager, config, binary_mask, nhits_maps, args.sim)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Script for generating signal and noise realizations",
-        epilog="mpi4py is required to run this script",
+        description="Script for generating signal and noise realizations"
     )
     parser.add_argument("--config", type=Path, required=True, help="config file")
 
@@ -416,17 +458,21 @@ def main():
     world, rank, size = get_world()
     num_sets = len(config.map_sets)
     color = rank % num_sets
-    scomm = world.Split(color=color, key=rank)
-    srank = scomm.Get_rank()
-    ssize = scomm.Get_size()
-
-    # Now split the configuration for the different groups
-    num_groups = min(size, num_sets)
+    if world is not None:
+        scomm = world.Split(color=color, key=rank)
+        srank = scomm.Get_rank()
+        ssize = scomm.Get_size()
+        num_groups = min(size, num_sets)
+    else:
+        scomm = None
+        srank = ssize = 0
+        num_groups = 1
 
     if rank == 0:
         manager.dump_config()
         manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
-    world.Barrier()
+    if world is not None:
+        world.Barrier()
 
     # Split the configuration
     sconf = config.split_map_sets(num_groups, color=color)

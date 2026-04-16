@@ -1,13 +1,10 @@
 import argparse
 import tracemalloc
-
-# from mpi4py.futures import MPICommExecutor
 from pathlib import Path
 
 import healpy as hp
 import numpy as np
 import pymaster as nmt
-from mpi4py import MPI
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
@@ -25,9 +22,7 @@ from megatop.utils.utils import MemoryUsage
 def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: int | None = None):
     tracemalloc.start()
 
-    comm = MPI.COMM_WORLD
-    size = comm.Get_size()
-    rank = comm.rank
+    comm, rank, size = get_world()
     root = 0
 
     MemoryUsage(f"rank = {rank} ")
@@ -244,6 +239,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 def main():
     parser = argparse.ArgumentParser(description="Noise spectra estimator")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -253,6 +249,10 @@ def main():
     if rank == 0:
         manager.dump_config()
         manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    if args.sim is not None:
+        noise_spectra_estimator(config, manager, id_sim_sky=args.sim)
+        return
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:
