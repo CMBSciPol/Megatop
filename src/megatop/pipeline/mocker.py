@@ -445,8 +445,7 @@ def main_noise():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Script for generating signal and noise realizations",
-        epilog="mpi4py is required to run this script",
+        description="Script for generating signal and noise realizations"
     )
     parser.add_argument("--config", type=Path, required=True, help="config file")
 
