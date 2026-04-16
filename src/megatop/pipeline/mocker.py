@@ -416,9 +416,12 @@ def main_signal():
     parser = argparse.ArgumentParser(description="Generate a single sky realization")
     parser.add_argument("--config", type=Path, required=True, help="config file")
     parser.add_argument("--sim", type=int, required=True, help="simulation index to generate")
+    parser.add_argument("--map-set", type=str, default=None, help="map set name to generate")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
+    if args.map_set is not None:
+        config.map_sets = [ms for ms in config.map_sets if ms.name == args.map_set]
     manager = DataManager(config)
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
@@ -431,9 +434,12 @@ def main_noise():
     parser = argparse.ArgumentParser(description="Generate a single noise realization")
     parser.add_argument("--config", type=Path, required=True, help="config file")
     parser.add_argument("--sim", type=int, required=True, help="simulation index to generate")
+    parser.add_argument("--map-set", type=str, default=None, help="map set name to generate")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
+    if args.map_set is not None:
+        config.map_sets = [ms for ms in config.map_sets if ms.name == args.map_set]
     manager = DataManager(config)
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 

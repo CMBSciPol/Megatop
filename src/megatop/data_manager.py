@@ -472,8 +472,11 @@ class DataManager:
             inputs.extend(self.get_obsmat_filenames())
         return inputs
 
-    def outputs_mock_signal(self, id_sim: int) -> list[Path]:
-        return self.get_maps_filenames(id_sim)
+    def outputs_mock_signal(self, id_sim: int, map_set: str | None = None) -> list[Path]:
+        files = self.get_maps_filenames(id_sim)
+        if map_set is not None:
+            return [f for ms, f in zip(self._config.map_sets, files) if ms.name == map_set]
+        return files
 
     def inputs_mock_noise(self, id_sim: int) -> list[Path]:
         return [
@@ -481,8 +484,11 @@ class DataManager:
             *[self.path_to_nhits_map(m) for m in self._config.map_sets],
         ]
 
-    def outputs_mock_noise(self, id_sim: int) -> list[Path]:
-        return self.get_noise_maps_filenames(id_sim)
+    def outputs_mock_noise(self, id_sim: int, map_set: str | None = None) -> list[Path]:
+        files = self.get_noise_maps_filenames(id_sim)
+        if map_set is not None:
+            return [f for ms, f in zip(self._config.map_sets, files) if ms.name == map_set]
+        return files
 
     def inputs_preproc(self, id_sim: int | None = None) -> list[Path]:
         inputs = [

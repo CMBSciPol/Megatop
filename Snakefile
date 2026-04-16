@@ -9,6 +9,7 @@ Usage (SLURM cluster):
     snakemake --profile runfiles/snakemake_profiles/slurm --configfile paramfiles/e2e_check.yaml
 """
 
+from itertools import product
 from pathlib import Path
 
 # ── Load megatop config ───────────────────────────────────────────────────────
@@ -22,6 +23,7 @@ manager = DataManager(mt)
 
 N_SKY = mt.map_sim_pars.n_sim
 N_NOISE = mt.noise_sim_pars.n_sim
+MAP_SETS = [ms.name for ms in mt.map_sets]
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -82,45 +84,49 @@ rule noisecov:
 
 
 # ── Per-noise-sim rules ───────────────────────────────────────────────────────
-for _i in range(N_NOISE):
+for _i, _ms in product(range(N_NOISE), MAP_SETS):
 
     rule:
         benchmark:
-            f"benchmarks/mock_noise_{_i:04d}.tsv"
-        name: f"mock_noise_{_i:04d}"
+            f"benchmarks/mock_noise_{_i:04d}_{_ms}.tsv"
+        name: f"mock_noise_{_i:04d}_{_ms}"
         input:
             S(manager.inputs_mock_noise(_i))
         output:
-            S(manager.outputs_mock_noise(_i))
+            S(manager.outputs_mock_noise(_i, map_set=_ms))
         resources:
             mem_mb=16000,
             runtime=60,
         params:
             config=MEGATOP_CONFIG,
             sim=_i,
+            map_set=_ms,
         shell:
-            "megatop-mock-noise-run --config {params.config} --sim {params.sim}"
+            "megatop-mock-noise-run --config {params.config} --sim {params.sim} --map-set {params.map_set}"
 
 
 # ── Per-sky-sim rules ─────────────────────────────────────────────────────────
-for _i in range(N_SKY):
+for _i, _ms in product(range(N_SKY), MAP_SETS):
 
     rule:
         benchmark:
-            f"benchmarks/mock_signal_{_i:04d}.tsv"
-        name: f"mock_signal_{_i:04d}"
+            f"benchmarks/mock_signal_{_i:04d}_{_ms}.tsv"
+        name: f"mock_signal_{_i:04d}_{_ms}"
         input:
             S(manager.inputs_mock_signal(_i))
         output:
-            S(manager.outputs_mock_signal(_i))
+            S(manager.outputs_mock_signal(_i, map_set=_ms))
         resources:
             mem_mb=16000,
             runtime=60,
         params:
             config=MEGATOP_CONFIG,
             sim=_i,
+            map_set=_ms,
         shell:
-            "megatop-mock-signal-run --config {params.config} --sim {params.sim}"
+            "megatop-mock-signal-run --config {params.config} --sim {params.sim} --map-set {params.map_set}"
+
+for _i in range(N_SKY):
 
     rule:
         benchmark:
