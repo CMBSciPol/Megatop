@@ -2,18 +2,18 @@
 Snakemake workflow for the Megatop CMB analysis pipeline.
 
 Usage (local):
-    snakemake --cores 4 --config megatop_config=paramfiles/e2e_check.yaml
-    snakemake --cores 4 --config megatop_config=paramfiles/e2e_check.yaml --dry-run
+    snakemake --cores 4 --configfile paramfiles/e2e_check.yaml
+    snakemake --cores 4 --configfile paramfiles/e2e_check.yaml --dry-run
 
 Usage (SLURM cluster):
-    snakemake --profile runfiles/snakemake_profiles/slurm --config megatop_config=paramfiles/e2e_check.yaml
+    snakemake --profile runfiles/snakemake_profiles/slurm --configfile paramfiles/e2e_check.yaml
 """
 
 from pathlib import Path
 
 # ── Load megatop config ───────────────────────────────────────────────────────
-# Pass the config path at invocation: --config megatop_config=path/to/config.yaml
-MEGATOP_CONFIG = Path(config["megatop_config"])
+# Pass the config path at invocation: --configfile path/to/config.yaml
+MEGATOP_CONFIG = Path(workflow.configfiles[0])
 
 from megatop import Config, DataManager
 

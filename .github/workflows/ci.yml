@@ -126,4 +126,4 @@ jobs:
           restore-keys: pysm3-${{ runner.os }}-
 
       - name: Run e2e pipeline via Snakemake
-        run: uv run snakemake --cores 4 --config megatop_config=paramfiles/e2e_check.yaml
+        run: uv run snakemake --cores 4 --configfile paramfiles/e2e_check.yaml
