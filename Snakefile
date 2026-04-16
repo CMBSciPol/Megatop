@@ -41,36 +41,36 @@ rule all:
 # ── Global steps (no id_sim) ──────────────────────────────────────────────────
 rule mask_handler:
     input:
-        S(manager.inputs_mask()),
+        S(manager.inputs_mask())
     output:
-        S(manager.outputs_mask()),
+        S(manager.outputs_mask())
     params:
-        config=MEGATOP_CONFIG,
+        config=MEGATOP_CONFIG
     shell:
         "megatop-mask-run --config {params.config}"
 
 
 rule binner:
     input:
-        S(manager.inputs_binner()),
+        S(manager.inputs_binner())
     output:
-        S(manager.outputs_binner()),
+        S(manager.outputs_binner())
     params:
-        config=MEGATOP_CONFIG,
+        config=MEGATOP_CONFIG
     shell:
         "megatop-binning-run --config {params.config}"
 
 
 rule noisecov:
     input:
-        S(manager.inputs_noisecov()),
+        S(manager.inputs_noisecov())
     output:
-        S(manager.outputs_noisecov()),
+        S(manager.outputs_noisecov())
     resources:
         mem_mb=32000,
         runtime=60,
     params:
-        config=MEGATOP_CONFIG,
+        config=MEGATOP_CONFIG
     shell:
         "megatop-noisecov-run --config {params.config}"
 
@@ -81,9 +81,9 @@ for _i in range(N_NOISE):
     rule:
         name: f"mock_noise_{_i:04d}"
         input:
-            S(manager.inputs_mock_noise(_i)),
+            S(manager.inputs_mock_noise(_i))
         output:
-            S(manager.outputs_mock_noise(_i)),
+            S(manager.outputs_mock_noise(_i))
         resources:
             mem_mb=16000,
             runtime=60,
@@ -100,9 +100,9 @@ for _i in range(N_SKY):
     rule:
         name: f"mock_signal_{_i:04d}"
         input:
-            S(manager.inputs_mock_signal(_i)),
+            S(manager.inputs_mock_signal(_i))
         output:
-            S(manager.outputs_mock_signal(_i)),
+            S(manager.outputs_mock_signal(_i))
         resources:
             mem_mb=16000,
             runtime=60,
@@ -115,9 +115,9 @@ for _i in range(N_SKY):
     rule:
         name: f"preproc_{_i:04d}"
         input:
-            S(manager.inputs_preproc(_i)),
+            S(manager.inputs_preproc(_i))
         output:
-            S(manager.outputs_preproc(_i)),
+            S(manager.outputs_preproc(_i))
         resources:
             mem_mb=16000,
             runtime=30,
@@ -130,9 +130,9 @@ for _i in range(N_SKY):
     rule:
         name: f"compsep_{_i:04d}"
         input:
-            S(manager.inputs_compsep(_i)),
+            S(manager.inputs_compsep(_i))
         output:
-            S(manager.outputs_compsep(_i)),
+            S(manager.outputs_compsep(_i))
         resources:
             mem_mb=32000,
             runtime=120,
@@ -145,9 +145,9 @@ for _i in range(N_SKY):
     rule:
         name: f"map2cl_{_i:04d}"
         input:
-            S(manager.inputs_map2cl(_i)),
+            S(manager.inputs_map2cl(_i))
         output:
-            S(manager.outputs_map2cl(_i)),
+            S(manager.outputs_map2cl(_i))
         resources:
             mem_mb=16000,
             runtime=30,
@@ -160,9 +160,9 @@ for _i in range(N_SKY):
     rule:
         name: f"noisespectra_{_i:04d}"
         input:
-            S(manager.inputs_noisespectra(_i)),
+            S(manager.inputs_noisespectra(_i))
         output:
-            S(manager.outputs_noisespectra(_i)),
+            S(manager.outputs_noisespectra(_i))
         resources:
             mem_mb=16000,
             runtime=30,
@@ -175,9 +175,9 @@ for _i in range(N_SKY):
     rule:
         name: f"cl2r_{_i:04d}"
         input:
-            S(manager.inputs_cl2r(_i)),
+            S(manager.inputs_cl2r(_i))
         output:
-            S(manager.outputs_cl2r(_i)),
+            S(manager.outputs_cl2r(_i))
         resources:
             mem_mb=16000,
             runtime=120,
