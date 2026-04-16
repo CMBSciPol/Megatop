@@ -40,6 +40,8 @@ rule all:
 
 # ── Global steps (no id_sim) ──────────────────────────────────────────────────
 rule mask_handler:
+    benchmark:
+        "benchmarks/mask_handler.tsv"
     input:
         S(manager.inputs_mask())
     output:
@@ -51,6 +53,8 @@ rule mask_handler:
 
 
 rule binner:
+    benchmark:
+        "benchmarks/binner.tsv"
     input:
         S(manager.inputs_binner())
     output:
@@ -62,6 +66,8 @@ rule binner:
 
 
 rule noisecov:
+    benchmark:
+        "benchmarks/noisecov.tsv"
     input:
         S(manager.inputs_noisecov())
     output:
@@ -79,6 +85,8 @@ rule noisecov:
 for _i in range(N_NOISE):
 
     rule:
+        benchmark:
+            f"benchmarks/mock_noise_{_i:04d}.tsv"
         name: f"mock_noise_{_i:04d}"
         input:
             S(manager.inputs_mock_noise(_i))
@@ -98,6 +106,8 @@ for _i in range(N_NOISE):
 for _i in range(N_SKY):
 
     rule:
+        benchmark:
+            f"benchmarks/mock_signal_{_i:04d}.tsv"
         name: f"mock_signal_{_i:04d}"
         input:
             S(manager.inputs_mock_signal(_i))
@@ -113,6 +123,8 @@ for _i in range(N_SKY):
             "megatop-mock-signal-run --config {params.config} --sim {params.sim}"
 
     rule:
+        benchmark:
+            f"benchmarks/preproc_{_i:04d}.tsv"
         name: f"preproc_{_i:04d}"
         input:
             S(manager.inputs_preproc(_i))
@@ -128,6 +140,8 @@ for _i in range(N_SKY):
             "megatop-preproc-run --config {params.config} --sim {params.sim}"
 
     rule:
+        benchmark:
+            f"benchmarks/compsep_{_i:04d}.tsv"
         name: f"compsep_{_i:04d}"
         input:
             S(manager.inputs_compsep(_i))
@@ -143,6 +157,8 @@ for _i in range(N_SKY):
             "megatop-compsep-run --config {params.config} --sim {params.sim}"
 
     rule:
+        benchmark:
+            f"benchmarks/map2cl_{_i:04d}.tsv"
         name: f"map2cl_{_i:04d}"
         input:
             S(manager.inputs_map2cl(_i))
@@ -158,6 +174,8 @@ for _i in range(N_SKY):
             "megatop-map2cl-run --config {params.config} --sim {params.sim}"
 
     rule:
+        benchmark:
+            f"benchmarks/noisespectra_{_i:04d}.tsv"
         name: f"noisespectra_{_i:04d}"
         input:
             S(manager.inputs_noisespectra(_i))
@@ -173,6 +191,8 @@ for _i in range(N_SKY):
             "megatop-noisespectra-run --config {params.config} --sim {params.sim}"
 
     rule:
+        benchmark:
+            f"benchmarks/cl2r_{_i:04d}.tsv"
         name: f"cl2r_{_i:04d}"
         input:
             S(manager.inputs_cl2r(_i))
