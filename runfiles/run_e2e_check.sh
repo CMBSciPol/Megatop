@@ -39,7 +39,7 @@ if [[ ! -f "$PARAM_FILE" ]]; then
 fi
 
 if [[ -n "$NP" ]]; then
-    RUN="mpirun -n ${NP}"
+    RUN="mpirun -n ${NP} --oversubscribe"
     echo "Running e2e check with config: ${PARAM_FILE} (MPI, ${NP} processes)"
 else
     RUN=""
