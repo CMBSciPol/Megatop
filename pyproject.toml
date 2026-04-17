@@ -37,7 +37,6 @@ dependencies = [
 mpi = ["mpi4py"]
 snake = [
     "snakemake; python_version >= '3.11'",
-    "snakemake-executor-plugin-slurm; python_version >= '3.11'",
 ]
 
 [dependency-groups]
