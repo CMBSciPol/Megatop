@@ -508,7 +508,7 @@ class DataManager:
     def inputs_noisecov(self) -> list[Path]:
         n_sim_noise = self._config.noise_sim_pars.n_sim
         noise_maps = [path for i in range(n_sim_noise) for path in self.get_noise_maps_filenames(i)]
-        inputs = noise_maps + [self.path_to_analysis_mask, self.path_to_binary_mask]
+        inputs = noise_maps + [self.path_to_analysis_mask]
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             inputs += [self.path_to_binning, self.path_to_lensed_scalar]
         return inputs
@@ -560,7 +560,7 @@ class DataManager:
     def outputs_map2cl(self, id_sim: int | None = None) -> list[Path]:
         return [self.get_path_to_spectra_cross_components(id_sim)]
 
-    def inputs_noisespectra(self, id_sim_sky: int | None = None) -> list[Path]:
+    def inputs_noisespectra(self, id_sim: int | None = None) -> list[Path]:
         n_sim_noise = self._config.noise_sim_pars.n_sim
         if self._config.noise_cov_pars.save_preprocessed_noise_maps:
             noise_inputs = [self.get_path_to_preprocessed_noise_maps(i) for i in range(n_sim_noise)]
@@ -569,15 +569,15 @@ class DataManager:
                 path for i in range(n_sim_noise) for path in self.get_noise_maps_filenames(i)
             ]
         return [
-            self.get_path_to_compsep_results(id_sim_sky),
+            self.get_path_to_compsep_results(id_sim),
             self.path_to_analysis_mask,
             self.path_to_binary_mask,
             self.path_to_binning,
             *noise_inputs,
         ]
 
-    def outputs_noisespectra(self, id_sim_sky: int | None = None) -> list[Path]:
-        return [self.get_path_to_noise_spectra_cross_components(id_sim_sky)]
+    def outputs_noisespectra(self, id_sim: int | None = None) -> list[Path]:
+        return [self.get_path_to_noise_spectra_cross_components(id_sim)]
 
     def inputs_cl2r(self, id_sim: int | None = None) -> list[Path]:
         return [
