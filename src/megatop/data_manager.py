@@ -508,7 +508,10 @@ class DataManager:
     def inputs_noisecov(self) -> list[Path]:
         n_sim_noise = self._config.noise_sim_pars.n_sim
         noise_maps = [path for i in range(n_sim_noise) for path in self.get_noise_maps_filenames(i)]
-        return noise_maps + [self.path_to_analysis_mask, self.path_to_binary_mask]
+        inputs = noise_maps + [self.path_to_analysis_mask, self.path_to_binary_mask]
+        if self._config.parametric_sep_pars.use_harmonic_compsep:
+            inputs += [self.path_to_binning, self.path_to_lensed_scalar]
+        return inputs
 
     def outputs_noisecov(self) -> list[Path]:
         outputs = [self.path_to_pixel_noisecov]
