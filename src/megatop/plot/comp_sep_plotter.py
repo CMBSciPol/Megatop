@@ -61,7 +61,9 @@ def plot_compsep_stats(manager: DataManager, config: Config):
             compsep_results_params.append(params)
             convergence_count += 1
     compsep_results_params = np.array(compsep_results_params)
-    logger.info(f"Component sepatation converged successfully for of {100 * convergence_count / config.map_sim_pars.n_sim:.2f}% the maps.")
+    logger.info(
+        f"Component sepatation converged successfully for of {100 * convergence_count / config.map_sim_pars.n_sim:.2f}% the maps."
+    )
 
     plot_dir = manager.path_to_components_plots
     compsep_results_last = np.load(fname_compsepresults, allow_pickle=True)
@@ -69,26 +71,26 @@ def plot_compsep_stats(manager: DataManager, config: Config):
     # Plotting histograms of result parameters:
     fig, axes = plt.subplots(1, compsep_results_last["params"].shape[0], figsize=(12, 5))
     axes = np.atleast_1d(axes)
-    
+
     label_map = {
-    "Dust.beta_d": r"$\beta_{dust}$",
-    "Synchrotron.beta_pl": r"$\beta_{sync}$",
+        "Dust.beta_d": r"$\beta_{dust}$",
+        "Synchrotron.beta_pl": r"$\beta_{sync}$",
     }
-    
+
     for i, (ax, param_name) in enumerate(zip(axes, compsep_results_last["params"], strict=False)):
         data = compsep_results_params[:, i]
-    
-        ax.hist(data, bins=25, histtype='step', density=False, color="darkblue")
-    
+
+        ax.hist(data, bins=25, histtype="step", density=False, color="darkblue")
+
         mean_param = np.mean(data)
         std_param = np.std(data)
-    
+
         ax.axvline(mean_param, color="mediumvioletred", linestyle="-", linewidth=1.5)
-    
+
         ax.grid(True, linestyle="--", color="lightgrey", alpha=0.7)
         ax.set_xlabel(label_map.get(param_name, param_name))
         ax.set_ylabel("Counts")
-        title = fr"${label_map.get(param_name, param_name).strip('$')} = {mean_param:.3f} \pm {std_param:.5f}$"
+        title = rf"${label_map.get(param_name, param_name).strip('$')} = {mean_param:.3f} \pm {std_param:.5f}$"
         ax.set_title(title)
 
     plt.savefig(plot_dir / Path("statistics_compsep.png"))  # , bbox_inches='tight')

@@ -164,8 +164,6 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
 def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-
-    fsky_binary = sum(binary_mask) / len(binary_mask)
     common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
 
     plot_dir = manager.path_to_mock_plots
@@ -204,7 +202,9 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(noise_freq_maps[i_f], datapath=HEALPY_DATA_PATH))
+            cls.append(
+                hp.anafast(noise_freq_maps[i_f], lmax=2 * config.nside, datapath=HEALPY_DATA_PATH)
+            )
         cls = np.array(cls)
 
         fsky_from_nhits = np.sqrt(np.mean(common_nhits_map**2))
@@ -222,7 +222,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 logger.error(msg)
                 raise RuntimeError(msg) from e
             noise_experiment[exp] = get_noise_experiment(
-                exp, noise_config.experiments[exp], fsky_binary=fsky_binary, nside=config.nside
+                exp, noise_config.experiments[exp], fsky_nhits=fsky_from_nhits, nside=config.nside
             )
         for i_map_set, map_set in enumerate(config.map_sets):
             exp = map_set.exp_tag
@@ -242,24 +242,21 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                     # (white_noise_level[np.newaxis] / np.sqrt(2) / hp.nside2resol(config.nside, arcmin=True)) ** 2
                     # * fsky_binary
                     # / fsky_correction
-                    * fsky_from_nhits[i_map_set] ** 1
-                    / 2
+                    * fsky_from_nhits
                 )
                 cl_model[i_map_set, 1] = (
                     (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
                     # (white_noise_level[np.newaxis] / hp.nside2resol(config.nside, arcmin=True)) ** 2
                     # * fsky_binary
                     # / fsky_correction
-                    * fsky_from_nhits[i_map_set] ** 1
-                    / 2
+                    * fsky_from_nhits
                 )
                 cl_model[i_map_set, 2] = (
                     (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
                     # (white_noise_level[np.newaxis] / hp.nside2resol(config.nside, arcmin=True)) ** 2
                     # * fsky_binary
                     # / fsky_correction
-                    * fsky_from_nhits[i_map_set] ** 1
-                    / 2
+                    * fsky_from_nhits
                 )
             elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
                 n_ell = noise_experiment[exp]["noise_spectra"][idx_freq]

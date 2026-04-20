@@ -1,19 +1,27 @@
+###
+# Config file to reproduce results from Wolz et al. (2302.04276).
+###
 data_dirs:
   beams: beams
   maps: maps
   passbands: passbands
   noise_maps: noise
-  root: /Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/planck_test/data
+  root: path/to/data
 
 fiducial_cmb:
-  lensed_scalar: Cls_Planck2018_lensed_scalar
-  unlensed_scalar_tensor_r1: Cls_Planck2018_unlensed_scalar_and_tensor_r1
-  root: /Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/data/fiducial_cmb_spectra
+  compute_from_camb: True
+  camb_cosmo_pars:
+    H0: 67.5
+    ombh2: 0.022
+    omch2: 0.122
+    tau: 0.06
+    As: 2e-9
+    ns: 0.965
 
 general_pars:
-  lmax: 250
+  lmax: 500
   lmin: 30
-  nside: 128
+  nside: 256
 
 map2cl_pars:
   delta_ell: 10
@@ -22,37 +30,48 @@ map2cl_pars:
   purify_e: false
 
 map_sets:
-- exp_tag: SAT
+- exp_tag: SO-SAT
   file_prefix: ''
   freq_tag: 27
   nhits_map_path: SO_nominal
-- exp_tag: SAT
+  beam: 91.
+
+- exp_tag: SO-SAT
   file_prefix: ''
   freq_tag: 39
   nhits_map_path: SO_nominal
-- exp_tag: SAT
+  beam: 63.
+
+- exp_tag: SO-SAT
   file_prefix: ''
   freq_tag: 93
   nhits_map_path: SO_nominal
-- exp_tag: SAT
+  beam: 30.
+
+- exp_tag: SO-SAT
   file_prefix: ''
   freq_tag: 145
   nhits_map_path: SO_nominal
-- exp_tag: SAT
+  beam: 17.
+
+- exp_tag: SO-SAT
   file_prefix: ''
   freq_tag: 225
   nhits_map_path: SO_nominal
-- exp_tag: SAT
+  beam: 11.
+
+- exp_tag: SO-SAT
   file_prefix: ''
   freq_tag: 280
   nhits_map_path: SO_nominal
+  beam: 9.
 
 map_sim_pars:
   A_lens: 1.
-  cmb_seed: 1
+  cmb_seed: 1234
   cmb_sim_no_pysm: true
   filter_sims: false
-  n_sim: 10
+  n_sim: 1  #Set to > 200 fro good statistics (500 in original paper)
   r_input: 0.0
   single_cmb: false
   sky_model:
@@ -65,7 +84,7 @@ masks_pars:
   galactic_mask_name: galactic_mask
   nhits_map_name: nhits_map
   sources_mask_name: sources_mask
-  include_galactic: false
+  include_galactic: False
   include_sources: false
   input_sources_mask: null
   apod_radius: 10.0
@@ -73,7 +92,7 @@ masks_pars:
   apod_type: C1
   fwhm_arcmin_smooth_nhits: 60
   binary_mask_zero_threshold: 1e-1
-  gal_key: null
+  gal_key: GAL060
   mock_nsources: 100
   mock_sources_hole_radius: 4.0
 
@@ -81,13 +100,17 @@ noise_cov_pars:
   save_preprocessed_noise_maps: true
 
 noise_sim_pars:
-  SAC_yrs_LF: 1
-  experiment: SO
-  include_nhits: true
-  n_sim: 10
-  noise_option: white_noise
-  v3_one_over_f_mode: OPTIMISTIC
-  v3_sensitivity_mode: GOAL
+  include_nhits: True
+  n_sim: 1.  #Set to > 200 for convergence of the noise covariance (500 recommended)
+
+  experiments:
+    SO-SAT:
+      usev3p1: True
+      default_bands: [27, 39, 93, 145, 225, 280]
+      Ntubes_years: [1.,9.,5.]
+      noise_option: noise_spectra
+      v3_one_over_f_mode: OPTIMISTIC
+      v3_sensitivity_mode: GOAL
 
 output_dirs:
   components: components
@@ -98,7 +121,7 @@ output_dirs:
   preproc: preproc
   spectra: spectra
   mcmc: mcmc
-  root: /Users/benjaminberingue/Documents/Research/BB/projects/2403_megatop/planck_test/outputs
+  root: path/to/outputs
 
 parametric_sep_pars:
   include_synchrotron: true
@@ -108,12 +131,12 @@ parametric_sep_pars:
     eps: 1.0e-12
     ftol: 1.0e-12
     gtol: 1.0e-12
-    maxiter: 100
+    maxiter: 200
   minimize_tol: 1.0e-18
   passband_int: false
 
 cl2r_pars:
-  lmax_cosmo_analysis: null
+  lmax_cosmo_analysis: 180
   lmin_cosmo_analysis: null
   load_model_spectra: True
   n_steps: 10000
@@ -140,5 +163,4 @@ plot_pars:
   lmin_plot: 30
 
 pre_proc_pars:
-  beam_fwhms: null
-  common_beam_correction: 100.0
+  common_beam_correction: 100.
