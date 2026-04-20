@@ -238,34 +238,18 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 )
 
                 cl_model[i_map_set, 0] = (
-                    (white_noise_level[np.newaxis] / np.sqrt(2) * np.pi / 180 / 60) ** 2
-                    # (white_noise_level[np.newaxis] / np.sqrt(2) / hp.nside2resol(config.nside, arcmin=True)) ** 2
-                    # * fsky_binary
-                    # / fsky_correction
-                    * fsky_from_nhits
-                )
+                    white_noise_level[np.newaxis] / np.sqrt(2) * np.pi / 180 / 60
+                ) ** 2 * fsky_from_nhits
                 cl_model[i_map_set, 1] = (
-                    (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
-                    # (white_noise_level[np.newaxis] / hp.nside2resol(config.nside, arcmin=True)) ** 2
-                    # * fsky_binary
-                    # / fsky_correction
-                    * fsky_from_nhits
-                )
+                    white_noise_level[np.newaxis] * np.pi / 180 / 60
+                ) ** 2 * fsky_from_nhits
                 cl_model[i_map_set, 2] = (
-                    (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
-                    # (white_noise_level[np.newaxis] / hp.nside2resol(config.nside, arcmin=True)) ** 2
-                    # * fsky_binary
-                    # / fsky_correction
-                    * fsky_from_nhits
-                )
+                    white_noise_level[np.newaxis] * np.pi / 180 / 60
+                ) ** 2 * fsky_from_nhits
             elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
                 n_ell = noise_experiment[exp]["noise_spectra"][idx_freq]
-                cl_model[:, 1, 2:-1] = (
-                    n_ell  # * fsky_from_nhits[i_map_set] ** 1 / 2  # * fsky_binary / fsky_correction
-                )
-                cl_model[:, 2, 2:-1] = (
-                    n_ell  # * fsky_from_nhits[i_map_set] ** 1 / 2  # * fsky_binary / fsky_correction
-                )
+                cl_model[:, 1, 2:-1] = n_ell
+                cl_model[:, 2, 2:-1] = n_ell
             elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
                 cl_model[i_map_set] = 0.0
             else:
