@@ -30,6 +30,7 @@ def get_noise(
         config.noise_sim_pars,
         fsky_nhits=fsky_nhits,
         nside=config.nside,
+        lmax=config.lmax,
         id_sim=id_sim,
     )
     logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
@@ -52,7 +53,9 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     logger.debug(f"CMB {seed = }")
 
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
-    cmb_map = mock.generate_map_cmb(Cl_cmb_model, config.nside, cmb_seed=seed)
+    cmb_map = mock.generate_map_cmb(
+        Cl_cmb_model, nside=config.nside, lmax=config.lmax, cmb_seed=seed
+    )
     logger.debug(f"CMB map has shape {cmb_map.shape}")
     return cmb_map
 
@@ -64,6 +67,7 @@ def get_foregrounds(config: Config) -> NDArray:
     fg_freq_maps = mock.generate_map_fgs_pysm(
         config.map_sets,
         config.nside,
+        config.lmax,
         config.map_sim_pars.sky_model,
     )
     logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
@@ -289,7 +293,9 @@ def func_signal(
     # apply beam and pixel window function correction
     with Timer("beam-freq-maps"):
         for i_f, _f in enumerate(config.frequencies):
-            sky[i_f] = mock.beam_winpix_correction(config.nside, sky[i_f], config.beams[i_f])
+            sky[i_f] = mock.beam_winpix_correction(
+                config.nside, sky[i_f], config.beams[i_f], config.lmax
+            )
 
     # apply filtering
     if obsmat_funcs is not None:
