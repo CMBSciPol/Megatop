@@ -148,7 +148,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         MemoryUsage(f"Memory for noise realisation {id_real + 1}: ")
 
         noise_cov_preprocessed += noise_freq_maps_preprocessed**2
-        # import IPython; IPython.embed()
         if config.parametric_sep_pars.use_harmonic_compsep:
             # Computing the noise spectra from the preprocessed noise maps using namaster
             if config.parametric_sep_pars.harmonic_delta_ell != 1:
@@ -167,7 +166,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     beam=beam4namaster,
                     return_all_spectra=config.pre_proc_pars.correct_for_TF,
                 )
-                # import IPython; IPython.embed()
                 if config.pre_proc_pars.correct_for_TF:
                     logger.warning("DEBUG: Including transfer function in the pre-processed alms. ")
 
