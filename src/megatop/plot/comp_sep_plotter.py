@@ -53,7 +53,7 @@ def plot_compsep_stats(manager: DataManager, config: Config):
     compsep_results_params = []
     convergence_count = 0
     for sky_sims_id in range(config.map_sim_pars.n_sim):
-        fname_compsepresults = manager.get_path_to_compsep_results(sub=sky_sims_id)
+        fname_compsepresults = manager.get_path_to_compsep_results(id_sim=sky_sims_id)
         compsep_results = np.load(fname_compsepresults, allow_pickle=True)
         params = compsep_results["x"]
         convergence = compsep_results["success"].astype(bool)
