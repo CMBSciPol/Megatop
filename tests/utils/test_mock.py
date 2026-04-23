@@ -10,7 +10,7 @@ RNG = np.random.default_rng()
 
 
 def test_fixed_cmb_simulation():
-    cl_cmb_model = RNG.random((1, 6, 3 * NSIDE - 1))
+    cl_cmb_model = RNG.random((6, 3 * NSIDE - 1))
     maps_1 = mock.generate_map_cmb(cl_cmb_model, NSIDE, cmb_seed=1234)
     maps_2 = mock.generate_map_cmb(cl_cmb_model, NSIDE, cmb_seed=1234)
     assert np.all(maps_1 == maps_2)
@@ -22,7 +22,7 @@ def test_shape_white_noise_map():
 
 
 def test_shape_spectra_noise_map():
-    nell = np.arange(2, 3 * NSIDE - 1)
+    nell = np.arange(2, 2 * NSIDE)
     freq_maps = mock.get_noise_map_from_noise_spectra(nell, NSIDE)
     assert freq_maps.shape == (3, hp.nside2npix(NSIDE))
 
@@ -47,14 +47,16 @@ def test_hit_map():
     binary = np.ones(hp.nside2npix(NSIDE))
     nhits_map = RNG.random(hp.nside2npix(NSIDE))
     noise_maps_rescaled = mock.include_hits_noise(
-        noise_maps=noise_maps, nhits_maps=nhits_map, binary_mask=binary
+        noise_maps=noise_maps, common_nhits_map=nhits_map, binary_mask=binary
     )
     assert np.all(noise_maps_rescaled >= np.ones((2, 3, hp.nside2npix(NSIDE))))
     assert np.all(np.isfinite(noise_maps_rescaled))
     assert noise_maps_rescaled.shape == (2, 3, hp.nside2npix(NSIDE))
     nhits_map[RNG.integers(0, hp.nside2npix(NSIDE))] = 0.0
     with pytest.raises(FloatingPointError):
-        _ = mock.include_hits_noise(noise_maps=noise_maps, nhits_maps=nhits_map, binary_mask=binary)
+        _ = mock.include_hits_noise(
+            noise_maps=noise_maps, common_nhits_map=nhits_map, binary_mask=binary
+        )
 
 
 def test_beam():

@@ -1,3 +1,5 @@
+import os
+
 import camb
 import healpy as hp
 import numpy as np
@@ -6,6 +8,8 @@ from numpy.typing import NDArray
 
 from megatop import Config
 from megatop.utils import logger
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def compute_spectra_from_camb(r, cosmo_params_dict, which="total"):
@@ -112,7 +116,9 @@ def compute_auto_cross_cl_from_maps_list(
 
 
 def get_common_beam_wpix(common_beam_fwhm_arcmin, nside):
-    wpix_out = hp.pixwin(nside, pol=True, lmax=3 * nside)  # Pixel window function of output maps
+    wpix_out = hp.pixwin(
+        nside, pol=True, lmax=3 * nside, datapath=HEALPY_DATA_PATH
+    )  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(
         np.radians(common_beam_fwhm_arcmin / 60), lmax=3 * nside, pol=True
     )
@@ -123,7 +129,10 @@ def get_common_beam_wpix(common_beam_fwhm_arcmin, nside):
 def get_effective_beam_noise_preproc(config: Config, A):
     lmax_convolution = 3 * config.nside
     wpix_out = hp.pixwin(
-        config.nside, pol=True, lmax=lmax_convolution
+        config.nside,
+        pol=True,
+        lmax=lmax_convolution,
+        datapath=HEALPY_DATA_PATH,
     )  # Pixel window function of output maps
     Bl_gauss_common = 1
 
@@ -145,7 +154,7 @@ def get_effective_beam_noise_preproc(config: Config, A):
 def get_effective_common_beam(config: Config, A):
     lmax_convolution = 3 * config.nside
     wpix_out = hp.pixwin(
-        config.nside, pol=True, lmax=lmax_convolution
+        config.nside, pol=True, lmax=lmax_convolution, datapath=HEALPY_DATA_PATH
     )  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(
         np.radians(config.pre_proc_pars.common_beam_correction / 60),

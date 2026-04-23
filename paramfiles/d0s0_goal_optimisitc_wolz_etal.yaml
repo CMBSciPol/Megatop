@@ -1,0 +1,166 @@
+###
+# Config file to reproduce results from Wolz et al. (2302.04276).
+###
+data_dirs:
+  beams: beams
+  maps: maps
+  passbands: passbands
+  noise_maps: noise
+  root: path/to/data
+
+fiducial_cmb:
+  compute_from_camb: True
+  camb_cosmo_pars:
+    H0: 67.5
+    ombh2: 0.022
+    omch2: 0.122
+    tau: 0.06
+    As: 2e-9
+    ns: 0.965
+
+general_pars:
+  lmax: 500
+  lmin: 30
+  nside: 256
+
+map2cl_pars:
+  delta_ell: 10
+  n_iter_namaster: 3
+  purify_b: true
+  purify_e: false
+
+map_sets:
+- exp_tag: SO-SAT
+  file_prefix: ''
+  freq_tag: 27
+  nhits_map_path: SO_nominal
+  beam: 91.
+
+- exp_tag: SO-SAT
+  file_prefix: ''
+  freq_tag: 39
+  nhits_map_path: SO_nominal
+  beam: 63.
+
+- exp_tag: SO-SAT
+  file_prefix: ''
+  freq_tag: 93
+  nhits_map_path: SO_nominal
+  beam: 30.
+
+- exp_tag: SO-SAT
+  file_prefix: ''
+  freq_tag: 145
+  nhits_map_path: SO_nominal
+  beam: 17.
+
+- exp_tag: SO-SAT
+  file_prefix: ''
+  freq_tag: 225
+  nhits_map_path: SO_nominal
+  beam: 11.
+
+- exp_tag: SO-SAT
+  file_prefix: ''
+  freq_tag: 280
+  nhits_map_path: SO_nominal
+  beam: 9.
+
+map_sim_pars:
+  A_lens: 1.
+  cmb_seed: 1234
+  cmb_sim_no_pysm: true
+  filter_sims: false
+  n_sim: 1  #Set to > 200 fro good statistics (500 in original paper)
+  r_input: 0.0
+  single_cmb: false
+  sky_model:
+  - d0
+  - s0
+
+masks_pars:
+  analysis_mask_name: common_analysis_mask
+  binary_mask_name: common_binary_mask
+  galactic_mask_name: galactic_mask
+  nhits_map_name: nhits_map
+  sources_mask_name: sources_mask
+  include_galactic: False
+  include_sources: false
+  input_sources_mask: null
+  apod_radius: 10.0
+  apod_radius_point_source: 4.0
+  apod_type: C1
+  fwhm_arcmin_smooth_nhits: 60
+  binary_mask_zero_threshold: 1e-1
+  gal_key: GAL060
+  mock_nsources: 100
+  mock_sources_hole_radius: 4.0
+
+noise_cov_pars:
+  save_preprocessed_noise_maps: true
+
+noise_sim_pars:
+  include_nhits: True
+  n_sim: 1.  #Set to > 200 for convergence of the noise covariance (500 recommended)
+
+  experiments:
+    SO-SAT:
+      usev3p1: True
+      default_bands: [27, 39, 93, 145, 225, 280]
+      Ntubes_years: [1.,9.,5.]
+      noise_option: noise_spectra
+      v3_one_over_f_mode: OPTIMISTIC
+      v3_sensitivity_mode: GOAL
+
+output_dirs:
+  components: components
+  covar: covar
+  masks: masks
+  noise_spectra: noise_spectra
+  plots: plots
+  preproc: preproc
+  spectra: spectra
+  mcmc: mcmc
+  root: path/to/outputs
+
+parametric_sep_pars:
+  include_synchrotron: true
+  minimize_method: TNC
+  minimize_options:
+    disp: false
+    eps: 1.0e-12
+    ftol: 1.0e-12
+    gtol: 1.0e-12
+    maxiter: 200
+  minimize_tol: 1.0e-18
+  passband_int: false
+
+cl2r_pars:
+  lmax_cosmo_analysis: 180
+  lmin_cosmo_analysis: null
+  load_model_spectra: True
+  n_steps: 10000
+  n_steps_burnin: 2000
+  n_walkers: 200
+  prior_bounds:
+    A_{dust}:
+    - 0.0
+    - 1.0
+    A_{lens}:
+    - 0.0
+    - 10.0
+    A_{sync}:
+    - 0.0
+    - 1.0
+    r:
+    - -0.1
+    - 0.1
+  dust_marg: false
+  sync_marg: false
+
+plot_pars:
+  lmax_plot: 500
+  lmin_plot: 30
+
+pre_proc_pars:
+  common_beam_correction: 100.

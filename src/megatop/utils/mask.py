@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from urllib.error import URLError
@@ -14,6 +15,7 @@ SO_NOMINAL_HITMAP_URL = (
     "https://portal.nersc.gov/cfs/sobs/users/so_bb/norm_nHits_SA_35FOV_ns512.fits"
 )
 
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 # def get_norm_nhits_from_depth(depth_maps):
 #     """
@@ -54,10 +56,14 @@ def smooth_mask(mask, fwhm_arcmin):
     if mask.ndim > 1:
         mask_smoothed = []
         for m in mask:
-            mask_smoothed.append(hp.smoothing(m, fwhm=np.radians(fwhm_arcmin / 60.0)))
+            mask_smoothed.append(
+                hp.smoothing(m, fwhm=np.radians(fwhm_arcmin / 60.0), datapath=HEALPY_DATA_PATH)
+            )
         mask_smoothed = np.array(mask_smoothed)
     else:
-        mask_smoothed = hp.smoothing(mask, fwhm=np.radians(fwhm_arcmin / 60.0))
+        mask_smoothed = hp.smoothing(
+            mask, fwhm=np.radians(fwhm_arcmin / 60.0), datapath=HEALPY_DATA_PATH
+        )
     mask_smoothed[mask_smoothed < 0] = 0
     return mask_smoothed
 
@@ -182,7 +188,9 @@ def get_binary_mask_from_nhits(nhits_map, nside, zero_threshold=1e-3):
     binary_mask: array
     """
     nhits_smoothed = hp.smoothing(
-        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64), fwhm=np.pi / 180
+        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64),
+        fwhm=np.pi / 180,
+        datapath=HEALPY_DATA_PATH,
     )
     nhits_smoothed[nhits_smoothed < 0] = 0
     nhits_smoothed /= np.amax(nhits_smoothed)
@@ -277,8 +285,8 @@ def get_spin_derivatives(map):
     ell = np.arange(3 * nside)
     alpha1i = np.sqrt(ell * (ell + 1.0))
     alpha2i = np.sqrt((ell - 1.0) * ell * (ell + 1.0) * (ell + 2.0))
-    first = hp.alm2map(hp.almxfl(hp.map2alm(map), alpha1i), nside=nside)
-    second = hp.alm2map(hp.almxfl(hp.map2alm(map), alpha2i), nside=nside)
+    first = hp.alm2map(hp.almxfl(hp.map2alm(map, datapath=HEALPY_DATA_PATH), alpha1i), nside=nside)
+    second = hp.alm2map(hp.almxfl(hp.map2alm(map, datapath=HEALPY_DATA_PATH), alpha2i), nside=nside)
 
     return first, second
 

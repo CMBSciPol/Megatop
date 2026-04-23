@@ -1,3 +1,5 @@
+import os
+
 import healpy as hp
 import numpy as np
 import scipy as sp
@@ -14,6 +16,8 @@ from ..data_manager import DataManager
 from . import V3calc as V3
 from . import V3p1calc as V3p1
 from .logger import logger
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def get_Cl_CMB_model_from_manager(manager: DataManager):
@@ -36,17 +40,15 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
 
     # setting TB and EB correlations to 0
-    return np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0]])
+    return np.array([Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0])
 
 
 def generate_map_cmb(Cl_cmb_model, nside: int, cmb_seed: list[int] | int | None = None):
     # TODO write tests
-    lmax = 3 * nside
-
     # Fixing seed if required
     # hp.synfast uses the legacy numpy random number generator
     np.random.seed(cmb_seed)  # noqa: NPY002
-    map_CMB = hp.synfast(Cl_cmb_model[0], nside=nside, lmax=lmax, new=True, pixwin=False)
+    map_CMB = hp.synfast(Cl_cmb_model, nside=nside, lmax=2 * nside, new=True, pixwin=False)
 
     # Resetting seed
     np.random.seed(None)  # noqa: NPY002
@@ -66,13 +68,14 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
                 f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"
             )
             r = hp.Rotator(coord=[input_coord, output_coord])
-            m = r.rotate_map_pixel(m)
+            # m = r.rotate_map_pixel(m)
+            m = r.rotate_map_alms(m, datapath=HEALPY_DATA_PATH)
         maps_fgs.append(m)
     return np.array(maps_fgs)
 
 
 def get_full_sky_noise_freq_maps(
-    map_sets, noise_config: dict, fsky_binary: float, nside: int, id_sim: int = 0
+    map_sets, noise_config: dict, fsky_nhits: float, nside: int, id_sim: int = 0
 ):
     experiments_map_set = set([map_set.exp_tag for map_set in map_sets])
     experiments_noiseconfig = [name for name in noise_config.experiments]
@@ -87,7 +90,7 @@ def get_full_sky_noise_freq_maps(
         noise_experiment[exp] = get_noise_experiment(
             exp,
             noise_config.experiments[exp],
-            fsky_binary=fsky_binary,
+            fsky_nhits=fsky_nhits,
             nside=nside,
             id_sim=id_sim,
         )
@@ -121,7 +124,7 @@ def get_full_sky_noise_freq_maps(
 def get_noise_experiment(
     exp: str,
     noise_config_exp: ValidExperimentConfig,
-    fsky_binary: float,
+    fsky_nhits: float,
     nside: int,
     id_sim: int = 0,
 ):
@@ -137,7 +140,7 @@ def get_noise_experiment(
                 survey_years=1.0,  # The scaling wiht time is done through Ntubes_years
             )
             _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-                f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
+                f_sky=fsky_nhits, ell_max=2 * nside, delta_ell=1, deconv_beam=False
             )
         else:
             logger.info(
@@ -149,8 +152,8 @@ def get_noise_experiment(
                 sensitivity_mode=sensitivity_mode,
                 one_over_f_mode=one_over_f_mode,
                 SAC_yrs_LF=noise_config_exp.SAC_yrs_LF,
-                f_sky=fsky_binary,
-                ell_max=3 * nside - 1,
+                f_sky=fsky_nhits,
+                ell_max=2 * nside,
                 delta_ell=1,
                 beam_corrected=False,
                 remove_kluge=False,
@@ -169,7 +172,7 @@ def get_noise_experiment(
             survey_years=1.0,
         )
         _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-            f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
+            f_sky=fsky_nhits, ell_max=2 * nside, delta_ell=1, deconv_beam=False
         )
 
     elif type(noise_config_exp) is ExternalNoiseMapconfig:
@@ -210,7 +213,7 @@ def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int):
 
 def get_noise_map_from_noise_spectra(n_ell, nside: int):
     noise_maps = np.zeros((3, hp.nside2npix(nside)))
-    noise_spectra = np.zeros((3, 3 * nside - 1))
+    noise_spectra = np.zeros((3, 2 * nside))
     logger.warning(
         "Do not trust the temperature noise spectra (ell_knee and alpha_knee are polarisation ones)"
     )
@@ -231,10 +234,10 @@ def get_noise_map_from_noise_spectra(n_ell, nside: int):
     return noise_maps
 
 
-def include_hits_noise(noise_maps, nhits_maps, binary_mask):
+def include_hits_noise(noise_maps, common_nhits_map, binary_mask):
     logger.debug("Rescaling the noise maps by the hits count")
     mask_indices = np.where(binary_mask == 1)[0]
-    if np.any(nhits_maps[..., mask_indices] == 0):
+    if np.any(common_nhits_map[mask_indices] == 0):
         logger.error("Division by 0 in noise map nhit rescaling.")
         logger.error("The binary mask does not cover all areas where nhits = 0.")
         logger.error(
@@ -242,18 +245,23 @@ def include_hits_noise(noise_maps, nhits_maps, binary_mask):
         )
         logger.error("Exiting...")
     with np.errstate(divide="raise", invalid="raise"):
-        noise_maps[..., mask_indices] /= np.sqrt(nhits_maps[..., np.newaxis, mask_indices])
+        noise_maps[..., mask_indices] /= np.sqrt(common_nhits_map[np.newaxis, mask_indices])
 
     return noise_maps
 
 
 def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float):
-    lmax_convolution = 3 * nside  # here lmax seems to play an important role
+    lmax_convolution = 2 * nside  # here lmax seems to play an important role
     logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
-    alms_T, alms_Q, alms_U = hp.map2alm(freq_map, lmax=lmax_convolution, pol=True)
+    alms_T, alms_Q, alms_U = hp.map2alm(
+        freq_map, lmax=lmax_convolution, pol=True, datapath=HEALPY_DATA_PATH
+    )
     Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam_FWHM / 60), lmax=lmax_convolution, pol=True)
     wpix_in = hp.pixwin(
-        nside, pol=True, lmax=lmax_convolution
+        nside,
+        pol=True,
+        lmax=lmax_convolution,
+        datapath=HEALPY_DATA_PATH,
     )  # Pixel window function of input maps
 
     sm_corr_T = Bl_gauss_fwhm[:, 0] * wpix_in[0]

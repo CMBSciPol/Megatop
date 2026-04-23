@@ -1,4 +1,5 @@
 import argparse
+import os
 import tracemalloc
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
 from megatop.utils.utils import MemoryUsage
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def get_reduced_TF(transfer):
@@ -247,7 +250,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 )
                 noise_spectra = np.array(
                     [
-                        hp.anafast(noise_freq_maps_preprocessed[i])[:3]
+                        hp.anafast(noise_freq_maps_preprocessed[i], datapath=HEALPY_DATA_PATH)[:3]
                         for i in range(len(config.frequencies))
                     ]
                 )
@@ -357,7 +360,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 )
                 noise_spectra = np.array(
                     [
-                        hp.anafast(noise_freq_maps_preprocessed[i])[:3]
+                        hp.anafast(noise_freq_maps_preprocessed[i], datapath=HEALPY_DATA_PATH)[:3]
                         for i in range(len(config.frequencies))
                     ]
                 )

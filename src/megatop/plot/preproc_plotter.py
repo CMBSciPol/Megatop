@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import Path
 
 import healpy as hp
@@ -8,6 +9,8 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def plot_preprocessed_maps(manager, config, id_sim=None, maps=True, cls=True):
@@ -33,7 +36,9 @@ def plot_preprocessed_maps(manager, config, id_sim=None, maps=True, cls=True):
         lmax = 3 * config.nside
         spectra_array = []
         for i in range(len(config.frequencies)):
-            spectra_array.append(hp.anafast(freq_maps_preprocessed[i], lmax=lmax))
+            spectra_array.append(
+                hp.anafast(freq_maps_preprocessed[i], lmax=lmax, datapath=HEALPY_DATA_PATH)
+            )
         spectra_array = np.array(spectra_array)
 
         plotTTEEBB(
