@@ -135,6 +135,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 common_beam=config.pre_proc_pars.common_beam_correction,
                 frequency_beams=config.beams,
                 freq_maps=noise_freq_maps,
+                lmax=config.lmax,
             )
 
         if config.noise_cov_pars.save_preprocessed_noise_maps:
