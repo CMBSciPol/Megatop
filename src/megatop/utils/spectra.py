@@ -6,7 +6,6 @@ import numpy as np
 import pymaster as nmt
 from numpy.typing import NDArray
 
-from megatop import Config
 from megatop.utils import logger
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
@@ -61,14 +60,30 @@ def compute_auto_cross_cl_from_maps_dict(
     maps_dict: dict,
     analysis_mask: NDArray,
     workspace,
-    purify_b: bool = True, 
-    purify_e: bool = False,
+    beam: NDArray,
+    n_iter: int,
+    lmax: int,
+    purify_b: bool,
+    purify_e: bool,
     inverse_effective_transfer_function: bool | None = None,
 ):
     # Create the fields
     fields = []
     for key in maps_dict:
-        fields.append(nmt.NmtField(mask=analysis_mask, maps=maps_dict[key], purify_e=purify_e, purify_b=purify_b))
+        fields.append(
+            nmt.NmtField(
+                mask=analysis_mask,
+                maps=maps_dict[key],
+                spin=2,
+                beam=beam,
+                purify_e=purify_e,
+                purify_b=purify_b,
+                n_iter=n_iter,
+                n_iter_mask=n_iter,
+                lmax=lmax,
+                lmax_mask=lmax,
+            )
+        )
 
     # Compute the power spectra
     cl_list = []
@@ -140,20 +155,19 @@ def get_effective_beam_noise_preproc(freqs, A, beams, nside: int, lmax: int):
     return np.einsum("fc, fl, fk->ckl", A, beam_correction, A)
 
 
-def get_effective_common_beam(config: Config, A):
-    lmax_convolution = 3 * config.nside
+def get_effective_common_beam(beam_fwhm_arcmin: float, frequencies, nside: int, lmax: int, A):
     wpix_out = hp.pixwin(
-        config.nside, pol=True, lmax=lmax_convolution, datapath=HEALPY_DATA_PATH
+        nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
     )  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(
-        np.radians(config.pre_proc_pars.common_beam_correction / 60),
-        lmax=lmax_convolution,
+        np.radians(beam_fwhm_arcmin / 60),
+        lmax=lmax,
         pol=True,
     )
 
     beam_P = Bl_gauss_common[:, 1] * wpix_out[1]  # Ignoring T
 
-    beam_P_freq_array = np.array([beam_P for i in range(len(config.frequencies))])
+    beam_P_freq_array = np.array([beam_P for i in range(len(frequencies))])  # TODO NOT NICE
     # Would probably be better to use W but it's last dimension is a map, which makes things ill defined
     return np.einsum("fc, fl, fk->ckl", A, beam_P_freq_array, A)
 

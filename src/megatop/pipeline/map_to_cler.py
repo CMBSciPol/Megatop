@@ -37,7 +37,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
 
     # Initializing workspace
     with Timer("init-namaster-workspace"):
-        workspaceff = initialize_nmt_workspace(
+        workspace_nmt = initialize_nmt_workspace(
             nmt_bins=nmt_bins,
             analysis_mask=analysis_mask,
             beam=effective_beam_CMB,
@@ -68,7 +68,12 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             all_Cls_WmaxL_freq = compute_auto_cross_cl_from_maps_dict(
                 maps_dict=dict_comp_WmaxL_freq,
                 analysis_mask=analysis_mask,
-                workspace=workspaceff,
+                workspace=workspace_nmt,
+                beam=effective_beam_CMB,
+                n_iter=config.map2cl_pars.n_iter_namaster,
+                lmax=config.lmax,
+                purify_b=config.map2cl_pars.purify_b,
+                purify_e=config.map2cl_pars.purify_e,
             )
             Cl_WmaxL[0, 0, freq] = all_Cls_WmaxL_freq["CMBxCMB"]
             Cl_WmaxL[0, 1, freq] = all_Cls_WmaxL_freq["CMBxDust"]
@@ -110,7 +115,12 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
         all_Cls = compute_auto_cross_cl_from_maps_dict(
             maps_dict=comp_dict,
             analysis_mask=analysis_mask,
-            workspace=workspaceff,
+            workspace=workspace_nmt,
+            beam=effective_beam_CMB,
+            n_iter=config.map2cl_pars.n_iter_namaster,
+            lmax=config.lmax,
+            purify_b=config.map2cl_pars.purify_b,
+            purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
         )
 

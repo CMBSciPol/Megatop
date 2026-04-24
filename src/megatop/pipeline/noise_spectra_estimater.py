@@ -40,11 +40,15 @@ def init_workspace(config: Config, manager: DataManager):
             n_iter=config.map2cl_pars.n_iter_namaster,
             lmax=config.lmax,
         )
-    return workspace
+    return workspace, effective_beam_CMB
 
 
 def noise_spectra_estimator(
-    config: Config, manager: DataManager, workspace_nmt, id_sim_sky: int | None = None
+    config: Config,
+    manager: DataManager,
+    workspace_nmt,
+    effective_beam_CMB,
+    id_sim_sky: int | None = None,
 ):
     tracemalloc.start()
 
@@ -94,6 +98,11 @@ def noise_spectra_estimator(
                 maps_dict=dict_comp_WmaxL_freq,
                 analysis_mask=analysis_mask,
                 workspace=workspace_nmt,
+                beam=effective_beam_CMB,
+                n_iter=config.map2cl_pars.n_iter_namaster,
+                lmax=config.lmax,
+                purify_b=config.map2cl_pars.purify_b,
+                purify_e=config.map2cl_pars.purify_e,
             )
             Cl_WmaxL[0, 0, freq] = all_Cls_WmaxL_freq["CMBxCMB"]
             Cl_WmaxL[0, 1, freq] = all_Cls_WmaxL_freq["CMBxDust"]
@@ -160,6 +169,11 @@ def noise_spectra_estimator(
             maps_dict=noise_comp_dict,
             analysis_mask=analysis_mask,
             workspace=workspace_nmt,
+            beam=effective_beam_CMB,
+            n_iter=config.map2cl_pars.n_iter_namaster,
+            lmax=config.lmax,
+            purify_b=config.map2cl_pars.purify_b,
+            purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
         )
         # Summing the noise spectra
@@ -209,7 +223,7 @@ def main():
     manager = DataManager(config)
 
     world, rank, size = get_world()
-    workspace_nmt = init_workspace(
+    workspace_nmt, effective_beam_CMB = init_workspace(
         config, manager
     )  # Initialize the workspace once and for all (WARNING WHEN WE'LL NEED EFFECTIVE BEAMS !!!!!)
     if rank == 0:
@@ -217,15 +231,17 @@ def main():
         manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     if args.sim is not None:
-        noise_spectra_estimator(config, manager, workspace_nmt, id_sim_sky=args.sim)
+        noise_spectra_estimator(
+            config, manager, workspace_nmt, effective_beam_CMB, id_sim_sky=args.sim
+        )
         return
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:
-        noise_spectra_estimator(config, manager, workspace_nmt)
+        noise_spectra_estimator(config, manager, workspace_nmt, effective_beam_CMB)
     else:
         for i in range(n_sim_sky):
-            result = noise_spectra_estimator(config, manager, workspace_nmt, i)
+            result = noise_spectra_estimator(config, manager, workspace_nmt, effective_beam_CMB, i)
             logger.info(
                 f"Finished noise spectra estimation for sky simulation {result + 1}/{n_sim_sky}"
             )
