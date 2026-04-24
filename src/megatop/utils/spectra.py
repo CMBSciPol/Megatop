@@ -61,12 +61,14 @@ def compute_auto_cross_cl_from_maps_dict(
     maps_dict: dict,
     analysis_mask: NDArray,
     workspace,
+    purify_b: bool = True, 
+    purify_e: bool = False,
     inverse_effective_transfer_function: bool | None = None,
 ):
     # Create the fields
     fields = []
     for key in maps_dict:
-        fields.append(nmt.NmtField(mask=analysis_mask, maps=maps_dict[key]))
+        fields.append(nmt.NmtField(mask=analysis_mask, maps=maps_dict[key], purify_e=purify_e, purify_b=purify_b))
 
     # Compute the power spectra
     cl_list = []
