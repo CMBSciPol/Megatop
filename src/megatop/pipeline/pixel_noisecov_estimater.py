@@ -12,7 +12,7 @@ from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
-from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
+from megatop.utils.spectra import initialize_nmt_workspace_harmonic_TF, spectra_from_namaster
 from megatop.utils.utils import MemoryUsage
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
@@ -72,7 +72,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
 
         with Timer("init-namaster-workspace"):
-            workspaceff = initialize_nmt_workspace(
+            workspaceff = initialize_nmt_workspace_harmonic_TF(
                 nmt_bins,
                 manager.path_to_lensed_scalar,
                 config.nside,
