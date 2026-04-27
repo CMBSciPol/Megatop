@@ -1,11 +1,10 @@
 [project]
 site_name = "Megatop documentation"
 site_description = "A map-based CMB polarisation experiment data analysis pipeline."
-site_author = "Simon Biquard"
+site_author = "SciPol team"
 site_url = "https://megatop.readthedocs.io/en"
-copyright = "Copyright &copy; 2025 SciPol"
+copyright = "&copy; 2026 SciPol"
 repo_url = "https://github.com/CMBSciPol/Megatop"
-repo_name = "CMBSciPol/Megatop"
 
 # https://zensical.org/docs/setup/navigation/
 nav = [
