@@ -3,14 +3,13 @@ version: 2
 build:
   os: ubuntu-24.04
   tools:
-    python: latest
-    uv: latest
+    python: "3.13"
   jobs:
     install:
-      - uv sync --only-group docs --no-install-project
+      - pip install uv
     build:
       html:
-        - zensical build
+        - uv run --only-group docs zensical build
     post_build:
       - mkdir -p $READTHEDOCS_OUTPUT/html/
       - cp --recursive site/* $READTHEDOCS_OUTPUT/html/
