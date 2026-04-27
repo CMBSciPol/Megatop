@@ -205,7 +205,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 logger.error(msg)
                 raise RuntimeError(msg) from e
             noise_experiment[exp] = get_noise_experiment(
-                exp, noise_config.experiments[exp], fsky_nhits=fsky_from_nhits, nside=config.nside
+                exp, noise_config.experiments[exp], fsky_nhits=fsky_from_nhits, lmax=config.lmax
             )
         for i_map_set, map_set in enumerate(config.map_sets):
             exp = map_set.exp_tag

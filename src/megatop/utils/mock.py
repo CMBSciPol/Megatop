@@ -108,7 +108,7 @@ def get_full_sky_noise_freq_maps(
             )
         elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
             noise_freq_maps[i_map_set] = get_noise_map_from_noise_spectra(
-                noise_experiment[exp]["noise_spectra"][idx_freq], nside
+                noise_experiment[exp]["noise_spectra"][idx_freq], nside, lmax
             )
         elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
             noise_freq_maps[i_map_set, :, :] = 1e-10
@@ -213,9 +213,9 @@ def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int):
     return rng.normal(np.zeros_like(nlev_map), nlev_map, (3, npix))
 
 
-def get_noise_map_from_noise_spectra(n_ell, nside: int):
+def get_noise_map_from_noise_spectra(n_ell, nside: int, lmax: int):
     noise_maps = np.zeros((3, hp.nside2npix(nside)))
-    noise_spectra = np.zeros((3, 2 * nside))
+    noise_spectra = np.zeros((3, lmax))
     logger.warning(
         "Do not trust the temperature noise spectra (ell_knee and alpha_knee are polarisation ones)"
     )

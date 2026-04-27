@@ -23,7 +23,7 @@ def test_shape_white_noise_map():
 
 def test_shape_spectra_noise_map():
     nell = np.arange(2, 2 * NSIDE)
-    freq_maps = mock.get_noise_map_from_noise_spectra(nell, NSIDE)
+    freq_maps = mock.get_noise_map_from_noise_spectra(nell, NSIDE, 2 * NSIDE)
     assert freq_maps.shape == (3, hp.nside2npix(NSIDE))
 
 
