@@ -15,7 +15,7 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
     plot_dir = manager.path_to_components_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
+    fname_compmaps = manager.get_path_to_components_maps(id_sim)
     comp_maps = np.load(fname_compmaps)
 
     binary_mask = hp.read_map(manager.path_to_binary_mask)
@@ -50,34 +50,51 @@ def plot_compsep_stats(manager: DataManager, config: Config):
         logger.info("No sky simulations, skipping component separation statistics plotter.")
         return
 
-    param_res_list = []
+    compsep_results_params = []
+    convergence_count = 0
     for sky_sims_id in range(config.map_sim_pars.n_sim):
-        fname_compsepresults = manager.get_path_to_compsep_results(sub=sky_sims_id)
-        param_res_compsep = np.load(fname_compsepresults, allow_pickle=True)["x"]
-        param_res_list.append(param_res_compsep)
-    param_res_list = np.array(param_res_list)
+        fname_compsepresults = manager.get_path_to_compsep_results(id_sim=sky_sims_id)
+        compsep_results = np.load(fname_compsepresults, allow_pickle=True)
+        params = compsep_results["x"]
+        convergence = compsep_results["success"].astype(bool)
+        if convergence:
+            compsep_results_params.append(params)
+            convergence_count += 1
+    compsep_results_params = np.array(compsep_results_params)
+    logger.info(
+        f"Component sepatation converged successfully for of {100 * convergence_count / config.map_sim_pars.n_sim:.2f}% the maps."
+    )
 
-    # Plotting the statistics of the component separation results
     plot_dir = manager.path_to_components_plots
-    res_compsep_last = np.load(fname_compsepresults, allow_pickle=True)
+    compsep_results_last = np.load(fname_compsepresults, allow_pickle=True)
 
-    # plotting histograms of result parameters
-    fig, axes = plt.subplots(1, res_compsep_last["params"].shape[0], figsize=(12, 5))
+    # Plotting histograms of result parameters:
+    fig, axes = plt.subplots(1, compsep_results_last["params"].shape[0], figsize=(12, 5))
     axes = np.atleast_1d(axes)
-    for i, (ax, param_name) in enumerate(zip(axes, res_compsep_last["params"], strict=False)):
-        ax.hist(param_res_list[:, i], density=True)
 
-        ax.set_xlabel(param_name)
-        # title showing mean and std:
-        mean_param = np.mean(param_res_list[:, i])
-        std_param = np.std(param_res_list[:, i])
-        title = f"{param_name} = {mean_param:.5} +/- {std_param:.5}" + i * "\n"
-        # adding i*"\n" allows to hack around overlapping titles...
+    label_map = {
+        "Dust.beta_d": r"$\beta_{dust}$",
+        "Synchrotron.beta_pl": r"$\beta_{sync}$",
+    }
+
+    for i, (ax, param_name) in enumerate(zip(axes, compsep_results_last["params"], strict=False)):
+        data = compsep_results_params[:, i]
+
+        ax.hist(data, bins=25, histtype="step", density=False, color="darkblue")
+
+        mean_param = np.mean(data)
+        std_param = np.std(data)
+
+        ax.axvline(mean_param, color="mediumvioletred", linestyle="-", linewidth=1.5)
+
+        ax.grid(True, linestyle="--", color="lightgrey", alpha=0.7)
+        ax.set_xlabel(label_map.get(param_name, param_name))
+        ax.set_ylabel("Counts")
+        title = rf"${label_map.get(param_name, param_name).strip('$')} = {mean_param:.3f} \pm {std_param:.5f}$"
         ax.set_title(title)
 
     plt.savefig(plot_dir / Path("statistics_compsep.png"))  # , bbox_inches='tight')
     plt.close()
-
     return
 
 

@@ -14,7 +14,7 @@ def plot_map2cl(manager, id_sim=None):
 
     bin_centre_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_centre_lminlmax"]
 
-    path_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+    path_all_Cls = manager.get_path_to_spectra_cross_components(id_sim)
     all_Cls = np.load(path_all_Cls, allow_pickle=True)
     plot_all_Cls(
         all_Cls,

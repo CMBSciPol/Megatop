@@ -28,7 +28,7 @@ dependencies = [
     "matplotlib",
     "numpy",
     "pymaster",
-    "pysm3 >= 3.4.1a2",
+    "pysm3 >= 3.4.4",
     "pyyaml",
     "tqdm",
 ]
@@ -52,6 +52,8 @@ docs = [
 "megatop-mask-run" = "megatop.pipeline.mask_handler:main"
 "megatop-mask-plot" = "megatop.plot.mask_plotter:main"
 "megatop-mock-run" = "megatop.pipeline.mocker:main"
+"megatop-mock-signal-run" = "megatop.pipeline.mocker:main_signal"
+"megatop-mock-noise-run" = "megatop.pipeline.mocker:main_noise"
 "megatop-mock-plot" = "megatop.plot.mock_plotter:main"
 "megatop-noisecov-run" = "megatop.pipeline.pixel_noisecov_estimater:main"
 "megatop-noisecov-plot" = "megatop.plot.noise_cov_plotter:main"

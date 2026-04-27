@@ -325,8 +325,8 @@ class MapSimConfig:
     """Tensor to scalar ratio value in the generated CMB simulations"""
     A_lens: float = 1
     """A_lens value in the generated CMB simulations"""
-    cmb_seed: int | None = None
-    """Optional integer seed for the CMB."""
+    cmb_seed: int = 67
+    """Integer seed for the CMB."""
     single_cmb: bool = False
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False

@@ -25,7 +25,7 @@ def plot_all_noise_spectra(manager, config):
 
     average_noise_CMB = np.zeros([4, len(bin_centre_lminlmax)])
     for id_sim in range(config.map_sim_pars.n_sim):
-        fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+        fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(id_sim)
         all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)
         all_noise_Cls_CMB = all_noise_Cls["Noise_CMBxNoise_CMB"]
 
@@ -93,7 +93,7 @@ def plot_all_spectra(manager, config):
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
     bin_index_lminlmax = binning_info["bin_index_lminlmax"]
 
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : 3 * config.nside]
     nmt_bins = load_nmt_binning(manager)
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, bin_index_lminlmax]
@@ -108,10 +108,10 @@ def plot_all_spectra(manager, config):
     average_noise_CMB = np.zeros([4, len(bin_centre_lminlmax)])
     array_debiased_diff_model = np.zeros([config.map_sim_pars.n_sim, 2, len(bin_centre_lminlmax)])
     for id_sim in range(config.map_sim_pars.n_sim):
-        fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+        fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(id_sim)
         all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)
 
-        fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+        fname_all_Cls = manager.get_path_to_spectra_cross_components(id_sim)
         all_Cls = np.load(fname_all_Cls, allow_pickle=True)
 
         cmb_cls = all_Cls["CMBxCMB"]
@@ -349,7 +349,7 @@ def plot_noise_spectra(manager, config, id_sim=None):
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
 
-    fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+    fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(id_sim)
     all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)
 
     plot_all_Cls(
@@ -361,7 +361,7 @@ def plot_noise_spectra(manager, config, id_sim=None):
         y_axis_label=r"$C_{\ell}$",
     )
 
-    fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+    fname_all_Cls = manager.get_path_to_spectra_cross_components(id_sim)
     all_Cls = np.load(fname_all_Cls, allow_pickle=True)
 
     debiased_cls = {}
@@ -377,7 +377,7 @@ def plot_noise_spectra(manager, config, id_sim=None):
         y_axis_label=r"$C_{\ell}$",
     )
 
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : 3 * config.nside]
     nmt_bins = load_nmt_binning(manager)
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, binning_info["bin_index_lminlmax"]]

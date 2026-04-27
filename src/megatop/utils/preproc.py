@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import healpy as hp
@@ -9,6 +10,8 @@ from megatop.utils.compsep import set_alm_tozero_above_lmax, set_alm_tozero_belo
 
 from .logger import logger
 from .timer import function_timer
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 @function_timer("common-beam-and-nside")
@@ -36,7 +39,7 @@ def common_beam_and_nside(
     freq_alms_out = []
     logger.info(f"Common beam correction -> {common_beam} arcmin and NSIDE -> {nside}")
     if lmax_convolution is None:
-        lmax_convolution = 3 * nside
+        lmax_convolution = 2 * nside
 
     wpix_out = hp.pixwin(
         nside, pol=True, lmax=lmax_convolution
@@ -51,7 +54,10 @@ def common_beam_and_nside(
         # Input window function. WARNING: Must be done in the loop, as input map don't necessarily have the same nside (e.g. MSS2)
         logger.info(f"Input beam FWHM {beam} arcmin -> {common_beam} arcmin")
         wpix_in = hp.pixwin(
-            hp.get_nside(freq_maps[i_beam][0]), pol=True, lmax=lmax_convolution
+            hp.get_nside(freq_maps[i_beam][0]),
+            pol=True,
+            lmax=lmax_convolution,
+            datapath=HEALPY_DATA_PATH,
         )  # Pixel window function of input maps
         wpix_in[1][0:2] = 1.0  # in order not to divide by 0
 
@@ -69,7 +75,11 @@ def common_beam_and_nside(
         map_in_U = np.array(freq_maps[i_beam][2])
 
         alm_in_T, alm_in_E, alm_in_B = hp.map2alm(
-            [map_in_T, map_in_Q, map_in_U], lmax=lmax_convolution, pol=True, iter=10
+            [map_in_T, map_in_Q, map_in_U],
+            lmax=lmax_convolution,
+            pol=True,
+            iter=10,
+            datapath=HEALPY_DATA_PATH,
         )
         # here lmax seems to play an important role
 

@@ -1,13 +1,10 @@
 import argparse
 import tracemalloc
-
-# from mpi4py.futures import MPICommExecutor
 from pathlib import Path
 
 import healpy as hp
 import numpy as np
 import pymaster as nmt
-from mpi4py import MPI
 
 from megatop import Config, DataManager
 from megatop.config import ExternalNoiseMapconfig
@@ -26,9 +23,7 @@ from megatop.utils.utils import MemoryUsage
 def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: int | None = None):
     tracemalloc.start()
 
-    comm = MPI.COMM_WORLD
-    size = comm.Get_size()
-    rank = comm.rank
+    comm, rank, size = get_world()
     root = 0
 
     MemoryUsage(f"rank = {rank} ")
@@ -55,9 +50,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
-    W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
-        "W_maxL"
-    ]
+    W_maxL = np.load(manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True)["W_maxL"]
 
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
@@ -246,9 +239,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
         mean_noise_spectra = None
 
     if rank == root:
-        path = manager.get_path_to_noise_spectra(sub=id_sim_sky)
-        path.mkdir(parents=True, exist_ok=True)
-        fname = manager.get_path_to_noise_spectra_cross_components(sub=id_sim_sky)
+        fname = manager.get_path_to_noise_spectra_cross_components(id_sim_sky)
         logger.info(f"Saving estimated noise spectra to {fname}")
         np.savez(fname, **mean_noise_spectra)
 
@@ -258,6 +249,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 def main():
     parser = argparse.ArgumentParser(description="Noise spectra estimator")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -266,6 +258,11 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    if args.sim is not None:
+        noise_spectra_estimator(config, manager, id_sim_sky=args.sim)
+        return
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:

@@ -5,7 +5,6 @@ from pathlib import Path
 import healpy as hp
 import numpy as np
 import pymaster as nmt
-from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask
@@ -20,9 +19,9 @@ from megatop.utils.spectra import (
 
 def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
     with Timer("load-component-maps"):
-        comp_path = manager.get_path_to_components_maps(sub=id_sim)
+        comp_path = manager.get_path_to_components_maps(id_sim)
         print(comp_path)
-        comp_maps = np.load(manager.get_path_to_components_maps(sub=id_sim))
+        comp_maps = np.load(manager.get_path_to_components_maps(id_sim))
 
     nmt_bins = load_nmt_binning(manager)
 
@@ -61,9 +60,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
             transfer_freq.append(transfer)
         transfer_freq = np.array(transfer_freq)
-        W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim), allow_pickle=True)[
-            "W_maxL"
-        ]
+        W_maxL = np.load(manager.get_path_to_compsep_results(id_sim), allow_pickle=True)["W_maxL"]
         # import IPython; IPython.embed()
         Cl_WmaxL = np.zeros(
             (W_maxL.shape[0], W_maxL.shape[0], W_maxL.shape[1], 4, nmt_bins.get_n_bands())
@@ -141,9 +138,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
 
 
 def save_spectra(manager: DataManager, all_Cls: dict, id_sim: int | None = None):
-    path = manager.get_path_to_spectra(sub=id_sim)
-    path.mkdir(parents=True, exist_ok=True)
-    fname = manager.get_path_to_spectra_cross_components(sub=id_sim)
+    fname = manager.get_path_to_spectra_cross_components(id_sim)
     logger.info(f"Saving estimated spectra to {fname}")
     np.savez(fname, **all_Cls)
 
@@ -162,6 +157,7 @@ def map2cl_and_save(config: Config, manager: DataManager, id_sim: int | None = N
 def main():
     parser = argparse.ArgumentParser(description="Map to CLs")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -170,11 +166,22 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    if args.sim is not None:
+        map2cl_and_save(config, manager, id_sim=args.sim)
+        return
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:
         map2cl_and_save(config, manager, id_sim=None)
+    elif size < 2:
+        for i in range(n_sim_sky):
+            result = map2cl_and_save(config, manager, id_sim=i)
+            logger.info(f"Finished Cl estimation on map {result + 1} / {n_sim_sky}")
     else:
+        from mpi4py.futures import MPICommExecutor
+
         with MPICommExecutor() as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} workers")

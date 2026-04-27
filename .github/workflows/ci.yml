@@ -14,12 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout project
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up prek and run hooks
-        uses: j178/prek-action@v1
+        uses: j178/prek-action@v2
         with:
-          prek-version: "0.2.19"
+          prek-version: "0.3.8"
 
   test:
     name: Run tests on Python ${{ matrix.python-version }}
@@ -34,12 +34,12 @@ jobs:
 
     steps:
       - name: Checkout project
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install uv and set Python version
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
-          version: "0.9.12"
+          version: "0.11.3"
           enable-cache: true
           python-version: ${{ matrix.python-version }}
 
@@ -56,3 +56,40 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -vv
+
+  e2e:
+    name: End-to-end pipeline check (${{ matrix.mpi && 'MPI' || 'no MPI' }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mpi: [true, false]
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v6
+
+      - name: Install uv and set Python version
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.3"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev ${{ matrix.mpi && 'libopenmpi-dev openmpi-bin' || '' }}
+
+      - name: Create virtual environment and install project
+        run: |
+          uv venv
+          uv pip install ${{ matrix.mpi && '".[mpi]"' || '.' }} --group dev
+
+      - name: Cache pysm3 template data
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pysm3
+          key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
+          restore-keys: pysm3-${{ runner.os }}-
+
+      - name: Run e2e pipeline
+        run: source .venv/bin/activate && bash runfiles/run_e2e_check.sh paramfiles/e2e_check.yaml ${{ matrix.mpi && '--np 2' || '' }}

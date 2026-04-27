@@ -4,7 +4,6 @@ from pathlib import Path
 
 import healpy as hp
 import numpy as np
-from mpi4py.futures import MPICommExecutor
 from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
@@ -57,7 +56,7 @@ def homemade_unbin_cell(binned_cell, nmt_bins):
 def preprocess_map(
     manager: DataManager, config: Config, id_sim: int | None = None, mask_output=True
 ):
-    input_maps = read_input_maps(manager.get_maps_filenames(sub=id_sim))
+    input_maps = read_input_maps(manager.get_maps_filenames(id_sim=id_sim))
 
     if config.map_sim_pars.use_input_maps and config.map_sim_pars.input_maps_correction != 1.0:
         corr = config.map_sim_pars.input_maps_correction
@@ -76,7 +75,7 @@ def preprocess_map(
         )
 
         try:
-            noise_maps = read_input_maps(manager.get_noise_maps_filenames(sub=id_sim))
+            noise_maps = read_input_maps(manager.get_noise_maps_filenames(id_sim=id_sim))
         except FileNotFoundError as err:
             if not has_external_noise_cfg:
                 raise
@@ -148,7 +147,7 @@ def preprocess_map(
         if config.pre_proc_pars.correct_for_TF:
             logger.warning("Including transfer function in the pre-processed alms. ")
             for f, tf_path in enumerate(manager.get_TF_filenames()):
-                if tf_path == Path():
+                if tf_path is None:
                     logger.warning(
                         f"DEBUG: Transfer function for frequency {config.frequencies[f]} is not provided, skipping."
                     )
@@ -245,15 +244,13 @@ def preprocess_map(
 
 
 def save_preprocessed_maps(manager: DataManager, freq_maps, id_sim: int | None = None):
-    fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
-    fname.parent.mkdir(parents=True, exist_ok=True)
+    fname = manager.get_path_to_preprocessed_maps(id_sim)
     logger.info(f"Saving pre-processed maps to {fname}")
     np.save(fname, freq_maps)
 
 
 def save_preprocessed_alms(manager: DataManager, freq_alms, id_sim: int | None = None):
-    fname = manager.get_path_to_preprocessed_alms(sub=id_sim)
-    fname.parent.mkdir(parents=True, exist_ok=True)
+    fname = manager.get_path_to_preprocessed_alms(id_sim)
     logger.info(f"Saving pre-processed alms to {fname}")
     np.save(fname, freq_alms)
 
@@ -270,10 +267,9 @@ def preproc_and_save(config: Config, manager: DataManager, id_sim: int | None = 
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Preprocesser", epilog="mpi4py is required to run this script"
-    )
+    parser = argparse.ArgumentParser(description="Preprocesser")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -282,11 +278,22 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    if args.sim is not None:
+        preproc_and_save(config, manager, id_sim=args.sim)
+        return
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data
         preproc_and_save(config, manager, id_sim=None)
+    elif size < 2:
+        for i in range(n_sim_sky):
+            result = preproc_and_save(config, manager, id_sim=i)
+            logger.info(f"Finished preprocessing map {result + 1} / {n_sim_sky}")
     else:
+        from mpi4py.futures import MPICommExecutor
+
         with MPICommExecutor() as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} workers")

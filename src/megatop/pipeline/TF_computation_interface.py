@@ -136,6 +136,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     if config.map_sim_pars.generate_sims_for_TF and config.pre_proc_pars.correct_for_TF:
         create_and_run_soopercool_yaml(manager=manager, config=config)
