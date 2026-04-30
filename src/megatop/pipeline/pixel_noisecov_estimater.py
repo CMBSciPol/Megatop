@@ -1,324 +1,77 @@
+"""Pixel (and harmonic) noise covariance aggregator.
+
+Streams the per-realisation outputs produced by ``megatop-noise-preproc-run``
+and averages them to form the final pixel covariance and (optionally) the
+harmonic ``nl`` covariance. No MPI: realisation-level parallelism is now
+handled by Snakemake fanning out one ``noise_preproc`` job per realisation.
+"""
+
 import argparse
-import os
-import tracemalloc
 from pathlib import Path
 
 import healpy as hp
 import numpy as np
-from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
-from megatop.utils import Timer, logger
-from megatop.utils.binning import load_nmt_binning
-from megatop.utils.mpi import MPISUM, get_world
-from megatop.utils.preproc import common_beam_and_nside
-from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
-from megatop.utils.utils import MemoryUsage
-
-HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
+from megatop.utils import logger
 
 
-def get_reduced_TF(transfer):
-    inv_sqrt_tf_full = np.linalg.inv([sqrtm(TF_ell.T) for TF_ell in transfer.T])[:, -4:, -4:]
-    inv_sqrt_tf_bin = np.zeros((2, 2, inv_sqrt_tf_full.shape[0]), dtype=np.complex128)
-    inv_sqrt_tf_bin[0, 0] = inv_sqrt_tf_full[:, 0, 0]
-    inv_sqrt_tf_bin[0, 1] = inv_sqrt_tf_full[:, 1, 1]
-    inv_sqrt_tf_bin[1, 0] = inv_sqrt_tf_full[:, 2, 2]
-    inv_sqrt_tf_bin[1, 1] = inv_sqrt_tf_full[:, 3, 3]
+def _iter_realisations(n_sim: int | None):
+    """Yield ``id_sim`` indices for the per-realisation files.
 
-    inv_tf_reduced = np.zeros((inv_sqrt_tf_full.shape[0], 4, 4), dtype=np.complex128)
-
-    inv_tf_reduced[:, 0, 0] = inv_sqrt_tf_bin[0, 0] ** 2
-    inv_tf_reduced[:, 0, 1] = inv_sqrt_tf_bin[0, 0] * inv_sqrt_tf_bin[0, 1]
-    inv_tf_reduced[:, 0, 2] = inv_sqrt_tf_bin[0, 1] * inv_sqrt_tf_bin[0, 0]
-    inv_tf_reduced[:, 0, 3] = inv_sqrt_tf_bin[0, 1] ** 2
-
-    inv_tf_reduced[:, 1, 0] = inv_sqrt_tf_bin[0, 0] * inv_sqrt_tf_bin[1, 0]
-    inv_tf_reduced[:, 1, 1] = inv_sqrt_tf_bin[0, 0] * inv_sqrt_tf_bin[1, 1]
-    inv_tf_reduced[:, 1, 2] = inv_sqrt_tf_bin[1, 0] * inv_sqrt_tf_bin[0, 1]
-    inv_tf_reduced[:, 1, 3] = inv_sqrt_tf_bin[0, 1] * inv_sqrt_tf_bin[1, 1]
-
-    inv_tf_reduced[:, 2, 0] = inv_sqrt_tf_bin[1, 0] * inv_sqrt_tf_bin[0, 0]
-    inv_tf_reduced[:, 2, 1] = inv_sqrt_tf_bin[0, 1] * inv_sqrt_tf_bin[1, 0]
-    inv_tf_reduced[:, 2, 2] = inv_sqrt_tf_bin[1, 1] * inv_sqrt_tf_bin[0, 0]
-    inv_tf_reduced[:, 2, 3] = inv_sqrt_tf_bin[1, 1] * inv_sqrt_tf_bin[0, 1]
-
-    inv_tf_reduced[:, 3, 0] = inv_sqrt_tf_bin[1, 0] ** 2
-    inv_tf_reduced[:, 3, 1] = inv_sqrt_tf_bin[1, 0] * inv_sqrt_tf_bin[1, 1]
-    inv_tf_reduced[:, 3, 2] = inv_sqrt_tf_bin[1, 1] * inv_sqrt_tf_bin[1, 0]
-    inv_tf_reduced[:, 3, 3] = inv_sqrt_tf_bin[1, 1] ** 2
-
-    return np.real(inv_tf_reduced)
+    When ``n_sim`` is ``None`` (real-data mode), yield ``None`` once.
+    """
+    if n_sim is None:
+        yield None
+        return
+    yield from range(n_sim)
 
 
-def pixel_noisecov_estimation(manager: DataManager, config: Config):
-    tracemalloc.start()
-    comm, rank, size = get_world()
-
-    MemoryUsage(f"rank = {rank} ")
-
-    logger.info(f"rank = {rank}, size = {size}")
-    noise_cov_preprocessed = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
-
-    if config.parametric_sep_pars.use_harmonic_compsep:
-        nmt_bins = load_nmt_binning(manager)
-        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
-            "bin_index_lminlmax"
-        ]
-
-        ell_min_namaster = config.parametric_sep_pars.harmonic_lmin
-        ell_max_namaster = config.parametric_sep_pars.harmonic_lmax
-
-        mask_analysis = hp.read_map(manager.path_to_analysis_mask)
-
-        with Timer("init-namaster-workspace"):
-            workspaceff = initialize_nmt_workspace(
-                nmt_bins,
-                manager.path_to_lensed_scalar,
-                config.nside,
-                mask_analysis,
-                effective_beam=None,
-                purify_e=False,
-                purify_b=False,
-                n_iter=10,
-            )
-
-        ell_total = len(nmt_bins.get_effective_ells()[bin_index_lminlmax])
-
-        # Initializeing the noise spectra
-        cl_noise_cov_preprocessed_unbinned = np.zeros(
-            (len(config.frequencies), 3, ell_max_namaster - ell_min_namaster)
-        )
-
-        cl_noise_cov_preprocessed = np.zeros((len(config.frequencies), 3, ell_total))
-
-    # Importing noise maps
+def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
     n_sim = config.noise_sim_pars.n_sim
-
-    # The None case of n_sim is useful when calling get_noise_map_filename
-    # so we need to handle it when creating the list of realisations to loop over
     int_n_sim = 1 if n_sim is None else n_sim
-    realisation_list = np.arange(int_n_sim)
 
-    # splitting the list of simulation between the ranks of the process:
-    rank_realisation_list = np.array_split(realisation_list, size)[rank]
+    pixel_acc = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
+    nl_acc = None
+    nl_unbinned_acc = None
+    use_harmonic = config.parametric_sep_pars.use_harmonic_compsep
 
-    for id_realisation in rank_realisation_list:
-        noise_freq_maps = []
+    for id_sim in _iter_realisations(n_sim):
+        maps_path = manager.get_path_to_preprocessed_noise_maps(id_sim)
+        logger.info(f"Loading preprocessed noise maps from {maps_path}")
+        maps = np.load(maps_path)
+        pixel_acc += maps**2
+        del maps
 
-        id_real = None if n_sim is None else id_realisation
+        if use_harmonic:
+            nl = np.load(manager.get_path_to_nl_noisecov_contrib(id_sim))
+            nl_un = np.load(manager.get_path_to_nl_noisecov_contrib_unbinned(id_sim))
+            nl_acc = nl.copy() if nl_acc is None else nl_acc + nl
+            nl_unbinned_acc = nl_un.copy() if nl_unbinned_acc is None else nl_unbinned_acc + nl_un
 
-        logger.info(f"Noise realisation {id_real + 1}/{n_sim}")
-        logger.info(f"in = {rank_realisation_list}")  # debug in logger
+    pixel_mean = pixel_acc / int_n_sim
+    np.save(manager.path_to_pixel_noisecov, pixel_mean)
+    logger.info(f"Saved pixel noise covariance to {manager.path_to_pixel_noisecov}")
 
-        for noise_filename in manager.get_noise_maps_filenames(id_real):
-            logger.debug(f"Importing noise map: {noise_filename}")
-            noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
+    if use_harmonic:
+        np.save(manager.path_to_nl_noisecov, nl_acc / int_n_sim)
+        np.save(manager.path_to_nl_noisecov_unbinned, nl_unbinned_acc / int_n_sim)
+        logger.info(f"Saved harmonic nl covariance to {manager.path_to_nl_noisecov}")
 
-        if (
-            np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams))
-            or config.pre_proc_pars.DEBUGskippreproc
-        ):
-            logger.info(
-                "Common beam correction is the same as the input beam, no need to apply it."
-            )
-            logger.info(
-                "WARNING: this is mostly for testing it might not actually represent the real noise"
-            )
-            noise_freq_maps_preprocessed = np.array(noise_freq_maps)
-
-        else:
-            noise_freq_maps = np.array(noise_freq_maps, dtype=object)
-
-            noise_freq_maps_preprocessed = common_beam_and_nside(
-                nside=config.nside,
-                common_beam=config.pre_proc_pars.common_beam_correction,
-                frequency_beams=config.beams,
-                freq_maps=noise_freq_maps,
-            )
-
-        if config.noise_cov_pars.save_preprocessed_noise_maps:
-            logger.info("Saving pre-processed noise maps to disk")
-            np.save(
-                manager.get_path_to_preprocessed_noise_maps(id_real),
-                noise_freq_maps_preprocessed,
-            )
-
-        MemoryUsage(f"Memory for noise realisation {id_real + 1}: ")
-
-        noise_cov_preprocessed += noise_freq_maps_preprocessed**2
-        # import IPython; IPython.embed()
-        if config.parametric_sep_pars.use_harmonic_compsep:
-            # Computing the noise spectra from the preprocessed noise maps using namaster
-            if config.parametric_sep_pars.harmonic_delta_ell != 1:
-                # use_beam = True
-                beam4namaster = None
-                input_namaster_noise_maps = noise_freq_maps_preprocessed
-
-                noise_spectra, noise_spectra_unbined = spectra_from_namaster(
-                    input_namaster_noise_maps,
-                    mask_analysis,
-                    workspaceff,
-                    nmt_bins,
-                    compute_cross_freq=False,
-                    purify_e=False,
-                    purify_b=False,
-                    beam=beam4namaster,
-                    return_all_spectra=config.pre_proc_pars.correct_for_TF,
-                )
-                # import IPython; IPython.embed()
-                if config.pre_proc_pars.correct_for_TF:
-                    logger.warning("DEBUG: Including transfer function in the pre-processed alms. ")
-
-                    output_noise_spectra = np.zeros(
-                        [len(config.frequencies), 3, nmt_bins.get_n_bands()]
-                    )
-                    output_noise_spectra_unbined = np.zeros(
-                        [len(config.frequencies), 3, noise_spectra_unbined.shape[-1]]
-                    )
-
-                    for f, tf_path in enumerate(manager.get_TF_filenames()):
-                        if tf_path is None:
-                            logger.warning(
-                                f"DEBUG: Transfer function for frequency p{config.frequencies[f]} is not provided, skipping."
-                            )
-                            output_noise_spectra[f, 0] = noise_spectra[f, 0] * 0
-                            output_noise_spectra[f, 1] = noise_spectra[f, 0]
-                            output_noise_spectra[f, 2] = noise_spectra[f, 3]
-                            output_noise_spectra_unbined[f, 0] = noise_spectra_unbined[f, 0] * 0
-                            output_noise_spectra_unbined[f, 1] = noise_spectra_unbined[f, 0]
-                            output_noise_spectra_unbined[f, 2] = noise_spectra_unbined[f, 3]
-                            continue
-                        logger.info(f"Loading transfer function from {tf_path}")
-                        transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
-
-                        inv_tf = np.linalg.inv([T_ell.T for T_ell in transfer.T])[
-                            :, -4:, -4:
-                        ]  # taking only polarised components
-                        # careful with the transpose here, transfer is not symetric
-
-                        reduced_TF = True
-                        # TODO: remove reduced_TF option, or if needed, make it a parameter in config
-                        if reduced_TF:
-                            # Using the same limited elements as for the preproc step
-                            # Since preproc uses alms and not spectra we only have alm_E, and alm_B
-                            inv_tf_ = np.zeros_like(inv_tf)
-                            if config.pre_proc_pars.sum_TF_column:
-                                inv_tf_sum = np.sum(
-                                    inv_tf, axis=1
-                                )  # summing over column to get all the contribution xy-->ab (EE-->EE + EB-->EE + BE-->EE + BB-->EE etc)
-                                inv_tf_[:, 0, 0] = inv_tf_sum[:, 0]  # EE->EE
-                                inv_tf_[:, 1, 1] = inv_tf_sum[:, 1]  # EB->EB
-                                inv_tf_[:, 2, 2] = inv_tf_sum[:, 2]  # BE->BE
-                                inv_tf_[:, 3, 3] = inv_tf_sum[:, 3]  # BB->BB
-                            else:
-                                inv_tf_[:, 0, 0] = inv_tf[:, 0, 0]
-                                inv_tf_[:, 1, 1] = inv_tf[:, 1, 1]
-                                # inv_tf_[:, 1, 1] = inv_tf[:, 0, -1]
-                                inv_tf_[:, 2, 2] = inv_tf[:, 2, 2]
-                                # inv_tf_[:, 2, 2] = inv_tf[:, -1, 0]
-                                inv_tf_[:, 3, 3] = inv_tf[:, 3, 3]
-                            inv_tf = inv_tf_
-
-                            inv_tf_reduced = get_reduced_TF(transfer)
-                            inv_tf = inv_tf_reduced
-
-                        noise_spectra_TF_corrected = np.einsum(
-                            "lij,jl->il",
-                            inv_tf,
-                            noise_spectra[f],
-                        )
-
-                        noise_spectra_TF_corrected_unbined = nmt_bins.unbin_cell(
-                            noise_spectra_TF_corrected
-                        )
-                        output_noise_spectra[f, 0] = noise_spectra_TF_corrected[0] * 0
-                        output_noise_spectra[f, 1] = noise_spectra_TF_corrected[0]
-                        output_noise_spectra[f, 2] = noise_spectra_TF_corrected[3]
-
-                        output_noise_spectra_unbined[f, 0] = (
-                            noise_spectra_TF_corrected_unbined[0] * 0
-                        )
-                        output_noise_spectra_unbined[f, 1] = noise_spectra_TF_corrected_unbined[0]
-                        output_noise_spectra_unbined[f, 2] = noise_spectra_TF_corrected_unbined[3]
-                    noise_spectra = output_noise_spectra
-                    noise_spectra_unbined = output_noise_spectra_unbined
-
-            else:
-                logger.warning(
-                    "Using harmonic delta ell = 1, this is not recommended for noise spectra estimation. Healpy is used in this case."
-                )
-                noise_spectra = np.array(
-                    [
-                        hp.anafast(noise_freq_maps_preprocessed[i], datapath=HEALPY_DATA_PATH)[:3]
-                        for i in range(len(config.frequencies))
-                    ]
-                )
-                noise_spectra_unbined = noise_spectra.copy()
-            noise_spectra = noise_spectra[..., bin_index_lminlmax]
-
-            # Adding the noise spectra to the ones from previous realisations
-            cl_noise_cov_preprocessed += noise_spectra
-            cl_noise_cov_preprocessed_unbinned += noise_spectra_unbined[
-                ..., ell_min_namaster:ell_max_namaster
-            ]
-
-    if comm is not None:
-        noise_cov_preprocessed_recvbuf = MPISUM(noise_cov_preprocessed, comm, rank, 0)
-        if config.parametric_sep_pars.use_harmonic_compsep:
-            noise_cov_preprocessed_recvbuf_cl = MPISUM(cl_noise_cov_preprocessed, comm, rank, 0)
-            noise_cov_preprocessed_recvbuf_cl_unbinned = MPISUM(
-                cl_noise_cov_preprocessed_unbinned, comm, rank, 0
-            )
-    else:
-        noise_cov_preprocessed_recvbuf = noise_cov_preprocessed
-        if config.parametric_sep_pars.use_harmonic_compsep:
-            noise_cov_preprocessed_recvbuf_cl = cl_noise_cov_preprocessed
-            noise_cov_preprocessed_recvbuf_cl_unbinned = cl_noise_cov_preprocessed_unbinned
-
-    if rank == 0:
-        # Average noise_cov and noise_cov_preprocessed over nsims
-        noise_cov_preprocessed_mean = noise_cov_preprocessed_recvbuf / int_n_sim
-        if config.parametric_sep_pars.use_harmonic_compsep:
-            noise_cov_preprocessed_mean_cl = noise_cov_preprocessed_recvbuf_cl / int_n_sim
-            noise_cov_preprocessed_recvbuf_cl_unbinned = (
-                noise_cov_preprocessed_recvbuf_cl_unbinned / int_n_sim
-            )
-
-    else:
-        noise_cov_preprocessed_mean = None
-        if config.parametric_sep_pars.use_harmonic_compsep:
-            noise_cov_preprocessed_mean_cl = None
-            noise_cov_preprocessed_recvbuf_cl_unbinned = None
-
-    if rank == 0:
-        np.save(manager.path_to_pixel_noisecov, noise_cov_preprocessed_mean)
-        if config.parametric_sep_pars.use_harmonic_compsep:
-            np.save(manager.path_to_nl_noisecov, noise_cov_preprocessed_mean_cl)
-            np.save(
-                manager.path_to_nl_noisecov_unbinned, noise_cov_preprocessed_recvbuf_cl_unbinned
-            )
-
-    if rank == 0:
-        logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
+    logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Pixel noise covariance estimater",
-    )
+    parser = argparse.ArgumentParser(description="Pixel noise covariance aggregator")
     parser.add_argument("--config", type=Path, required=True, help="config file")
-
     args = parser.parse_args()
+
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
+    manager.dump_config()
+    manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
-    world, rank, size = get_world()
-    if rank == 0:
-        manager.dump_config()
-        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
-
-    pixel_noisecov_estimation(manager, config)
+    aggregate_noise_cov(manager, config)
 
 
 if __name__ == "__main__":

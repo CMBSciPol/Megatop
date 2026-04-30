@@ -90,6 +90,20 @@ for _i, _ms in product(range(N_NOISE), MAP_SETS):
         shell:
             "megatop-mock-noise-run --config {params.config} --sim {params.sim} --map-set {params.map_set}"
 
+for _i in range(N_NOISE):
+
+    rule:
+        name: f"noise_preproc_{_i:04d}"
+        input:
+            S(manager.inputs_noise_preproc(_i))
+        output:
+            S(manager.outputs_noise_preproc(_i))
+        params:
+            config=MEGATOP_CONFIG,
+            sim=_i,
+        shell:
+            "megatop-noise-preproc-run --config {params.config} --sim {params.sim}"
+
 
 # ── Per-sky-sim rules ─────────────────────────────────────────────────────────
 for _i, _ms in product(range(N_SKY), MAP_SETS):
