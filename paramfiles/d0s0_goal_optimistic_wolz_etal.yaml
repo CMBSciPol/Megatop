@@ -96,9 +96,6 @@ masks_pars:
   mock_nsources: 100
   mock_sources_hole_radius: 4.0
 
-noise_cov_pars:
-  save_preprocessed_noise_maps: true
-
 noise_sim_pars:
   include_nhits: True
   seed: 5678

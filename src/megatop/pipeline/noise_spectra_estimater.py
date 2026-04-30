@@ -10,7 +10,6 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
-from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_list,
     get_common_beam_wpix,
@@ -129,48 +128,13 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
     sum_noise_spectra = {}
 
     for id_realisation in rank_realisation_list:
-        noise_freq_maps = []
-
         id_real = None if n_sim_noise is None else id_realisation
 
         logger.info(f"id_realisation = {id_real}")
         logger.info(f"in = {rank_realisation_list}")
 
-        if config.noise_cov_pars.save_preprocessed_noise_maps:
-            # TODO if use input maps for compsep then can also just import input noise maps here
-            logger.info("Loading pre-processed noise maps")
-
-            noise_freq_maps_preprocessed = np.load(
-                manager.get_path_to_preprocessed_noise_maps(id_real)
-            )
-
-        else:
-            nside_in_list = []
-            for noise_filename in manager.get_noise_maps_filenames(id_real):
-                logger.debug(f"Importing noise map: {noise_filename}")
-                noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
-                nside_in_list.append(hp.get_nside(noise_freq_maps[-1][-1]))
-
-            if np.all(
-                np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams)
-            ):
-                logger.info(
-                    "Common beam correction is the same as the input beam, no need to apply it."
-                )
-                logger.info(
-                    "WARNING: this is mostly for testing it might not actually represent the real noise"
-                )
-
-                noise_freq_maps_preprocessed = noise_freq_maps
-
-            else:
-                noise_freq_maps = np.array(noise_freq_maps, dtype=object)
-                noise_freq_maps_preprocessed = common_beam_and_nside(
-                    nside=config.nside,
-                    common_beam=config.pre_proc_pars.common_beam_correction,
-                    frequency_beams=config.beams,
-                    freq_maps=noise_freq_maps,
-                )
+        logger.info("Loading pre-processed noise maps")
+        noise_freq_maps_preprocessed = np.load(manager.get_path_to_preprocessed_noise_maps(id_real))
 
         # Applying component-separation operator
         noise_map_post_compsep = np.einsum(

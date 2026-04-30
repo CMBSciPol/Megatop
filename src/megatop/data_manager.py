@@ -590,12 +590,7 @@ class DataManager:
 
     def inputs_noisespectra(self, id_sim: int | None = None) -> list[Path]:
         n_sim_noise = self._config.noise_sim_pars.n_sim
-        if self._config.noise_cov_pars.save_preprocessed_noise_maps:
-            noise_inputs = [self.get_path_to_preprocessed_noise_maps(i) for i in range(n_sim_noise)]
-        else:
-            noise_inputs = [
-                path for i in range(n_sim_noise) for path in self.get_noise_maps_filenames(i)
-            ]
+        noise_inputs = [self.get_path_to_preprocessed_noise_maps(i) for i in range(n_sim_noise)]
         return [
             self.get_path_to_compsep_results(id_sim),
             self.path_to_analysis_mask,

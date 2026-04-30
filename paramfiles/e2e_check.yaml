@@ -101,9 +101,6 @@ pre_proc_pars:
   correct_for_TF: false
   sum_TF_column: true
 
-noise_cov_pars:
-  save_preprocessed_noise_maps: true
-
 parametric_sep_pars:
   include_synchrotron: true
   use_harmonic_compsep: false
