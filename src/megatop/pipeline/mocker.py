@@ -404,13 +404,6 @@ def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
         logger.info(f"Finished TF simulation {result + 1} / {n_sim}")
 
 
-def _load_masks(manager: DataManager, config: Config):
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
-    nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
-    return binary_mask, nhits_maps
-
-
 def main_signal():
     """Entry point for generating a single sky realization."""
     parser = argparse.ArgumentParser(description="Generate a single sky realization")
@@ -425,8 +418,9 @@ def main_signal():
     manager = DataManager(config)
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
-    binary_mask, nhits_maps = _load_masks(manager, config)
-    func_signal(args.sim, manager, config, binary_mask, nhits_maps)
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    func_signal(args.sim, manager, config, binary_mask, common_nhits_map)
 
 
 def main_noise():
@@ -443,8 +437,9 @@ def main_noise():
     manager = DataManager(config)
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
-    binary_mask, nhits_maps = _load_masks(manager, config)
-    func_noise(manager, config, binary_mask, nhits_maps, args.sim)
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    func_noise(manager, config, binary_mask, common_nhits_map, args.sim)
 
 
 def main():
