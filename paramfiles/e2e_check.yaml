@@ -48,7 +48,6 @@ map_sets:
     noise_prefix: noise_
     simfoTF_prefix: simforTF_
 
-
     passband_filename: ''
     depth_map_path: null
   - freq_tag: 145
@@ -59,7 +58,6 @@ map_sets:
     noise_prefix: noise_
     simfoTF_prefix: simforTF_
 
-
     passband_filename: ''
     depth_map_path: null
   - freq_tag: 225
@@ -69,7 +67,6 @@ map_sets:
     file_prefix: ''
     noise_prefix: noise_
     simfoTF_prefix: simforTF_
-
 
     passband_filename: ''
     depth_map_path: null
