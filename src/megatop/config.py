@@ -449,6 +449,13 @@ class Config:
                     msg = f"Map set '{map_set.name}' requires a non-empty passband_filename because passband_int=True."
                     raise ValueError(msg)
 
+        # Validate obsmat_path for all map sets if filter_sims=True
+        if self.map_sim_pars.filter_sims:
+            for map_set in self.map_sets:
+                if map_set.obsmat_path is None:
+                    msg = f"Map set '{map_set.name}' requires obsmat_path because filter_sims=True."
+                    raise ValueError(msg)
+
     @classmethod
     def load_yaml(cls, path: str | Path) -> "Config":
         """Load and instantiate a ``Config`` from a YAML file."""
