@@ -26,7 +26,7 @@ If you prefer to provide precomputed spectra files, set `compute_from_camb: fals
 
 ### Option A — Snakemake (recommended)
 
-Snakemake is installed as part of Megatop's dependencies. It handles step ordering, parallelism, and skips steps whose outputs already exist.
+Snakemake is an optional dependency (requires Python >= 3.11), installed via `pip install megatop[snake]`. It handles step ordering, parallelism, and skips steps whose outputs already exist.
 
 ```bash
 snakemake --cores 4 --configfile paramfiles/default_config.yaml
