@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 import numpy as np
 from attrs import Factory, asdict, define, evolve, field
+from attrs.converters import optional
 
 from megatop._converter import yaml_converter
 
@@ -113,8 +114,8 @@ class _CAMBCosmoPars:
 @define
 class FiducialCMBConfig:
     # root: Path = field(converter=Path)
-    fiducial_lensed_scalar: Path | None = None
-    fiducial_unlensed_scalar_tensor_r1: Path | None = None
+    fiducial_lensed_scalar: Path | None = field(default=None, converter=optional(Path))
+    fiducial_unlensed_scalar_tensor_r1: Path | None = field(default=None, converter=optional(Path))
     compute_from_camb: bool = field(default=True)
     # root: Path | None = field(default=None)
     camb_cosmo_pars: _CAMBCosmoPars = Factory(_CAMBCosmoPars)
@@ -144,6 +145,12 @@ class FiducialCMBConfig:
             raise ValueError(msg)
 
 
+def _nhits_map_path_converter(v: Any) -> Literal["SO_nominal"] | Path | None:
+    if v is None or v == "SO_nominal":
+        return v
+    return Path(v)
+
+
 @define(slots=False)
 class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
@@ -153,11 +160,13 @@ class MapSetConfig:
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     simfoTF_prefix: str = "simforTF_"
-    obsmat_path: Path = field(converter=Path, default=".")
-    TF_path: Path = field(converter=Path, default=".")
+    obsmat_path: Path | None = field(default=None, converter=optional(Path))
+    TF_path: Path | None = field(default=None, converter=optional(Path))
     passband_filename: str = ""
-    nhits_map_path: str | Path | None = field(default=None)
-    depth_map_path: Path | None = field(default=None)
+    nhits_map_path: Literal["SO_nominal"] | Path | None = field(
+        default=None, converter=_nhits_map_path_converter
+    )
+    depth_map_path: Path | None = field(default=None, converter=optional(Path))
 
     def __attrs_post_init__(self) -> None:
         self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
@@ -200,7 +209,7 @@ class MasksConfig:
     gal_key: ValidPlanckGalKey | None = field(default=None)
 
     include_sources: bool = False
-    input_sources_mask: Path | None = None
+    input_sources_mask: Path | None = field(default=None, converter=optional(Path))
     sources_mask_name: str = "sources_mask"
     mock_nsources: int = 100
     mock_sources_hole_radius: float = 4
@@ -438,6 +447,13 @@ class Config:
             for map_set in self.map_sets:
                 if not map_set.passband_filename:
                     msg = f"Map set '{map_set.name}' requires a non-empty passband_filename because passband_int=True."
+                    raise ValueError(msg)
+
+        # Validate obsmat_path for all map sets if filter_sims=True
+        if self.map_sim_pars.filter_sims:
+            for map_set in self.map_sets:
+                if map_set.obsmat_path is None:
+                    msg = f"Map set '{map_set.name}' requires obsmat_path because filter_sims=True."
                     raise ValueError(msg)
 
     @classmethod
