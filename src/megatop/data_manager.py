@@ -429,12 +429,9 @@ class DataManager:
         if self._config.use_depth_maps:
             return [m.depth_map_path for m in self._config.map_sets if m.depth_map_path is not None]
         # nhits_map_path can be "SO_nominal" (downloaded at runtime) or an actual file
-        paths = []
-        for m in self._config.map_sets:
-            p = m.nhits_map_path
-            if p is not None and p != "SO_nominal":
-                paths.append(Path(p))
-        return paths
+        return [
+            m.nhits_map_path for m in self._config.map_sets if isinstance(m.nhits_map_path, Path)
+        ]
 
     def outputs_mask(self) -> list[Path]:
         outputs = [
@@ -470,7 +467,7 @@ class DataManager:
             *[self.path_to_nhits_map(m) for m in self._config.map_sets],
         ]
         if self._config.map_sim_pars.filter_sims:
-            inputs.extend(self.get_obsmat_filenames())
+            inputs.extend(p for p in self.get_obsmat_filenames() if p is not None)
         return inputs
 
     def outputs_mock_signal(self, id_sim: int, map_set: str | None = None) -> list[Path]:
