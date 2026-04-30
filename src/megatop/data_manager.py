@@ -182,10 +182,12 @@ class DataManager:
         names = [dest / map_set.map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
-    def get_obsmat_filenames(self) -> list[Path]:
+    def get_obsmat_filenames(self) -> list[Path | None]:
         """Get the list of filenames for the observation matrices."""
-        names = [map_set.obsmat_path for map_set in self._config.map_sets]
-        return [name.with_suffix(".npz") for name in names]
+        return [
+            None if map_set.obsmat_path is None else map_set.obsmat_path.with_suffix(".npz")
+            for map_set in self._config.map_sets
+        ]
 
     @property
     def path_to_TF_output_dir(self) -> Path:
@@ -247,9 +249,8 @@ class DataManager:
     def get_TF_filenames(self) -> list[Path | None]:
         """Get the list of filenames for the Transfer Functions.
 
-        Returns ``None`` for any map set whose ``TF_path`` is unset (the ``'.'``
-        sentinel in the config), signalling that no TF is available for that
-        frequency.
+        Returns ``None`` for any map set whose ``TF_path`` is unset (``None``),
+        signalling that no TF is available for that frequency.
         """
         if self._config.map_sim_pars.generate_sims_for_TF:
             logger.info("Internal TF used, generating TF path on the fly")
@@ -262,7 +263,7 @@ class DataManager:
             name_list = []
             for map_set in self._config.map_sets:
                 name = map_set.TF_path
-                if name == Path():
+                if name is None:
                     name_list.append(None)
                 else:
                     name_list.append(name.with_suffix(".npz"))
