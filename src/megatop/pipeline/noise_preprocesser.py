@@ -24,6 +24,7 @@ from scipy.linalg import sqrtm
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
+from megatop.utils.mpi import get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
 
@@ -205,11 +206,27 @@ def main():
 
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
+
+    _world, rank, _size = get_world()
+    if rank != 0:
+        return
+
     manager.dump_config()
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
-    id_sim = args.sim if config.noise_sim_pars.n_sim is not None else None
-    noise_preprocess_realisation(config, manager, id_sim)
+    n_sim_noise = config.noise_sim_pars.n_sim
+    if args.sim is not None:
+        id_sim = args.sim if n_sim_noise is not None else None
+        noise_preprocess_realisation(config, manager, id_sim)
+        return
+
+    if n_sim_noise is None:
+        noise_preprocess_realisation(config, manager, None)
+        return
+
+    for i in range(n_sim_noise):
+        noise_preprocess_realisation(config, manager, i)
+        logger.info(f"Finished noise preprocessing {i + 1} / {n_sim_noise}")
 
 
 if __name__ == "__main__":

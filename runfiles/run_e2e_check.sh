@@ -63,6 +63,9 @@ ${RUN} megatop-mock-run --config "${PARAM_FILE}"
 step "preprocesser"
 ${RUN} megatop-preproc-run --config "${PARAM_FILE}"
 
+step "noise-preprocesser"
+${RUN} megatop-noise-preproc-run --config "${PARAM_FILE}"
+
 step "noise-covariance"
 ${RUN} megatop-noisecov-run --config "${PARAM_FILE}"
 
