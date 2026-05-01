@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PARAM_FILE="../paramfiles/d0s0_goal_optimisitc_wolz_etal.yaml"
+PARAM_FILE="../paramfiles/d0s0_goal_optimistic_wolz_etal.yaml"
 
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 
