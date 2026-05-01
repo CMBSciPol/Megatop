@@ -52,10 +52,10 @@ step() {
 }
 
 step "mask-handler"
-${RUN} megatop-mask-run --config "${PARAM_FILE}"
+megatop-mask-run --config "${PARAM_FILE}"
 
 step "binning-maker"
-${RUN} megatop-binning-run --config "${PARAM_FILE}"
+megatop-binning-run --config "${PARAM_FILE}"
 
 step "mocker"
 ${RUN} megatop-mock-run --config "${PARAM_FILE}"
