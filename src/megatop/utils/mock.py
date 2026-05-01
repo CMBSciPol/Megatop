@@ -58,7 +58,12 @@ def generate_map_cmb(Cl_cmb_model, nside: int, lmax: int, cmb_seed: list[int] | 
 
 
 def generate_map_fgs_pysm(
-    map_sets, nside: int, lmax: int, sky_model: list[str], input_coord: int = "G", output_coord="E"
+    map_sets,
+    nside: int,
+    lmax: int,
+    sky_model: list[str],
+    input_coord: str = "G",
+    output_coord: str = "E",
 ):
     # TODO write tests
     logger.debug(f"Generating FG maps for {[m.freq_tag for m in map_sets]} GHz")
@@ -223,7 +228,7 @@ def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int, see
 
 
 def get_noise_map_from_noise_spectra(n_ell, nside: int, lmax: int, seed=None):
-    noise_spectra = np.zeros((3, lmax))
+    noise_spectra = np.zeros((3, lmax + 1))
     logger.warning(
         "Do not trust the temperature noise spectra (ell_knee and alpha_knee are polarisation ones)"
     )

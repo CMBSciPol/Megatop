@@ -233,8 +233,8 @@ class GeneralConfig:
     @lmax.validator
     def check(self, attribute, value):
         """Check that lmax <= 2 * nside"""
-        if value > (three_nside_minus_one := 2 * self.nside):
-            msg = f"{attribute.name}={value} must be less than or equal to {three_nside_minus_one=}"
+        if value > (two_nside := 2 * self.nside):
+            msg = f"{attribute.name}={value} must be less than or equal to {two_nside=}"
             raise ValueError(msg)
 
 

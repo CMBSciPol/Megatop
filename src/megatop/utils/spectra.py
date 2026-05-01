@@ -65,7 +65,7 @@ def compute_auto_cross_cl_from_maps_dict(
     lmax: int,
     purify_b: bool,
     purify_e: bool,
-    inverse_effective_transfer_function: bool | None = None,
+    inverse_effective_transfer_function: NDArray | None = None,
 ):
     # Create the fields
     fields = []
