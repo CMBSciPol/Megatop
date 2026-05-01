@@ -22,15 +22,25 @@ _POOL_EXECUTOR_THRESHOLD = 2
 
 @function_timer("get-noise-map")
 def get_noise(
-    config: Config, binary_mask: NDArray, common_nhits_map: NDArray, id_sim: int = 0
+    config: Config,
+    binary_mask: NDArray,
+    common_nhits_map: NDArray,
+    id_sim: int = 0,
+    *,
+    extra_seed=None,
 ) -> NDArray:
     fsky_nhits = common_nhits_map.mean()
+    seed = [config.noise_sim_pars.seed, id_sim]
+    if extra_seed is not None:
+        seed.append(extra_seed)
+    logger.debug(f"Noise {seed = }")
     noise_freq_maps = mock.get_full_sky_noise_freq_maps(
         config.map_sets,
         config.noise_sim_pars,
         fsky_nhits=fsky_nhits,
         nside=config.nside,
         id_sim=id_sim,
+        seed=seed,
     )
     logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
@@ -281,7 +291,13 @@ def func_signal(
     # generate the components
     cmb = get_cmb(manager, config, id_sim=id_sim)
     fg = get_foregrounds(config)
-    noise = get_noise(config, binary_mask, common_nhits_map, id_sim=id_sim)
+    noise = get_noise(
+        config,
+        binary_mask,
+        common_nhits_map,
+        id_sim=id_sim,
+        extra_seed=config.map_sim_pars.cmb_seed,
+    )
 
     # broadcast CMB to all frequencies
     sky = cmb[None, ...] + fg
