@@ -12,7 +12,7 @@ from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import MPISUM, get_world
 from megatop.utils.preproc import common_beam_and_nside
-from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
+from megatop.utils.spectra import initialize_nmt_workspace_harmonic_TF, spectra_from_namaster
 from megatop.utils.utils import MemoryUsage
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
@@ -72,7 +72,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         mask_analysis = hp.read_map(manager.path_to_analysis_mask)
 
         with Timer("init-namaster-workspace"):
-            workspaceff = initialize_nmt_workspace(
+            workspaceff = initialize_nmt_workspace_harmonic_TF(
                 nmt_bins,
                 manager.path_to_lensed_scalar,
                 config.nside,
@@ -135,6 +135,7 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                 common_beam=config.pre_proc_pars.common_beam_correction,
                 frequency_beams=config.beams,
                 freq_maps=noise_freq_maps,
+                lmax=config.lmax,
             )
 
         if config.noise_cov_pars.save_preprocessed_noise_maps:
@@ -147,7 +148,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
         MemoryUsage(f"Memory for noise realisation {id_real + 1}: ")
 
         noise_cov_preprocessed += noise_freq_maps_preprocessed**2
-        # import IPython; IPython.embed()
         if config.parametric_sep_pars.use_harmonic_compsep:
             # Computing the noise spectra from the preprocessed noise maps using namaster
             if config.parametric_sep_pars.harmonic_delta_ell != 1:
@@ -166,7 +166,6 @@ def pixel_noisecov_estimation(manager: DataManager, config: Config):
                     beam=beam4namaster,
                     return_all_spectra=config.pre_proc_pars.correct_for_TF,
                 )
-                # import IPython; IPython.embed()
                 if config.pre_proc_pars.correct_for_TF:
                     logger.warning("DEBUG: Including transfer function in the pre-processed alms. ")
 
