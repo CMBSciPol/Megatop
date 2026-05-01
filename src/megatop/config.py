@@ -384,6 +384,8 @@ ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig
 class NoiseSimConfig:
     n_sim: int = 1
     include_nhits: bool = True
+    seed: int = 42
+    """Integer seed for the noise simulations."""
     experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict(SO=SOConfig()))
 
 

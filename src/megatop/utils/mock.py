@@ -1,4 +1,5 @@
 import os
+import zlib
 
 import healpy as hp
 import numpy as np
@@ -75,7 +76,12 @@ def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_co
 
 
 def get_full_sky_noise_freq_maps(
-    map_sets, noise_config: dict, fsky_nhits: float, nside: int, id_sim: int = 0
+    map_sets,
+    noise_config: dict,
+    fsky_nhits: float,
+    nside: int,
+    id_sim: int = 0,
+    seed=None,
 ):
     experiments_map_set = set([map_set.exp_tag for map_set in map_sets])
     experiments_noiseconfig = [name for name in noise_config.experiments]
@@ -100,13 +106,15 @@ def get_full_sky_noise_freq_maps(
         noise_config_exp = noise_config.experiments[exp]
         idx_freq = noise_config_exp.default_bands.index(map_set.freq_tag)
         logger.debug(f"Map {exp}_{map_set.freq_tag} has index {idx_freq}.")
+        seed_i = list(seed) + [zlib.crc32(map_set.name.encode())] if seed is not None else None
+        logger.debug(f"Noise {seed_i = } for {map_set.name}")
         if noise_config_exp.noise_option == NoiseOption.WHITE:
             noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
-                noise_experiment[exp]["map_white_noise_levels"][idx_freq], nside
+                noise_experiment[exp]["map_white_noise_levels"][idx_freq], nside, seed=seed_i
             )
         elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
             noise_freq_maps[i_map_set] = get_noise_map_from_noise_spectra(
-                noise_experiment[exp]["noise_spectra"][idx_freq], nside
+                noise_experiment[exp]["noise_spectra"][idx_freq], nside, seed=seed_i
             )
         elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
             noise_freq_maps[i_map_set, :, :] = 1e-10
@@ -196,7 +204,7 @@ def get_noise_experiment(
     return {"noise_spectra": n_ell, "map_white_noise_levels": white_noise_levels}
 
 
-def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int):
+def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int, seed=None):
     logger.debug(f"Map white noise level (Q,U) {map_white_noise_level} muK-arcmin")
     npix = hp.nside2npix(nside)
     nlev_map = np.array(
@@ -207,12 +215,11 @@ def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int):
         ]
     )[:, np.newaxis] * np.ones((3, npix))
     nlev_map /= hp.nside2resol(nside, arcmin=True)
-    rng = np.random.default_rng()
-    return rng.normal(np.zeros_like(nlev_map), nlev_map, (3, npix))
+    rng = np.random.default_rng(seed)
+    return rng.normal(0, nlev_map, (3, npix))
 
 
-def get_noise_map_from_noise_spectra(n_ell, nside: int):
-    noise_maps = np.zeros((3, hp.nside2npix(nside)))
+def get_noise_map_from_noise_spectra(n_ell, nside: int, seed=None):
     noise_spectra = np.zeros((3, 2 * nside))
     logger.warning(
         "Do not trust the temperature noise spectra (ell_knee and alpha_knee are polarisation ones)"
@@ -220,6 +227,8 @@ def get_noise_map_from_noise_spectra(n_ell, nside: int):
     noise_spectra[0, 2:] = n_ell / 2
     noise_spectra[1, 2:] = n_ell
     noise_spectra[2, 2:] = n_ell
+    # hp.synfast uses the legacy numpy random number generator
+    np.random.seed(seed)  # noqa: NPY002
     noise_maps = hp.synfast(
         (
             noise_spectra[0],

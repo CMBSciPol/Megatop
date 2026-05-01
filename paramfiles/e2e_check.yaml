@@ -152,6 +152,7 @@ map_sim_pars:
 noise_sim_pars:
   n_sim: 2
   include_nhits: false
+  seed: 43
   experiments:
     SO:
       usev3p1: true

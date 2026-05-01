@@ -101,6 +101,7 @@ noise_cov_pars:
 
 noise_sim_pars:
   include_nhits: True
+  seed: 5678
   n_sim: 1.  #Set to > 200 for convergence of the noise covariance (500 recommended)
 
   experiments:
