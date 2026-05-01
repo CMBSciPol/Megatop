@@ -107,6 +107,7 @@ def get_full_sky_noise_freq_maps(
         idx_freq = noise_config_exp.default_bands.index(map_set.freq_tag)
         logger.debug(f"Map {exp}_{map_set.freq_tag} has index {idx_freq}.")
         seed_i = list(seed) + [zlib.crc32(map_set.name.encode())] if seed is not None else None
+        logger.debug(f"Noise {seed_i = } for {map_set.name}")
         if noise_config_exp.noise_option == NoiseOption.WHITE:
             noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
                 noise_experiment[exp]["map_white_noise_levels"][idx_freq], nside, seed=seed_i
