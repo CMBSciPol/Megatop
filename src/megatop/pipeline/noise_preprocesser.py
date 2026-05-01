@@ -26,7 +26,7 @@ from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 from megatop.utils.preproc import common_beam_and_nside
-from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
+from megatop.utils.spectra import initialize_nmt_workspace_harmonic_TF, spectra_from_namaster
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
@@ -84,6 +84,7 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
         common_beam=config.pre_proc_pars.common_beam_correction,
         frequency_beams=config.beams,
         freq_maps=np.array(noise_freq_maps, dtype=object),
+        lmax=config.lmax,
     )
 
 
@@ -103,7 +104,7 @@ def _harmonic_nl_contrib(
 
     if config.parametric_sep_pars.harmonic_delta_ell != 1:
         with Timer("init-namaster-workspace"):
-            workspaceff = initialize_nmt_workspace(
+            workspaceff = initialize_nmt_workspace_harmonic_TF(
                 nmt_bins,
                 manager.path_to_lensed_scalar,
                 config.nside,

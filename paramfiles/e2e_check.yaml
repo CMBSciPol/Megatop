@@ -93,7 +93,7 @@ masks_pars:
 general_pars:
   nside: 64
   lmin: 30
-  lmax: 150
+  lmax: 100
 
 pre_proc_pars:
   common_beam_correction: 60.0
