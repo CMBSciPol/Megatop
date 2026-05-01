@@ -182,3 +182,135 @@ for _i in range(N_SKY):
             sim=_i,
         shell:
             "megatop-cl2r-run --config {params.config} --sim {params.sim}"
+
+
+# ── Plot rules ────────────────────────────────────────────────────────────────
+# All plotters take only --config; per-sim plotters internally use sim 0 (or
+# None for real data).  Outputs are touch-sentinels because some filenames are
+# config-conditional and nothing in the pipeline reads plot files.
+
+_id_repr = 0 if N_SKY > 0 else None
+
+_all_cl2r = (
+    S(*[manager.outputs_cl2r(i) for i in range(N_SKY)])
+    if N_SKY > 0
+    else S(manager.outputs_cl2r(None))
+)
+
+
+rule plots:
+    input:
+        str(manager.path_to_masks_plots / ".done"),
+        str(manager.path_to_mock_plots / ".done"),
+        str(manager.path_to_covar_plots / ".done"),
+        str(manager.path_to_preproc_plots / ".done"),
+        str(manager.path_to_components_plots / ".done"),
+        str(manager.path_to_spectra_plots / ".done_map2cl"),
+        str(manager.path_to_spectra_plots / ".done_noisespectra"),
+        str(manager.path_to_mcmc_plots / ".done_cl2r"),
+        str(manager.path_to_mcmc_plots / ".done_mcmc"),
+
+
+rule plot_mask:
+    input:
+        S(manager.outputs_mask())
+    output:
+        touch(str(manager.path_to_masks_plots / ".done"))
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-mask-plot --config {params.config}"
+
+
+rule plot_mock:
+    input:
+        S(manager.outputs_binner(), manager.outputs_mask(),
+          *[manager.outputs_mock_signal(0, map_set=ms) for ms in MAP_SETS])
+        if N_SKY > 0
+        else S(manager.outputs_binner(), manager.outputs_mask())
+    output:
+        touch(str(manager.path_to_mock_plots / ".done"))
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-mock-plot --config {params.config}"
+
+
+rule plot_noisecov:
+    input:
+        S(manager.outputs_noisecov())
+    output:
+        touch(str(manager.path_to_covar_plots / ".done"))
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-noisecov-plot --config {params.config}"
+
+
+rule plot_preproc:
+    input:
+        S(manager.outputs_preproc(_id_repr))
+    output:
+        touch(str(manager.path_to_preproc_plots / ".done"))
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-preproc-plot --config {params.config}"
+
+
+rule plot_compsep:
+    input:
+        S(manager.outputs_compsep(_id_repr))
+    output:
+        touch(str(manager.path_to_components_plots / ".done"))
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-compsep-plot --config {params.config}"
+
+
+rule plot_map2cl:
+    input:
+        S(manager.outputs_map2cl(_id_repr))
+    output:
+        touch(str(manager.path_to_spectra_plots / ".done_map2cl"))
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-map2cl-plot --config {params.config}"
+
+
+rule plot_noisespectra:
+    input:
+        S(*[manager.outputs_noisespectra(i) for i in range(N_SKY)],
+          *[manager.outputs_map2cl(i) for i in range(N_SKY)])
+        if N_SKY > 0
+        else S(manager.outputs_noisespectra(None), manager.outputs_map2cl(None))
+    output:
+        touch(str(manager.path_to_spectra_plots / ".done_noisespectra"))
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-noisespectra-plot --config {params.config}"
+
+
+rule plot_cl2r:
+    input:
+        _all_cl2r
+    output:
+        touch(str(manager.path_to_mcmc_plots / ".done_cl2r"))
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-cl2r-plot --configs {params.config}"
+
+
+rule plot_mcmc:
+    input:
+        _all_cl2r
+    output:
+        touch(str(manager.path_to_mcmc_plots / ".done_mcmc"))
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-cl2r_mcmc-plot --config {params.config}"
