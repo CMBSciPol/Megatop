@@ -127,3 +127,6 @@ jobs:
 
       - name: Run e2e pipeline via Snakemake
         run: uv run snakemake --cores 4 --configfile paramfiles/e2e_check.yaml
+
+      - name: Run plot rules
+        run: MPLBACKEND=Agg uv run snakemake plots --cores 4 --configfile paramfiles/e2e_check.yaml
