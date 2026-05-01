@@ -172,24 +172,6 @@ def get_effective_common_beam(beam_fwhm_arcmin: float, frequencies, nside: int, 
     return np.einsum("fc, fl, fk->ckl", A, beam_P_freq_array, A)
 
 
-def initialize_nmt_workspace_harmonic_TF(
-    nmt_bins, path_Cl_lens, nside, mask_analysis, effective_beam, purify_e, purify_b, n_iter
-):  # TODO keeping this for backward compatibility, probably can be removed ?
-    Cl_lens = hp.read_cl(path_Cl_lens)
-    map_T_init_wsp, map_Q_init_wsp, map_U_init_wsp = hp.synfast(Cl_lens, nside, new=True)
-
-    fields_init_wsp = nmt.NmtField(
-        mask_analysis,
-        [map_Q_init_wsp, map_U_init_wsp],
-        beam=effective_beam,
-        purify_e=purify_e,
-        purify_b=purify_b,
-        n_iter=n_iter,
-    )
-
-    return nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
-
-
 def initialize_nmt_workspace(
     nmt_bins,
     analysis_mask: NDArray,
