@@ -47,6 +47,11 @@ echo "Plotting pre-processer outputs"
 megatop-preproc-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
+echo "|                  NOISE PREPROCESSING                     |"
+echo "------------------------------------------------------------"
+megatop-noise-preproc-run --config ${PARAM_FILE}
+
+echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"
 echo "------------------------------------------------------------"
 megatop-noisecov-run --config ${PARAM_FILE}

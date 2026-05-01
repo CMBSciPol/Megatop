@@ -18,7 +18,6 @@ __all__ = [
     "MapSetConfig",
     "MapSimConfig",
     "MasksConfig",
-    "NoiseCovmatConfig",
     "NoiseSimConfig",
     "OutputDirsConfig",
     "PlotsConfig",
@@ -249,11 +248,6 @@ class PreProcessingConfig:
 
 
 @define
-class NoiseCovmatConfig:
-    save_preprocessed_noise_maps: bool = True
-
-
-@define
 class _MinimizeOptions:
     disp: bool = False
     gtol: float = 1e-12
@@ -429,7 +423,6 @@ class Config:
     masks_pars: MasksConfig = Factory(MasksConfig)
     general_pars: GeneralConfig = Factory(GeneralConfig)
     pre_proc_pars: PreProcessingConfig = Factory(PreProcessingConfig)
-    noise_cov_pars: NoiseCovmatConfig = Factory(NoiseCovmatConfig)
     parametric_sep_pars: CompSepConfig = Factory(CompSepConfig)
     map2cl_pars: Map2ClConfig = Factory(Map2ClConfig)
     plot_pars: PlotsConfig = Factory(PlotsConfig)
