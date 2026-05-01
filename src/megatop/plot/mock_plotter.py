@@ -229,8 +229,8 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 ) ** 2 * fsky_from_nhits
             elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
                 n_ell = noise_experiment[exp]["noise_spectra"][idx_freq]
-                cl_model[:, 1, 2:-1] = n_ell
-                cl_model[:, 2, 2:-1] = n_ell
+                cl_model[:, 1, 2:] = n_ell
+                cl_model[:, 2, 2:] = n_ell
             elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
                 cl_model[i_map_set] = 0.0
             else:

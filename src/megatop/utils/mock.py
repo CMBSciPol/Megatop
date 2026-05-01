@@ -156,7 +156,7 @@ def get_noise_experiment(
                 survey_years=1.0,  # The scaling wiht time is done through Ntubes_years
             )
             _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-                f_sky=fsky_nhits, ell_max=lmax, delta_ell=1, deconv_beam=False
+                f_sky=fsky_nhits, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
             )
         else:
             logger.info(
@@ -169,7 +169,7 @@ def get_noise_experiment(
                 one_over_f_mode=one_over_f_mode,
                 SAC_yrs_LF=noise_config_exp.SAC_yrs_LF,
                 f_sky=fsky_nhits,
-                ell_max=lmax,
+                ell_max=lmax + 1,
                 delta_ell=1,
                 beam_corrected=False,
                 remove_kluge=False,
@@ -188,7 +188,7 @@ def get_noise_experiment(
             survey_years=1.0,
         )
         _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-            f_sky=fsky_nhits, ell_max=lmax, delta_ell=1, deconv_beam=False
+            f_sky=fsky_nhits, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
         )
 
     elif type(noise_config_exp) is ExternalNoiseMapconfig:
