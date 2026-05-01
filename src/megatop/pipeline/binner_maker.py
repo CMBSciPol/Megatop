@@ -98,7 +98,7 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
 
 def binning_maker(manager: DataManager, config: Config):
     bin_low, bin_high, bin_centre = create_binning(
-        config.nside,
+        config.lmax,
         config.map2cl_pars.delta_ell,
         config.map2cl_pars.delta_ell,
         # end_first_bin=config.lmin

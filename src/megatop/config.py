@@ -227,14 +227,14 @@ class MasksConfig:
 @define
 class GeneralConfig:
     nside: int = 512
-    lmin: int = 30
+    lmin: int = 30  # TODO: used ?
     lmax: int = field(default=1000)
 
     @lmax.validator
     def check(self, attribute, value):
-        """Check that lmax <= 3 * nside - 1"""
-        if value > (three_nside_minus_one := 3 * self.nside - 1):
-            msg = f"{attribute.name}={value} must be less than or equal to {three_nside_minus_one=}"
+        """Check that lmax <= 2 * nside"""
+        if value > (two_nside := 2 * self.nside):
+            msg = f"{attribute.name}={value} must be less than or equal to {two_nside=}"
             raise ValueError(msg)
 
 

@@ -6,7 +6,6 @@ import numpy as np
 import pymaster as nmt
 from numpy.typing import NDArray
 
-from megatop import Config
 from megatop.utils import logger
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
@@ -57,22 +56,32 @@ def compute_spectra_from_camb(r, cosmo_params_dict, which="total"):
     return TT, EE, BB, TE
 
 
-def compute_auto_cross_cl_from_maps_list(
-    maps_dict,
-    mask,
-    beam,
+def compute_auto_cross_cl_from_maps_dict(
+    maps_dict: dict,
+    analysis_mask: NDArray,
     workspace,
-    purify_e=True,
-    purify_b=True,
-    n_iter=3,
-    inverse_effective_transfer_function=None,
+    beam: NDArray,
+    n_iter: int,
+    lmax: int,
+    purify_b: bool,
+    purify_e: bool,
+    inverse_effective_transfer_function: NDArray | None = None,
 ):
     # Create the fields
     fields = []
     for key in maps_dict:
         fields.append(
             nmt.NmtField(
-                mask, maps_dict[key], beam=beam, purify_e=purify_e, purify_b=purify_b, n_iter=n_iter
+                mask=analysis_mask,
+                maps=maps_dict[key],
+                spin=2,
+                beam=beam,
+                purify_e=purify_e,
+                purify_b=purify_b,
+                n_iter=n_iter,
+                n_iter_mask=n_iter,
+                lmax=lmax,
+                lmax_mask=lmax,
             )
         )
 
@@ -97,50 +106,45 @@ def compute_auto_cross_cl_from_maps_list(
     cl_dict = {}
     if inverse_effective_transfer_function is None:
         # Store in dictionary with key x key
-        for i, key in enumerate(maps_dict.keys()):
+        for i, key1 in enumerate(maps_dict.keys()):
             for j, key2 in enumerate(maps_dict.keys()):
                 if i <= j:
-                    cl_dict[key + "x" + key2] = cl_list.pop(0)
+                    cl_dict[key1 + "x" + key2] = cl_list.pop(0)
 
     else:
         logger.info("Applying effective transfer function to the spectra")
         tf_corrected_cl_matrix = np.einsum(
             "ckijl,ckjl->ckil", inverse_effective_transfer_function, cl_matrix
         )
-        for i, key in enumerate(maps_dict.keys()):
+        for i, key1 in enumerate(maps_dict.keys()):
             for j, key2 in enumerate(maps_dict.keys()):
                 if i <= j:
-                    cl_dict[key + "x" + key2] = tf_corrected_cl_matrix[i, j]
+                    cl_dict[key1 + "x" + key2] = tf_corrected_cl_matrix[i, j]
 
     return cl_dict
 
 
-def get_common_beam_wpix(common_beam_fwhm_arcmin, nside):
+def get_common_beam_wpix(common_beam_fwhm_arcmin: float, nside: int, lmax: int):
     wpix_out = hp.pixwin(
-        nside, pol=True, lmax=3 * nside, datapath=HEALPY_DATA_PATH
+        nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
     )  # Pixel window function of output maps
-    Bl_gauss_common = hp.gauss_beam(
-        np.radians(common_beam_fwhm_arcmin / 60), lmax=3 * nside, pol=True
-    )
+    Bl_gauss_common = hp.gauss_beam(np.radians(common_beam_fwhm_arcmin / 60.0), lmax=lmax, pol=True)
 
     return Bl_gauss_common[:, 1] * wpix_out[1]  # TODO only polarisation one ?
 
 
-def get_effective_beam_noise_preproc(config: Config, A):
-    lmax_convolution = 3 * config.nside
+def get_effective_beam_noise_preproc(freqs, A, beams, nside: int, lmax: int):
     wpix_out = hp.pixwin(
-        config.nside,
+        nside,
         pol=True,
-        lmax=lmax_convolution,
+        lmax=lmax,
         datapath=HEALPY_DATA_PATH,
     )  # Pixel window function of output maps
     Bl_gauss_common = 1
 
     beam_correction = []
-    for i_f in range(len(config.frequencies)):
-        Bl_gauss_fwhm = hp.gauss_beam(
-            np.radians(config.beams[i_f] / 60), lmax=lmax_convolution, pol=True
-        )
+    for i_f in range(len(freqs)):
+        Bl_gauss_fwhm = hp.gauss_beam(np.radians(beams[i_f] / 60), lmax=lmax, pol=True)
         bl_correction = Bl_gauss_common / Bl_gauss_fwhm
 
         sm_corr_P = bl_correction[:, 1] * wpix_out[1]  # Ignoring T
@@ -151,39 +155,44 @@ def get_effective_beam_noise_preproc(config: Config, A):
     return np.einsum("fc, fl, fk->ckl", A, beam_correction, A)
 
 
-def get_effective_common_beam(config: Config, A):
-    lmax_convolution = 3 * config.nside
+def get_effective_common_beam(beam_fwhm_arcmin: float, frequencies, nside: int, lmax: int, A):
     wpix_out = hp.pixwin(
-        config.nside, pol=True, lmax=lmax_convolution, datapath=HEALPY_DATA_PATH
+        nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
     )  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(
-        np.radians(config.pre_proc_pars.common_beam_correction / 60),
-        lmax=lmax_convolution,
+        np.radians(beam_fwhm_arcmin / 60),
+        lmax=lmax,
         pol=True,
     )
 
     beam_P = Bl_gauss_common[:, 1] * wpix_out[1]  # Ignoring T
 
-    beam_P_freq_array = np.array([beam_P for i in range(len(config.frequencies))])
+    beam_P_freq_array = np.array([beam_P for i in range(len(frequencies))])  # TODO NOT NICE
     # Would probably be better to use W but it's last dimension is a map, which makes things ill defined
     return np.einsum("fc, fl, fk->ckl", A, beam_P_freq_array, A)
 
 
 def initialize_nmt_workspace(
-    nmt_bins, path_Cl_lens, nside, mask_analysis, effective_beam, purify_e, purify_b, n_iter
+    nmt_bins,
+    analysis_mask: NDArray,
+    beam: NDArray,
+    purify_e: bool,
+    purify_b: bool,
+    n_iter: int,
+    lmax: int,
 ):
-    Cl_lens = hp.read_cl(path_Cl_lens)
-    map_T_init_wsp, map_Q_init_wsp, map_U_init_wsp = hp.synfast(Cl_lens, nside, new=True)
-
     fields_init_wsp = nmt.NmtField(
-        mask_analysis,
-        [map_Q_init_wsp, map_U_init_wsp],
-        beam=effective_beam,
+        mask=analysis_mask,
+        maps=None,
+        spin=2,
+        beam=beam,
         purify_e=purify_e,
         purify_b=purify_b,
         n_iter=n_iter,
+        n_iter_mask=n_iter,
+        lmax=lmax,
+        lmax_mask=lmax,
     )
-
     return nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
 
 
