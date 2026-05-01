@@ -225,9 +225,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     tol = config.parametric_sep_pars.minimize_tol
     method = config.parametric_sep_pars.minimize_method
 
-    # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
-    # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
-    binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
 
     with Timer("load-maps"):
         preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
@@ -236,7 +234,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
 
     freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
         freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
-    )
+    )  # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
     res = fg.separation_recipes.weighted_comp_sep(
         components,
@@ -285,7 +283,7 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
     for attr in dir(res):
         if (
             not attr.startswith("__") and attr != "s"
-        ):  # remove component maps to avoid saving twice.
+        ):  # remove component maps to avoid saving twice. #TODO should we specify explicitely which fields are saved ?
             res_dict[attr] = getattr(res, attr)
     # Saving result dict
     logger.info(f"Saving compsep results to {fname_results}")

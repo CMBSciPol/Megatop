@@ -246,9 +246,10 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     )
 
     if config.cl2r_pars.load_model_spectra:
-        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: 3 * config.nside]
+        print("ok")
+        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: config.lmax + 1]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
-            : 3 * config.nside
+            : config.lmax + 1
         ]
     else:
         Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)

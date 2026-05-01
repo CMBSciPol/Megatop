@@ -20,8 +20,8 @@ def common_beam_and_nside(
     common_beam: float,
     frequency_beams: list[float],
     freq_maps: list[npt.ArrayLike],
+    lmax: int,
     output_alms: bool = False,
-    lmax_convolution: int | None = None,
     DEBUGtruncatealms: bool = False,
     DEBUGlm_range: tuple[int, int] | None = None,
 ):
@@ -38,15 +38,15 @@ def common_beam_and_nside(
     freq_maps_out = []
     freq_alms_out = []
     logger.info(f"Common beam correction -> {common_beam} arcmin and NSIDE -> {nside}")
-    if lmax_convolution is None:
-        lmax_convolution = 2 * nside
 
     wpix_out = hp.pixwin(
-        nside, pol=True, lmax=lmax_convolution
+        nside,
+        pol=True,
+        lmax=lmax,
     )  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(
         np.radians(common_beam / 60.0),
-        lmax=lmax_convolution,
+        lmax=lmax,
         pol=True,
     )
 
@@ -56,13 +56,13 @@ def common_beam_and_nside(
         wpix_in = hp.pixwin(
             hp.get_nside(freq_maps[i_beam][0]),
             pol=True,
-            lmax=lmax_convolution,
+            lmax=lmax,
             datapath=HEALPY_DATA_PATH,
         )  # Pixel window function of input maps
         wpix_in[1][0:2] = 1.0  # in order not to divide by 0
 
         # beam corrections
-        Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam / 60), lmax=lmax_convolution, pol=True)
+        Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam / 60), lmax=lmax, pol=True)
 
         bl_correction = Bl_gauss_common / Bl_gauss_fwhm
 
@@ -76,12 +76,11 @@ def common_beam_and_nside(
 
         alm_in_T, alm_in_E, alm_in_B = hp.map2alm(
             [map_in_T, map_in_Q, map_in_U],
-            lmax=lmax_convolution,
+            lmax=lmax,
             pol=True,
             iter=10,
             datapath=HEALPY_DATA_PATH,
         )
-        # here lmax seems to play an important role
 
         # change beam and wpix
         alm_out_T = hp.almxfl(alm_in_T, sm_corr_T)
@@ -110,7 +109,7 @@ def common_beam_and_nside(
         map_out_T, map_out_Q, map_out_U = hp.alm2map(
             [alm_out_T, alm_out_E, alm_out_B],
             nside,
-            lmax=lmax_convolution,
+            lmax=lmax,
             pixwin=False,
             fwhm=0.0,
             pol=True,

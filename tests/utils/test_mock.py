@@ -11,8 +11,8 @@ RNG = np.random.default_rng()
 
 def test_fixed_cmb_simulation():
     cl_cmb_model = RNG.random((6, 3 * NSIDE - 1))
-    maps_1 = mock.generate_map_cmb(cl_cmb_model, NSIDE, cmb_seed=1234)
-    maps_2 = mock.generate_map_cmb(cl_cmb_model, NSIDE, cmb_seed=1234)
+    maps_1 = mock.generate_map_cmb(cl_cmb_model, NSIDE, lmax=2 * NSIDE, cmb_seed=1234)
+    maps_2 = mock.generate_map_cmb(cl_cmb_model, NSIDE, lmax=2 * NSIDE, cmb_seed=1234)
     assert np.all(maps_1 == maps_2)
 
 
@@ -23,7 +23,7 @@ def test_shape_white_noise_map():
 
 def test_shape_spectra_noise_map():
     nell = np.arange(2, 2 * NSIDE)
-    freq_maps = mock.get_noise_map_from_noise_spectra(nell, NSIDE)
+    freq_maps = mock.get_noise_map_from_noise_spectra(nell, NSIDE, 2 * NSIDE)
     assert freq_maps.shape == (3, hp.nside2npix(NSIDE))
 
 
@@ -37,7 +37,7 @@ def test_shape_fg_map():
     map_sets[1].frequency = 200
     map_sets[1].weight = 1
     freq_maps = mock.generate_map_fgs_pysm(
-        map_sets, NSIDE, ["d0"], input_coord="G", output_coord="E"
+        map_sets, NSIDE, 2 * NSIDE, ["d0"], input_coord="G", output_coord="E"
     )
     assert freq_maps.shape == (2, 3, hp.nside2npix(NSIDE))
 
@@ -61,7 +61,9 @@ def test_hit_map():
 
 def test_beam():
     freq_map = RNG.random((3, hp.nside2npix(NSIDE)))
-    freq_map_beamed = mock.beam_winpix_correction(NSIDE, freq_map=freq_map, beam_FWHM=100)
+    freq_map_beamed = mock.beam_winpix_correction(
+        NSIDE, freq_map=freq_map, beam_FWHM=100, lmax=2 * NSIDE
+    )
     assert np.all(np.isfinite(freq_map_beamed))
     assert freq_map.shape == freq_map_beamed.shape
 
