@@ -96,7 +96,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         std_instr,
         data_alms_lmin,
         config.nside,
-        config.parametric_sep_pars.harmonic_lmax - 1,
+        config.parametric_sep_pars.harmonic_lmax,
         invN=invN,
         invNlm=invNlm,
         mask=None,
@@ -151,7 +151,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
                     res.s_alm[i],
                     nside=config.nside,
                     spin=2,
-                    lmax=config.parametric_sep_pars.harmonic_lmax - 1,
+                    lmax=config.parametric_sep_pars.harmonic_lmax,
                 )  # lmax=3 * config.nside
                 for i in range(res.s_alm.shape[0])
             ]

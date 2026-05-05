@@ -67,7 +67,6 @@ def preprocess_map(
             freq_beams = np.array([0.0] * len(config.frequencies))
             common_beam = 0.0
         freq_alms_convolved = alm_common_beam(
-            nside=config.nside,
             common_beam=common_beam,
             frequency_beams=freq_beams,
             freq_maps=np.array(input_maps),

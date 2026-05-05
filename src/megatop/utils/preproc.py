@@ -6,7 +6,7 @@ import numpy as np
 import numpy.typing as npt
 import pymaster as nmt
 
-from megatop.utils.compsep import set_alm_tozero_above_lmax, set_alm_tozero_below_lmin, truncate_alm
+from megatop.utils.compsep import set_alm_tozero_above_lmax, set_alm_tozero_below_lmin
 
 from .logger import logger
 from .timer import function_timer
@@ -151,49 +151,42 @@ def read_input_maps(list_mapnames: list[Path]) -> list[npt.ArrayLike]:
 
 @function_timer("alm_common_beam")
 def alm_common_beam(
-    nside: int,
     common_beam: float,
     frequency_beams: list[float],
     freq_maps: list[npt.ArrayLike],
-    analysis_mask: npt.ArrayLike | None = None,
-    harmonic_analysis_lmax: int | None = None,
+    analysis_mask: npt.ArrayLike,
+    harmonic_analysis_lmax: int,
 ):
-    mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
-    mean_fsky_correction = np.sqrt(mean_fsky)
-
-    data_alms = []
-
-    for f in range(freq_maps.shape[0]):
-        fields = nmt.NmtField(
-            analysis_mask,
-            freq_maps[f, 1:],
-            beam=None,
-            purify_e=False,
-            purify_b=False,
-            n_iter=10,
-        )
-        # The smooth mask (mask_analysis) is applied in the NmtField constructor
-        data_alms.append(truncate_alm(fields.alm, lmax_new=harmonic_analysis_lmax - 1))
-    data_alms = np.array(data_alms) / mean_fsky_correction
+    data_alms = np.array(
+        [
+            nmt.NmtField(
+                analysis_mask,
+                freq_maps[f, 1:],
+                beam=None,
+                purify_e=False,
+                purify_b=False,
+                n_iter=10,
+                lmax=harmonic_analysis_lmax,
+                lmax_mask=harmonic_analysis_lmax,
+            ).get_alms()
+            for f in range(freq_maps.shape[0])
+        ]
+    )
+    mean_fsky = np.mean(np.square(analysis_mask))  # the analysis mask must be normalized!
+    data_alms /= np.sqrt(mean_fsky)
 
     common_beam_ell = hp.gauss_beam(
         np.radians(common_beam / 60.0),
-        lmax=3 * nside,
+        lmax=harmonic_analysis_lmax,
         pol=True,
-    )[
-        :-1, 1
-    ]  # taking only the GRAD/ELECTRIC/E polarization beam (it is equal to the  CURL/MAGNETIC/B polarization beam)
+    )[:, 1]  # E polarization beam; shape (harmonic_analysis_lmax + 1,)
 
     beam4namaster = np.array(
         [
-            hp.gauss_beam(np.radians(beam / 60), lmax=3 * nside, pol=True)[:-1, 1] / common_beam_ell
+            hp.gauss_beam(np.radians(beam / 60), lmax=harmonic_analysis_lmax, pol=True)[:, 1]
+            / common_beam_ell
             for beam in frequency_beams
         ]
-    )
-    beam4namaster = beam4namaster[..., : harmonic_analysis_lmax - 1]
-
-    assert beam4namaster.shape[-1] == hp.Alm.getlmax(data_alms.shape[-1]), (
-        f"beam4namaster shape {beam4namaster.shape} does not match data_alms shape {data_alms.shape}"
     )
 
     for f in range(data_alms.shape[0]):

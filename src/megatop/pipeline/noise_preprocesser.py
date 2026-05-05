@@ -176,7 +176,7 @@ def _harmonic_nl_contrib(
         noise_spectra_unbined = noise_spectra.copy()
 
     nl_binned = noise_spectra[..., bin_index_lminlmax]
-    nl_unbinned = noise_spectra_unbined[..., ell_min:ell_max]
+    nl_unbinned = noise_spectra_unbined[..., ell_min : ell_max + 1]
     return nl_binned, nl_unbinned
 
 
