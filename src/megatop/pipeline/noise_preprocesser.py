@@ -124,6 +124,7 @@ def _harmonic_nl_contrib(
             purify_b=False,
             beam=None,
             return_all_spectra=config.pre_proc_pars.correct_for_TF,
+            lmax=config.lmax,
         )
 
         if config.pre_proc_pars.correct_for_TF:

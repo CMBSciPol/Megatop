@@ -223,6 +223,7 @@ def spectra_from_namaster(
     purify_b=False,
     beam=None,
     return_all_spectra=False,
+    lmax=None,
 ):
     """
     Computes the auto and cross-spectra from the frequency noise maps using NaMaster.
@@ -287,6 +288,8 @@ def spectra_from_namaster(
             purify_e=purify_e,
             purify_b=purify_b,
             n_iter=10,
+            lmax=lmax,
+            lmax_mask=lmax,
         )
         if reset_workspace:
             workspaceff = nmt.NmtWorkspace.from_fields(fields, fields, nmt_bins)
