@@ -100,7 +100,7 @@ def binning_maker(manager: DataManager, config: Config):
     bin_low, bin_high, bin_centre = create_binning(
         config.lmax,
         config.map2cl_pars.delta_ell,
-        config.map2cl_pars.delta_ell,
+        config.map2cl_pars.uniform_start,
     )
     bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
 

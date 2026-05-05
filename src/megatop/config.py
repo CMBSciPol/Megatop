@@ -284,9 +284,15 @@ class CompSepConfig:
 @define
 class Map2ClConfig:
     delta_ell: int | list[int] = 10
+    """Width of uniform multipole bins."""
+    uniform_start: int | None = None
+    """If set, first bin spans [2, uniform_start - 1] and uniform bins of width delta_ell start at uniform_start."""
     purify_e: bool = field(default=False)
+    """Purify E modes in NaMaster field construction."""
     purify_b: bool = True
+    """Purify B modes in NaMaster field construction."""
     n_iter_namaster: int = 3
+    """Number of iterations for NaMaster map2alm."""
 
     @purify_e.validator
     def check(self, attribute, value):
