@@ -101,7 +101,10 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3):
     Args:
         maps: Input map. CAR shape ``(..., ny, nx)``; HEALPIX shape
             ``(..., npix)``. CAR inputs must be ``pixell.enmap.ndmap``.
-        spin: Spin of the field (0 for T, 2 for (Q, U)).
+        spin: Spin weight(s). Scalar (0 for T, 2 for Q/U) or a list such as
+            ``[0, 2]`` to analyse mixed-spin fields from a stacked map array
+            in one call.  CAR dispatches directly to pixell; HEALPIX splits
+            the leading map axis by spin group.
         lmax: Bandlimit. Defaults to ``3 * nside - 1`` for HEALPIX and to
             the library default for CAR.
         mmax: Azimuthal bandlimit. Defaults to ``lmax``.
@@ -115,6 +118,18 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3):
     """
     if _is_car(maps):
         return curvedsky.map2alm(maps, spin=spin, lmax=lmax, niter=niter)
+    if isinstance(spin, (list, tuple)):
+        alms_out = []
+        idx = 0
+        for s in spin:
+            nmaps = 1 if s == 0 else 2
+            alms_out.append(
+                _map2alm_healpix_iter(
+                    maps[idx : idx + nmaps], spin=s, lmax=lmax, mmax=mmax, niter=niter
+                )
+            )
+            idx += nmaps
+        return np.concatenate(alms_out, axis=0)
     # ducc0 wants an explicit nmaps axis (1 for spin 0, 2 for spin > 0).
     work = maps[..., None, :] if spin == 0 else maps
     alm = _map2alm_healpix_iter(work, spin=spin, lmax=lmax, mmax=mmax, niter=niter)
@@ -142,7 +157,10 @@ def alm2map(
 
     Args:
         alms: Spherical harmonic coefficients.
-        spin: Spin of the field (0 for T, 2 for (Q, U)).
+        spin: Spin weight(s). Scalar (0 for T, 2 for Q/U) or a list such as
+            ``[0, 2]`` to synthesise mixed-spin fields from a stacked ``alms``
+            array in one call.  CAR dispatches directly to pixell; HEALPIX
+            splits ``alms`` along the leading axis by spin group.
         nside: HEALPIX resolution. Mutually exclusive with the CAR options.
         shape: CAR pixel shape. Used together with ``wcs``.
         wcs: CAR world coordinate system. Used together with ``shape``.
@@ -170,6 +188,16 @@ def alm2map(
         return curvedsky.alm2map(alms, map=out, spin=spin, copy=False)
     if nside is None:
         raise ValueError("Provide nside for HEALPIX or out / shape+wcs for CAR.")
+    if isinstance(spin, (list, tuple)):
+        maps_out = []
+        idx = 0
+        for s in spin:
+            nmaps = 1 if s == 0 else 2
+            maps_out.append(
+                _alm2map_healpix(alms[idx : idx + nmaps], spin=s, nside=nside, lmax=lmax, mmax=mmax)
+            )
+            idx += nmaps
+        return np.concatenate(maps_out, axis=0)
     work = alms[..., None, :] if spin == 0 else alms
     m = _alm2map_healpix(work, spin=spin, nside=nside, lmax=lmax, mmax=mmax)
     return m[..., 0, :] if spin == 0 else m
@@ -261,15 +289,10 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
 
     # Multi-component (T, E, B) → synthesise (T, Q, U)
     alm_T, alm_E, alm_B = hp.synalm(cl_norm, lmax=lmax, new=new)
+    alms_teb = np.stack([alm_T, alm_E, alm_B])
     if nside is not None:
-        map_T = alm2map(alm_T, spin=0, nside=nside, lmax=lmax)
-        map_QU = alm2map(np.stack([alm_E, alm_B]), spin=2, nside=nside, lmax=lmax)
-        return np.stack([map_T, *map_QU])
-    # CAR: T spin-0, (E, B) spin-2 → (T, Q, U)
-    out = enmap.zeros((3, *shape[-2:]), wcs=wcs, dtype=np.float64)
-    alm2map(alm_T, spin=0, out=out[0])
-    alm2map(np.stack([alm_E, alm_B]), spin=2, out=out[1:])
-    return out
+        return alm2map(alms_teb, spin=[0, 2], nside=nside, lmax=lmax)
+    return alm2map(alms_teb, spin=[0, 2], shape=shape[-2:], wcs=wcs)
 
 
 def almxfl(alms, fl, *, mmax=None, inplace=False):
@@ -321,9 +344,7 @@ def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True):
 
     def _healpix_alms(m):
         if pol and m.ndim >= 2 and m.shape[-2] == 3:
-            alm_T = map2alm(m[..., 0, :], spin=0, lmax=lmax, mmax=mmax, niter=niter)
-            alm_EB = map2alm(m[..., 1:, :], spin=2, lmax=lmax, mmax=mmax, niter=niter)
-            return [alm_T, alm_EB[..., 0, :], alm_EB[..., 1, :]]
+            return map2alm(m, spin=[0, 2], lmax=lmax, mmax=mmax, niter=niter)
         return map2alm(m, spin=0, lmax=lmax, mmax=mmax, niter=niter)
 
     if _is_car(maps):

@@ -106,6 +106,45 @@ def test_alm2map_spin0_batches_leading_dim():
         assert np.allclose(m[i], m_i)
 
 
+def test_map2alm_list_spin_healpix():
+    npix = hp.nside2npix(NSIDE)
+    map_T = RNG.standard_normal(npix)
+    map_QU = RNG.standard_normal((2, npix))
+    maps_tqu = np.concatenate([map_T[None], map_QU], axis=0)
+    alms = harmonic.map2alm(maps_tqu, spin=[0, 2], lmax=LMAX)
+    assert alms.shape == (3, NALM)
+    alm_T = harmonic.map2alm(map_T, spin=0, lmax=LMAX)
+    alm_QU = harmonic.map2alm(map_QU, spin=2, lmax=LMAX)
+    assert_allclose(alms[0], alm_T)
+    assert_allclose(alms[1:], alm_QU)
+
+
+def test_alm2map_list_spin_healpix():
+    alm_T = _random_alm()
+    alm_QU = _random_alm(ncomp=2)
+    alms_teb = np.concatenate([alm_T[None], alm_QU], axis=0)
+    m = harmonic.alm2map(alms_teb, spin=[0, 2], nside=NSIDE, lmax=LMAX)
+    assert m.shape == (3, hp.nside2npix(NSIDE))
+    m_T = harmonic.alm2map(alm_T, spin=0, nside=NSIDE, lmax=LMAX)
+    m_QU = harmonic.alm2map(alm_QU, spin=2, nside=NSIDE, lmax=LMAX)
+    assert_allclose(m[0], m_T)
+    assert_allclose(m[1:], m_QU)
+
+
+def test_alm2map_list_spin_car(car_geometry):
+    shape, wcs = car_geometry
+    alm_T = _random_alm()
+    alm_QU = _random_alm(ncomp=2)
+    alms_teb = np.concatenate([alm_T[None], alm_QU], axis=0)
+    m = harmonic.alm2map(alms_teb, spin=[0, 2], shape=shape[-2:], wcs=wcs, lmax=LMAX)
+    assert isinstance(m, enmap.ndmap)
+    assert m.shape == (3, *shape[-2:])
+    m_T = harmonic.alm2map(alm_T, spin=0, shape=shape[-2:], wcs=wcs, lmax=LMAX)
+    m_QU = harmonic.alm2map(alm_QU, spin=2, shape=shape[-2:], wcs=wcs, lmax=LMAX)
+    assert_allclose(m[0], m_T)
+    assert_allclose(m[1:], m_QU)
+
+
 # --- almxfl wrapper --------------------------------------------------------
 
 
