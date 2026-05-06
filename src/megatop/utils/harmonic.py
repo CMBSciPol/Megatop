@@ -144,14 +144,15 @@ def alm2map(
         nside: HEALPIX resolution. Mutually exclusive with the CAR options.
         shape: CAR pixel shape. Used together with ``wcs``.
         wcs: CAR world coordinate system. Used together with ``shape``.
-        out: Pre-allocated CAR enmap to write into. Mutually exclusive with
-            ``nside``.
+        out: Pre-allocated CAR enmap written into in-place and returned.
+            Mutually exclusive with ``nside``.
         lmax: Bandlimit. Defaults to inferred value from ``alms``.
         mmax: Azimuthal bandlimit. Defaults to ``lmax``.
 
     Returns:
         Pixel map. ``np.ndarray`` of shape ``(..., npix)`` for HEALPIX, or
-        ``pixell.enmap.ndmap`` of shape ``(..., ny, nx)`` for CAR.
+        ``pixell.enmap.ndmap`` of shape ``(..., ny, nx)`` for CAR. When
+        ``out`` is provided, the return value is ``out`` itself.
 
     Raises:
         ValueError: If both CAR and HEALPIX targets are specified, or if
@@ -164,7 +165,7 @@ def alm2map(
         if out is None:
             full_shape = (*alms.shape[:-1], *shape[-2:])
             out = enmap.zeros(full_shape, wcs=wcs, dtype=np.float64)
-        return curvedsky.alm2map(alms, map=out, spin=spin, copy=True)
+        return curvedsky.alm2map(alms, map=out, spin=spin, copy=False)
     if nside is None:
         raise ValueError("Provide nside for HEALPIX or out / shape+wcs for CAR.")
     work = alms[..., None, :] if spin == 0 else alms

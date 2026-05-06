@@ -70,6 +70,8 @@ def test_alm2map_dispatch_car_via_out():
     alm = _random_alm()
     m = harmonic.alm2map(alm, spin=0, out=out, lmax=LMAX)
     assert isinstance(m, enmap.ndmap)
+    assert m is out  # out written in-place, return value is the same object
+    assert not np.all(out == 0)  # actually populated
 
 
 # --- spin-0 batching (our addition over ducc0) -----------------------------
