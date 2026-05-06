@@ -43,16 +43,13 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
 
-      - name: Create virtual environment
-        run: uv venv
-
       - name: Install namaster dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
 
-      - name: Install project with dev dependencies
-        run: uv pip install . --group dev
+      - name: Sync project
+        run: uv sync --dev --managed-python
 
       - name: Run tests
         run: uv run pytest -vv
@@ -113,10 +110,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
 
-      - name: Create virtual environment and install project
-        run: |
-          uv venv
-          uv pip install ".[snake]" --group dev
+      - name: Sync project
+        run: uv sync --extra snake --dev --managed-python
 
       - name: Cache pysm3 template data
         uses: actions/cache@v4
