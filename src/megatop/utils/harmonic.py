@@ -1,5 +1,10 @@
-# Adapted from SMARTIES (Simons Observatory Collaboration), MIT-licensed.
-# Original source: harmonics.py at the SMARTIES project root.
+# Copyright (c) 2024–2026 members of the Simons Observatory Collaboration.
+#
+# This file is based on original SMARTIES code released under the MIT License.
+# It has been modified from its original form.
+#
+# See the LICENSE file in the root of this repository for full MIT license terms.
+
 """Pixelization-agnostic spherical harmonic transforms.
 
 Dispatches between HEALPIX (via ducc0) and CAR (via pixell.curvedsky) based
