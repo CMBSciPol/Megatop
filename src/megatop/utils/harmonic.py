@@ -8,8 +8,6 @@ native shapes for each pixelization: ``(..., npix)`` for HEALPIX and
 ``(..., ny, nx)`` for CAR.
 """
 
-from __future__ import annotations
-
 import ducc0
 import healpy as hp
 import numpy as np
