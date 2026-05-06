@@ -89,8 +89,6 @@ def _map2alm_healpix(maps, *, spin, lmax=None, mmax=None):
 def _map2alm_healpix_iter(maps, *, spin, lmax=None, mmax=None, niter=0):
     nside = hp.npix2nside(maps.shape[-1])
     alm = _map2alm_healpix(maps, spin=spin, lmax=lmax, mmax=mmax)
-    if niter == 0:
-        return alm
     for _ in range(niter):
         residual = _alm2map_healpix(alm, spin=spin, nside=nside, lmax=lmax, mmax=mmax) - maps
         alm -= _map2alm_healpix(residual, spin=spin, lmax=lmax, mmax=mmax)
