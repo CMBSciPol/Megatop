@@ -138,11 +138,28 @@ def test_almxfl_no_inplace_does_not_mutate():
 # --- anafast wrapper -------------------------------------------------------
 
 
-def test_anafast_healpix_delegates_to_healpy():
+def test_anafast_healpix_scalar():
     m = RNG.standard_normal(hp.nside2npix(NSIDE))
     cl_us = harmonic.anafast(m, lmax=LMAX, pol=False, niter=3)
     cl_hp = hp.anafast(m, lmax=LMAX, pol=False, iter=3)
-    assert np.array_equal(cl_us, cl_hp)
+    np.testing.assert_allclose(cl_us, cl_hp, rtol=1e-10)
+
+
+def test_anafast_healpix_pol():
+    tqu = RNG.standard_normal((3, hp.nside2npix(NSIDE)))
+    cl_us = harmonic.anafast(tqu, lmax=LMAX, pol=True, niter=3)
+    cl_hp = hp.anafast(tqu, lmax=LMAX, pol=True, iter=3)
+    assert cl_us.shape == cl_hp.shape  # (6, lmax+1)
+    np.testing.assert_allclose(cl_us, cl_hp, rtol=1e-10)
+
+
+def test_anafast_healpix_cross():
+    npix = hp.nside2npix(NSIDE)
+    m1 = RNG.standard_normal(npix)
+    m2 = RNG.standard_normal(npix)
+    cl_us = harmonic.anafast(m1, m2, lmax=LMAX, pol=False, niter=3)
+    cl_hp = hp.anafast(m1, map2=m2, lmax=LMAX, pol=False, iter=3)
+    np.testing.assert_allclose(cl_us, cl_hp, rtol=1e-10)
 
 
 def test_anafast_car_auto():

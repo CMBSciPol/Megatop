@@ -241,9 +241,10 @@ def almxfl(alms, fl, *, mmax=None, inplace=False):
 def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=0, pol=True):
     """Compute auto or cross power spectrum.
 
-    For HEALPIX inputs, delegates to ``healpy.anafast`` (which handles
-    T-only and ``(T, Q, U) → (TT, EE, BB, TE, EB, TB)`` natively).
-    For CAR inputs, uses ``pixell.curvedsky.map2alm`` then ``healpy.alm2cl``.
+    Both HEALPIX and CAR paths use ``map2alm`` (ducc0 / pixell) then
+    ``healpy.alm2cl``.  For HEALPIX TQU maps (``pol=True``), T is
+    decomposed with spin-0 and QU with spin-2 to obtain E/B alms, then
+    ``healpy.alm2cl`` returns ``(TT, EE, BB, TE, EB, TB)``.
 
     Args:
         maps: Input map (HEALPIX ndarray or CAR enmap).
@@ -251,14 +252,25 @@ def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=0, pol=True):
         lmax: Bandlimit.
         mmax: Azimuthal bandlimit (HEALPIX only).
         niter: Jacobi iterations for the forward SHT.
-        pol: HEALPIX-only: pass through to ``healpy.anafast``.
+        pol: If ``True`` and HEALPIX input has shape ``(..., 3, npix)``,
+            treat as TQU and return all six spectra.
 
     Returns:
         Power spectrum array. Shape depends on the number of input
         components and the underlying library.
     """
+
+    def _healpix_alms(m):
+        if pol and m.ndim >= 2 and m.shape[-2] == 3:
+            alm_T = map2alm(m[..., 0, :], spin=0, lmax=lmax, mmax=mmax, niter=niter)
+            alm_EB = map2alm(m[..., 1:, :], spin=2, lmax=lmax, mmax=mmax, niter=niter)
+            return [alm_T, alm_EB[..., 0, :], alm_EB[..., 1, :]]
+        return map2alm(m, spin=0, lmax=lmax, mmax=mmax, niter=niter)
+
     if _is_car(maps):
         alm1 = curvedsky.map2alm(maps, lmax=lmax, niter=niter)
         alm2 = curvedsky.map2alm(maps2, lmax=lmax, niter=niter) if maps2 is not None else None
-        return hp.alm2cl(alm1, alm2, lmax=lmax, mmax=mmax)
-    return hp.anafast(maps, map2=maps2, lmax=lmax, mmax=mmax, iter=niter, pol=pol)
+    else:
+        alm1 = _healpix_alms(maps)
+        alm2 = _healpix_alms(maps2) if maps2 is not None else None
+    return hp.alm2cl(alm1, alm2, lmax=lmax, mmax=mmax)
