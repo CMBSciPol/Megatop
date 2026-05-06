@@ -1,4 +1,4 @@
-"""Tests for the dispatch and convenience layer in megatop.utils.harmonics.
+"""Tests for the dispatch and convenience layer in megatop.utils.harmonic.
 
 Underlying SHT correctness is the responsibility of ducc0 / pixell / healpy
 and is not retested here. These tests only exercise behavior the wrapper
