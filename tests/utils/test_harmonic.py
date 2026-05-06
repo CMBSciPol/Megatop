@@ -289,69 +289,68 @@ def test_synfast_healpix_pol_matches_hp_synfast():
     assert np.allclose(result, expected, rtol=1e-10)
 
 
-# --- _flat_cl_to_cov --------------------------------------------------------
+# --- _normalise_cl ----------------------------------------------------------
 
 
 NL = LMAX + 1
 
 
-def test_flat_cl_to_cov_1d():
+def _cls6_to_cov(cls6):
+    """Build (3, 3, nl) covariance matrix from a (6, nl) flat diagonal array."""
+    cov = np.zeros((3, 3, cls6.shape[1]))
+    cov[0, 0] = cls6[0]
+    cov[1, 1] = cls6[1]
+    cov[2, 2] = cls6[2]
+    cov[0, 1] = cov[1, 0] = cls6[3]
+    cov[1, 2] = cov[2, 1] = cls6[4]
+    cov[0, 2] = cov[2, 0] = cls6[5]
+    return cov
+
+
+def test_normalise_cl_1d():
     cl = np.ones(NL)
-    cov = harmonic._flat_cl_to_cov(cl)
-    assert cov.shape == (1, 1, NL)
-    assert_array_equal(cov[0, 0], cl)
+    out = harmonic._normalise_cl(cl)
+    assert isinstance(out, np.ndarray) and out.ndim == 1
+    assert_array_equal(out, cl)
 
 
-def test_flat_cl_to_cov_3d_passthrough():
-    cov_in = np.ones((3, 3, NL))
-    cov_out = harmonic._flat_cl_to_cov(cov_in)
-    assert cov_out is cov_in
-
-
-def test_flat_cl_to_cov_n2_triangular():
-    # TT, EE, TE (diagonal ordering, n=2)
-    cl = np.arange(3 * NL, dtype=float).reshape(3, NL)
-    cov = harmonic._flat_cl_to_cov(cl)
-    assert cov.shape == (2, 2, NL)
-    assert_array_equal(cov[0, 0], cl[0])  # TT
-    assert_array_equal(cov[1, 1], cl[1])  # EE
-    assert_array_equal(cov[0, 1], cl[2])  # TE
-    assert_array_equal(cov[1, 0], cl[2])  # TE symmetric
-
-
-def test_flat_cl_to_cov_n3_triangular():
-    # TT, EE, BB, TE, EB, TB (diagonal ordering, n=3)
+def test_normalise_cl_2d_returns_list():
     cl = np.arange(6 * NL, dtype=float).reshape(6, NL)
-    cov = harmonic._flat_cl_to_cov(cl)
-    assert cov.shape == (3, 3, NL)
-    assert_array_equal(cov[0, 0], cl[0])  # TT
-    assert_array_equal(cov[1, 1], cl[1])  # EE
-    assert_array_equal(cov[2, 2], cl[2])  # BB
-    assert_array_equal(cov[0, 1], cl[3])  # TE
-    assert_array_equal(cov[1, 0], cl[3])  # TE symmetric
-    assert_array_equal(cov[1, 2], cl[4])  # EB
-    assert_array_equal(cov[2, 1], cl[4])  # EB symmetric
-    assert_array_equal(cov[0, 2], cl[5])  # TB
-    assert_array_equal(cov[2, 0], cl[5])  # TB symmetric
+    out = harmonic._normalise_cl(cl)
+    assert isinstance(out, list) and len(out) == 6
+    for i in range(6):
+        assert_array_equal(out[i], cl[i])
 
 
-def test_flat_cl_to_cov_4spec_healpy_shorthand():
-    # TT, EE, BB, TE — EB and TB assumed zero
+def test_normalise_cl_4spec_pads_zeros():
     cl = np.arange(4 * NL, dtype=float).reshape(4, NL)
-    cov = harmonic._flat_cl_to_cov(cl)
-    assert cov.shape == (3, 3, NL)
-    assert_array_equal(cov[0, 0], cl[0])  # TT
-    assert_array_equal(cov[1, 1], cl[1])  # EE
-    assert_array_equal(cov[2, 2], cl[2])  # BB
-    assert_array_equal(cov[0, 1], cl[3])  # TE
-    assert_array_equal(cov[1, 0], cl[3])  # TE symmetric
-    assert_array_equal(cov[1, 2], 0)  # EB = 0
-    assert_array_equal(cov[0, 2], 0)  # TB = 0
+    out = harmonic._normalise_cl(cl)
+    assert isinstance(out, list) and len(out) == 6
+    for i in range(4):
+        assert_array_equal(out[i], cl[i])
+    assert_array_equal(out[4], 0)  # EB = 0
+    assert_array_equal(out[5], 0)  # TB = 0
 
 
-def test_flat_cl_to_cov_invalid_nspec_raises():
+def test_normalise_cl_3d_diagonal_order():
+    # Build a cov with distinct values per entry
+    cov = np.zeros((3, 3, NL))
+    for i in range(3):
+        for j in range(3):
+            cov[i, j] = (i * 3 + j + 1) * np.ones(NL)
+    out = harmonic._normalise_cl(cov)
+    # Diagonal order: TT EE BB TE EB TB
+    assert_array_equal(out[0], cov[0, 0])  # TT
+    assert_array_equal(out[1], cov[1, 1])  # EE
+    assert_array_equal(out[2], cov[2, 2])  # BB
+    assert_array_equal(out[3], cov[0, 1])  # TE
+    assert_array_equal(out[4], cov[1, 2])  # EB
+    assert_array_equal(out[5], cov[0, 2])  # TB
+
+
+def test_normalise_cl_invalid_nspec_raises():
     with pytest.raises(ValueError, match="triangular"):
-        harmonic._flat_cl_to_cov(np.ones((5, NL)))
+        harmonic._normalise_cl(np.ones((5, NL)))
 
 
 # --- synfast CAR (cl format support) ----------------------------------------
@@ -388,7 +387,7 @@ def test_synfast_car_4spec_shape(car_tqu_geometry):
 
 def test_synfast_car_cov_matrix_shape(car_tqu_geometry):
     tqu_shape, wcs = car_tqu_geometry
-    cov = harmonic._flat_cl_to_cov(_CL_6_CAR)
+    cov = _cls6_to_cov(_CL_6_CAR)
     m = harmonic.synfast(cov, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=4)
     assert isinstance(m, enmap.ndmap)
     assert m.shape[-3] == 3
@@ -398,10 +397,24 @@ def test_synfast_car_cov_matrix_shape(car_tqu_geometry):
 def test_synfast_car_flat_and_cov_equivalent(car_tqu_geometry):
     """Flat 6-spectrum and covariance-matrix formats give identical results."""
     tqu_shape, wcs = car_tqu_geometry
-    cov = harmonic._flat_cl_to_cov(_CL_6_CAR)
+    cov = _cls6_to_cov(_CL_6_CAR)
     m_flat = harmonic.synfast(_CL_6_CAR, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=7)
     m_cov = harmonic.synfast(cov, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=7)
     assert_array_equal(m_flat, m_cov)
+
+
+def test_synfast_healpix_cov_matrix_shape():
+    cov = _cls6_to_cov(_CL_6_CAR)
+    m = harmonic.synfast(cov, nside=NSIDE_SF, lmax=LMAX_SF, seed=5)
+    assert m.shape == (3, NPIX_SF)
+    assert np.all(np.isfinite(m))
+
+
+def test_synfast_healpix_cov_matrix_matches_flat():
+    cov = _cls6_to_cov(_CL_POL)
+    m_flat = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=6)
+    m_cov = harmonic.synfast(cov, nside=NSIDE_SF, lmax=LMAX_SF, seed=6)
+    np.testing.assert_array_equal(m_flat, m_cov)
 
 
 def test_synfast_car_invalid_flat_raises(car_geometry):

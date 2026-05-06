@@ -175,77 +175,64 @@ def alm2map(
     return m[..., 0, :] if spin == 0 else m
 
 
-def _flat_cl_to_cov(cl):
-    """Convert healpy-style flat cl array (``new=True`` diagonal ordering) to a
-    pixell covariance matrix of shape ``(n, n, lmax+1)``.
+def _normalise_cl(cl):
+    """Normalise any supported cl format to a scalar array or list for ``hp.synalm``.
 
-    Accepted input shapes:
-
-    * ``(lmax+1,)`` — single spectrum → ``(1, 1, lmax+1)``
-    * ``(nspec, lmax+1)`` where ``nspec = n*(n+1)/2`` — full diagonal ordering
-      ``TT, EE, BB, TE, EB, TB, …`` → ``(n, n, lmax+1)``
-    * ``(4, lmax+1)`` — healpy special case ``TT, EE, BB, TE`` with EB=TB=0
-      → ``(3, 3, lmax+1)``
-    * ``(n, n, lmax+1)`` — already a covariance matrix, returned as-is.
+    * ``(lmax+1,)`` — returned as-is (single spectrum).
+    * ``(nspec, lmax+1)`` flat diagonal ordering → list; caller controls
+      ordering via the ``new`` argument to ``hp.synalm``.
+    * ``(4, lmax+1)`` — healpy 4-spectrum shorthand ``TT EE BB TE``; padded
+      to 6 spectra with EB=TB=0 in diagonal order.
+    * ``(n, n, lmax+1)`` covariance matrix → upper triangle extracted in
+      diagonal (``new=True``) order.
     """
     cl = np.asarray(cl)
-    if cl.ndim == 3:
-        return cl
     if cl.ndim == 1:
-        return cl[None, None, :]
+        return cl
+    if cl.ndim == 3:
+        n = cl.shape[0]
+        out = []
+        for diag in range(n):
+            for i in range(n - diag):
+                out.append(cl[i, i + diag])
+        return out
     if cl.ndim != 2:
         raise ValueError(f"cl must be 1-, 2-, or 3-D, got shape {cl.shape}")
-    nspec, nl = cl.shape
-    # Healpy special case: 4 spectra = TT, EE, BB, TE (EB=TB=0 assumed)
+    nspec = cl.shape[0]
     if nspec == 4:
-        cov = np.zeros((3, 3, nl), dtype=cl.dtype)
-        cov[0, 0] = cl[0]
-        cov[1, 1] = cl[1]
-        cov[2, 2] = cl[2]
-        cov[0, 1] = cov[1, 0] = cl[3]
-        return cov
-    # General triangular case
+        padded = np.zeros((6, cl.shape[1]), dtype=cl.dtype)
+        padded[:4] = cl
+        return list(padded)
     n = int(round((-1 + np.sqrt(1 + 8 * nspec)) / 2))
     if n * (n + 1) // 2 != nspec:
         raise ValueError(
             f"cl has {nspec} spectra, which is not triangular (n*(n+1)/2). "
             "Pass an (n, n, lmax+1) covariance matrix or healpy-ordered flat spectra."
         )
-    cov = np.zeros((n, n, nl), dtype=cl.dtype)
-    idx = 0
-    for diag in range(n):
-        for i in range(n - diag):
-            j = i + diag
-            cov[i, j] = cl[idx]
-            if diag > 0:
-                cov[j, i] = cl[idx]
-            idx += 1
-    return cov
+    return list(cl)
 
 
 def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=True):
     """Generate a Gaussian random map from an input power spectrum.
 
     Args:
-        cl: Power spectrum array.  Accepted formats:
+        cl: Power spectrum. Accepted formats for both pixelizations:
 
-            - **1-D** ``(lmax+1,)`` — single TT spectrum. Works for both
-              pixelizations.
-            - **Flat (healpy) ordering** ``(nspec, lmax+1)`` with ``new=True``
-              diagonal convention: ``TT, EE, BB, TE, EB, TB`` (or the
-              4-spectrum shorthand ``TT, EE, BB, TE`` with EB=TB=0). Works
-              for both pixelizations.
-            - **Covariance matrix** ``(n, n, lmax+1)`` — CAR only; passed
-              directly to pixell.
+            * 1-D ``(lmax+1,)`` — single TT spectrum.
+            * 2-D ``(nspec, lmax+1)`` flat diagonal ordering
+              ``TT, EE, BB, TE, EB, TB`` (or the 4-spectrum shorthand
+              ``TT, EE, BB, TE`` with EB=TB=0).
+            * 3-D ``(n, n, lmax+1)`` covariance matrix.
 
         nside: HEALPIX resolution. Mutually exclusive with ``shape``/``wcs``.
         shape: CAR pixel shape. Used together with ``wcs``.
         wcs: CAR world coordinate system. Used together with ``shape``.
         lmax: Bandlimit. Defaults to library default.
         seed: PRNG seed.
-        new: HEALPIX-only: ordering convention passed to ``healpy.synalm``.
-            Defaults to ``True`` (diagonal ordering ``TT, EE, BB, TE, EB, TB``),
-            which differs from healpy's own default of ``False``.
+        new: Ordering convention for flat 2-D ``cl`` input, passed to
+            ``healpy.synalm``. Defaults to ``True`` (diagonal ordering
+            ``TT, EE, BB, TE, EB, TB``), which differs from healpy's own
+            default of ``False``. Has no effect for 1-D or 3-D ``cl``.
 
     Returns:
         ``np.ndarray`` for HEALPIX, ``pixell.enmap.ndmap`` for CAR.
@@ -259,21 +246,30 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
         raise ValueError("Specify either nside (HEALPIX) or shape+wcs (CAR).")
     if nside is None and (shape is None or wcs is None):
         raise ValueError("Provide nside, or both shape and wcs.")
-    if nside is None:
-        return curvedsky.rand_map(shape, wcs, _flat_cl_to_cov(cl), lmax=lmax, seed=seed)
-    # Split hp.synfast into synalm + ducc0 synthesis (faster than healpy SHT)
+
     if seed is not None:
         np.random.seed(seed)  # noqa: NPY002
-    cl_in = np.atleast_2d(cl)
-    if cl_in.shape[0] == 1:
-        alm = hp.synalm(cl_in[0], lmax=lmax, new=new)
-        return _alm2map_healpix(alm[None], spin=0, nside=nside, lmax=lmax)[0]
-    # Polarization: synalm draws cross-correlated (T,E,B) alms; then T needs
-    # spin-0 and (E,B) need spin-2 synthesis to get (T,Q,U) pixel maps.
-    alm_T, alm_E, alm_B = hp.synalm(list(cl_in), lmax=lmax, new=new)
-    map_T = _alm2map_healpix(alm_T[None], spin=0, nside=nside, lmax=lmax)[0]
-    map_QU = _alm2map_healpix(np.stack([alm_E, alm_B]), spin=2, nside=nside, lmax=lmax)
-    return np.stack([map_T, *map_QU])
+
+    cl_norm = _normalise_cl(cl)
+    scalar = isinstance(cl_norm, np.ndarray) and cl_norm.ndim == 1
+
+    if scalar:
+        alm = hp.synalm(cl_norm, lmax=lmax, new=new)
+        if nside is not None:
+            return alm2map(alm, spin=0, nside=nside, lmax=lmax)
+        return alm2map(alm, spin=0, shape=shape[-2:], wcs=wcs)
+
+    # Multi-component (T, E, B) → synthesise (T, Q, U)
+    alm_T, alm_E, alm_B = hp.synalm(cl_norm, lmax=lmax, new=new)
+    if nside is not None:
+        map_T = alm2map(alm_T, spin=0, nside=nside, lmax=lmax)
+        map_QU = alm2map(np.stack([alm_E, alm_B]), spin=2, nside=nside, lmax=lmax)
+        return np.stack([map_T, *map_QU])
+    # CAR: T spin-0, (E, B) spin-2 → (T, Q, U)
+    out = enmap.zeros((3, *shape[-2:]), wcs=wcs, dtype=np.float64)
+    alm2map(alm_T, spin=0, out=out[0])
+    alm2map(np.stack([alm_E, alm_B]), spin=2, out=out[1:])
+    return out
 
 
 def almxfl(alms, fl, *, mmax=None, inplace=False):
