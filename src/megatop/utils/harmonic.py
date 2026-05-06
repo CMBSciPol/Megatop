@@ -175,17 +175,77 @@ def alm2map(
     return m[..., 0, :] if spin == 0 else m
 
 
+def _flat_cl_to_cov(cl):
+    """Convert healpy-style flat cl array (``new=True`` diagonal ordering) to a
+    pixell covariance matrix of shape ``(n, n, lmax+1)``.
+
+    Accepted input shapes:
+
+    * ``(lmax+1,)`` — single spectrum → ``(1, 1, lmax+1)``
+    * ``(nspec, lmax+1)`` where ``nspec = n*(n+1)/2`` — full diagonal ordering
+      ``TT, EE, BB, TE, EB, TB, …`` → ``(n, n, lmax+1)``
+    * ``(4, lmax+1)`` — healpy special case ``TT, EE, BB, TE`` with EB=TB=0
+      → ``(3, 3, lmax+1)``
+    * ``(n, n, lmax+1)`` — already a covariance matrix, returned as-is.
+    """
+    cl = np.asarray(cl)
+    if cl.ndim == 3:
+        return cl
+    if cl.ndim == 1:
+        return cl[None, None, :]
+    if cl.ndim != 2:
+        raise ValueError(f"cl must be 1-, 2-, or 3-D, got shape {cl.shape}")
+    nspec, nl = cl.shape
+    # Healpy special case: 4 spectra = TT, EE, BB, TE (EB=TB=0 assumed)
+    if nspec == 4:
+        cov = np.zeros((3, 3, nl), dtype=cl.dtype)
+        cov[0, 0] = cl[0]
+        cov[1, 1] = cl[1]
+        cov[2, 2] = cl[2]
+        cov[0, 1] = cov[1, 0] = cl[3]
+        return cov
+    # General triangular case
+    n = int(round((-1 + np.sqrt(1 + 8 * nspec)) / 2))
+    if n * (n + 1) // 2 != nspec:
+        raise ValueError(
+            f"cl has {nspec} spectra, which is not triangular (n*(n+1)/2). "
+            "Pass an (n, n, lmax+1) covariance matrix or healpy-ordered flat spectra."
+        )
+    cov = np.zeros((n, n, nl), dtype=cl.dtype)
+    idx = 0
+    for diag in range(n):
+        for i in range(n - diag):
+            j = i + diag
+            cov[i, j] = cl[idx]
+            if diag > 0:
+                cov[j, i] = cl[idx]
+            idx += 1
+    return cov
+
+
 def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=True):
     """Generate a Gaussian random map from an input power spectrum.
 
     Args:
-        cl: Power spectrum or list of spectra to sample from.
+        cl: Power spectrum array.  Accepted formats:
+
+            - **1-D** ``(lmax+1,)`` — single TT spectrum. Works for both
+              pixelizations.
+            - **Flat (healpy) ordering** ``(nspec, lmax+1)`` with ``new=True``
+              diagonal convention: ``TT, EE, BB, TE, EB, TB`` (or the
+              4-spectrum shorthand ``TT, EE, BB, TE`` with EB=TB=0). Works
+              for both pixelizations.
+            - **Covariance matrix** ``(n, n, lmax+1)`` — CAR only; passed
+              directly to pixell.
+
         nside: HEALPIX resolution. Mutually exclusive with ``shape``/``wcs``.
         shape: CAR pixel shape. Used together with ``wcs``.
         wcs: CAR world coordinate system. Used together with ``shape``.
         lmax: Bandlimit. Defaults to library default.
         seed: PRNG seed.
-        new: HEALPIX-only: pass through to ``healpy.synfast``.
+        new: HEALPIX-only: ordering convention passed to ``healpy.synalm``.
+            Defaults to ``True`` (diagonal ordering ``TT, EE, BB, TE, EB, TB``),
+            which differs from healpy's own default of ``False``.
 
     Returns:
         ``np.ndarray`` for HEALPIX, ``pixell.enmap.ndmap`` for CAR.
@@ -200,7 +260,7 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
     if nside is None and (shape is None or wcs is None):
         raise ValueError("Provide nside, or both shape and wcs.")
     if nside is None:
-        return curvedsky.rand_map(shape, wcs, np.atleast_2d(cl), lmax=lmax, seed=seed)
+        return curvedsky.rand_map(shape, wcs, _flat_cl_to_cov(cl), lmax=lmax, seed=seed)
     # Split hp.synfast into synalm + ducc0 synthesis (faster than healpy SHT)
     if seed is not None:
         np.random.seed(seed)  # noqa: NPY002
@@ -257,8 +317,10 @@ def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True):
             treat as TQU and return all six spectra.
 
     Returns:
-        Power spectrum array. Shape depends on the number of input
-        components and the underlying library.
+        Power spectrum array. For TQU HEALPIX input (``pol=True``) the six
+        spectra are returned in diagonal ordering ``TT, EE, BB, TE, EB, TB``
+        — consistent with ``synfast``'s ``new=True`` convention and suitable
+        as direct input to ``synfast``.
     """
 
     def _healpix_alms(m):
