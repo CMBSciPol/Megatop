@@ -86,7 +86,7 @@ def _map2alm_healpix(maps, *, spin, lmax=None, mmax=None):
     )
 
 
-def _map2alm_healpix_iter(maps, *, spin, lmax=None, mmax=None, niter=0):
+def _map2alm_healpix_iter(maps, *, spin, lmax=None, mmax=None, niter=3):
     nside = hp.npix2nside(maps.shape[-1])
     alm = _map2alm_healpix(maps, spin=spin, lmax=lmax, mmax=mmax)
     for _ in range(niter):
@@ -95,7 +95,7 @@ def _map2alm_healpix_iter(maps, *, spin, lmax=None, mmax=None, niter=0):
     return alm
 
 
-def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=0):
+def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3):
     """Forward SHT, dispatching on pixelization.
 
     Args:
@@ -105,8 +105,9 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=0):
         lmax: Bandlimit. Defaults to ``3 * nside - 1`` for HEALPIX and to
             the library default for CAR.
         mmax: Azimuthal bandlimit. Defaults to ``lmax``.
-        niter: Jacobi iterations for HEALPIX adjoint synthesis (ignored for
-            CAR).
+        niter: Iterative refinement steps. For HEALPIX, Jacobi iterations
+            on top of adjoint synthesis. For CAR, passed through to
+            ``pixell.curvedsky.map2alm``.
 
     Returns:
         Spherical harmonic coefficients with the last axis storing the
@@ -238,7 +239,7 @@ def almxfl(alms, fl, *, mmax=None, inplace=False):
     return out
 
 
-def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=0, pol=True):
+def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True):
     """Compute auto or cross power spectrum.
 
     Both HEALPIX and CAR paths use ``map2alm`` (ducc0 / pixell) then
