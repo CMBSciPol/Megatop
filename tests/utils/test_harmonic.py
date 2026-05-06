@@ -191,6 +191,63 @@ def test_alm2map_lmax_exceeds_alm_bandlimit():
         harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX + 5)
 
 
+# --- synfast healpix -------------------------------------------------------
+
+
+NSIDE_SF = 64
+LMAX_SF = 2 * NSIDE_SF
+NPIX_SF = hp.nside2npix(NSIDE_SF)
+
+# Flat-ish spectrum well above noise for statistical checks.
+_CL_T = np.ones(LMAX_SF + 1) * 1e-4
+_CL_POL = np.zeros((6, LMAX_SF + 1))
+_CL_POL[0] = _CL_T  # TT
+_CL_POL[1] = _CL_T * 0.5  # EE
+_CL_POL[2] = _CL_T * 0.1  # BB
+
+
+def test_synfast_healpix_t_shape():
+    m = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=1)
+    assert m.shape == (NPIX_SF,)
+    assert m.dtype.kind == "f"
+    assert np.all(np.isfinite(m))
+
+
+def test_synfast_healpix_pol_shape():
+    m = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=2)
+    assert m.shape == (3, NPIX_SF)
+    assert m.dtype.kind == "f"
+    assert np.all(np.isfinite(m))
+
+
+def test_synfast_healpix_t_seed_reproducible():
+    m1 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
+    np.random.seed(None)  # noqa: NPY002
+    m2 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
+    assert np.array_equal(m1, m2)
+
+
+def test_synfast_healpix_pol_seed_reproducible():
+    m1 = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
+    np.random.seed(None)  # noqa: NPY002
+    m2 = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
+    assert np.array_equal(m1, m2)
+
+
+def test_synfast_healpix_t_matches_hp_synfast():
+    np.random.seed(99)  # noqa: NPY002
+    expected = hp.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
+    result = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
+    assert np.allclose(result, expected, rtol=1e-10)
+
+
+def test_synfast_healpix_pol_matches_hp_synfast():
+    np.random.seed(99)  # noqa: NPY002
+    expected = hp.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
+    result = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
+    assert np.allclose(result, expected, rtol=1e-10)
+
+
 # --- getlmax convenience ---------------------------------------------------
 
 

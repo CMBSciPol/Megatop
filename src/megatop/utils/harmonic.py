@@ -194,13 +194,23 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
     car_target = shape is not None or wcs is not None
     if nside is not None and car_target:
         raise ValueError("Specify either nside (HEALPIX) or shape+wcs (CAR).")
-    if nside is not None:
-        if seed is not None:
-            np.random.seed(seed)  # noqa: NPY002
-        return hp.synfast(cl, nside=nside, lmax=lmax, new=new)
-    if shape is None or wcs is None:
+    if nside is None and (shape is None or wcs is None):
         raise ValueError("Provide nside, or both shape and wcs.")
-    return curvedsky.rand_map(shape, wcs, np.atleast_2d(cl), lmax=lmax, seed=seed)
+    if nside is None:
+        return curvedsky.rand_map(shape, wcs, np.atleast_2d(cl), lmax=lmax, seed=seed)
+    # Split hp.synfast into synalm + ducc0 synthesis (faster than healpy SHT)
+    if seed is not None:
+        np.random.seed(seed)  # noqa: NPY002
+    cl_in = np.atleast_2d(cl)
+    if cl_in.shape[0] == 1:
+        alm = hp.synalm(cl_in[0], lmax=lmax, new=new)
+        return _alm2map_healpix(alm[None], spin=0, nside=nside, lmax=lmax)[0]
+    # Polarization: synalm draws cross-correlated (T,E,B) alms; then T needs
+    # spin-0 and (E,B) need spin-2 synthesis to get (T,Q,U) pixel maps.
+    alm_T, alm_E, alm_B = hp.synalm(list(cl_in), lmax=lmax, new=new)
+    map_T = _alm2map_healpix(alm_T[None], spin=0, nside=nside, lmax=lmax)[0]
+    map_QU = _alm2map_healpix(np.stack([alm_E, alm_B]), spin=2, nside=nside, lmax=lmax)
+    return np.stack([map_T, *map_QU])
 
 
 def almxfl(alms, fl, *, mmax=None, inplace=False):
