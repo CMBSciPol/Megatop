@@ -40,310 +40,282 @@ def _random_alm(ncomp=1):
     return RNG.standard_normal(shape) + 1j * RNG.standard_normal(shape)
 
 
-# --- dispatch ---------------------------------------------------------------
-
-
-def test_map2alm_dispatch_healpix():
-    m = RNG.standard_normal(hp.nside2npix(NSIDE))
-    alm = harmonic.map2alm(m, spin=0, lmax=LMAX)
-    assert isinstance(alm, np.ndarray)
-    assert not isinstance(alm, enmap.ndmap)
-
-
-def test_map2alm_dispatch_car(car_geometry):
-    shape, wcs = car_geometry
-    m = enmap.enmap(RNG.standard_normal(shape), wcs)
-    alm = harmonic.map2alm(m, spin=0, lmax=LMAX)
-    assert isinstance(alm, np.ndarray)
-
-
-def test_alm2map_dispatch_healpix():
-    alm = _random_alm()
-    m = harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX)
-    assert m.shape[-1] == hp.nside2npix(NSIDE)
-    assert not isinstance(m, enmap.ndmap)
-
-
-def test_alm2map_dispatch_car_via_shape_wcs(car_geometry):
-    shape, wcs = car_geometry
-    alm = _random_alm()
-    m = harmonic.alm2map(alm, spin=0, shape=shape, wcs=wcs, lmax=LMAX)
-    assert isinstance(m, enmap.ndmap)
-    assert m.shape[-2:] == tuple(shape[-2:])
-
-
-def test_alm2map_dispatch_car_via_out(car_geometry):
-    shape, wcs = car_geometry
-    out = enmap.zeros(shape, wcs=wcs)
-    alm = _random_alm()
-    m = harmonic.alm2map(alm, spin=0, out=out, lmax=LMAX)
-    assert isinstance(m, enmap.ndmap)
-    assert m is out  # out written in-place, return value is the same object
-    assert not np.all(out == 0)  # actually populated
-
-
-def test_alm2map_healpix_out_spin0():
-    alm = _random_alm()
-    out = np.zeros(hp.nside2npix(NSIDE))
-    m = harmonic.alm2map(alm, spin=0, nside=NSIDE, out=out, lmax=LMAX)
-    assert m is out
-    assert not np.all(out == 0)
-    assert_allclose(m, harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX))
-
-
-def test_alm2map_healpix_out_spin2():
-    alm = _random_alm(ncomp=2)
-    out = np.zeros((2, hp.nside2npix(NSIDE)))
-    m = harmonic.alm2map(alm, spin=2, nside=NSIDE, out=out, lmax=LMAX)
-    assert m is out
-    assert not np.all(out == 0)
-    assert_allclose(m, harmonic.alm2map(alm, spin=2, nside=NSIDE, lmax=LMAX))
-
-
-def test_alm2map_healpix_out_list_spin():
-    alm_T = _random_alm()
-    alm_QU = _random_alm(ncomp=2)
-    alms = np.concatenate([alm_T[None], alm_QU], axis=0)
-    out = np.zeros((3, hp.nside2npix(NSIDE)))
-    m = harmonic.alm2map(alms, spin=[0, 2], nside=NSIDE, out=out, lmax=LMAX)
-    assert m is out
-    assert not np.all(out == 0)
-    assert_allclose(m, harmonic.alm2map(alms, spin=[0, 2], nside=NSIDE, lmax=LMAX))
-
-
-# --- spin-0 batching (our addition over ducc0) -----------------------------
-
-
-def test_map2alm_spin0_batches_leading_dim():
-    ncomp = 4
-    m = RNG.standard_normal((ncomp, hp.nside2npix(NSIDE)))
-    alm = harmonic.map2alm(m, spin=0, lmax=LMAX)
-    assert alm.shape == (ncomp, NALM)
-    # equivalent to per-row calls
-    for i in range(ncomp):
-        alm_i = harmonic.map2alm(m[i], spin=0, lmax=LMAX)
-        assert np.allclose(alm[i], alm_i)
-
-
-def test_alm2map_spin0_batches_leading_dim():
-    ncomp = 4
-    alms = _random_alm(ncomp=ncomp)
-    m = harmonic.alm2map(alms, spin=0, nside=NSIDE, lmax=LMAX)
-    assert m.shape == (ncomp, hp.nside2npix(NSIDE))
-    for i in range(ncomp):
-        m_i = harmonic.alm2map(alms[i], spin=0, nside=NSIDE, lmax=LMAX)
-        assert np.allclose(m[i], m_i)
-
-
-def test_map2alm_list_spin_healpix():
-    npix = hp.nside2npix(NSIDE)
-    map_T = RNG.standard_normal(npix)
-    map_QU = RNG.standard_normal((2, npix))
-    maps_tqu = np.concatenate([map_T[None], map_QU], axis=0)
-    alms = harmonic.map2alm(maps_tqu, spin=[0, 2], lmax=LMAX)
-    assert alms.shape == (3, NALM)
-    alm_T = harmonic.map2alm(map_T, spin=0, lmax=LMAX)
-    alm_QU = harmonic.map2alm(map_QU, spin=2, lmax=LMAX)
-    assert_allclose(alms[0], alm_T)
-    assert_allclose(alms[1:], alm_QU)
-
-
-def test_alm2map_list_spin_healpix():
-    alm_T = _random_alm()
-    alm_QU = _random_alm(ncomp=2)
-    alms_teb = np.concatenate([alm_T[None], alm_QU], axis=0)
-    m = harmonic.alm2map(alms_teb, spin=[0, 2], nside=NSIDE, lmax=LMAX)
-    assert m.shape == (3, hp.nside2npix(NSIDE))
-    m_T = harmonic.alm2map(alm_T, spin=0, nside=NSIDE, lmax=LMAX)
-    m_QU = harmonic.alm2map(alm_QU, spin=2, nside=NSIDE, lmax=LMAX)
-    assert_allclose(m[0], m_T)
-    assert_allclose(m[1:], m_QU)
-
-
-def test_alm2map_list_spin_car(car_geometry):
-    shape, wcs = car_geometry
-    alm_T = _random_alm()
-    alm_QU = _random_alm(ncomp=2)
-    alms_teb = np.concatenate([alm_T[None], alm_QU], axis=0)
-    m = harmonic.alm2map(alms_teb, spin=[0, 2], shape=shape[-2:], wcs=wcs, lmax=LMAX)
-    assert isinstance(m, enmap.ndmap)
-    assert m.shape == (3, *shape[-2:])
-    m_T = harmonic.alm2map(alm_T, spin=0, shape=shape[-2:], wcs=wcs, lmax=LMAX)
-    m_QU = harmonic.alm2map(alm_QU, spin=2, shape=shape[-2:], wcs=wcs, lmax=LMAX)
-    assert_allclose(m[0], m_T)
-    assert_allclose(m[1:], m_QU)
-
-
-# --- almxfl wrapper --------------------------------------------------------
-
-
-def test_almxfl_1d_passthrough():
-    alm = _random_alm()
-    fl = np.linspace(1.0, 2.0, LMAX + 1)
-    out = harmonic.almxfl(alm, fl)
-    assert np.allclose(out, hp.almxfl(alm.copy(), fl))
-
-
-def test_almxfl_2d_per_row():
-    alms = _random_alm(ncomp=3)
-    fl = np.linspace(1.0, 2.0, LMAX + 1)
-    out = harmonic.almxfl(alms, fl)
-    assert out.shape == alms.shape
-    for i in range(3):
-        assert np.allclose(out[i], hp.almxfl(alms[i].copy(), fl))
-
-
-def test_almxfl_inplace():
-    alms = _random_alm(ncomp=2)
-    snapshot = alms.copy()
-    fl = np.linspace(1.0, 2.0, LMAX + 1)
-    out = harmonic.almxfl(alms, fl, inplace=True)
-    assert out is alms
-    for i in range(2):
-        assert np.allclose(alms[i], hp.almxfl(snapshot[i].copy(), fl))
-
-
-def test_almxfl_no_inplace_does_not_mutate():
-    alms = _random_alm(ncomp=2)
-    snapshot = alms.copy()
-    fl = np.linspace(1.0, 2.0, LMAX + 1)
-    harmonic.almxfl(alms, fl, inplace=False)
-    assert np.allclose(alms, snapshot)
-
-
-# --- anafast wrapper -------------------------------------------------------
-
-
-def test_anafast_healpix_scalar():
-    m = RNG.standard_normal(hp.nside2npix(NSIDE))
-    cl_us = harmonic.anafast(m, lmax=LMAX, pol=False, niter=3)
-    cl_hp = hp.anafast(m, lmax=LMAX, pol=False, iter=3)
-    assert_allclose(cl_us, cl_hp, rtol=1e-10)
-
-
-def test_anafast_healpix_pol():
-    tqu = RNG.standard_normal((3, hp.nside2npix(NSIDE)))
-    cl_us = harmonic.anafast(tqu, lmax=LMAX, pol=True, niter=3)
-    cl_hp = hp.anafast(tqu, lmax=LMAX, pol=True, iter=3)
-    assert cl_us.shape == cl_hp.shape  # (6, lmax+1)
-    assert_allclose(cl_us, cl_hp, rtol=1e-10)
-
-
-def test_anafast_healpix_cross():
-    npix = hp.nside2npix(NSIDE)
-    m1 = RNG.standard_normal(npix)
-    m2 = RNG.standard_normal(npix)
-    cl_us = harmonic.anafast(m1, m2, lmax=LMAX, pol=False, niter=3)
-    cl_hp = hp.anafast(m1, map2=m2, lmax=LMAX, pol=False, iter=3)
-    assert_allclose(cl_us, cl_hp, rtol=1e-10)
-
-
-def test_anafast_car_auto(car_geometry):
-    shape, wcs = car_geometry
-    m = enmap.enmap(RNG.standard_normal(shape), wcs)
-    cl = harmonic.anafast(m, lmax=LMAX)
-    assert cl.shape[-1] == LMAX + 1
-
-
-def test_anafast_car_cross(car_geometry):
-    shape, wcs = car_geometry
-    m1 = enmap.enmap(RNG.standard_normal(shape), wcs)
-    m2 = enmap.enmap(RNG.standard_normal(shape), wcs)
-    cl = harmonic.anafast(m1, m2, lmax=LMAX)
-    assert cl.shape[-1] == LMAX + 1
-
-
-# --- argument validation ---------------------------------------------------
-
-
-def test_alm2map_requires_target():
-    alm = _random_alm()
-    with pytest.raises(ValueError):
-        harmonic.alm2map(alm, spin=0)
-
-
-def test_alm2map_rejects_both_targets(car_geometry):
-    shape, wcs = car_geometry
-    alm = _random_alm()
-    with pytest.raises(ValueError):
-        harmonic.alm2map(alm, spin=0, nside=NSIDE, shape=shape, wcs=wcs)
-
-
-def test_alm2map_rejects_out_and_shape_wcs(car_geometry):
-    shape, wcs = car_geometry
-    alm = _random_alm()
-    out = enmap.zeros(shape, wcs=wcs)
-    with pytest.raises(ValueError, match="out"):
-        harmonic.alm2map(alm, spin=0, out=out, shape=shape, wcs=wcs)
-
-
-def test_alm2map_rejects_healpix_out_and_shape_wcs(car_geometry):
-    shape, wcs = car_geometry
-    alm = _random_alm()
-    out = np.zeros(hp.nside2npix(NSIDE))
-    with pytest.raises(ValueError, match="out"):
-        harmonic.alm2map(alm, spin=0, out=out, shape=shape, wcs=wcs)
-
-
-def test_synfast_rejects_both_targets(car_geometry):
-    shape, wcs = car_geometry
-    with pytest.raises(ValueError):
-        harmonic.synfast(np.ones(LMAX + 1), nside=NSIDE, shape=shape, wcs=wcs)
-
-
-def test_synfast_requires_target():
-    with pytest.raises(ValueError):
-        harmonic.synfast(np.ones(LMAX + 1))
-
-
-def test_anafast_pol_wrong_nstokes_healpix():
-    m = RNG.standard_normal((2, hp.nside2npix(NSIDE)))
-    with pytest.raises(ValueError, match="pol=True"):
-        harmonic.anafast(m, lmax=LMAX, pol=True)
-
-
-def test_anafast_pol_wrong_nstokes_car(car_geometry):
-    shape, wcs = car_geometry
-    m = enmap.enmap(RNG.standard_normal((2, *shape[-2:])), wcs)
-    with pytest.raises(ValueError, match="pol=True"):
-        harmonic.anafast(m, lmax=LMAX, pol=True)
-
-
-def test_alm2map_lmax_exceeds_alm_bandlimit():
-    alm = _random_alm()
-    with pytest.raises(ValueError, match="lmax"):
-        harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX + 5)
-
-
-def test_map2alm_lmax_exceeds_nside_limit():
-    m = RNG.standard_normal(hp.nside2npix(NSIDE))
-    with pytest.raises(ValueError, match="lmax"):
-        harmonic.map2alm(m, spin=0, lmax=3 * NSIDE)
-
-
-def test_map2alm_healpix_spin2():
-    npix = hp.nside2npix(NSIDE)
-    m = RNG.standard_normal((2, npix))
-    alm = harmonic.map2alm(m, spin=2, lmax=LMAX)
-    assert alm.shape == (2, NALM)
-    alm_ref = harmonic.map2alm(m, spin=[2], lmax=LMAX)
-    assert_allclose(alm, alm_ref)
-
-
-def test_map2alm_niter0_equals_adjoint():
-    m = RNG.standard_normal(hp.nside2npix(NSIDE))
-    alm_iter = harmonic.map2alm(m, spin=0, lmax=LMAX, niter=0)
-    alm_ref = harmonic.map2alm(m, spin=0, lmax=LMAX, niter=3)
-    assert alm_iter.shape == alm_ref.shape
-    assert not np.allclose(alm_iter, alm_ref)  # niter=0 is less accurate
-
-
-# --- synfast healpix -------------------------------------------------------
-
+# ---------------------------------------------------------------------------
+# map2alm
+# ---------------------------------------------------------------------------
+
+
+class TestMap2Alm:
+    def test_dispatch_healpix(self):
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        alm = harmonic.map2alm(m, spin=0, lmax=LMAX)
+        assert isinstance(alm, np.ndarray)
+        assert not isinstance(alm, enmap.ndmap)
+
+    def test_dispatch_car(self, car_geometry):
+        shape, wcs = car_geometry
+        m = enmap.enmap(RNG.standard_normal(shape), wcs)
+        alm = harmonic.map2alm(m, spin=0, lmax=LMAX)
+        assert isinstance(alm, np.ndarray)
+
+    def test_healpix_spin0_scalar(self):
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        alm = harmonic.map2alm(m, spin=0, lmax=LMAX)
+        assert alm.shape == (NALM,)
+
+    def test_healpix_spin0_batch(self):
+        ncomp = 4
+        m = RNG.standard_normal((ncomp, hp.nside2npix(NSIDE)))
+        alm = harmonic.map2alm(m, spin=0, lmax=LMAX)
+        assert alm.shape == (ncomp, NALM)
+        for i in range(ncomp):
+            assert_allclose(alm[i], harmonic.map2alm(m[i], spin=0, lmax=LMAX))
+
+    def test_healpix_spin2(self):
+        m = RNG.standard_normal((2, hp.nside2npix(NSIDE)))
+        alm = harmonic.map2alm(m, spin=2, lmax=LMAX)
+        assert alm.shape == (2, NALM)
+        assert_allclose(alm, harmonic.map2alm(m, spin=[2], lmax=LMAX))
+
+    def test_healpix_list_spin(self):
+        npix = hp.nside2npix(NSIDE)
+        map_T = RNG.standard_normal(npix)
+        map_QU = RNG.standard_normal((2, npix))
+        maps_tqu = np.concatenate([map_T[None], map_QU], axis=0)
+        alms = harmonic.map2alm(maps_tqu, spin=[0, 2], lmax=LMAX)
+        assert alms.shape == (3, NALM)
+        assert_allclose(alms[0], harmonic.map2alm(map_T, spin=0, lmax=LMAX))
+        assert_allclose(alms[1:], harmonic.map2alm(map_QU, spin=2, lmax=LMAX))
+
+    def test_healpix_niter0_differs_from_niter3(self):
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        alm0 = harmonic.map2alm(m, spin=0, lmax=LMAX, niter=0)
+        alm3 = harmonic.map2alm(m, spin=0, lmax=LMAX, niter=3)
+        assert alm0.shape == alm3.shape
+        assert not np.allclose(alm0, alm3)
+
+    def test_healpix_lmax_exceeds_nside_limit(self):
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        with pytest.raises(ValueError, match="lmax"):
+            harmonic.map2alm(m, spin=0, lmax=3 * NSIDE)
+
+
+# ---------------------------------------------------------------------------
+# alm2map
+# ---------------------------------------------------------------------------
+
+
+class TestAlm2Map:
+    def test_dispatch_healpix(self):
+        alm = _random_alm()
+        m = harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX)
+        assert m.shape[-1] == hp.nside2npix(NSIDE)
+        assert not isinstance(m, enmap.ndmap)
+
+    def test_dispatch_car_via_shape_wcs(self, car_geometry):
+        shape, wcs = car_geometry
+        alm = _random_alm()
+        m = harmonic.alm2map(alm, spin=0, shape=shape, wcs=wcs, lmax=LMAX)
+        assert isinstance(m, enmap.ndmap)
+        assert m.shape[-2:] == tuple(shape[-2:])
+
+    def test_dispatch_car_via_out(self, car_geometry):
+        shape, wcs = car_geometry
+        out = enmap.zeros(shape, wcs=wcs)
+        alm = _random_alm()
+        m = harmonic.alm2map(alm, spin=0, out=out, lmax=LMAX)
+        assert isinstance(m, enmap.ndmap)
+        assert m is out
+        assert not np.all(out == 0)
+
+    def test_healpix_spin0_scalar(self):
+        alm = _random_alm()
+        m = harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX)
+        assert m.shape == (hp.nside2npix(NSIDE),)
+
+    def test_healpix_spin0_batch(self):
+        ncomp = 4
+        alms = _random_alm(ncomp=ncomp)
+        m = harmonic.alm2map(alms, spin=0, nside=NSIDE, lmax=LMAX)
+        assert m.shape == (ncomp, hp.nside2npix(NSIDE))
+        for i in range(ncomp):
+            assert_allclose(m[i], harmonic.alm2map(alms[i], spin=0, nside=NSIDE, lmax=LMAX))
+
+    def test_healpix_list_spin(self):
+        alm_T = _random_alm()
+        alm_QU = _random_alm(ncomp=2)
+        alms_teb = np.concatenate([alm_T[None], alm_QU], axis=0)
+        m = harmonic.alm2map(alms_teb, spin=[0, 2], nside=NSIDE, lmax=LMAX)
+        assert m.shape == (3, hp.nside2npix(NSIDE))
+        assert_allclose(m[0], harmonic.alm2map(alm_T, spin=0, nside=NSIDE, lmax=LMAX))
+        assert_allclose(m[1:], harmonic.alm2map(alm_QU, spin=2, nside=NSIDE, lmax=LMAX))
+
+    def test_car_list_spin(self, car_geometry):
+        shape, wcs = car_geometry
+        alm_T = _random_alm()
+        alm_QU = _random_alm(ncomp=2)
+        alms_teb = np.concatenate([alm_T[None], alm_QU], axis=0)
+        m = harmonic.alm2map(alms_teb, spin=[0, 2], shape=shape[-2:], wcs=wcs, lmax=LMAX)
+        assert isinstance(m, enmap.ndmap)
+        assert m.shape == (3, *shape[-2:])
+        assert_allclose(m[0], harmonic.alm2map(alm_T, spin=0, shape=shape[-2:], wcs=wcs, lmax=LMAX))
+        assert_allclose(
+            m[1:], harmonic.alm2map(alm_QU, spin=2, shape=shape[-2:], wcs=wcs, lmax=LMAX)
+        )
+
+    def test_healpix_out_spin0(self):
+        alm = _random_alm()
+        out = np.zeros(hp.nside2npix(NSIDE))
+        m = harmonic.alm2map(alm, spin=0, nside=NSIDE, out=out, lmax=LMAX)
+        assert m is out
+        assert not np.all(out == 0)
+        assert_allclose(m, harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX))
+
+    def test_healpix_out_spin2(self):
+        alm = _random_alm(ncomp=2)
+        out = np.zeros((2, hp.nside2npix(NSIDE)))
+        m = harmonic.alm2map(alm, spin=2, nside=NSIDE, out=out, lmax=LMAX)
+        assert m is out
+        assert not np.all(out == 0)
+        assert_allclose(m, harmonic.alm2map(alm, spin=2, nside=NSIDE, lmax=LMAX))
+
+    def test_healpix_out_list_spin(self):
+        alm_T = _random_alm()
+        alm_QU = _random_alm(ncomp=2)
+        alms = np.concatenate([alm_T[None], alm_QU], axis=0)
+        out = np.zeros((3, hp.nside2npix(NSIDE)))
+        m = harmonic.alm2map(alms, spin=[0, 2], nside=NSIDE, out=out, lmax=LMAX)
+        assert m is out
+        assert not np.all(out == 0)
+        assert_allclose(m, harmonic.alm2map(alms, spin=[0, 2], nside=NSIDE, lmax=LMAX))
+
+    def test_requires_target(self):
+        alm = _random_alm()
+        with pytest.raises(ValueError):
+            harmonic.alm2map(alm, spin=0)
+
+    def test_rejects_both_targets(self, car_geometry):
+        shape, wcs = car_geometry
+        alm = _random_alm()
+        with pytest.raises(ValueError):
+            harmonic.alm2map(alm, spin=0, nside=NSIDE, shape=shape, wcs=wcs)
+
+    def test_rejects_out_and_shape_wcs_car(self, car_geometry):
+        shape, wcs = car_geometry
+        alm = _random_alm()
+        out = enmap.zeros(shape, wcs=wcs)
+        with pytest.raises(ValueError, match="out"):
+            harmonic.alm2map(alm, spin=0, out=out, shape=shape, wcs=wcs)
+
+    def test_rejects_out_and_shape_wcs_healpix(self, car_geometry):
+        shape, wcs = car_geometry
+        alm = _random_alm()
+        out = np.zeros(hp.nside2npix(NSIDE))
+        with pytest.raises(ValueError, match="out"):
+            harmonic.alm2map(alm, spin=0, out=out, shape=shape, wcs=wcs)
+
+    def test_lmax_exceeds_alm_bandlimit(self):
+        alm = _random_alm()
+        with pytest.raises(ValueError, match="lmax"):
+            harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX + 5)
+
+
+# ---------------------------------------------------------------------------
+# almxfl
+# ---------------------------------------------------------------------------
+
+
+class TestAlmxfl:
+    def test_1d_passthrough(self):
+        alm = _random_alm()
+        fl = np.linspace(1.0, 2.0, LMAX + 1)
+        assert_allclose(harmonic.almxfl(alm, fl), hp.almxfl(alm.copy(), fl))
+
+    def test_2d_per_row(self):
+        alms = _random_alm(ncomp=3)
+        fl = np.linspace(1.0, 2.0, LMAX + 1)
+        out = harmonic.almxfl(alms, fl)
+        assert out.shape == alms.shape
+        for i in range(3):
+            assert_allclose(out[i], hp.almxfl(alms[i].copy(), fl))
+
+    def test_inplace(self):
+        alms = _random_alm(ncomp=2)
+        snapshot = alms.copy()
+        fl = np.linspace(1.0, 2.0, LMAX + 1)
+        out = harmonic.almxfl(alms, fl, inplace=True)
+        assert out is alms
+        for i in range(2):
+            assert_allclose(alms[i], hp.almxfl(snapshot[i].copy(), fl))
+
+    def test_no_inplace_does_not_mutate(self):
+        alms = _random_alm(ncomp=2)
+        snapshot = alms.copy()
+        fl = np.linspace(1.0, 2.0, LMAX + 1)
+        harmonic.almxfl(alms, fl, inplace=False)
+        assert_allclose(alms, snapshot)
+
+
+# ---------------------------------------------------------------------------
+# anafast
+# ---------------------------------------------------------------------------
+
+
+class TestAnafast:
+    def test_healpix_scalar(self):
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        cl_us = harmonic.anafast(m, lmax=LMAX, pol=False, niter=3)
+        cl_hp = hp.anafast(m, lmax=LMAX, pol=False, iter=3)
+        assert_allclose(cl_us, cl_hp, rtol=1e-10)
+
+    def test_healpix_pol(self):
+        tqu = RNG.standard_normal((3, hp.nside2npix(NSIDE)))
+        cl_us = harmonic.anafast(tqu, lmax=LMAX, pol=True, niter=3)
+        cl_hp = hp.anafast(tqu, lmax=LMAX, pol=True, iter=3)
+        assert cl_us.shape == cl_hp.shape  # (6, lmax+1)
+        assert_allclose(cl_us, cl_hp, rtol=1e-10)
+
+    def test_healpix_cross(self):
+        npix = hp.nside2npix(NSIDE)
+        m1 = RNG.standard_normal(npix)
+        m2 = RNG.standard_normal(npix)
+        cl_us = harmonic.anafast(m1, m2, lmax=LMAX, pol=False, niter=3)
+        cl_hp = hp.anafast(m1, map2=m2, lmax=LMAX, pol=False, iter=3)
+        assert_allclose(cl_us, cl_hp, rtol=1e-10)
+
+    def test_car_auto(self, car_geometry):
+        shape, wcs = car_geometry
+        m = enmap.enmap(RNG.standard_normal(shape), wcs)
+        cl = harmonic.anafast(m, lmax=LMAX)
+        assert cl.shape[-1] == LMAX + 1
+
+    def test_car_cross(self, car_geometry):
+        shape, wcs = car_geometry
+        m1 = enmap.enmap(RNG.standard_normal(shape), wcs)
+        m2 = enmap.enmap(RNG.standard_normal(shape), wcs)
+        cl = harmonic.anafast(m1, m2, lmax=LMAX)
+        assert cl.shape[-1] == LMAX + 1
+
+    def test_pol_wrong_nstokes_healpix(self):
+        m = RNG.standard_normal((2, hp.nside2npix(NSIDE)))
+        with pytest.raises(ValueError, match="pol=True"):
+            harmonic.anafast(m, lmax=LMAX, pol=True)
+
+    def test_pol_wrong_nstokes_car(self, car_geometry):
+        shape, wcs = car_geometry
+        m = enmap.enmap(RNG.standard_normal((2, *shape[-2:])), wcs)
+        with pytest.raises(ValueError, match="pol=True"):
+            harmonic.anafast(m, lmax=LMAX, pol=True)
+
+
+# ---------------------------------------------------------------------------
+# synfast
+# ---------------------------------------------------------------------------
 
 NSIDE_SF = 64
 LMAX_SF = 2 * NSIDE_SF
 NPIX_SF = hp.nside2npix(NSIDE_SF)
+LMAX_CAR = 20
 
 
 def _make_cls(lmax):
@@ -363,56 +335,6 @@ def _make_cls(lmax):
     return cls
 
 
-_CL_T = _make_cls(LMAX_SF)[0]
-_CL_POL = _make_cls(LMAX_SF)
-
-
-def test_synfast_healpix_t_shape():
-    m = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=1)
-    assert m.shape == (NPIX_SF,)
-    assert m.dtype.kind == "f"
-    assert np.all(np.isfinite(m))
-
-
-def test_synfast_healpix_pol_shape():
-    m = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=2)
-    assert m.shape == (3, NPIX_SF)
-    assert m.dtype.kind == "f"
-    assert np.all(np.isfinite(m))
-
-
-def test_synfast_healpix_t_seed_reproducible():
-    m1 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
-    m2 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
-    assert np.array_equal(m1, m2)
-
-
-def test_synfast_healpix_pol_seed_reproducible():
-    m1 = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
-    m2 = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
-    assert np.array_equal(m1, m2)
-
-
-def test_synfast_healpix_t_matches_hp_synfast():
-    np.random.seed(99)  # noqa: NPY002
-    expected = hp.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
-    result = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
-    assert_allclose(result, expected, rtol=1e-10)
-
-
-def test_synfast_healpix_pol_matches_hp_synfast():
-    np.random.seed(99)  # noqa: NPY002
-    expected = hp.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
-    result = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
-    assert_allclose(result, expected, rtol=1e-10)
-
-
-# --- _normalise_cl ----------------------------------------------------------
-
-
-NL = LMAX + 1
-
-
 def _cls6_to_cov(cls6):
     """Build (3, 3, nl) covariance matrix from a (6, nl) flat diagonal array."""
     cov = np.zeros((3, 3, cls6.shape[1]))
@@ -425,128 +347,164 @@ def _cls6_to_cov(cls6):
     return cov
 
 
-def test_normalise_cl_1d():
-    cl = np.ones(NL)
-    out = harmonic._normalise_cl(cl)
-    assert isinstance(out, np.ndarray) and out.ndim == 1
-    assert_array_equal(out, cl)
-
-
-def test_normalise_cl_2d_returns_list():
-    cl = np.arange(6 * NL, dtype=float).reshape(6, NL)
-    out = harmonic._normalise_cl(cl)
-    assert isinstance(out, list) and len(out) == 6
-    for i in range(6):
-        assert_array_equal(out[i], cl[i])
-
-
-def test_normalise_cl_4spec_passthrough():
-    cl = np.arange(4 * NL, dtype=float).reshape(4, NL)
-    out = harmonic._normalise_cl(cl)
-    assert isinstance(out, list) and len(out) == 4
-    for i in range(4):
-        assert_array_equal(out[i], cl[i])
-
-
-def test_normalise_cl_3d_diagonal_order():
-    # Build a cov with distinct values per entry
-    cov = np.zeros((3, 3, NL))
-    for i in range(3):
-        for j in range(3):
-            cov[i, j] = (i * 3 + j + 1) * np.ones(NL)
-    out = harmonic._normalise_cl(cov)
-    # Diagonal order: TT EE BB TE EB TB
-    assert_array_equal(out[0], cov[0, 0])  # TT
-    assert_array_equal(out[1], cov[1, 1])  # EE
-    assert_array_equal(out[2], cov[2, 2])  # BB
-    assert_array_equal(out[3], cov[0, 1])  # TE
-    assert_array_equal(out[4], cov[1, 2])  # EB
-    assert_array_equal(out[5], cov[0, 2])  # TB
-
-
-def test_normalise_cl_invalid_nspec_raises():
-    with pytest.raises(ValueError, match="triangular"):
-        harmonic._normalise_cl(np.ones((5, NL)))
-
-
-# --- synfast CAR (cl format support) ----------------------------------------
-
-
-LMAX_CAR = 20
-
+_CL_T = _make_cls(LMAX_SF)[0]
+_CL_POL = _make_cls(LMAX_SF)
 _CL_6_CAR = _make_cls(LMAX_CAR)
 _CL_TT_CAR = _CL_6_CAR[0]
 
 
-def test_synfast_car_1d_shape(car_geometry):
-    shape, wcs = car_geometry
-    m = harmonic.synfast(_CL_TT_CAR, shape=shape, wcs=wcs, lmax=LMAX_CAR, seed=1)
-    assert isinstance(m, enmap.ndmap)
-    assert np.all(np.isfinite(m))
+class TestSynfast:
+    def test_rejects_both_targets(self, car_geometry):
+        shape, wcs = car_geometry
+        with pytest.raises(ValueError):
+            harmonic.synfast(np.ones(LMAX + 1), nside=NSIDE, shape=shape, wcs=wcs)
+
+    def test_requires_target(self):
+        with pytest.raises(ValueError):
+            harmonic.synfast(np.ones(LMAX + 1))
+
+    def test_healpix_t_shape(self):
+        m = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=1)
+        assert m.shape == (NPIX_SF,)
+        assert m.dtype.kind == "f"
+        assert np.all(np.isfinite(m))
+
+    def test_healpix_pol_shape(self):
+        m = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=2)
+        assert m.shape == (3, NPIX_SF)
+        assert m.dtype.kind == "f"
+        assert np.all(np.isfinite(m))
+
+    def test_healpix_t_seed_reproducible(self):
+        m1 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
+        m2 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
+        assert np.array_equal(m1, m2)
+
+    def test_healpix_pol_seed_reproducible(self):
+        m1 = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
+        m2 = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
+        assert np.array_equal(m1, m2)
+
+    def test_healpix_t_matches_hp_synfast(self):
+        np.random.seed(99)  # noqa: NPY002
+        expected = hp.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
+        result = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
+        assert_allclose(result, expected, rtol=1e-10)
+
+    def test_healpix_pol_matches_hp_synfast(self):
+        np.random.seed(99)  # noqa: NPY002
+        expected = hp.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
+        result = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
+        assert_allclose(result, expected, rtol=1e-10)
+
+    def test_healpix_cov_matrix_shape(self):
+        cov = _cls6_to_cov(_CL_6_CAR)
+        m = harmonic.synfast(cov, nside=NSIDE_SF, lmax=LMAX_SF, seed=5)
+        assert m.shape == (3, NPIX_SF)
+        assert np.all(np.isfinite(m))
+
+    def test_healpix_cov_matches_flat(self):
+        cov = _cls6_to_cov(_CL_POL)
+        m_flat = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=6)
+        m_cov = harmonic.synfast(cov, nside=NSIDE_SF, lmax=LMAX_SF, seed=6)
+        assert_array_equal(m_flat, m_cov)
+
+    def test_car_1d_shape(self, car_geometry):
+        shape, wcs = car_geometry
+        m = harmonic.synfast(_CL_TT_CAR, shape=shape, wcs=wcs, lmax=LMAX_CAR, seed=1)
+        assert isinstance(m, enmap.ndmap)
+        assert np.all(np.isfinite(m))
+
+    def test_car_flat_6spec_shape(self, car_tqu_geometry):
+        tqu_shape, wcs = car_tqu_geometry
+        m = harmonic.synfast(_CL_6_CAR, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=2)
+        assert isinstance(m, enmap.ndmap)
+        assert m.shape[-3] == 3
+        assert np.all(np.isfinite(m))
+
+    def test_car_4spec_shape(self, car_tqu_geometry):
+        tqu_shape, wcs = car_tqu_geometry
+        m = harmonic.synfast(_CL_6_CAR[:4], shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=3)
+        assert isinstance(m, enmap.ndmap)
+        assert m.shape[-3] == 3
+        assert np.all(np.isfinite(m))
+
+    def test_car_cov_matrix_shape(self, car_tqu_geometry):
+        tqu_shape, wcs = car_tqu_geometry
+        cov = _cls6_to_cov(_CL_6_CAR)
+        m = harmonic.synfast(cov, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=4)
+        assert isinstance(m, enmap.ndmap)
+        assert m.shape[-3] == 3
+        assert np.all(np.isfinite(m))
+
+    def test_car_flat_and_cov_equivalent(self, car_tqu_geometry):
+        tqu_shape, wcs = car_tqu_geometry
+        cov = _cls6_to_cov(_CL_6_CAR)
+        m_flat = harmonic.synfast(_CL_6_CAR, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=7)
+        m_cov = harmonic.synfast(cov, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=7)
+        assert_array_equal(m_flat, m_cov)
+
+    def test_car_invalid_flat_raises(self, car_geometry):
+        shape, wcs = car_geometry
+        with pytest.raises(ValueError, match="triangular"):
+            harmonic.synfast(np.ones((5, LMAX_CAR + 1)), shape=shape, wcs=wcs, lmax=LMAX_CAR)
 
 
-def test_synfast_car_flat_6spec_shape(car_tqu_geometry):
-    tqu_shape, wcs = car_tqu_geometry
-    m = harmonic.synfast(_CL_6_CAR, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=2)
-    assert isinstance(m, enmap.ndmap)
-    assert m.shape[-3] == 3
-    assert np.all(np.isfinite(m))
+# ---------------------------------------------------------------------------
+# _normalise_cl
+# ---------------------------------------------------------------------------
+
+NL = LMAX + 1
 
 
-def test_synfast_car_4spec_shape(car_tqu_geometry):
-    tqu_shape, wcs = car_tqu_geometry
-    m = harmonic.synfast(_CL_6_CAR[:4], shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=3)
-    assert isinstance(m, enmap.ndmap)
-    assert m.shape[-3] == 3
-    assert np.all(np.isfinite(m))
+class TestNormaliseCl:
+    def test_1d_passthrough(self):
+        cl = np.ones(NL)
+        out = harmonic._normalise_cl(cl)
+        assert isinstance(out, np.ndarray) and out.ndim == 1
+        assert_array_equal(out, cl)
+
+    def test_2d_returns_list(self):
+        cl = np.arange(6 * NL, dtype=float).reshape(6, NL)
+        out = harmonic._normalise_cl(cl)
+        assert isinstance(out, list) and len(out) == 6
+        for i in range(6):
+            assert_array_equal(out[i], cl[i])
+
+    def test_4spec_passthrough(self):
+        cl = np.arange(4 * NL, dtype=float).reshape(4, NL)
+        out = harmonic._normalise_cl(cl)
+        assert isinstance(out, list) and len(out) == 4
+        for i in range(4):
+            assert_array_equal(out[i], cl[i])
+
+    def test_3d_diagonal_order(self):
+        cov = np.zeros((3, 3, NL))
+        for i in range(3):
+            for j in range(3):
+                cov[i, j] = (i * 3 + j + 1) * np.ones(NL)
+        out = harmonic._normalise_cl(cov)
+        # Diagonal order: TT EE BB TE EB TB
+        assert_array_equal(out[0], cov[0, 0])  # TT
+        assert_array_equal(out[1], cov[1, 1])  # EE
+        assert_array_equal(out[2], cov[2, 2])  # BB
+        assert_array_equal(out[3], cov[0, 1])  # TE
+        assert_array_equal(out[4], cov[1, 2])  # EB
+        assert_array_equal(out[5], cov[0, 2])  # TB
+
+    def test_invalid_nspec_raises(self):
+        with pytest.raises(ValueError, match="triangular"):
+            harmonic._normalise_cl(np.ones((5, NL)))
 
 
-def test_synfast_car_cov_matrix_shape(car_tqu_geometry):
-    tqu_shape, wcs = car_tqu_geometry
-    cov = _cls6_to_cov(_CL_6_CAR)
-    m = harmonic.synfast(cov, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=4)
-    assert isinstance(m, enmap.ndmap)
-    assert m.shape[-3] == 3
-    assert np.all(np.isfinite(m))
+# ---------------------------------------------------------------------------
+# getlmax
+# ---------------------------------------------------------------------------
 
 
-def test_synfast_car_flat_and_cov_equivalent(car_tqu_geometry):
-    """Flat 6-spectrum and covariance-matrix formats give identical results."""
-    tqu_shape, wcs = car_tqu_geometry
-    cov = _cls6_to_cov(_CL_6_CAR)
-    m_flat = harmonic.synfast(_CL_6_CAR, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=7)
-    m_cov = harmonic.synfast(cov, shape=tqu_shape, wcs=wcs, lmax=LMAX_CAR, seed=7)
-    assert_array_equal(m_flat, m_cov)
+class TestGetlmax:
+    def test_1d(self):
+        assert harmonic.getlmax(np.zeros(NALM, dtype=complex)) == LMAX
 
-
-def test_synfast_healpix_cov_matrix_shape():
-    cov = _cls6_to_cov(_CL_6_CAR)
-    m = harmonic.synfast(cov, nside=NSIDE_SF, lmax=LMAX_SF, seed=5)
-    assert m.shape == (3, NPIX_SF)
-    assert np.all(np.isfinite(m))
-
-
-def test_synfast_healpix_cov_matrix_matches_flat():
-    cov = _cls6_to_cov(_CL_POL)
-    m_flat = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=6)
-    m_cov = harmonic.synfast(cov, nside=NSIDE_SF, lmax=LMAX_SF, seed=6)
-    np.testing.assert_array_equal(m_flat, m_cov)
-
-
-def test_synfast_car_invalid_flat_raises(car_geometry):
-    shape, wcs = car_geometry
-    with pytest.raises(ValueError, match="triangular"):
-        harmonic.synfast(np.ones((5, LMAX_CAR + 1)), shape=shape, wcs=wcs, lmax=LMAX_CAR)
-
-
-# --- getlmax convenience ---------------------------------------------------
-
-
-def test_getlmax_1d():
-    fake = np.zeros(NALM, dtype=complex)
-    assert harmonic.getlmax(fake) == LMAX
-
-
-def test_getlmax_2d_uses_last_axis():
-    fake = np.zeros((3, NALM), dtype=complex)
-    assert harmonic.getlmax(fake) == LMAX
+    def test_2d_uses_last_axis(self):
+        assert harmonic.getlmax(np.zeros((3, NALM), dtype=complex)) == LMAX
