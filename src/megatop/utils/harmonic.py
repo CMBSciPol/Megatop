@@ -278,7 +278,7 @@ def _normalise_cl(cl):
     return list(cl)
 
 
-def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=True):
+def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=True, nthreads=None):
     """Generate a Gaussian random map from an input power spectrum.
 
     Args:
@@ -295,6 +295,8 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
         wcs: CAR world coordinate system. Used together with ``shape``.
         lmax: Bandlimit. Defaults to library default.
         seed: PRNG seed.
+        nthreads: Thread count for ducc0 (HEALPIX). ``None`` uses
+            ``MEGATOP_SHT_NTHREADS`` env var (default 0 = ducc auto).
         new: Ordering convention for flat 2-D ``cl`` input, passed to
             ``healpy.synalm``. Defaults to ``True`` (diagonal ordering
             ``TT, EE, BB, TE, EB, TB``), which differs from healpy's own
@@ -322,15 +324,15 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
     if scalar:
         alm = hp.synalm(cl_norm, lmax=lmax, new=new)
         if nside is not None:
-            return alm2map(alm, spin=0, nside=nside, lmax=lmax)
-        return alm2map(alm, spin=0, shape=shape[-2:], wcs=wcs, lmax=lmax)
+            return alm2map(alm, spin=0, nside=nside, lmax=lmax, nthreads=nthreads)
+        return alm2map(alm, spin=0, shape=shape[-2:], wcs=wcs, lmax=lmax, nthreads=nthreads)
 
     # Multi-component (T, E, B) → synthesise (T, Q, U)
     alm_T, alm_E, alm_B = hp.synalm(cl_norm, lmax=lmax, new=new)
     alms_teb = np.stack([alm_T, alm_E, alm_B])
     if nside is not None:
-        return alm2map(alms_teb, spin=[0, 2], nside=nside, lmax=lmax)
-    return alm2map(alms_teb, spin=[0, 2], shape=shape[-2:], wcs=wcs, lmax=lmax)
+        return alm2map(alms_teb, spin=[0, 2], nside=nside, lmax=lmax, nthreads=nthreads)
+    return alm2map(alms_teb, spin=[0, 2], shape=shape[-2:], wcs=wcs, lmax=lmax, nthreads=nthreads)
 
 
 def almxfl(alms, fl, *, mmax=None, inplace=False):
