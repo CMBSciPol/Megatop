@@ -94,8 +94,8 @@ def _alm2map_healpix(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None, 
     ``out``:  ``(..., npix)`` for spin 0, ``(..., 2, npix)`` for spin > 0.
     Injects and strips the ducc0 nmaps axis for spin 0 internally.
     """
+    inplace = out is not None
     if spin == 0:
-        ducc_out = out[..., None, :] if out is not None else None
         m = _ducc_synthesis(
             alms[..., None, :],
             spin=0,
@@ -103,13 +103,13 @@ def _alm2map_healpix(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None, 
             lmax=lmax,
             mmax=mmax,
             nthreads=nthreads,
-            out=ducc_out,
+            out=out[..., None, :] if inplace else None,
         )
-        return out if out is not None else m[..., 0, :]
+        return out if inplace else m[..., 0, :]
     m = _ducc_synthesis(
         alms, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out
     )
-    return out if out is not None else m
+    return out if inplace else m
 
 
 def _ducc_adjoint_synthesis(maps, *, spin, lmax=None, mmax=None, nthreads=None):
@@ -264,20 +264,21 @@ def alm2map(
     if nside is None:
         raise ValueError("Provide nside for HEALPIX or out / shape+wcs for CAR.")
     if isinstance(spin, (list, tuple)):
-        maps_out = [] if out is None else None
+        inplace = out is not None
+        maps_out = [] if not inplace else None
         out_idx = idx = 0
         for s in spin:
             nmaps = 1 if s == 0 else 2
             alm_seg = alms[idx : idx + nmaps]
-            out_seg = out[out_idx : out_idx + nmaps] if out is not None else None
+            out_seg = out[out_idx : out_idx + nmaps] if inplace else None
             result = _alm2map_healpix(
                 alm_seg, spin=s, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out_seg
             )
-            if maps_out is not None:
+            if not inplace:
                 maps_out.append(result)
             idx += nmaps
             out_idx += nmaps
-        return out if out is not None else np.concatenate(maps_out, axis=0)
+        return out if inplace else np.concatenate(maps_out, axis=0)
     return _alm2map_healpix(
         alms, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out
     )
@@ -350,9 +351,10 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
             or if both are.
     """
     car_target = shape is not None or wcs is not None
-    if nside is not None and car_target:
+    healpix = nside is not None
+    if healpix and car_target:
         raise ValueError("Specify either nside (HEALPIX) or shape+wcs (CAR).")
-    if nside is None and (shape is None or wcs is None):
+    if not healpix and (shape is None or wcs is None):
         raise ValueError("Provide nside, or both shape and wcs.")
 
     if seed is not None:
@@ -363,14 +365,14 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
 
     if scalar:
         alm = hp.synalm(cl_norm, lmax=lmax, new=new)
-        if nside is not None:
+        if healpix:
             return alm2map(alm, spin=0, nside=nside, lmax=lmax, nthreads=nthreads)
         return alm2map(alm, spin=0, shape=shape[-2:], wcs=wcs, lmax=lmax, nthreads=nthreads)
 
     # Multi-component (T, E, B) → synthesise (T, Q, U)
     alm_T, alm_E, alm_B = hp.synalm(cl_norm, lmax=lmax, new=new)
     alms_teb = np.stack([alm_T, alm_E, alm_B])
-    if nside is not None:
+    if healpix:
         return alm2map(alms_teb, spin=[0, 2], nside=nside, lmax=lmax, nthreads=nthreads)
     return alm2map(alms_teb, spin=[0, 2], shape=shape[-2:], wcs=wcs, lmax=lmax, nthreads=nthreads)
 
