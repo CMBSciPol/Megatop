@@ -99,6 +99,21 @@ class TestMap2Alm:
         with pytest.raises(ValueError, match="lmax"):
             harmonic.map2alm(m, spin=0, lmax=3 * NSIDE)
 
+    def test_healpix_nthreads(self):
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        alm1 = harmonic.map2alm(m, spin=0, lmax=LMAX, nthreads=1)
+        alm2 = harmonic.map2alm(m, spin=0, lmax=LMAX, nthreads=2)
+        assert_allclose(alm1, alm2, rtol=1e-10)
+
+    def test_car_list_spin(self, car_geometry):
+        shape, wcs = car_geometry
+        npix = shape[-2:]
+        tqu = enmap.enmap(RNG.standard_normal((3, *npix)), wcs)
+        alms = harmonic.map2alm(tqu, spin=[0, 2], lmax=LMAX)
+        assert alms.shape == (3, NALM)
+        assert_allclose(alms[0], harmonic.map2alm(tqu[0], spin=0, lmax=LMAX))
+        assert_allclose(alms[1:], harmonic.map2alm(tqu[1:], spin=2, lmax=LMAX))
+
 
 # ---------------------------------------------------------------------------
 # alm2map
@@ -219,6 +234,20 @@ class TestAlm2Map:
         with pytest.raises(ValueError, match="lmax"):
             harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX + 5)
 
+    def test_healpix_out_batched_spin0(self):
+        ncomp = 3
+        alms = _random_alm(ncomp=ncomp)
+        out = np.zeros((ncomp, hp.nside2npix(NSIDE)))
+        m = harmonic.alm2map(alms, spin=0, nside=NSIDE, out=out, lmax=LMAX)
+        assert m is out
+        assert_allclose(m, harmonic.alm2map(alms, spin=0, nside=NSIDE, lmax=LMAX))
+
+    def test_healpix_nthreads(self):
+        alm = _random_alm()
+        m1 = harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX, nthreads=1)
+        m2 = harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX, nthreads=2)
+        assert_allclose(m1, m2, rtol=1e-10)
+
 
 # ---------------------------------------------------------------------------
 # almxfl
@@ -306,6 +335,14 @@ class TestAnafast:
         m = enmap.enmap(RNG.standard_normal((2, *shape[-2:])), wcs)
         with pytest.raises(ValueError, match="pol=True"):
             harmonic.anafast(m, lmax=LMAX, pol=True)
+
+    def test_healpix_pol_cross(self):
+        tqu1 = RNG.standard_normal((3, hp.nside2npix(NSIDE)))
+        tqu2 = RNG.standard_normal((3, hp.nside2npix(NSIDE)))
+        cl_us = harmonic.anafast(tqu1, tqu2, lmax=LMAX, pol=True, niter=3)
+        cl_hp = hp.anafast(tqu1, map2=tqu2, lmax=LMAX, pol=True, iter=3)
+        assert cl_us.shape == cl_hp.shape
+        assert_allclose(cl_us, cl_hp, rtol=1e-10)
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +485,11 @@ class TestSynfast:
         shape, wcs = car_geometry
         with pytest.raises(ValueError, match="triangular"):
             harmonic.synfast(np.ones((5, LMAX_CAR + 1)), shape=shape, wcs=wcs, lmax=LMAX_CAR)
+
+    def test_healpix_nthreads(self):
+        m1 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=10, nthreads=1)
+        m2 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=10, nthreads=2)
+        assert_allclose(m1, m2, rtol=1e-10)
 
 
 # ---------------------------------------------------------------------------
