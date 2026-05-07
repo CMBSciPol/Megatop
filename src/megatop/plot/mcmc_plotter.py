@@ -225,9 +225,9 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     ls_bins_lminlmax_centre = binning_info["bin_centre_lminlmax"]
 
     if config.cl2r_pars.load_model_spectra:
-        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: 3 * config.nside]
+        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: config.lmax + 1]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
-            : 3 * config.nside
+            : config.lmax + 1
         ]
     else:
         Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
@@ -305,7 +305,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     )
 
     ax.plot(
-        np.arange(0, 3 * config.nside),
+        np.arange(0, config.lmax + 1),
         Cl_BB_prim_est,
         label=r"$C_\ell^{prim, \rm est} = r^{\rm est} \cdot C_\ell^{\rm prim}(r=1)$ "
         + r",  $r^{\rm est} = $"
@@ -316,7 +316,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     )
 
     ax.plot(
-        np.arange(0, 3 * config.nside),
+        np.arange(0, config.lmax + 1),
         Cl_BB_lensing_est,
         label=r"$C_\ell^{lensing, \rm est} = A_{\rm lens}^{\rm est} \cdot C_\ell^{\rm prim}(r=0)$"
         + r",  $A_{\rm lens}^{\rm est} = $"

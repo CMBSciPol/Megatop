@@ -84,6 +84,7 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
         common_beam=config.pre_proc_pars.common_beam_correction,
         frequency_beams=config.beams,
         freq_maps=np.array(noise_freq_maps, dtype=object),
+        lmax=config.lmax,
     )
 
 
@@ -104,14 +105,13 @@ def _harmonic_nl_contrib(
     if config.parametric_sep_pars.harmonic_delta_ell != 1:
         with Timer("init-namaster-workspace"):
             workspaceff = initialize_nmt_workspace(
-                nmt_bins,
-                manager.path_to_lensed_scalar,
-                config.nside,
-                mask_analysis,
-                effective_beam=None,
+                nmt_bins=nmt_bins,
+                analysis_mask=mask_analysis,
+                beam=None,
                 purify_e=False,
                 purify_b=False,
                 n_iter=10,
+                lmax=config.lmax,
             )
 
         noise_spectra, noise_spectra_unbined = spectra_from_namaster(
@@ -124,6 +124,7 @@ def _harmonic_nl_contrib(
             purify_b=False,
             beam=None,
             return_all_spectra=config.pre_proc_pars.correct_for_TF,
+            lmax=config.lmax,
         )
 
         if config.pre_proc_pars.correct_for_TF:
@@ -176,7 +177,7 @@ def _harmonic_nl_contrib(
         noise_spectra_unbined = noise_spectra.copy()
 
     nl_binned = noise_spectra[..., bin_index_lminlmax]
-    nl_unbinned = noise_spectra_unbined[..., ell_min:ell_max]
+    nl_unbinned = noise_spectra_unbined[..., ell_min : ell_max + 1]
     return nl_binned, nl_unbinned
 
 

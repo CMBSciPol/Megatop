@@ -51,6 +51,7 @@ def preprocess_map(
             common_beam=config.pre_proc_pars.common_beam_correction,
             frequency_beams=config.beams,
             freq_maps=input_maps,
+            lmax=config.lmax,
         )
         logger.info(f"Pre-processed maps have shape: {freq_maps_convolved.shape}")
 
@@ -66,7 +67,6 @@ def preprocess_map(
             freq_beams = np.array([0.0] * len(config.frequencies))
             common_beam = 0.0
         freq_alms_convolved = alm_common_beam(
-            nside=config.nside,
             common_beam=common_beam,
             frequency_beams=freq_beams,
             freq_maps=np.array(input_maps),
