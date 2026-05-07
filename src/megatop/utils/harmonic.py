@@ -67,11 +67,12 @@ def _ducc_sht_kwargs(*, spin, nside, lmax, mmax=None):
     return {"spin": spin, "lmax": lmax, "mmax": mmax, **_healpix_sht_info(nside)}
 
 
-def _alm2map_healpix(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None):
+def _alm2map_healpix(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None, out=None):
     """Thin ducc0 synthesis wrapper.
 
     ``alms`` must follow ducc0's ``([ntrans,] nmaps, nalm)`` convention:
     ``nmaps == 1`` for spin 0, ``nmaps == 2`` for spin > 0.
+    ``out``, if provided, must match the expected ``([ntrans,] nmaps, npix)`` shape.
     """
     alm_lmax = getlmax(alms)
     if lmax is None:
@@ -80,6 +81,7 @@ def _alm2map_healpix(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None):
         raise ValueError(f"lmax={lmax} exceeds alm bandlimit {alm_lmax}")
     return ducc0.sht.synthesis(
         alm=alms,
+        map=out,
         nthreads=nthreads or _DEFAULT_NTHREADS,
         **_ducc_sht_kwargs(spin=spin, nside=nside, lmax=lmax, mmax=mmax),
     )
@@ -195,8 +197,10 @@ def alm2map(
         nside: HEALPIX resolution. Mutually exclusive with the CAR options.
         shape: CAR pixel shape. Used together with ``wcs``.
         wcs: CAR world coordinate system. Used together with ``shape``.
-        out: Pre-allocated CAR enmap written into in-place and returned.
-            Mutually exclusive with ``nside``.
+        out: Pre-allocated output array written into in-place and returned.
+            Pass a ``pixell.enmap.ndmap`` for CAR or a plain ``numpy.ndarray``
+            for HEALPIX. Mutually exclusive with ``shape``/``wcs`` (CAR) or
+            ``nside`` (HEALPIX) when using the other pixelization.
         lmax: Bandlimit. Defaults to inferred value from ``alms``.
         mmax: Azimuthal bandlimit. Defaults to ``lmax``.
         nthreads: Thread count for ducc0 (HEALPIX). ``None`` uses
@@ -211,7 +215,7 @@ def alm2map(
         ValueError: If both CAR and HEALPIX targets are specified, or if
             neither is.
     """
-    car_target = out is not None or (shape is not None and wcs is not None)
+    car_target = _is_car(out) or (shape is not None and wcs is not None)
     if car_target and nside is not None:
         raise ValueError("Specify either CAR (out / shape+wcs) or HEALPIX (nside), not both.")
     if car_target:
@@ -222,10 +226,12 @@ def alm2map(
     if nside is None:
         raise ValueError("Provide nside for HEALPIX or out / shape+wcs for CAR.")
     if isinstance(spin, (list, tuple)):
+        out_idx = 0
         maps_out = []
         idx = 0
         for s in spin:
             nmaps = 1 if s == 0 else 2
+            out_slice = out[out_idx : out_idx + nmaps] if out is not None else None
             maps_out.append(
                 _alm2map_healpix(
                     alms[idx : idx + nmaps],
@@ -234,13 +240,29 @@ def alm2map(
                     lmax=lmax,
                     mmax=mmax,
                     nthreads=nthreads,
+                    out=out_slice,
                 )
             )
             idx += nmaps
-        return np.concatenate(maps_out, axis=0)
-    work = alms[..., None, :] if spin == 0 else alms
-    m = _alm2map_healpix(work, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads)
-    return m[..., 0, :] if spin == 0 else m
+            out_idx += nmaps
+        return out if out is not None else np.concatenate(maps_out, axis=0)
+    if spin == 0:
+        # ducc0 needs an explicit nmaps=1 axis; use out as the buffer if provided.
+        ducc_out = out[..., None, :] if out is not None else None
+        m = _alm2map_healpix(
+            alms[..., None, :],
+            spin=0,
+            nside=nside,
+            lmax=lmax,
+            mmax=mmax,
+            nthreads=nthreads,
+            out=ducc_out,
+        )
+        return out if out is not None else m[..., 0, :]
+    m = _alm2map_healpix(
+        alms, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out
+    )
+    return out if out is not None else m
 
 
 def _normalise_cl(cl):

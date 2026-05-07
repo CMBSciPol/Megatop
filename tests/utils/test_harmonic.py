@@ -82,6 +82,35 @@ def test_alm2map_dispatch_car_via_out(car_geometry):
     assert not np.all(out == 0)  # actually populated
 
 
+def test_alm2map_healpix_out_spin0():
+    alm = _random_alm()
+    out = np.zeros(hp.nside2npix(NSIDE))
+    m = harmonic.alm2map(alm, spin=0, nside=NSIDE, out=out, lmax=LMAX)
+    assert m is out
+    assert not np.all(out == 0)
+    assert_allclose(m, harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX))
+
+
+def test_alm2map_healpix_out_spin2():
+    alm = _random_alm(ncomp=2)
+    out = np.zeros((2, hp.nside2npix(NSIDE)))
+    m = harmonic.alm2map(alm, spin=2, nside=NSIDE, out=out, lmax=LMAX)
+    assert m is out
+    assert not np.all(out == 0)
+    assert_allclose(m, harmonic.alm2map(alm, spin=2, nside=NSIDE, lmax=LMAX))
+
+
+def test_alm2map_healpix_out_list_spin():
+    alm_T = _random_alm()
+    alm_QU = _random_alm(ncomp=2)
+    alms = np.concatenate([alm_T[None], alm_QU], axis=0)
+    out = np.zeros((3, hp.nside2npix(NSIDE)))
+    m = harmonic.alm2map(alms, spin=[0, 2], nside=NSIDE, out=out, lmax=LMAX)
+    assert m is out
+    assert not np.all(out == 0)
+    assert_allclose(m, harmonic.alm2map(alms, spin=[0, 2], nside=NSIDE, lmax=LMAX))
+
+
 # --- spin-0 batching (our addition over ducc0) -----------------------------
 
 
