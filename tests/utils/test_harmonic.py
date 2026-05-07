@@ -269,6 +269,22 @@ def test_alm2map_rejects_both_targets(car_geometry):
         harmonic.alm2map(alm, spin=0, nside=NSIDE, shape=shape, wcs=wcs)
 
 
+def test_alm2map_rejects_out_and_shape_wcs(car_geometry):
+    shape, wcs = car_geometry
+    alm = _random_alm()
+    out = enmap.zeros(shape, wcs=wcs)
+    with pytest.raises(ValueError, match="out"):
+        harmonic.alm2map(alm, spin=0, out=out, shape=shape, wcs=wcs)
+
+
+def test_alm2map_rejects_healpix_out_and_shape_wcs(car_geometry):
+    shape, wcs = car_geometry
+    alm = _random_alm()
+    out = np.zeros(hp.nside2npix(NSIDE))
+    with pytest.raises(ValueError, match="out"):
+        harmonic.alm2map(alm, spin=0, out=out, shape=shape, wcs=wcs)
+
+
 def test_synfast_rejects_both_targets(car_geometry):
     shape, wcs = car_geometry
     with pytest.raises(ValueError):

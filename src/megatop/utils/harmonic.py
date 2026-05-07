@@ -199,8 +199,7 @@ def alm2map(
         wcs: CAR world coordinate system. Used together with ``shape``.
         out: Pre-allocated output array written into in-place and returned.
             Pass a ``pixell.enmap.ndmap`` for CAR or a plain ``numpy.ndarray``
-            for HEALPIX. Mutually exclusive with ``shape``/``wcs`` (CAR) or
-            ``nside`` (HEALPIX) when using the other pixelization.
+            for HEALPIX. Mutually exclusive with ``shape`` and ``wcs``.
         lmax: Bandlimit. Defaults to inferred value from ``alms``.
         mmax: Azimuthal bandlimit. Defaults to ``lmax``.
         nthreads: Thread count for ducc0 (HEALPIX). ``None`` uses
@@ -212,9 +211,11 @@ def alm2map(
         ``out`` is provided, the return value is ``out`` itself.
 
     Raises:
-        ValueError: If both CAR and HEALPIX targets are specified, or if
-            neither is.
+        ValueError: If conflicting targets are specified (both ``out`` and
+            ``shape``/``wcs``, or both CAR and HEALPIX), or if neither is.
     """
+    if out is not None and (shape is not None or wcs is not None):
+        raise ValueError("Provide either out or shape+wcs, not both.")
     car_target = _is_car(out) or (shape is not None and wcs is not None)
     if car_target and nside is not None:
         raise ValueError("Specify either CAR (out / shape+wcs) or HEALPIX (nside), not both.")
