@@ -67,7 +67,7 @@ def _ducc_sht_kwargs(*, spin, nside, lmax, mmax=None):
     return {"spin": spin, "lmax": lmax, "mmax": mmax, **_healpix_sht_info(nside)}
 
 
-def _alm2map_healpix(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None, out=None):
+def _ducc_synthesis(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None, out=None):
     """Thin ducc0 synthesis wrapper.
 
     ``alms`` must follow ducc0's ``([ntrans,] nmaps, nalm)`` convention:
@@ -87,7 +87,32 @@ def _alm2map_healpix(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None, 
     )
 
 
-def _map2alm_healpix(maps, *, spin, lmax=None, mmax=None, nthreads=None):
+def _alm2map_healpix(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None, out=None):
+    """Public-shape synthesis entrypoint.
+
+    ``alms``: ``(..., nalm)`` for spin 0, ``(..., 2, nalm)`` for spin > 0.
+    ``out``:  ``(..., npix)`` for spin 0, ``(..., 2, npix)`` for spin > 0.
+    Injects and strips the ducc0 nmaps axis for spin 0 internally.
+    """
+    if spin == 0:
+        ducc_out = out[..., None, :] if out is not None else None
+        m = _ducc_synthesis(
+            alms[..., None, :],
+            spin=0,
+            nside=nside,
+            lmax=lmax,
+            mmax=mmax,
+            nthreads=nthreads,
+            out=ducc_out,
+        )
+        return out if out is not None else m[..., 0, :]
+    m = _ducc_synthesis(
+        alms, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out
+    )
+    return out if out is not None else m
+
+
+def _ducc_adjoint_synthesis(maps, *, spin, lmax=None, mmax=None, nthreads=None):
     """Thin ducc0 adjoint-synthesis wrapper.
 
     ``maps`` must follow ducc0's ``([ntrans,] nmaps, npix)`` convention.
@@ -107,15 +132,32 @@ def _map2alm_healpix(maps, *, spin, lmax=None, mmax=None, nthreads=None):
 
 
 def _map2alm_healpix_iter(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None):
+    """Jacobi iteration over ``_ducc_adjoint_synthesis``. Uses ducc0 shapes."""
     nside = hp.npix2nside(maps.shape[-1])
-    alm = _map2alm_healpix(maps, spin=spin, lmax=lmax, mmax=mmax, nthreads=nthreads)
+    alm = _ducc_adjoint_synthesis(maps, spin=spin, lmax=lmax, mmax=mmax, nthreads=nthreads)
     for _ in range(niter):
         residual = (
-            _alm2map_healpix(alm, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads)
+            _ducc_synthesis(alm, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads)
             - maps
         )
-        alm -= _map2alm_healpix(residual, spin=spin, lmax=lmax, mmax=mmax, nthreads=nthreads)
+        alm -= _ducc_adjoint_synthesis(residual, spin=spin, lmax=lmax, mmax=mmax, nthreads=nthreads)
     return alm
+
+
+def _map2alm_healpix(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None):
+    """Public-shape forward SHT entrypoint.
+
+    ``maps``: ``(..., npix)`` for spin 0, ``(..., 2, npix)`` for spin > 0.
+    Injects and strips the ducc0 nmaps axis for spin 0 internally.
+    """
+    if spin == 0:
+        alm = _map2alm_healpix_iter(
+            maps[..., None, :], spin=0, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads
+        )
+        return alm[..., 0, :]
+    return _map2alm_healpix_iter(
+        maps, spin=spin, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads
+    )
 
 
 def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
@@ -149,7 +191,7 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
         for s in spin:
             nmaps = 1 if s == 0 else 2
             alms_out.append(
-                _map2alm_healpix_iter(
+                _map2alm_healpix(
                     maps[idx : idx + nmaps],
                     spin=s,
                     lmax=lmax,
@@ -160,12 +202,7 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
             )
             idx += nmaps
         return np.concatenate(alms_out, axis=0)
-    # ducc0 wants an explicit nmaps axis (1 for spin 0, 2 for spin > 0).
-    work = maps[..., None, :] if spin == 0 else maps
-    alm = _map2alm_healpix_iter(
-        work, spin=spin, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads
-    )
-    return alm[..., 0, :] if spin == 0 else alm
+    return _map2alm_healpix(maps, spin=spin, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads)
 
 
 def alm2map(
@@ -227,43 +264,23 @@ def alm2map(
     if nside is None:
         raise ValueError("Provide nside for HEALPIX or out / shape+wcs for CAR.")
     if isinstance(spin, (list, tuple)):
-        out_idx = 0
-        maps_out = []
-        idx = 0
+        maps_out = [] if out is None else None
+        out_idx = idx = 0
         for s in spin:
             nmaps = 1 if s == 0 else 2
-            out_slice = out[out_idx : out_idx + nmaps] if out is not None else None
-            maps_out.append(
-                _alm2map_healpix(
-                    alms[idx : idx + nmaps],
-                    spin=s,
-                    nside=nside,
-                    lmax=lmax,
-                    mmax=mmax,
-                    nthreads=nthreads,
-                    out=out_slice,
-                )
+            alm_seg = alms[idx : idx + nmaps]
+            out_seg = out[out_idx : out_idx + nmaps] if out is not None else None
+            result = _alm2map_healpix(
+                alm_seg, spin=s, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out_seg
             )
+            if maps_out is not None:
+                maps_out.append(result)
             idx += nmaps
             out_idx += nmaps
         return out if out is not None else np.concatenate(maps_out, axis=0)
-    if spin == 0:
-        # ducc0 needs an explicit nmaps=1 axis; use out as the buffer if provided.
-        ducc_out = out[..., None, :] if out is not None else None
-        m = _alm2map_healpix(
-            alms[..., None, :],
-            spin=0,
-            nside=nside,
-            lmax=lmax,
-            mmax=mmax,
-            nthreads=nthreads,
-            out=ducc_out,
-        )
-        return out if out is not None else m[..., 0, :]
-    m = _alm2map_healpix(
+    return _alm2map_healpix(
         alms, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out
     )
-    return out if out is not None else m
 
 
 def _normalise_cl(cl):
@@ -397,8 +414,10 @@ def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthrea
         mmax: Azimuthal bandlimit (HEALPIX only — CAR ignores it as pixell
             does not expose ``mmax``).
         niter: Jacobi iterations for the forward SHT.
-        pol: If ``True`` and the leading shape axis has length 3, treat as
-            TQU and return all six spectra.
+        pol: If ``True`` and the map has a leading Stokes axis (length 3),
+            perform spin-0/spin-2 decomposition to obtain (T, E, B) alms and
+            return all six spectra. Raises ``ValueError`` if the Stokes axis
+            exists but has length != 3.
         nthreads: Thread count for ducc0 (HEALPIX only).
 
     Returns:
@@ -411,7 +430,13 @@ def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthrea
         if m is None:
             return None
         stokes_axis = -3 if _is_car(m) else -2
-        is_tqu = pol and m.ndim >= -stokes_axis and m.shape[stokes_axis] == 3
+        has_stokes = m.ndim >= abs(stokes_axis)
+        if pol and has_stokes and m.shape[stokes_axis] != 3:
+            raise ValueError(
+                f"pol=True requires 3 Stokes components along axis {stokes_axis}, "
+                f"got shape {m.shape}"
+            )
+        is_tqu = pol and has_stokes and m.shape[stokes_axis] == 3
         spin = [0, 2] if is_tqu else 0
         return map2alm(m, spin=spin, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads)
 

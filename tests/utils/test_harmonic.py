@@ -296,10 +296,46 @@ def test_synfast_requires_target():
         harmonic.synfast(np.ones(LMAX + 1))
 
 
+def test_anafast_pol_wrong_nstokes_healpix():
+    m = RNG.standard_normal((2, hp.nside2npix(NSIDE)))
+    with pytest.raises(ValueError, match="pol=True"):
+        harmonic.anafast(m, lmax=LMAX, pol=True)
+
+
+def test_anafast_pol_wrong_nstokes_car(car_geometry):
+    shape, wcs = car_geometry
+    m = enmap.enmap(RNG.standard_normal((2, *shape[-2:])), wcs)
+    with pytest.raises(ValueError, match="pol=True"):
+        harmonic.anafast(m, lmax=LMAX, pol=True)
+
+
 def test_alm2map_lmax_exceeds_alm_bandlimit():
     alm = _random_alm()
     with pytest.raises(ValueError, match="lmax"):
         harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX + 5)
+
+
+def test_map2alm_lmax_exceeds_nside_limit():
+    m = RNG.standard_normal(hp.nside2npix(NSIDE))
+    with pytest.raises(ValueError, match="lmax"):
+        harmonic.map2alm(m, spin=0, lmax=3 * NSIDE)
+
+
+def test_map2alm_healpix_spin2():
+    npix = hp.nside2npix(NSIDE)
+    m = RNG.standard_normal((2, npix))
+    alm = harmonic.map2alm(m, spin=2, lmax=LMAX)
+    assert alm.shape == (2, NALM)
+    alm_ref = harmonic.map2alm(m, spin=[2], lmax=LMAX)
+    assert_allclose(alm, alm_ref)
+
+
+def test_map2alm_niter0_equals_adjoint():
+    m = RNG.standard_normal(hp.nside2npix(NSIDE))
+    alm_iter = harmonic.map2alm(m, spin=0, lmax=LMAX, niter=0)
+    alm_ref = harmonic.map2alm(m, spin=0, lmax=LMAX, niter=3)
+    assert alm_iter.shape == alm_ref.shape
+    assert not np.allclose(alm_iter, alm_ref)  # niter=0 is less accurate
 
 
 # --- synfast healpix -------------------------------------------------------
