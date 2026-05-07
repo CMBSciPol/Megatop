@@ -302,14 +302,12 @@ def test_synfast_healpix_pol_shape():
 
 def test_synfast_healpix_t_seed_reproducible():
     m1 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
-    np.random.seed(None)  # noqa: NPY002
     m2 = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
     assert np.array_equal(m1, m2)
 
 
 def test_synfast_healpix_pol_seed_reproducible():
     m1 = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
-    np.random.seed(None)  # noqa: NPY002
     m2 = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
     assert np.array_equal(m1, m2)
 
@@ -318,14 +316,14 @@ def test_synfast_healpix_t_matches_hp_synfast():
     np.random.seed(99)  # noqa: NPY002
     expected = hp.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
     result = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
-    assert np.allclose(result, expected, rtol=1e-10)
+    assert_allclose(result, expected, rtol=1e-10)
 
 
 def test_synfast_healpix_pol_matches_hp_synfast():
     np.random.seed(99)  # noqa: NPY002
     expected = hp.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
     result = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
-    assert np.allclose(result, expected, rtol=1e-10)
+    assert_allclose(result, expected, rtol=1e-10)
 
 
 # --- _normalise_cl ----------------------------------------------------------
@@ -361,14 +359,12 @@ def test_normalise_cl_2d_returns_list():
         assert_array_equal(out[i], cl[i])
 
 
-def test_normalise_cl_4spec_pads_zeros():
+def test_normalise_cl_4spec_passthrough():
     cl = np.arange(4 * NL, dtype=float).reshape(4, NL)
     out = harmonic._normalise_cl(cl)
-    assert isinstance(out, list) and len(out) == 6
+    assert isinstance(out, list) and len(out) == 4
     for i in range(4):
         assert_array_equal(out[i], cl[i])
-    assert_array_equal(out[4], 0)  # EB = 0
-    assert_array_equal(out[5], 0)  # TB = 0
 
 
 def test_normalise_cl_3d_diagonal_order():
