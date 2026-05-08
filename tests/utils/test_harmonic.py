@@ -575,6 +575,10 @@ class TestNormaliseCl:
         with pytest.raises(ValueError, match="triangular"):
             harmonic._normalise_cl(np.ones((5, NL)))
 
+    def test_3d_non_square_raises(self):
+        with pytest.raises(ValueError, match="square"):
+            harmonic._normalise_cl(np.ones((2, 3, NL)))
+
 
 # ---------------------------------------------------------------------------
 # getlmax

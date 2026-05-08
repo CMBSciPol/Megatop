@@ -267,6 +267,8 @@ def _normalise_cl(cl):
     if cl.ndim == 1:
         return cl
     if cl.ndim == 3:
+        if cl.shape[0] != cl.shape[1]:
+            raise ValueError(f"3-D cl must be square (n, n, lmax+1), got shape {cl.shape}")
         # extract upper triangle in "diagonal order" (TT EE BB TE EB TB)
         n = cl.shape[0]
         return [cl[i, i + d] for d in range(n) for i in range(n - d)]
