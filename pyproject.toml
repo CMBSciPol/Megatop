@@ -40,6 +40,10 @@ dependencies = [
 
 [project.optional-dependencies]
 mpi = ["mpi4py"]
+sht = [
+    "ducc0",
+    "pixell",
+]
 snake = [
     "snakemake; python_version >= '3.11'",
 ]
