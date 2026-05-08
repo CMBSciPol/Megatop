@@ -262,7 +262,7 @@ class TestAlmxfl:
     def test_1d_passthrough(self):
         alm = _random_alm()
         fl = np.linspace(1.0, 2.0, LMAX + 1)
-        assert_allclose(harmonic.almxfl(alm, fl), hp.almxfl(alm.copy(), fl))
+        assert_allclose(harmonic.almxfl(alm, fl), hp.almxfl(alm, fl))
 
     def test_2d_per_row(self):
         alms = _random_alm(ncomp=3)
@@ -270,7 +270,7 @@ class TestAlmxfl:
         out = harmonic.almxfl(alms, fl)
         assert out.shape == alms.shape
         for i in range(3):
-            assert_allclose(out[i], hp.almxfl(alms[i].copy(), fl))
+            assert_allclose(out[i], hp.almxfl(alms[i], fl))
 
     def test_inplace(self):
         alms = _random_alm(ncomp=2)
@@ -279,14 +279,14 @@ class TestAlmxfl:
         out = harmonic.almxfl(alms, fl, inplace=True)
         assert out is alms
         for i in range(2):
-            assert_allclose(alms[i], hp.almxfl(snapshot[i].copy(), fl))
+            assert_allclose(alms[i], hp.almxfl(snapshot[i], fl))
 
     def test_no_inplace_does_not_mutate(self):
         alms = _random_alm(ncomp=2)
         snapshot = alms.copy()
         fl = np.linspace(1.0, 2.0, LMAX + 1)
         harmonic.almxfl(alms, fl, inplace=False)
-        assert_allclose(alms, snapshot)
+        assert_array_equal(alms, snapshot)
 
 
 # ---------------------------------------------------------------------------
