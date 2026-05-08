@@ -360,6 +360,9 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
     if seed is not None:
         np.random.seed(seed)  # noqa: NPY002
 
+    cl = np.asarray(cl)
+    if cl.ndim == 3:
+        new = True
     cl_norm = _normalise_cl(cl)
     scalar = isinstance(cl_norm, np.ndarray) and cl_norm.ndim == 1
 
