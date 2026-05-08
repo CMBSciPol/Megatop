@@ -1,11 +1,3 @@
-"""Tests for the dispatch and convenience layer in megatop.utils.harmonic.
-
-Underlying SHT correctness is the responsibility of ducc0 / pixell / healpy
-and is not retested here. These tests only exercise behavior the wrapper
-itself adds: pixelization dispatch, spin-0 batching, 2D almxfl, anafast
-routing, argument validation.
-"""
-
 import healpy as hp
 import numpy as np
 import pytest
