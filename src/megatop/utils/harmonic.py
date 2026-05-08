@@ -7,16 +7,14 @@
 
 """Pixelization-agnostic spherical harmonic transforms.
 
-Dispatches between HEALPIX (via ducc0) and CAR (via pixell.curvedsky) based
-on the input map type. Public API takes keyword-only arguments and uses
-native shapes for each pixelization: ``(..., npix)`` for HEALPIX and
-``(..., ny, nx)`` for CAR.
+Dispatches between HEALPix (via ducc0) and CAR (via pixell.curvedsky) based on
+the input map type. Shapes are ``(..., npix)`` for HEALPix and ``(..., ny, nx)``
+for CAR. All public functions are keyword-only.
 
 Environment variables:
-    MEGATOP_SHT_NTHREADS: Default thread count for ducc0 SHTs (HEALPIX
-        path). Read once at import. ``0`` (default) lets ducc0 pick. Public
-        functions accept an ``nthreads`` kwarg that overrides this; passing
-        ``0`` or ``None`` falls back to the env-var default.
+    MEGATOP_SHT_NTHREADS: Default ducc0 thread count (HEALPix path). Read once
+        at import; ``0`` (default) lets ducc0 choose. Overridden per-call via
+        ``nthreads`` (``0`` or ``None`` falls back to this default).
 """
 
 import os
@@ -44,15 +42,7 @@ def _is_car(x) -> bool:
 
 
 def getlmax(alm) -> int:
-    """Infer ``lmax`` from a triangular-layout ``alm`` array.
-
-    Args:
-        alm: Spherical harmonic coefficients with the last axis storing the
-            triangular ``(l, m)`` layout.
-
-    Returns:
-        Maximum multipole ``lmax`` consistent with ``alm.shape[-1]``.
-    """
+    """Infer ``lmax`` from ``alm.shape[-1]`` assuming triangular ``(l, m)`` layout."""
     return hp.Alm.getlmax(alm.shape[-1])
 
 
@@ -152,24 +142,18 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
     """Forward SHT, dispatching on pixelization.
 
     Args:
-        maps: Input map. CAR shape ``(..., ny, nx)``; HEALPIX shape
-            ``(..., npix)``. CAR inputs must be ``pixell.enmap.ndmap``.
-        spin: Spin weight(s). Scalar (0 for T, 2 for Q/U) or a list such as
-            ``[0, 2]`` to analyse mixed-spin fields from a stacked map array
-            in one call.  CAR dispatches directly to pixell; HEALPIX splits
-            the leading map axis by spin group.
-        lmax: Bandlimit. Defaults to ``3 * nside - 1`` for HEALPIX and to
-            the library default for CAR.
-        mmax: Azimuthal bandlimit. Defaults to ``lmax``.
-        niter: Iterative refinement steps. For HEALPIX, Jacobi iterations
-            on top of adjoint synthesis. For CAR, passed through to
-            ``pixell.curvedsky.map2alm``.
-        nthreads: Thread count for ducc0 (HEALPIX). ``None`` uses
-            ``MEGATOP_SHT_NTHREADS`` env var (default 0 = ducc auto).
+        maps: HEALPix ``(..., npix)`` ndarray or CAR ``pixell.enmap.ndmap``
+            ``(..., ny, nx)``.
+        spin: Spin weight: ``0`` (T), ``2`` (Q/U), or a list like ``[0, 2]``
+            for mixed-spin fields. HEALPix splits the map axis by spin group;
+            CAR passes to pixell.
+        lmax: Bandlimit. HEALPix default: ``3 * nside - 1``; CAR: library default.
+        mmax: Azimuthal bandlimit (HEALPix only). Defaults to ``lmax``.
+        niter: Refinement steps. HEALPix: Jacobi iterations; CAR: passed to pixell.
+        nthreads: ducc0 thread count (HEALPix). ``None`` uses ``MEGATOP_SHT_NTHREADS``.
 
     Returns:
-        Spherical harmonic coefficients with the last axis storing the
-        triangular ``(l, m)`` layout.
+        Alm array, last axis in triangular ``(l, m)`` layout.
     """
     if _is_car(maps):
         return curvedsky.map2alm(maps, spin=spin, lmax=lmax, niter=niter)
@@ -205,52 +189,45 @@ def alm2map(
     mmax=None,
     nthreads=None,
 ):
-    """Inverse SHT.
+    """Inverse SHT. Target pixelization set by kwargs:
 
-    Output pixelization is selected by which kwargs are given:
-
-    - ``out`` (enmap) → CAR, written into ``out``.
-    - ``shape`` and ``wcs`` → CAR, fresh enmap.
-    - ``nside`` → HEALPIX (ducc0).
+    - ``out`` (enmap) → CAR in-place.
+    - ``shape`` + ``wcs`` → CAR, new enmap.
+    - ``nside`` → HEALPix.
 
     Args:
         alms: Spherical harmonic coefficients.
-        spin: Spin weight(s). Scalar (0 for T, 2 for Q/U) or a list such as
-            ``[0, 2]`` to synthesise mixed-spin fields from a stacked ``alms``
-            array in one call.  CAR dispatches directly to pixell; HEALPIX
-            splits ``alms`` along the leading axis by spin group.
-        nside: HEALPIX resolution. Mutually exclusive with the CAR options.
-        shape: CAR pixel shape. Used together with ``wcs``.
-        wcs: CAR world coordinate system. Used together with ``shape``.
-        out: Pre-allocated output array written into in-place and returned.
-            Pass a ``pixell.enmap.ndmap`` for CAR or a plain ``numpy.ndarray``
-            for HEALPIX. Mutually exclusive with ``shape`` and ``wcs``.
-        lmax: Bandlimit. Defaults to inferred value from ``alms``.
-        mmax: Azimuthal bandlimit. Defaults to ``lmax``.
-        nthreads: Thread count for ducc0 (HEALPIX). ``None`` uses
-            ``MEGATOP_SHT_NTHREADS`` env var (default 0 = ducc auto).
+        spin: Spin weight: ``0`` (T), ``2`` (Q/U), or a list like ``[0, 2]``
+            for mixed-spin fields. HEALPix splits the alm axis by spin group;
+            CAR passes to pixell.
+        nside: HEALPix resolution. Mutually exclusive with CAR options.
+        shape: CAR pixel shape. Used with ``wcs``.
+        wcs: CAR world coordinate system. Used with ``shape``.
+        out: Pre-allocated output written in-place and returned. enmap for CAR,
+            ndarray for HEALPix. Mutually exclusive with ``shape``/``wcs``.
+        lmax: Bandlimit (HEALPix only — CAR infers it from ``alms``).
+        mmax: Azimuthal bandlimit (HEALPix only). Defaults to ``lmax``.
+        nthreads: ducc0 thread count (HEALPix). ``None`` uses ``MEGATOP_SHT_NTHREADS``.
 
     Returns:
-        Pixel map. ``np.ndarray`` of shape ``(..., npix)`` for HEALPIX, or
-        ``pixell.enmap.ndmap`` of shape ``(..., ny, nx)`` for CAR. When
-        ``out`` is provided, the return value is ``out`` itself.
+        ``np.ndarray`` ``(..., npix)`` for HEALPix or ``pixell.enmap.ndmap``
+        ``(..., ny, nx)`` for CAR. Returns ``out`` when provided.
 
     Raises:
-        ValueError: If conflicting targets are specified (both ``out`` and
-            ``shape``/``wcs``, or both CAR and HEALPIX), or if neither is.
+        ValueError: Conflicting or missing pixelization targets.
     """
     if out is not None and (shape is not None or wcs is not None):
         raise ValueError("Provide either out or shape+wcs, not both.")
     car_target = _is_car(out) or (shape is not None and wcs is not None)
     if car_target and nside is not None:
-        raise ValueError("Specify either CAR (out / shape+wcs) or HEALPIX (nside), not both.")
+        raise ValueError("Specify either CAR (out / shape+wcs) or HEALPix (nside), not both.")
     if car_target:
         if out is None:
             full_shape = (*alms.shape[:-1], *shape[-2:])
             out = enmap.zeros(full_shape, wcs=wcs, dtype=alms.real.dtype)
         return curvedsky.alm2map(alms, map=out, spin=spin, copy=False)
     if nside is None:
-        raise ValueError("Provide nside for HEALPIX or out / shape+wcs for CAR.")
+        raise ValueError("Provide nside for HEALPix or out / shape+wcs for CAR.")
     kw = {"nside": nside, "lmax": lmax, "mmax": mmax, "nthreads": nthreads}
     if isinstance(spin, (list, tuple)):
         inplace = out is not None
@@ -270,15 +247,12 @@ def alm2map(
 
 
 def _normalise_cl(cl):
-    """Normalise any supported cl format to a scalar array or list for ``hp.synalm``.
+    """Normalise cl to a scalar array or list accepted by ``hp.synalm``.
 
-    * ``(lmax+1,)`` — returned as-is (single spectrum).
-    * ``(nspec, lmax+1)`` flat diagonal ordering → list; caller controls
-      ordering via the ``new`` argument to ``hp.synalm``.
-    * ``(4, lmax+1)`` — healpy 4-spectrum shorthand ``TT EE BB TE``,
-      passed through to ``hp.synalm`` which fills EB=TB=0.
-    * ``(n, n, lmax+1)`` covariance matrix → upper triangle extracted in
-      diagonal (``new=True``) order.
+    * ``(lmax+1,)`` — returned as-is.
+    * ``(nspec, lmax+1)`` — returned as list; caller controls ordering via ``new``.
+    * ``(4, lmax+1)`` — healpy shorthand TT EE BB TE (EB=TB=0 filled by healpy).
+    * ``(n, n, lmax+1)`` — upper triangle extracted in diagonal (``new=True``) order.
     """
     cl = np.asarray(cl)
     if cl.ndim == 1:
@@ -302,40 +276,36 @@ def _normalise_cl(cl):
 
 
 def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=True, nthreads=None):
-    """Generate a Gaussian random map from an input power spectrum.
+    """Generate a Gaussian random map from a power spectrum.
 
     Args:
-        cl: Power spectrum. Accepted formats for both pixelizations:
+        cl: Power spectrum. Accepted shapes:
 
             * 1-D ``(lmax+1,)`` — single TT spectrum.
-            * 2-D ``(nspec, lmax+1)`` flat diagonal ordering
-              ``TT, EE, BB, TE, EB, TB`` (or the 4-spectrum shorthand
-              ``TT, EE, BB, TE`` with EB=TB=0).
-            * 3-D ``(n, n, lmax+1)`` covariance matrix.
+            * 2-D ``(nspec, lmax+1)`` — flat spectra; ordering set by ``new``.
+            * 2-D ``(4, lmax+1)`` — healpy shorthand TT EE BB TE (EB=TB=0).
+            * 3-D ``(n, n, lmax+1)`` — covariance matrix.
 
-        nside: HEALPIX resolution. Mutually exclusive with ``shape``/``wcs``.
-        shape: CAR pixel shape. Used together with ``wcs``.
-        wcs: CAR world coordinate system. Used together with ``shape``.
+        nside: HEALPix resolution. Mutually exclusive with ``shape``/``wcs``.
+        shape: CAR pixel shape. Used with ``wcs``.
+        wcs: CAR world coordinate system. Used with ``shape``.
         lmax: Bandlimit. Defaults to library default.
         seed: PRNG seed.
-        nthreads: Thread count for ducc0 (HEALPIX). ``None`` uses
-            ``MEGATOP_SHT_NTHREADS`` env var (default 0 = ducc auto).
-        new: Ordering convention for flat 2-D ``cl`` input, passed to
-            ``healpy.synalm``. Defaults to ``True`` (diagonal ordering
-            ``TT, EE, BB, TE, EB, TB``), which differs from healpy's own
-            default of ``False``. Has no effect for 1-D or 3-D ``cl``.
+        nthreads: ducc0 thread count (HEALPix). ``None`` uses ``MEGATOP_SHT_NTHREADS``.
+        new: Ordering for 2-D ``cl``, passed to ``hp.synalm``. Defaults to
+            ``True`` (TT EE BB TE EB TB), unlike healpy's default ``False``.
+            No effect for 1-D or 3-D input.
 
     Returns:
-        ``np.ndarray`` for HEALPIX, ``pixell.enmap.ndmap`` for CAR.
+        ``np.ndarray`` for HEALPix, ``pixell.enmap.ndmap`` for CAR.
 
     Raises:
-        ValueError: If neither HEALPIX nor CAR targets are fully specified,
-            or if both are.
+        ValueError: Missing or conflicting pixelization targets.
     """
     car_target = shape is not None or wcs is not None
     healpix = nside is not None
     if healpix and car_target:
-        raise ValueError("Specify either nside (HEALPIX) or shape+wcs (CAR).")
+        raise ValueError("Specify either nside (HEALPix) or shape+wcs (CAR).")
     if not healpix and (shape is None or wcs is None):
         raise ValueError("Provide nside, or both shape and wcs.")
 
@@ -364,19 +334,16 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
 
 
 def almxfl(alms, fl, *, mmax=None, inplace=False):
-    """Multiply each ``a_lm`` by ``f_l``.
-
-    Pixel-agnostic since ducc0 and healpy share the triangular alm layout.
+    """Multiply each ``a_lm`` by ``f_l``. Pixel-agnostic.
 
     Args:
-        alms: Spherical harmonic coefficients, 1D for a single field or 2D
-            ``(ncomp, nalm)`` for multiple components.
-        fl: Multipole-dependent filter ``f_l`` of length ``lmax + 1``.
+        alms: 1-D alm array or 2-D ``(ncomp, nalm)``.
+        fl: Filter of length ``lmax + 1``.
         mmax: Azimuthal bandlimit; defaults to inferred from ``alms``.
-        inplace: If ``True``, modify ``alms`` directly.
+        inplace: Modify ``alms`` in place.
 
     Returns:
-        Filtered alms with the same shape as ``alms``.
+        Filtered alms, same shape as input.
     """
     if alms.ndim == 1:
         return hp.almxfl(alms, fl, mmax=mmax, inplace=inplace)
@@ -389,29 +356,24 @@ def almxfl(alms, fl, *, mmax=None, inplace=False):
 def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthreads=None):
     """Compute auto or cross power spectrum.
 
-    Both pixelizations are routed through ``map2alm`` followed by
-    ``healpy.alm2cl``. For TQU input (``pol=True``) the spin-0 / spin-2
-    decomposition produces (T, E, B) alms; ``healpy.alm2cl`` then returns
-    ``(TT, EE, BB, TE, EB, TB)`` in diagonal order, consistent with
-    ``synfast``'s ``new=True`` convention.
+    Routes through ``map2alm`` then ``hp.alm2cl``. For TQU input (``pol=True``),
+    spin-0/spin-2 decomposition yields TEB alms; output is six spectra
+    TT EE BB TE EB TB in diagonal order, consistent with ``synfast(new=True)``.
 
     Args:
-        maps: Input map (HEALPIX ndarray or CAR enmap).
-        maps2: Optional second map for cross-spectrum.
+        maps: Input map (HEALPix ndarray or CAR enmap).
+        maps2: Second map for cross-spectrum.
         lmax: Bandlimit.
-        mmax: Azimuthal bandlimit (HEALPIX only — CAR ignores it as pixell
-            does not expose ``mmax``).
+        mmax: Azimuthal bandlimit (HEALPix only — pixell does not expose it).
         niter: Jacobi iterations for the forward SHT.
-        pol: If ``True`` and the map has a leading Stokes axis (length 3),
-            perform spin-0/spin-2 decomposition to obtain (T, E, B) alms and
-            return all six spectra. Raises ``ValueError`` if the Stokes axis
-            exists but has length != 3.
-        nthreads: Thread count for ducc0 (HEALPIX only).
+        pol: If ``True`` and the map has a Stokes axis of length 3, decompose
+            into TEB and return all six spectra. Raises ``ValueError`` if the
+            Stokes axis exists but has length ≠ 3.
+        nthreads: ducc0 thread count (HEALPix only).
 
     Returns:
-        Power spectrum array. For TQU input (``pol=True``) the six spectra
-        are returned in diagonal ordering ``TT, EE, BB, TE, EB, TB`` —
-        directly usable as input to ``synfast``.
+        Power spectrum array. For TQU input: TT EE BB TE EB TB in diagonal
+        order, directly usable as ``synfast`` input.
     """
 
     def _alms(m):
