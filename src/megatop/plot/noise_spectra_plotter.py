@@ -316,22 +316,31 @@ def plot_all_spectra(manager, config):
     ax_BB_debiased.set_title("CMB BB spectra")
     fig_BB_debiased.savefig(plot_dir / "allskysims_CMB_BB_debiased_spectra.png")
 
-    ax_EE_debiased_diff.set_xlabel(r"$\ell$")
-    ax_EE_debiased_diff.set_ylabel(r"$C_{\ell}^{EE}$")
-    ax_EE_debiased_diff.legend()
-    ax_EE_debiased_diff.axhline(0, color="black", linestyle="--", linewidth=1)
-    ax_EE_debiased_diff.set_title("CMB EE spectra difference to model")
-    ax_EE_debiased_diff.set_xscale("log")
-    ax_EE_debiased_diff.set_yscale("log")
-    fig_EE_debiased_diff.savefig(plot_dir / "allskysims_CMB_EE_debiased_spectra_diff_to_model.png")
+    lmax_cosmo = config.cl2r_pars.lmax_cosmo_analysis or config.lmax
+    cosmo_mask = bin_centre_lminlmax <= lmax_cosmo
+    ylim_EE = 3.0 * np.nanmax(np.abs(cosmic_var_plus_noise_EE[cosmo_mask]))
+    ylim_BB = 3.0 * np.nanmax(np.abs(cosmic_var_plus_noise_BB[cosmo_mask]))
 
-    ax_BB_debiased_diff.set_xlabel(r"$\ell$")
-    ax_BB_debiased_diff.set_ylabel(r"$C_{\ell}^{BB}$")
-    ax_BB_debiased_diff.legend()
-    ax_BB_debiased_diff.axhline(0, color="black", linestyle="--", linewidth=1)
-    ax_BB_debiased_diff.set_title("CMB BB spectra difference to model")
-    ax_BB_debiased_diff.set_xscale("log")
-    ax_BB_debiased_diff.set_yscale("log")
+    for ax, ylim, pol in [
+        (ax_EE_debiased_diff, ylim_EE, "EE"),
+        (ax_BB_debiased_diff, ylim_BB, "BB"),
+    ]:
+        ax.set_xlabel(r"$\ell$")
+        ax.set_ylabel(rf"$C_{{\ell}}^{{{pol}}}$")
+        ax.axhline(0, color="black", linestyle="--", linewidth=1)
+        ax.axvline(
+            lmax_cosmo,
+            color="gray",
+            linestyle=":",
+            linewidth=1,
+            label=rf"$\ell_{{max}}^{{cosmo}}={lmax_cosmo}$",
+        )
+        ax.legend(fontsize=7)
+        ax.set_title(rf"CMB {pol} spectra difference to model")
+        ax.set_xscale("log")
+        ax.set_ylim(-ylim, ylim)
+
+    fig_EE_debiased_diff.savefig(plot_dir / "allskysims_CMB_EE_debiased_spectra_diff_to_model.png")
     fig_BB_debiased_diff.savefig(plot_dir / "allskysims_CMB_BB_debiased_spectra_diff_to_model.png")
     # closing figures
     plt.close(fig_EE)
