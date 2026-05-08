@@ -252,6 +252,21 @@ class TestAlm2Map:
         m2 = harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX, nthreads=2)
         assert_allclose(m1, m2, rtol=1e-10)
 
+    def test_healpix_mmax_explicit_lmax_matches_default(self):
+        alm = _random_alm()
+        m_default = harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX)
+        m_explicit = harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX, mmax=LMAX)
+        assert_array_equal(m_default, m_explicit)
+
+    def test_healpix_mmax_truncated_roundtrip(self):
+        mmax = LMAX // 2
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        alm = harmonic.map2alm(m, spin=0, lmax=LMAX, mmax=mmax)
+        assert alm.shape == (hp.Alm.getsize(LMAX, mmax=mmax),)
+        m_out = harmonic.alm2map(alm, spin=0, nside=NSIDE, lmax=LMAX, mmax=mmax)
+        assert m_out.shape == (hp.nside2npix(NSIDE),)
+        assert np.all(np.isfinite(m_out))
+
 
 # ---------------------------------------------------------------------------
 # almxfl
@@ -287,6 +302,18 @@ class TestAlmxfl:
         fl = np.linspace(1.0, 2.0, LMAX + 1)
         harmonic.almxfl(alms, fl, inplace=False)
         assert_array_equal(alms, snapshot)
+
+    def test_mmax_explicit_lmax_matches_default(self):
+        alm = _random_alm()
+        fl = np.linspace(1.0, 2.0, LMAX + 1)
+        assert_array_equal(harmonic.almxfl(alm, fl), harmonic.almxfl(alm, fl, mmax=LMAX))
+
+    def test_mmax_truncated(self):
+        mmax = LMAX // 2
+        alm = np.zeros(hp.Alm.getsize(LMAX, mmax=mmax), dtype=complex)
+        fl = np.linspace(1.0, 2.0, LMAX + 1)
+        out = harmonic.almxfl(alm, fl, mmax=mmax)
+        assert out.shape == alm.shape
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +374,12 @@ class TestAnafast:
         cl_hp = hp.anafast(tqu1, map2=tqu2, lmax=LMAX, pol=True, iter=3)
         assert cl_us.shape == cl_hp.shape
         assert_allclose(cl_us, cl_hp, rtol=1e-10)
+
+    def test_healpix_mmax_explicit_lmax_matches_default(self):
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        cl_default = harmonic.anafast(m, lmax=LMAX, pol=False)
+        cl_explicit = harmonic.anafast(m, lmax=LMAX, mmax=LMAX, pol=False)
+        assert_array_equal(cl_default, cl_explicit)
 
 
 # ---------------------------------------------------------------------------

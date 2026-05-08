@@ -348,7 +348,7 @@ def almxfl(alms, fl, *, mmax=None, inplace=False):
     Args:
         alms: 1-D alm array or 2-D ``(ncomp, nalm)``.
         fl: Filter of length ``lmax + 1``.
-        mmax: Azimuthal bandlimit; defaults to inferred from ``alms``.
+        mmax: Azimuthal bandlimit. Defaults to ``lmax`` (full triangular layout).
         inplace: Modify ``alms`` in place.
 
     Returns:
