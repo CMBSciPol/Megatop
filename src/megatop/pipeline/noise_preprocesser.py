@@ -24,6 +24,7 @@ from scipy.linalg import sqrtm
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
+from megatop.utils.mock import beam_winpix_correction
 from megatop.utils.mpi import get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
@@ -66,9 +67,11 @@ def get_reduced_TF(transfer):
 
 def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | None) -> np.ndarray:
     noise_freq_maps = []
-    for noise_filename in manager.get_noise_maps_filenames(id_real):
+    for i, noise_filename in enumerate(manager.get_noise_maps_filenames(id_real)):
         logger.debug(f"Importing noise map: {noise_filename}")
-        noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
+        freq_map = hp.read_map(noise_filename, field=None)
+        freq_map = beam_winpix_correction(config.nside, freq_map, 0.0, config.lmax)
+        noise_freq_maps.append(freq_map)
 
     skip_beam = (
         np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams))
@@ -76,7 +79,6 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
     )
     if skip_beam:
         logger.info("Common beam correction is the same as the input beam, no need to apply it.")
-        logger.warning("This is mostly for testing; may not represent the real noise.")
         return np.array(noise_freq_maps)
 
     return common_beam_and_nside(

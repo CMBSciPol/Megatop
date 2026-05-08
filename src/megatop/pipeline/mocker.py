@@ -320,6 +320,11 @@ def func_signal(
                 logger.debug(f"Filtering {key} channel")
                 sky[i_f] = mock.apply_observation_matrix(func, sky[i_f])
 
+    # apply pixel window function to noise (beam=0: wpix only, not the telescope beam)
+    with Timer("beam-freq-maps-noise"):
+        for i_f in range(len(config.frequencies)):
+            noise[i_f] = mock.beam_winpix_correction(config.nside, noise[i_f], 0.0, config.lmax)
+
     # add noise
     sky += noise
 
