@@ -94,22 +94,15 @@ def _alm2map_healpix(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None, 
     ``out``:  ``(..., npix)`` for spin 0, ``(..., 2, npix)`` for spin > 0.
     Injects and strips the ducc0 nmaps axis for spin 0 internally.
     """
+    kw = {"nside": nside, "lmax": lmax, "mmax": mmax, "nthreads": nthreads}
+    if spin != 0:
+        # ducc0 writes into out (if given) and returns it, so this handles both cases
+        return _ducc_synthesis(alms, spin=spin, out=out, **kw)
+    # special case spin = 0
     inplace = out is not None
-    if spin == 0:
-        m = _ducc_synthesis(
-            alms[..., None, :],
-            spin=0,
-            nside=nside,
-            lmax=lmax,
-            mmax=mmax,
-            nthreads=nthreads,
-            out=out[..., None, :] if inplace else None,
-        )
-        return out if inplace else m[..., 0, :]
-    m = _ducc_synthesis(
-        alms, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out
-    )
-    return out if inplace else m
+    ducc_out = out[..., None, :] if inplace else None
+    m = _ducc_synthesis(alms[..., None, :], spin=0, out=ducc_out, **kw)
+    return out if inplace else m[..., 0, :]
 
 
 def _ducc_adjoint_synthesis(maps, *, spin, lmax=None, mmax=None, nthreads=None):
@@ -134,13 +127,11 @@ def _ducc_adjoint_synthesis(maps, *, spin, lmax=None, mmax=None, nthreads=None):
 def _map2alm_healpix_iter(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None):
     """Jacobi iteration over ``_ducc_adjoint_synthesis``. Uses ducc0 shapes."""
     nside = hp.npix2nside(maps.shape[-1])
-    alm = _ducc_adjoint_synthesis(maps, spin=spin, lmax=lmax, mmax=mmax, nthreads=nthreads)
+    kw = {"spin": spin, "lmax": lmax, "mmax": mmax, "nthreads": nthreads}
+    alm = _ducc_adjoint_synthesis(maps, **kw)
     for _ in range(niter):
-        residual = (
-            _ducc_synthesis(alm, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads)
-            - maps
-        )
-        alm -= _ducc_adjoint_synthesis(residual, spin=spin, lmax=lmax, mmax=mmax, nthreads=nthreads)
+        residual = _ducc_synthesis(alm, **kw, nside=nside) - maps
+        alm -= _ducc_adjoint_synthesis(residual, **kw)
     return alm
 
 
@@ -150,14 +141,11 @@ def _map2alm_healpix(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None
     ``maps``: ``(..., npix)`` for spin 0, ``(..., 2, npix)`` for spin > 0.
     Injects and strips the ducc0 nmaps axis for spin 0 internally.
     """
+    kw = {"spin": spin, "lmax": lmax, "mmax": mmax, "niter": niter, "nthreads": nthreads}
     if spin == 0:
-        alm = _map2alm_healpix_iter(
-            maps[..., None, :], spin=0, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads
-        )
+        alm = _map2alm_healpix_iter(maps[..., None, :], **kw)
         return alm[..., 0, :]
-    return _map2alm_healpix_iter(
-        maps, spin=spin, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads
-    )
+    return _map2alm_healpix_iter(maps, **kw)
 
 
 def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
@@ -263,6 +251,7 @@ def alm2map(
         return curvedsky.alm2map(alms, map=out, spin=spin, copy=False)
     if nside is None:
         raise ValueError("Provide nside for HEALPIX or out / shape+wcs for CAR.")
+    kw = {"nside": nside, "lmax": lmax, "mmax": mmax, "nthreads": nthreads}
     if isinstance(spin, (list, tuple)):
         inplace = out is not None
         maps_out = [] if not inplace else None
@@ -271,17 +260,13 @@ def alm2map(
             nmaps = 1 if s == 0 else 2
             alm_seg = alms[idx : idx + nmaps]
             out_seg = out[out_idx : out_idx + nmaps] if inplace else None
-            result = _alm2map_healpix(
-                alm_seg, spin=s, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out_seg
-            )
+            result = _alm2map_healpix(alm_seg, spin=s, out=out_seg, **kw)
             if not inplace:
                 maps_out.append(result)
             idx += nmaps
             out_idx += nmaps
         return out if inplace else np.concatenate(maps_out, axis=0)
-    return _alm2map_healpix(
-        alms, spin=spin, nside=nside, lmax=lmax, mmax=mmax, nthreads=nthreads, out=out
-    )
+    return _alm2map_healpix(alms, spin=spin, out=out, **kw)
 
 
 def _normalise_cl(cl):
@@ -299,12 +284,9 @@ def _normalise_cl(cl):
     if cl.ndim == 1:
         return cl
     if cl.ndim == 3:
+        # extract upper triangle in "diagonal order" (TT EE BB TE EB TB)
         n = cl.shape[0]
-        out = []
-        for diag in range(n):
-            for i in range(n - diag):
-                out.append(cl[i, i + diag])
-        return out
+        return [cl[i, i + d] for d in range(n) for i in range(n - d)]
     if cl.ndim != 2:
         raise ValueError(f"cl must be 1-, 2-, or 3-D, got shape {cl.shape}")
     nspec = cl.shape[0]
@@ -365,19 +347,20 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
         new = True
     cl_norm = _normalise_cl(cl)
     scalar = isinstance(cl_norm, np.ndarray) and cl_norm.ndim == 1
+    kw = (
+        {"nside": nside, "lmax": lmax, "nthreads": nthreads}
+        if healpix
+        else {"shape": shape[-2:], "wcs": wcs, "lmax": lmax}
+    )
 
     if scalar:
         alm = hp.synalm(cl_norm, lmax=lmax, new=new)
-        if healpix:
-            return alm2map(alm, spin=0, nside=nside, lmax=lmax, nthreads=nthreads)
-        return alm2map(alm, spin=0, shape=shape[-2:], wcs=wcs, lmax=lmax, nthreads=nthreads)
+        return alm2map(alm, spin=0, **kw)
 
     # Multi-component (T, E, B) → synthesise (T, Q, U)
     alm_T, alm_E, alm_B = hp.synalm(cl_norm, lmax=lmax, new=new)
     alms_teb = np.stack([alm_T, alm_E, alm_B])
-    if healpix:
-        return alm2map(alms_teb, spin=[0, 2], nside=nside, lmax=lmax, nthreads=nthreads)
-    return alm2map(alms_teb, spin=[0, 2], shape=shape[-2:], wcs=wcs, lmax=lmax, nthreads=nthreads)
+    return alm2map(alms_teb, spin=[0, 2], **kw)
 
 
 def almxfl(alms, fl, *, mmax=None, inplace=False):
