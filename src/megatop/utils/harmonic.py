@@ -41,9 +41,18 @@ def _is_car(x) -> bool:
     return isinstance(x, enmap.ndmap)
 
 
-def getlmax(alm) -> int:
-    """Infer ``lmax`` from ``alm.shape[-1]`` assuming triangular ``(l, m)`` layout."""
-    return hp.Alm.getlmax(alm.shape[-1])
+def getlmax(alm, mmax=None) -> int:
+    """Infer ``lmax`` from ``alm.shape[-1]``.
+
+    Args:
+        alm: Alm array; last axis stores the ``(l, m)`` layout.
+        mmax: Azimuthal bandlimit if the layout is truncated (``mmax < lmax``).
+            Defaults to ``lmax`` (full triangular layout).
+
+    Returns:
+        ``lmax`` consistent with ``alm.shape[-1]`` and ``mmax``.
+    """
+    return hp.Alm.getlmax(alm.shape[-1], mmax=mmax)
 
 
 @lru_cache(maxsize=8)
@@ -64,7 +73,7 @@ def _ducc_synthesis(alms, *, spin, nside, lmax=None, mmax=None, nthreads=None, o
     ``nmaps == 1`` for spin 0, ``nmaps == 2`` for spin > 0.
     ``out``, if provided, must match the expected ``([ntrans,] nmaps, npix)`` shape.
     """
-    alm_lmax = getlmax(alms)
+    alm_lmax = getlmax(alms, mmax=mmax)
     if lmax is None:
         lmax = alm_lmax
     elif lmax > alm_lmax:

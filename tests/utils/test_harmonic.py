@@ -87,6 +87,18 @@ class TestMap2Alm:
         assert_allclose(alms[0], harmonic.map2alm(map_T, spin=0, lmax=LMAX))
         assert_allclose(alms[1:], harmonic.map2alm(map_QU, spin=2, lmax=LMAX))
 
+    def test_healpix_mmax_explicit_lmax_matches_default(self):
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        alm_default = harmonic.map2alm(m, spin=0, lmax=LMAX)
+        alm_explicit = harmonic.map2alm(m, spin=0, lmax=LMAX, mmax=LMAX)
+        assert_array_equal(alm_default, alm_explicit)
+
+    def test_healpix_mmax_truncated_size(self):
+        mmax = LMAX // 2
+        m = RNG.standard_normal(hp.nside2npix(NSIDE))
+        alm = harmonic.map2alm(m, spin=0, lmax=LMAX, mmax=mmax)
+        assert alm.shape == (hp.Alm.getsize(LMAX, mmax=mmax),)
+
     def test_healpix_niter0_differs_from_niter3(self):
         m = RNG.standard_normal(hp.nside2npix(NSIDE))
         alm0 = harmonic.map2alm(m, spin=0, lmax=LMAX, niter=0)
@@ -550,3 +562,11 @@ class TestGetlmax:
 
     def test_2d_uses_last_axis(self):
         assert harmonic.getlmax(np.zeros((3, NALM), dtype=complex)) == LMAX
+
+    def test_truncated_mmax(self):
+        mmax = LMAX // 2
+        nalm = hp.Alm.getsize(LMAX, mmax=mmax)
+        assert harmonic.getlmax(np.zeros(nalm, dtype=complex), mmax=mmax) == LMAX
+
+    def test_mmax_none_matches_default(self):
+        assert harmonic.getlmax(np.zeros(NALM, dtype=complex), mmax=None) == LMAX
