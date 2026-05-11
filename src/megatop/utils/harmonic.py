@@ -162,6 +162,7 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
             Unlike healpy's ``pol=True``, TQU → TEB requires ``spin=[0, 2]``
             explicitly. With ``spin=[0, 2]`` and a ``(3, npix)`` input the
             output is ``(3, nalm)`` with rows ``[alm_T, alm_E, alm_B]``.
+            Batch dimensions are supported: ``(batch, 3, npix)`` → ``(batch, 3, nalm)``.
         lmax: Bandlimit. HEALPix default: ``3 * nside - 1``; CAR: library default.
         mmax: Azimuthal bandlimit (HEALPix only). Defaults to ``lmax``.
         niter: Refinement steps. HEALPix: Jacobi iterations; CAR: passed to pixell.
@@ -172,24 +173,17 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
     """
     if _is_car(maps):
         return curvedsky.map2alm(maps, spin=spin, lmax=lmax, niter=niter)
+    kw = {"lmax": lmax, "mmax": mmax, "niter": niter, "nthreads": nthreads}
     if isinstance(spin, (list, tuple)):
         alms_out = []
         idx = 0
         for s in spin:
             nmaps = 1 if s == 0 else 2
-            alms_out.append(
-                _map2alm_healpix(
-                    maps[idx : idx + nmaps],
-                    spin=s,
-                    lmax=lmax,
-                    mmax=mmax,
-                    niter=niter,
-                    nthreads=nthreads,
-                )
-            )
+            # _map2alm_healpix_iter uses ducc0 ([ntrans,] nmaps, npix) convention directly
+            alms_out.append(_map2alm_healpix_iter(maps[..., idx : idx + nmaps, :], spin=s, **kw))
             idx += nmaps
-        return np.concatenate(alms_out, axis=0)
-    return _map2alm_healpix(maps, spin=spin, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads)
+        return np.concatenate(alms_out, axis=-2)
+    return _map2alm_healpix(maps, spin=spin, **kw)
 
 
 def alm2map(
@@ -218,6 +212,7 @@ def alm2map(
 
             TEB → TQU requires ``spin=[0, 2]``. With a ``(3, nalm)`` input the
             output is ``(3, npix)`` with rows ``[T, Q, U]``.
+            Batch dimensions are supported: ``(batch, 3, nalm)`` → ``(batch, 3, npix)``.
         nside: HEALPix resolution. Mutually exclusive with CAR options.
         shape: CAR pixel shape. Used with ``wcs``.
         wcs: CAR world coordinate system. Used with ``shape``.
@@ -253,14 +248,14 @@ def alm2map(
         out_idx = idx = 0
         for s in spin:
             nmaps = 1 if s == 0 else 2
-            alm_seg = alms[idx : idx + nmaps]
-            out_seg = out[out_idx : out_idx + nmaps] if inplace else None
-            result = _alm2map_healpix(alm_seg, spin=s, out=out_seg, **kw)
+            # _ducc_synthesis uses ([ntrans,] nmaps, nalm) convention directly
+            out_seg = out[..., out_idx : out_idx + nmaps, :] if inplace else None
+            result = _ducc_synthesis(alms[..., idx : idx + nmaps, :], spin=s, out=out_seg, **kw)
             if not inplace:
                 maps_out.append(result)
             idx += nmaps
             out_idx += nmaps
-        return out if inplace else np.concatenate(maps_out, axis=0)
+        return out if inplace else np.concatenate(maps_out, axis=-2)
     return _alm2map_healpix(alms, spin=spin, out=out, **kw)
 
 

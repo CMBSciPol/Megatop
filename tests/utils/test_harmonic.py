@@ -79,6 +79,15 @@ class TestMap2Alm:
         assert_allclose(alms[0], harmonic.map2alm(map_T, spin=0, lmax=LMAX))
         assert_allclose(alms[1:], harmonic.map2alm(map_QU, spin=2, lmax=LMAX))
 
+    def test_healpix_list_spin_batch(self):
+        nbatch = 5
+        npix = hp.nside2npix(NSIDE)
+        maps_tqu = RNG.standard_normal((nbatch, 3, npix))
+        alms = harmonic.map2alm(maps_tqu, spin=[0, 2], lmax=LMAX)
+        assert alms.shape == (nbatch, 3, NALM)
+        for i in range(nbatch):
+            assert_allclose(alms[i], harmonic.map2alm(maps_tqu[i], spin=[0, 2], lmax=LMAX))
+
     def test_healpix_mmax_explicit_lmax_matches_default(self):
         m = RNG.standard_normal(hp.nside2npix(NSIDE))
         alm_default = harmonic.map2alm(m, spin=0, lmax=LMAX)
@@ -168,6 +177,18 @@ class TestAlm2Map:
         assert m.shape == (3, hp.nside2npix(NSIDE))
         assert_allclose(m[0], harmonic.alm2map(alm_T, spin=0, nside=NSIDE, lmax=LMAX))
         assert_allclose(m[1:], harmonic.alm2map(alm_QU, spin=2, nside=NSIDE, lmax=LMAX))
+
+    def test_healpix_list_spin_batch(self):
+        nbatch = 5
+        alms_teb = RNG.standard_normal((nbatch, 3, NALM)) + 1j * RNG.standard_normal(
+            (nbatch, 3, NALM)
+        )
+        m = harmonic.alm2map(alms_teb, spin=[0, 2], nside=NSIDE, lmax=LMAX)
+        assert m.shape == (nbatch, 3, hp.nside2npix(NSIDE))
+        for i in range(nbatch):
+            assert_allclose(
+                m[i], harmonic.alm2map(alms_teb[i], spin=[0, 2], nside=NSIDE, lmax=LMAX)
+            )
 
     def test_car_list_spin(self, car_geometry):
         shape, wcs = car_geometry
