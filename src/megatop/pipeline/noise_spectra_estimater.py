@@ -82,6 +82,16 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                 "Using Megabuster for component separation, make sure to have the correct parameters set in the config file"
             )
 
+            try:
+                parameters_foregrounds_x = np.load(
+                    manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True
+                )["x"]
+            except FileNotFoundError:
+                logger.error(
+                    f"Results from comp sep not found for {manager.get_path_to_compsep_results(sub=id_sim_sky)}"
+                )
+                return id_sim_sky
+
             obsmat_operator_fname = manager.get_path_list_or_None("suffix_obsmat_scipy")
 
             if np.all(np.array(obsmat_operator_fname) == Path()):
@@ -94,7 +104,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
                 msg_any_obs = "Not all observation matrix files are provided. Provide either all or none, partial set of observation matrices is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
                 raise ValueError(msg_any_obs)
             else:
-                logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
+                logger.info(f"Loading observation matrix from {obsmat_operator_fname}")
                 npix = binary_mask.size
                 indices_mask = np.arange(npix)[hp.reorder(binary_mask, r2n=True) != 0]
                 mask_stacked_nest = np.hstack((indices_mask + npix, indices_mask + 2 * npix))
@@ -141,9 +151,7 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             )
 
             # get the 'options' through the appropriate method which returns a dict
-            parameters_foregrounds_x = np.load(
-                manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True
-            )["x"]
+
             parameters_foregrounds = {
                 "beta_dust": np.array(parameters_foregrounds_x[0]),
                 "beta_pl": np.array(parameters_foregrounds_x[1]),
@@ -156,10 +164,11 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
             mask_analysis,
             None,
             spin=2,
-            beam=effective_beam_CMB[:-1],
+            beam=effective_beam_CMB[: nmt_bins.lmax + 1],
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
+            lmax=nmt_bins.lmax,
         )
         workspaceff = nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
 
@@ -430,6 +439,9 @@ def noise_spectra_estimator(config: Config, manager: DataManager, id_sim_sky: in
 def main():
     parser = argparse.ArgumentParser(description="Noise spectra estimator")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument(
+        "--start_nsim", type=int, required=False, default=0, help="Simulation number to start with"
+    )
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -443,7 +455,7 @@ def main():
     if n_sim_sky == 0:
         noise_spectra_estimator(config, manager)
     else:
-        for i in range(n_sim_sky):
+        for i in range(args.start_nsim, n_sim_sky):
             result = noise_spectra_estimator(config, manager, i)
             logger.info(
                 f"Finished noise spectra estimation for sky simulation {result + 1}/{n_sim_sky}"
