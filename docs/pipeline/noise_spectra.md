@@ -6,21 +6,11 @@ and returns the mean residual noise power $N_\ell$ on the recovered CMB
 channel. This is the quantity the cosmological likelihood subtracts as a
 noise bias and uses in its variance.
 
-## Why a separate pipeline pass
-
-A naive analytic noise model would miss several effects that show up only at
-the spectrum level:
-
-- the **mixing weights** $\big(\mathbf{A}^{\!\top} N^{-1} \mathbf{A}\big)^{-1}
-  \mathbf{A}^{\!\top} N^{-1}$ from component separation, which redistribute
-  per-frequency noise into the CMB channel and depend on the best-fit
-  spectral parameters;
-- the **mode-coupling and purification** done by NaMaster on a cut sky;
-- the **transfer-function** debiasing of the filter response.
-
-By running each noise-only realisation through exactly the same chain as the
-signal, the resulting noise spectra are consistent by construction with the
-estimator applied to the data.
+Each noise realisation is pushed through the same preprocessing → compsep →
+NaMaster chain as the signal. This automatically accounts for the compsep
+mixing weights (which depend on the best-fit spectral parameters), the
+mode-coupling and purification, and the transfer-function debiasing — effects
+that an analytic $N_\ell$ estimate would miss.
 
 ## What this step does
 
@@ -46,11 +36,8 @@ both consumed by the cosmological estimator.
 
 ## Beam handling
 
-The effective beam used for noise spectra is the **CMB-channel common beam**
-&mdash; the same beam the component-separated CMB map carries. Other
-components have, in principle, different effective beams after compsep
-because the weights mix frequencies differently; only the CMB is needed at
-this stage, so this simplification is fine.
+The workspace uses the **CMB-channel common beam** $B_{\rm c}(\ell)\,p_\ell$,
+matching the beam of the component-separated CMB map.
 
 ## Relevant configuration
 

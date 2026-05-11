@@ -43,10 +43,8 @@ $$
 $$
 
 with $\ell_{\rm eff,b}$ and $\Delta\ell_b$ from the binning and $f_{\rm sky}$
-from the analysis mask. The Wishart form is appropriate for a single auto-
-spectrum at moderate $f_{\rm sky}$; it is positively biased for $C^{\rm model}$
-near zero, so the prior must keep the model spectrum positive (the code logs
-a warning when it sees negative bins inside the analysis range).
+from the analysis mask. The code warns when $C^{\rm model}$ has negative bins
+inside the analysis range, as this breaks the log term.
 
 The analysis multipole range is restricted to
 `[cl2r_pars.lmin_cosmo_analysis, cl2r_pars.lmax_cosmo_analysis]`, typically

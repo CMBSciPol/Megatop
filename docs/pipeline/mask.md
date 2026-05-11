@@ -2,15 +2,12 @@
 
 This step builds the sky masks that define the analysis footprint, downweight
 poorly observed pixels, and (optionally) suppress Galactic emission and point
-sources. All downstream estimators take these masks as inputs, so getting them
-right is critical: they set the effective sky fraction $f_{\rm sky}$, govern
-the mode-coupling matrix used to deconvolve the pseudo-$C_\ell$, and control
-$E$-to-$B$ leakage when purification is applied.
+sources.
 
 ## Inputs
 
-Per map set, the user supplies either a hit-count map $n_{\rm hits}(p)$ or a
-white-noise depth map $\sigma(p)$ (in $\mu$K-arcmin). Optionally:
+Per map set, the user supplies either a hit-count map $n_{\rm hits}$ or a
+white-noise depth map $\sigma$ (in $\mu$K-arcmin). Optionally:
 
 - a Planck Galactic plane mask (auto-downloaded if missing) at a chosen sky
   fraction (`gal_key`, e.g. `GAL060`);
@@ -32,8 +29,7 @@ white-noise depth map $\sigma(p)$ (in $\mu$K-arcmin). Optionally:
 4. **Analysis (apodised) mask** &mdash; the binary mask, optionally multiplied
    by the Galactic and point-source masks, then apodised with the chosen
    scheme (`C1`/`C2`/Smooth) at radius `apod_radius` (and
-   `apod_radius_point_source` for sources). Apodisation reduces ringing in the
-   mode-coupling kernel and is essential for $B$-mode purification.
+   `apod_radius_point_source` for sources).
 
 ## Diagnostics
 
@@ -47,15 +43,6 @@ white-noise depth map $\sigma(p)$ (in $\mu$K-arcmin). Optionally:
 It also generates a small set of purified pure-$B$ simulations to verify that
 the chosen apodisation does not leak unacceptably between $E$ and $B$ at the
 multipoles of interest.
-
-## Why it matters
-
-The mode-coupling kernel $M_{\ell \ell'}$ used by NaMaster depends entirely on
-the analysis mask. Insufficient apodisation inflates the kernel off-diagonal
-and biases the deconvolved power; aggressive apodisation reduces effective
-sky area and inflates sample variance. The default `C1` apodisation at
-$\sim 10^\circ$ is the typical compromise used in Simons Observatory SAT-like
-analyses.
 
 ## Relevant configuration
 

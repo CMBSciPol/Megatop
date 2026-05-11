@@ -39,9 +39,8 @@ Megatop does not implement the TF estimator itself; it delegates to
 
 - The TF depends on the filter, the mask, and the binning &mdash; it must be
   recomputed whenever any of these change.
-- Purification (`map2cl_pars.purify_b`) reduces but does not eliminate $E\to B$
-  leakage on a cut sky; the residual leakage is precisely what the off-diagonal
-  $T_b$ entries capture.
+- Off-diagonal $T_b$ entries capture residual $E\to B$ leakage not removed by
+  purification.
 - The TF is applied symmetrically through $T_b^{-1/2}$ when used to debias
   noise covariances (see [noise_covariance](noise_covariance.md)); this keeps
   the resulting covariance positive-definite.

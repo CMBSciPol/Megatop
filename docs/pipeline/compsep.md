@@ -8,10 +8,10 @@ uses **parametric component separation** as implemented in
 ## Data model
 
 After preprocessing, every frequency map sits at the same beam and the data
-vector at pixel $p$ (or harmonic mode $\ell m$) is
+vector (per pixel, or per harmonic mode $\ell m$) is
 
 $$
-\mathbf{d}(p) \;=\; \mathbf{A}(\boldsymbol{\beta}) \, \mathbf{s}(p) + \mathbf{n}(p),
+\mathbf{d} \;=\; \mathbf{A}(\boldsymbol{\beta}) \, \mathbf{s} + \mathbf{n},
 $$
 
 with
@@ -47,7 +47,7 @@ with method, tolerances and bounds from `parametric_sep_pars.minimize_*`.
 Component amplitudes are then recovered by the standard GLS solution
 
 $$
-\widehat{\mathbf{s}}(p) \;=\; \big(\mathbf{A}^{\!\top} N^{-1} \mathbf{A}\big)^{-1} \mathbf{A}^{\!\top} N^{-1} \mathbf{d}(p).
+\widehat{\mathbf{s}} \;=\; \big(\mathbf{A}^{\!\top} N^{-1} \mathbf{A}\big)^{-1} \mathbf{A}^{\!\top} N^{-1} \mathbf{d}.
 $$
 
 The recovered CMB amplitude map is what enters the spectrum estimator
@@ -67,7 +67,7 @@ the regime where the noise spectrum estimate is unreliable.
 
 - Best-fit spectral parameters $\widehat{\boldsymbol{\beta}}$ and their
   estimated covariance from the Hessian at the minimum.
-- Component amplitude maps $\widehat{\mathbf{s}}(p)$ &mdash; in particular the
+- Component amplitude maps $\widehat{\mathbf{s}}$ &mdash; in particular the
   CMB-channel map used for the cosmological pipeline.
 - Auxiliary products (e.g. residual maps) used for plotting and diagnostics.
 

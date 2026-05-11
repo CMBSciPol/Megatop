@@ -12,15 +12,9 @@ A `NaMaster` binning object is built from the configuration:
 - `map2cl_pars.delta_ell` sets the bin width $\Delta\ell$ (linear bins by
   default; weighting inside a bin is $1/(2\ell+1)$).
 
-The same binning is used for pseudo-$C_\ell$ estimation, for the noise spectra,
-and for the binning of the transfer function and the cosmological likelihood.
-Using a single binning everywhere is what makes the bias and covariance terms
-in the likelihood directly comparable bin-by-bin.
-
-The effective bin centre is
-$$\ell_{\rm eff,b} = \frac{\sum_{\ell \in b} w_\ell \, \ell}{\sum_{\ell \in b} w_\ell},$$
-and the bin width is $\Delta\ell_b = \ell_{\rm max}^{(b)} - \ell_{\rm min}^{(b)} + 1$.
-Both enter the likelihood weighting (see [cl2r](cl2r.md)).
+The same binning is used throughout: spectrum estimation, noise spectra,
+transfer function, and the cosmological likelihood, so all quantities are
+directly comparable bin-by-bin.
 
 ## Fiducial CMB spectra
 

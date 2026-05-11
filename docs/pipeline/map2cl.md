@@ -1,24 +1,7 @@
 # Maps to power spectra
 
 This step estimates the auto- and cross-spectra of the component-separated
-maps using the pseudo-$C_\ell$ formalism via
-[NaMaster](https://github.com/LSSTDESC/NaMaster).
-
-## Pseudo-$C_\ell$ recap
-
-Multiplication by the analysis mask $W(\hat n)$ couples multipoles. The
-masked-sky pseudo-power spectrum $\widetilde{C}_\ell$ relates to the true
-$C_\ell$ via
-
-$$
-\langle \widetilde{C}_\ell^{XY} \rangle \;=\; \sum_{\ell'} M^{XY}_{\ell\ell'} \, B^X_{\ell'} B^Y_{\ell'} \, p^2_{\ell'} \, C_{\ell'}^{XY},
-$$
-
-where $M_{\ell\ell'}$ is the mode-coupling matrix determined by $W$, $B_\ell$
-is the (common) beam, and $p_\ell$ is the HEALPix pixel window. NaMaster
-deconvolves $M_{\ell\ell'}$ at the binned level: it actually inverts the
-binned coupling matrix, so the output is a debiased binned spectrum, not an
-unbiased per-$\ell$ spectrum.
+maps using [NaMaster](https://github.com/LSSTDESC/NaMaster).
 
 ## Workspace
 
@@ -30,38 +13,27 @@ The mode-coupling workspace is built once per run from:
 - the purification flags `map2cl_pars.purify_e` and `map2cl_pars.purify_b`,
 - the SHT iteration count `map2cl_pars.n_iter_namaster` (typically 3).
 
-Reusing one workspace across realisations is what makes the per-sim spectrum
-cost cheap; the expensive coupling-matrix computation is paid only once.
+Reusing one workspace across realisations keeps per-sim spectrum cost cheap;
+the coupling-matrix inversion is paid only once.
 
 ## $B$-mode purification
 
-`purify_b: true` removes ambiguous modes (linear combinations that are pure
-$E$ on the full sky but project onto $B$ on the masked sky) by constructing
-the pure-$B$ estimator of Smith (2006) inside NaMaster. This is essential for
-ground-based $B$-mode searches where masked-sky $E$-to-$B$ leakage dominates
-the unprocessed estimator at $\ell \lesssim 100$. Purification requires an
-analysis mask whose first and second derivatives vanish at the edge &mdash;
-hence the apodisation set up in [mask](mask.md).
+`purify_b: true` constructs the pure-$B$ estimator of Smith (2006) inside
+NaMaster. Requires an analysis mask whose first and second derivatives vanish
+at the edge — hence the apodisation set up in [mask](mask.md). `purify_e`
+and `purify_b` are mutually exclusive.
 
 ## What is computed
 
-For each pair of input maps the pipeline computes the binned, mode-coupling
-deconvolved spectrum
+For each pair of input maps, the pipeline produces the binned,
+mode-coupling-deconvolved, beam- and pixel-window-corrected spectrum
 
 $$
-\widehat{C}_b^{XY}, \qquad XY \in \{TT, TE, EE, EB, BE, BB\},
+\widehat{C}_b^{XY}, \qquad XY \in \{TT, TE, EE, EB, BE, BB\}.
 $$
 
-though the cosmological analysis only uses $BB$ of the CMB-channel
-auto-spectrum. The output is restricted to the analysis range via
-`limit_namaster_output`.
-
-## Beam treatment
-
-The effective beam includes the common beam $B_{\rm c}(\ell)$ from
-preprocessing and the pixel window $p_\ell$ at the analysis $n_{\rm side}$.
-NaMaster's beam deconvolution is applied inside the workspace; the recovered
-$\widehat{C}_b$ is therefore already corrected for beam and pixel window.
+The cosmological analysis uses only the CMB-channel $BB$ auto-spectrum.
+Output is restricted to the analysis range via `limit_namaster_output`.
 
 ## Relevant configuration
 

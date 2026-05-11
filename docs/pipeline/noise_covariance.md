@@ -28,7 +28,7 @@ For each noise realisation $i$:
 Streams the per-realisation outputs and computes:
 
 $$
-\sigma^2_\nu(p) \;=\; \frac{1}{N_{\rm sim}} \sum_i \big[m_\nu^{(i,n)}(p)\big]^2,
+\sigma^2_\nu \;=\; \frac{1}{N_{\rm sim}} \sum_i \big[m_\nu^{(i,n)}\big]^2,
 \qquad
 N_\ell^{\nu\nu} \;=\; \frac{1}{N_{\rm sim}} \sum_i \widetilde{N}_\ell^{(i),\nu\nu},
 $$
@@ -44,7 +44,7 @@ use jackknife noise sims.
 
 ## Use downstream
 
-- $\sigma^2_\nu(p)$ enters the pixel `fgbuster` likelihood as the diagonal of
+- $\sigma^2_\nu$ enters the pixel `fgbuster` likelihood as the diagonal of
   $N^{-1}$, giving each pixel weight $\propto 1/\sigma^2$.
 - $N_\ell$ is inverted (with a regularisation floor at $\ell <$
   `parametric_sep_pars.harmonic_lmin`) and used as the harmonic-space noise

@@ -14,10 +14,10 @@ and noise-only spectra (and noise covariances) cleanly.
 
 ## Sky component
 
-For each sky realisation the mocker builds, per frequency $\nu$ and pixel $p$,
+For each sky realisation the mocker builds, per frequency $\nu$,
 
 $$
-m_\nu(p) \;=\; B_\nu \!\ast\!\Big[ s^{\rm CMB}(p) + \sum_c s^{(c)}_\nu(p) \Big],
+m_\nu \;=\; B_\nu \!\ast\!\Big[ s^{\rm CMB} + \sum_c s^{(c)}_\nu \Big],
 $$
 
 where $B_\nu$ is the per-frequency Gaussian beam (FWHM from
@@ -43,7 +43,7 @@ For each noise realisation, per frequency:
    chosen $1/f$ mode and sensitivity tier) or a white-noise level
    (`noise_option: white`).
 2. If `include_nhits: true`, the map is rescaled pixel-by-pixel by
-   $\sqrt{\langle n_{\rm hits}\rangle / n_{\rm hits}(p)}$ inside the binary
+   $\sqrt{\langle n_{\rm hits}\rangle / n_{\rm hits}}$ inside the binary
    mask, so the noise variance tracks the relative hit count of the
    experiment.
 
@@ -80,7 +80,7 @@ map_sim_pars:
 
 noise_sim_pars:
   n_sim: 20                        # number of noise realisations
-  include_nhits: true              # rescale by sqrt(<nhits>/nhits(p))
+  include_nhits: true              # rescale per pixel by sqrt(<nhits>/nhits)
   seed: 42                         # base noise seed
   experiments:
     SO-SAT:
