@@ -215,24 +215,28 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     # fsky_obs = np.sqrt(mean_fsky)
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
-    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
-        "CMBxCMB"
-    ][3][binning_info["bin_index_lminlmax"]]
-    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
-        "DustxDust"
-    ][3][binning_info["bin_index_lminlmax"]]
-
-    all_noise_options = [
-        config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
-        for map_set in config.map_sets
-    ]
-    if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
-        # TODO: test case when only one experiment is noiseless?
-        Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
-    else:
-        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
-            "Noise_CMBxNoise_CMB"
+    try:
+        Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+            "CMBxCMB"
         ][3][binning_info["bin_index_lminlmax"]]
+        Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+            "DustxDust"
+        ][3][binning_info["bin_index_lminlmax"]]
+
+        all_noise_options = [
+            config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
+            for map_set in config.map_sets
+        ]
+        if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+            # TODO: test case when only one experiment is noiseless?
+            Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
+        else:
+            Nl_CMBxCMB_BB_est = np.load(
+                manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+            )["Noise_CMBxNoise_CMB"][3][binning_info["bin_index_lminlmax"]]
+    except FileNotFoundError:
+        logger.error(f"CMB or Noise spectra not found for id_sim={id_sim}")
+        return None
 
     nmt_bins = load_nmt_binning(manager)
 
@@ -250,12 +254,16 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     )
 
     if config.cl2r_pars.load_model_spectra:
-        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: 3 * config.nside]
+        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][
+            : 2 * config.nside + config.map2cl_pars.delta_ell
+        ]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
-            : 3 * config.nside
+            : 2 * config.nside + config.map2cl_pars.delta_ell
         ]
     else:
-        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
+        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(
+            0, 2 * config.nside + config.map2cl_pars.delta_ell
+        )
 
     # 2. init mcmc parameters:
     if not dust_marg and not sync_marg:
@@ -365,7 +373,8 @@ def main():
                 logger.info(f"Distributing work to {executor.num_workers} workers")
                 func = partial(run_mcmc_and_save, manager, config)
                 for result in executor.map(func, range(n_sim_sky), unordered=True):
-                    logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
+                    if result is not None:
+                        logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
 
 
 if __name__ == "__main__":
