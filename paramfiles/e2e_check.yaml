@@ -97,7 +97,6 @@ general_pars:
 
 pre_proc_pars:
   common_beam_correction: 60.0
-  DEBUGskippreproc: false
   correct_for_TF: false
   sum_TF_column: true
 

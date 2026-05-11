@@ -70,10 +70,6 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
         logger.debug(f"Importing noise map: {noise_filename}")
         noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
 
-    if config.pre_proc_pars.DEBUGskippreproc:
-        logger.warning("This is mostly for testing; may not represent the real noise.")
-        return np.array(noise_freq_maps)
-
     # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
     # preventing aliasing from modes above lmax into the analysis bins.
