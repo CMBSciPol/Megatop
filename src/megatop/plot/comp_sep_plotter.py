@@ -15,8 +15,14 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
     plot_dir = manager.path_to_components_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
-    comp_maps = np.load(fname_compmaps)
+    try:
+        fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
+        comp_maps = np.load(fname_compmaps)
+    except FileNotFoundError:
+        logger.warning(
+            f"Component separation maps for simulation {id_sim} not found, skipping plotting."
+        )
+        return
 
     binary_mask = hp.read_map(manager.path_to_binary_mask)
     comp_maps = apply_binary_mask(comp_maps, binary_mask, unseen=True)
@@ -56,6 +62,7 @@ def plot_compsep_stats(manager: DataManager, config: Config):
             fname_compsepresults = manager.get_path_to_compsep_results(sub=sky_sims_id)
             param_res_compsep = np.load(fname_compsepresults, allow_pickle=True)["x"]
             param_res_list.append(param_res_compsep)
+            last_valid_id = sky_sims_id
         except FileNotFoundError:
             logger.warning(
                 f"Component separation results for simulation {sky_sims_id} not found, skipping."
@@ -65,7 +72,9 @@ def plot_compsep_stats(manager: DataManager, config: Config):
 
     # Plotting the statistics of the component separation results
     plot_dir = manager.path_to_components_plots
-    res_compsep_last = np.load(manager.get_path_to_compsep_results(sub=0), allow_pickle=True)
+    res_compsep_last = np.load(
+        manager.get_path_to_compsep_results(sub=last_valid_id), allow_pickle=True
+    )
 
     # plotting histograms of result parameters
     fig, axes = plt.subplots(1, res_compsep_last["params"].shape[0], figsize=(12, 5))

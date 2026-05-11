@@ -16,14 +16,17 @@ def get_params_statistics(manager, config):
     mean_per_sim = []
     std_per_sim = []
     for id_sim in range(n_sim_sky):
-        fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
-        mcmc = np.load(fname_chains, allow_pickle=True)
-        chains = mcmc["mcmc_chains"]
+        try:
+            fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+            mcmc = np.load(fname_chains, allow_pickle=True)
+            chains = mcmc["mcmc_chains"]
 
-        mean_chain = np.mean(chains, axis=0)
-        std_chain = np.std(chains, axis=0)
-        mean_per_sim.append(mean_chain)
-        std_per_sim.append(std_chain)
+            mean_chain = np.mean(chains, axis=0)
+            std_chain = np.std(chains, axis=0)
+            mean_per_sim.append(mean_chain)
+            std_per_sim.append(std_chain)
+        except FileNotFoundError:
+            logger.warning(f"MCMC chain file not found for id_sim={id_sim} at Path:{fname_chains}")
 
     mean_per_sim = np.array(mean_per_sim)
     std_per_sim = np.array(std_per_sim)

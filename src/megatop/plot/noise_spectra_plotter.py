@@ -102,7 +102,9 @@ def plot_all_spectra(manager, config):
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
     bin_index_lminlmax = binning_info["bin_index_lminlmax"]
 
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[
+        0, :, : 2 * config.nside + config.map2cl_pars.delta_ell
+    ]
     nmt_bins = load_nmt_binning(manager)
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, bin_index_lminlmax]
@@ -120,9 +122,10 @@ def plot_all_spectra(manager, config):
     for id_sim in range(config.map_sim_pars.n_sim):
         try:
             fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+            fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+
             all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)
 
-            fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
             all_Cls = np.load(fname_all_Cls, allow_pickle=True)
 
             cmb_cls = all_Cls["CMBxCMB"][:, bin_index_lminlmax]
@@ -382,8 +385,15 @@ def plot_noise_spectra(manager, config, id_sim=None):
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
     bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
 
-    fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
-    all_noise_Cls_ = np.load(fname_noise_Cls, allow_pickle=True)
+    try:
+        fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+        all_noise_Cls_ = np.load(fname_noise_Cls, allow_pickle=True)
+    except FileNotFoundError:
+        logger.warning(
+            f"Noise Spectra file not found for id_sim={id_sim} at Path:{fname_noise_Cls}, skipping plotting."
+        )
+        # TODO: try another id_sim if the file is not found for this one, instead of skipping plotting entirely?
+        return
     all_noise_Cls_binranged = {}
     for k in all_noise_Cls_:
         all_noise_Cls_binranged[k] = all_noise_Cls_[k][:, bin_index_lminlmax]
@@ -416,7 +426,9 @@ def plot_noise_spectra(manager, config, id_sim=None):
         y_axis_label=r"$C_{\ell}$",
     )
 
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[
+        0, :, : 2 * config.nside + config.map2cl_pars.delta_ell
+    ]
     nmt_bins = load_nmt_binning(manager)
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, binning_info["bin_index_lminlmax"]]
