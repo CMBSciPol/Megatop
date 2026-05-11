@@ -20,9 +20,13 @@ from megatop.utils.spectra import (
 
 def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
     with Timer("load-component-maps"):
-        comp_path = manager.get_path_to_components_maps(sub=id_sim)
-        print(comp_path)
-        comp_maps = np.load(manager.get_path_to_components_maps(sub=id_sim))
+        try:
+            comp_path = manager.get_path_to_components_maps(sub=id_sim)
+            logger.info(f"comp_path = {comp_path}")
+            comp_maps = np.load(manager.get_path_to_components_maps(sub=id_sim))
+        except FileNotFoundError:
+            logger.error(f"Component map not found at {comp_path}")
+            return None
 
     nmt_bins = load_nmt_binning(manager)
 
@@ -45,10 +49,11 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             mask_analysis,
             None,
             spin=2,
-            beam=effective_beam_CMB[:-1],
+            beam=effective_beam_CMB[: nmt_bins.lmax + 1],
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
+            lmax=nmt_bins.lmax,
         )
         workspaceff = nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
 
@@ -183,7 +188,8 @@ def map2cl_and_save(config: Config, manager: DataManager, id_sim: int | None = N
             config,
             id_sim=id_sim,
         )
-    save_spectra(manager, all_Cls=all_Cls, id_sim=id_sim)
+    if all_Cls is not None:
+        save_spectra(manager, all_Cls=all_Cls, id_sim=id_sim)
     return id_sim
 
 
