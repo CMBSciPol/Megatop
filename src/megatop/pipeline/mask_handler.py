@@ -1,3 +1,5 @@
+"""Build the binary, common-hit, and apodised analysis masks from per-frequency hit/depth maps."""
+
 import argparse
 from pathlib import Path
 from typing import get_args

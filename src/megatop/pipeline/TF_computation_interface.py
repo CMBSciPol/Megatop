@@ -1,3 +1,5 @@
+"""Wrap SOOPERCOOL to estimate the filter+mask transfer function used to debias spectra."""
+
 import argparse
 import copy
 
