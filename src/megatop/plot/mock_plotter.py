@@ -97,8 +97,10 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
         cls = []
         cls_beamed = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(fg_freq_maps[i_f], datapath=HEALPY_DATA_PATH))
-            cls_beamed.append(hp.anafast(fg_freq_maps_beamed[i_f], datapath=HEALPY_DATA_PATH))
+            cls.append(hp.anafast(fg_freq_maps[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH))
+            cls_beamed.append(
+                hp.anafast(fg_freq_maps_beamed[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH)
+            )
         cls = np.array(cls)
         cls_beamed = np.array(cls_beamed)
 
@@ -145,7 +147,7 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
         )
 
     if cls:
-        cls = hp.anafast(cmb_map, datapath=HEALPY_DATA_PATH)
+        cls = hp.anafast(cmb_map, lmax=config.lmax, datapath=HEALPY_DATA_PATH)
         cls = np.array(cls)
 
         plotTTEEBB_diff(
@@ -274,7 +276,7 @@ def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(combined_maps[i_f], datapath=HEALPY_DATA_PATH))
+            cls.append(hp.anafast(combined_maps[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH))
         cls = np.array(cls)
 
         plotTTEEBB(
