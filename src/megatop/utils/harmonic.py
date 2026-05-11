@@ -156,6 +156,10 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
         spin: Spin weight: ``0`` (T), ``2`` (Q/U), or a list like ``[0, 2]``
             for mixed-spin fields. HEALPix splits the map axis by spin group;
             CAR passes to pixell.
+
+            Unlike healpy's ``pol=True``, TQU → TEB requires ``spin=[0, 2]``
+            explicitly. With ``spin=[0, 2]`` and a ``(3, npix)`` input the
+            output is ``(3, nalm)`` with rows ``[alm_T, alm_E, alm_B]``.
         lmax: Bandlimit. HEALPix default: ``3 * nside - 1``; CAR: library default.
         mmax: Azimuthal bandlimit (HEALPix only). Defaults to ``lmax``.
         niter: Refinement steps. HEALPix: Jacobi iterations; CAR: passed to pixell.
@@ -209,6 +213,9 @@ def alm2map(
         spin: Spin weight: ``0`` (T), ``2`` (Q/U), or a list like ``[0, 2]``
             for mixed-spin fields. HEALPix splits the alm axis by spin group;
             CAR passes to pixell.
+
+            TEB → TQU requires ``spin=[0, 2]``. With a ``(3, nalm)`` input the
+            output is ``(3, npix)`` with rows ``[T, Q, U]``.
         nside: HEALPix resolution. Mutually exclusive with CAR options.
         shape: CAR pixel shape. Used with ``wcs``.
         wcs: CAR world coordinate system. Used with ``shape``.
