@@ -33,6 +33,8 @@ __all__ = [
     "anafast",
     "getlmax",
     "map2alm",
+    "gauss_beam",
+    "smooth",
     "synfast",
 ]
 
@@ -369,6 +371,71 @@ def almxfl(alms, fl, *, mmax=None, inplace=False):
     for i in range(out.shape[0]):
         hp.almxfl(out[i], fl, mmax=mmax, inplace=True)
     return out
+
+
+def gauss_beam(fwhm_arcmin, lmax, *, pol=False):
+    """Wrapper around ``healpy.gauss_beam`` with FWHM in arcminutes.
+
+    See healpy documentation for full details. The only difference is that
+    ``fwhm_arcmin`` is in arcminutes whereas healpy's ``fwhm`` is in radians.
+    """
+    return hp.gauss_beam(np.radians(fwhm_arcmin / 60), lmax=lmax, pol=pol)
+
+
+def smooth(
+    maps,
+    fwhm_arcmin,
+    *,
+    pol=False,
+    lmax=None,
+    nside=None,
+    shape=None,
+    wcs=None,
+    out=None,
+    niter=3,
+    nthreads=None,
+):
+    """Smooth a map with a Gaussian beam.
+
+    When no output geometry is given the input geometry is reused:
+    HEALPix nside is inferred from the input pixel count; CAR shape and
+    WCS are copied from the input enmap.
+
+    Args:
+        maps: Input map — HEALPix ``(..., npix)`` ndarray or CAR
+            ``pixell.enmap.ndmap`` ``(..., ny, nx)``.
+        fwhm_arcmin: FWHM of the Gaussian beam in arcminutes.
+        pol: If ``True``, treat ``maps`` as TQU and apply separate T and P
+            beams (spin ``[0, 2]``). If ``False`` (default), apply a single
+            spin-0 beam to all components.
+        lmax: Bandlimit. Inferred from the alm output of ``map2alm`` if
+            ``None``.
+        nside: HEALPix output resolution. Defaults to input nside.
+        shape: CAR output pixel shape. Defaults to input shape.
+        wcs: CAR world coordinate system. Defaults to input WCS.
+        out: Pre-allocated output map written in-place and returned.
+        niter: Jacobi iterations for the forward SHT (HEALPix).
+        nthreads: ducc0 thread count (HEALPix).
+
+    Returns:
+        Smoothed map, same type and geometry as input unless overridden.
+    """
+    spin = [0, 2] if pol else 0
+    alms = map2alm(maps, spin=spin, lmax=lmax, niter=niter, nthreads=nthreads)
+    lmax_alm = getlmax(alms)
+    if pol:
+        bl = gauss_beam(fwhm_arcmin, lmax_alm, pol=True)  # (lmax+1, 4)
+        almxfl(alms[0], bl[:, 0], inplace=True)
+        almxfl(alms[1:], bl[:, 1], inplace=True)
+    else:
+        almxfl(alms, gauss_beam(fwhm_arcmin, lmax_alm), inplace=True)
+    if _is_car(maps):
+        if out is None and shape is None:
+            shape = maps.shape
+            wcs = maps.wcs
+    elif out is None and nside is None and shape is None:
+        nside = hp.npix2nside(np.asarray(maps).shape[-1])
+    return alm2map(alms, spin=spin, nside=nside, shape=shape, wcs=wcs, out=out, nthreads=nthreads)
 
 
 def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthreads=None):
