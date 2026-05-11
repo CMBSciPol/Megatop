@@ -34,10 +34,9 @@ def preprocess_map(
         f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
     )
 
-    # bool for the different conditions where the preprocessing can be skipped e.g. debug, no beam, same input and common beam, etc.
+    # Skip preprocessing when common beam == input beams (no actual correction needed) and not harmonic pipeline.
     skip_preprocessing_bool = (
         np.all(np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams))
-        or config.pre_proc_pars.DEBUGskippreproc
     ) and not config.parametric_sep_pars.use_harmonic_compsep
 
     if skip_preprocessing_bool:  # and not DEBUGtruncatealms:
@@ -61,14 +60,9 @@ def preprocess_map(
         )
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
-        freq_beams = config.beams
-        common_beam = config.pre_proc_pars.common_beam_correction
-        if config.pre_proc_pars.DEBUGskippreproc:
-            freq_beams = np.array([0.0] * len(config.frequencies))
-            common_beam = 0.0
         freq_alms_convolved = alm_common_beam(
-            common_beam=common_beam,
-            frequency_beams=freq_beams,
+            common_beam=config.pre_proc_pars.common_beam_correction,
+            frequency_beams=config.beams,
             freq_maps=np.array(input_maps),
             analysis_mask=analysis_mask,
             harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
