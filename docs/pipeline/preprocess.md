@@ -8,22 +8,22 @@ see [noise_covariance](noise_covariance.md)).
 ## Common-beam correction
 
 Each frequency map is delivered at its native instrumental beam
-$B_\nu(\ell)$ (FWHM from `map_sets[i].beam`). Pixel-domain component
+$B^\nu_\ell$ (FWHM from `map_sets[i].beam`). Pixel-domain component
 separation assumes all frequencies share the same beam, so the maps are
-reconvolved to a common Gaussian beam $B_{\rm c}(\ell)$ with FWHM
+reconvolved to a common Gaussian beam $B^{\rm c}_\ell$ with FWHM
 `pre_proc_pars.common_beam_correction`. In harmonic space,
 
 $$
-a_{\ell m}^{(\nu),{\rm c}} \;=\; \frac{B_{\rm c}(\ell)\, p_{\rm c}(\ell)}{B_\nu(\ell)\, p_\nu(\ell)} \; a_{\ell m}^{(\nu)},
+a_{\ell m}^{(\nu),{\rm c}} \;=\; \frac{B^{\rm c}_\ell\, w^{\rm c}_\ell}{B^\nu_\ell\, w^\nu_\ell} \; a_{\ell m}^{(\nu)},
 $$
 
-where $p(\ell)$ is the HEALPix pixel window function at the relevant
+where $w_\ell$ is the HEALPix [pixel window function](https://healpix.sourceforge.io/html/intro_Pixel_window_functions.htm) at the relevant
 $n_{\rm side}$. The pixel window is included so the correction also accounts
 for any change in $n_{\rm side}$ between input maps and the analysis grid.
 
 The common beam must be **wider** than every native beam at all $\ell$ used
 in the analysis &mdash; otherwise the deconvolution
-$B_{\rm c}/B_\nu$ diverges and noise blows up. The pipeline raises if this
+$B^{\rm c}_\ell/B^\nu_\ell$ diverges and noise blows up. The pipeline raises if this
 condition is not met for the requested `lmax`.
 
 ## Masking

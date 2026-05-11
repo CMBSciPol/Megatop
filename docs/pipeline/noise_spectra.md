@@ -36,7 +36,7 @@ both consumed by the cosmological estimator.
 
 ## Beam handling
 
-The workspace uses the **CMB-channel common beam** $B_{\rm c}(\ell)\,p_\ell$,
+The workspace uses the **CMB-channel common beam** $B^{\rm c}_\ell\,w^{\rm c}_\ell$,
 matching the beam of the component-separated CMB map.
 
 ## Relevant configuration

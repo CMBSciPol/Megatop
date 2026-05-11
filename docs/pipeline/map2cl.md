@@ -8,7 +8,7 @@ maps using [NaMaster](https://github.com/LSSTDESC/NaMaster).
 The mode-coupling workspace is built once per run from:
 
 - the analysis mask (sets $M_{\ell\ell'}$),
-- the **effective common beam** $B_\ell\, p_\ell$ from preprocessing,
+- the **effective common beam** $B^{\rm c}_\ell\, w^{\rm c}_\ell$ from preprocessing,
 - the binning from [binning](binning.md),
 - the purification flags `map2cl_pars.purify_e` and `map2cl_pars.purify_b`,
 - the SHT iteration count `map2cl_pars.n_iter_namaster` (typically 3).
