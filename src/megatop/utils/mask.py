@@ -67,7 +67,7 @@ def read_depth_maps(list_depthmapname: list[Path], nside: int):
     depth_maps = []
     for depthmapname in list_depthmapname:
         depth_maps.append(hp.ud_grade(hp.read_map(depthmapname, field=0), nside_out=nside))
-    return np.array(depth_maps)
+    return np.array(depth_maps, dtype=np.float64)
 
 
 def read_nhits_maps(list_hitmapname: list[Path], nside: int):
@@ -94,7 +94,7 @@ def read_nhits_maps(list_hitmapname: list[Path], nside: int):
             nhits_maps.append(
                 hp.ud_grade(hp.read_map(hitmapname, field=0), nside_out=nside, power=-2)
             )
-    return np.array(nhits_maps)
+    return np.array(nhits_maps, dtype=np.float64)
 
 
 def norm_smooth_nhits_maps(nhits_maps, fwhm_arcmin_nhits):
