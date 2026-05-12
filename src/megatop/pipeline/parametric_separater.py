@@ -452,7 +452,7 @@ def megabuster_comp_sep(
         1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
     )
 
-    max_iter = options["maxiter"] if method != "TNC" else options["maxfun"]
+    max_iter = options["maxiter"]  # if method != "TNC" else options["maxfun"]
 
     if method == "TNC":
         logger.warning(
