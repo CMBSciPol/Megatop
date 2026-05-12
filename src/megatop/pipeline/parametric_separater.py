@@ -19,7 +19,11 @@ from mpi4py.futures import MPICommExecutor  # noqa: E402
 
 from megatop import Config, DataManager  # noqa: E402
 from megatop.utils import Timer, logger, mask, passband  # noqa: E402
-from megatop.utils.compsep import set_alm_tozero_below_lmin  # noqa: E402
+from megatop.utils.compsep import (  # noqa: E402
+    cut_map_scales,
+    get_smooth_scale_cut,
+    set_alm_tozero_below_lmin,
+)
 from megatop.utils.mpi import get_world  # noqa: E402
 from megatop.utils.utils import MemoryUsage  # noqa: E402
 
@@ -398,30 +402,13 @@ def megabuster_comp_sep(
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
     apply_before_paramestimation = False
     if config.map2cl_pars.DEBUG_cut_scales and apply_before_paramestimation:
+        # I'm keeping this in for now until we have full confirmation that the Obs(noise_1/f) is correct
         logger.warning("TEST: Applying smooth cut at large scales to component maps")
-
-        def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
-            ell = np.arange(lmax + 1)
-            smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
-            smooth_cut[:lmin] = 0.0
-            return smooth_cut
-
-        cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
-        freq_maps_cut = np.zeros_like(freq_maps_preprocessed)
-        for f in range(freq_maps_preprocessed.shape[0]):
-            alm_comp = hp.map2alm(
-                [
-                    freq_maps_preprocessed[f, 0],
-                    freq_maps_preprocessed[f, 1],
-                    freq_maps_preprocessed[f, 2],
-                ],
-                lmax=3 * config.nside,
-            )
-            for s in range(alm_comp.shape[0]):
-                hp.almxfl(alm_comp[s], cut_array, inplace=True)
-            freq_maps_cut[f] = hp.alm2map(
-                alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
-            )  # removing temperature
+        logger.warning("TO BE DEPRECATED")
+        logger.warning("TO BE DEPRECATED")
+        logger.warning("TO BE DEPRECATED")
+        cut_array_test = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
+        freq_maps_cut = cut_map_scales(freq_maps_preprocessed, cut_array_test, config.nside)
         freq_maps_preprocessed = freq_maps_cut
 
     timer = Timer()
@@ -429,14 +416,8 @@ def megabuster_comp_sep(
 
     if config.parametric_sep_pars.passband_int:
         logger.info("Using passband-integration for the component separation step.")
-        # config.map_sets = passband.passband_constructor(
-        #     config, manager, passband_int=config.parametric_sep_pars.passband_int
-        # )
-        # passbands_norm = passband.fgbuster_passband(config.map_sets)
-        # instrument = {"frequency": passbands_norm}
         msg_passband = "Megabuster does not support passband integration yet. \nPlease use FGBuster for this feature."
         raise NotImplementedError(msg_passband)
-    # instrument = {"frequency": config.frequencies}
     if config.parametric_sep_pars.include_synchrotron:
         components = ["cmb", "dust", "synchrotron"]  # TODO move default to config
         first_guess = {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)}
@@ -467,6 +448,15 @@ def megabuster_comp_sep(
 
     max_iter = options["maxiter"] if method != "TNC" else options["maxfun"]
 
+    if method == "TNC":
+        logger.warning(
+            "Changing method=TNC to method='scipy_tnc' for compatibility with megabuster and furax_cs."
+        )
+        method = "scipy_tnc"
+        # dict_parameters_minimization = {"max_fun": max_iter, "tol": tol, 'solver_name': method}
+    # else:
+    dict_parameters_minimization = {"max_iter": max_iter, "tol": tol, "solver_name": method}
+    # import IPython; IPython.embed()
     res = mb.compsep.perform_compsep(
         first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
         fixed_params={"temp_dust": 20.0},
@@ -481,7 +471,7 @@ def megabuster_comp_sep(
         use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
         central_freq_op=central_freq_op,
         matrix_precond=matrix_precond,
-        dictionary_parameters_minimization={"max_iter": max_iter, "tol": tol},
+        dictionary_parameters_minimization=dict_parameters_minimization,
         dictionary_parameters_CG={
             "max_steps_CG": megabuster_options["max_steps_CG"],
             "tol_CG": megabuster_options["tol_CG"],
@@ -490,37 +480,20 @@ def megabuster_comp_sep(
         ordering_component=components,
         dust_nu0=150.0,
         synchrotron_nu0=150.0,
-        components_list=components,
+        # components_list=components, #TODO: For future when no_synch options is merged in megabuster
     )
     if config.map2cl_pars.DEBUG_cut_scales and not apply_before_paramestimation:
+        # I'm keeping this in for now until we have full confirmation that the Obs(noise_1/f) is correct
         logger.warning("TEST: Applying smooth cut at large scales to component maps")
         logger.warning("TEST: DOING IT AFTER PARAM ESTIMATION")
-
-        def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
-            ell = np.arange(lmax + 1)
-            smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
-            smooth_cut[:lmin] = 0.0
-            return smooth_cut
+        logger.warning("TO BE DEPRECATED")
+        logger.warning("TO BE DEPRECATED")
+        logger.warning("TO BE DEPRECATED")
 
         cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
-        freq_maps_cut = np.zeros_like(freq_maps_preprocessed)
-        for f in range(freq_maps_preprocessed.shape[0]):
-            alm_comp = hp.map2alm(
-                [
-                    freq_maps_preprocessed[f, 0],
-                    freq_maps_preprocessed[f, 1],
-                    freq_maps_preprocessed[f, 2],
-                ],
-                lmax=3 * config.nside,
-            )
-            for s in range(alm_comp.shape[0]):
-                hp.almxfl(alm_comp[s], cut_array, inplace=True)
-            freq_maps_cut[f] = hp.alm2map(
-                alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
-            )  # removing temperature
-        freq_maps_preprocessed = freq_maps_cut
+        freq_maps_cut = cut_map_scales(freq_maps_preprocessed, cut_array, config.nside)
         freq_maps_preprocessed_QU_masked_cut = mask.apply_binary_mask(
-            freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
+            freq_maps_cut[:, 1:], binary_mask, unseen=False
         )
 
         res_first_guess = (
@@ -542,7 +515,7 @@ def megabuster_comp_sep(
             use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
             central_freq_op=central_freq_op,
             matrix_precond=matrix_precond,
-            dictionary_parameters_minimization={"max_iter": max_iter, "tol": tol},
+            dictionary_parameters_minimization=dict_parameters_minimization,
             dictionary_parameters_CG={
                 "max_steps_CG": megabuster_options["max_steps_CG"],
                 "tol_CG": megabuster_options["tol_CG"],
@@ -574,14 +547,7 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
         if (not attr.startswith("__") and attr != "s") and not isfunction(
             getattr(res, attr)
         ):  # remove component maps to avoid saving twice.
-            # if isinstance(getattr(res, attr), callable):
-            #     continue # Skip callable attributes
             res_dict[attr] = getattr(res, attr)
-
-    # if type(res_dict["W_maxL"]) is not np.ndarray:
-    #     # If W_maxL is a function, we can't pickle it, so we remove it
-    #     logger.warning("W_maxL is a function, removing it from the results dictionary.")
-    #     res_dict.pop("W_maxL")
 
     # Saving result dict
     logger.info(f"Saving compsep results to {fname_results}")
@@ -630,6 +596,9 @@ def compsep_and_save(
 def main():
     parser = argparse.ArgumentParser(description="Component separation")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument(
+        "--start_nsim", type=int, required=False, default=0, help="Simulation number to start with"
+    )
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -672,7 +641,7 @@ def main():
                     central_freq_op,
                     matrix_precond,
                 )
-                for result in executor.map(func, range(n_sim_sky), unordered=True):
+                for result in executor.map(func, range(args.start_nsim, n_sim_sky), unordered=True):
                     logger.info(f"Finished component separation on map {result + 1} / {n_sim_sky}")
 
 
