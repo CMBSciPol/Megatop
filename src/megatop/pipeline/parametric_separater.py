@@ -461,7 +461,12 @@ def megabuster_comp_sep(
         method = "scipy_tnc"
         # dict_parameters_minimization = {"max_fun": max_iter, "tol": tol, 'solver_name': method}
     # else:
-    dict_parameters_minimization = {"max_iter": max_iter, "tol": tol, "solver_name": method}
+    dict_parameters_minimization = {
+        "max_iter": max_iter,
+        "tol": tol,
+        "solver_name": solver_name,
+        "options": megabuster_options.get("minimizer_options", dict()),
+    }
     # import IPython; IPython.embed()
     res = mb.compsep.perform_compsep(
         first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
@@ -477,12 +482,7 @@ def megabuster_comp_sep(
         use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
         central_freq_op=central_freq_op,
         matrix_precond=matrix_precond,
-        dictionary_parameters_minimization={
-            "max_iter": max_iter,
-            "tol": tol,
-            "solver_name": solver_name,
-            "options": megabuster_options.get("minimizer_options", dict()),
-        },
+        dictionary_parameters_minimization=dict_parameters_minimization,
         dictionary_parameters_CG={
             "max_steps_CG": megabuster_options["max_steps_CG"],
             "tol_CG": megabuster_options["tol_CG"],
