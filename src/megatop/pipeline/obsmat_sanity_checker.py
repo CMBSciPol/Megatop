@@ -90,6 +90,10 @@ def main():
     if config.parametric_sep_pars.use_megabuster:
         # TODO: is it also an issue for just the mocker?
         obsmat_sanity_check(manager=manager, config=config)
+    else:
+        logger.info(
+            "Megabuster is not used, skipping obsmat sanity check as it is only relevant for the component separation step."
+        )
 
 
 if __name__ == "__main__":
