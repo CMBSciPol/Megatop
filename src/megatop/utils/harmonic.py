@@ -127,6 +127,7 @@ def _ducc_adjoint_synthesis(maps, *, spin, lmax=None, mmax=None, nthreads=None):
 
 def _map2alm_healpix_iter(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None):
     """Jacobi iteration over ``_ducc_adjoint_synthesis``. Uses ducc0 shapes."""
+    maps = np.where(maps == hp.UNSEEN, 0.0, maps)
     nside = hp.npix2nside(maps.shape[-1])
     kw = {"spin": spin, "lmax": lmax, "mmax": mmax, "nthreads": nthreads}
     alm = _ducc_adjoint_synthesis(maps, **kw)
