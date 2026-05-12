@@ -338,6 +338,13 @@ class MapSimConfig:
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
     """If True, the Observation Matrices provided in map_sets will be applied on the CMB + Foreground maps generated in the mocker."""
+    filter_noise: bool = False
+    """If True, the Observation Matrices provided in map_sets will be ALSO be applied to the noise, the data model would then be d = O (As + n).
+        The pure noise sims used for the covariance estimation will also be filtered, the TRUE noise sims will be filtered if DEBUG_save_TRUEnoise_simulations.
+        BOTH pure noise and true noise filtering can be turned off independently for debuging purposes with DEBUGDont_Filter_purenoise_sims."""
+    DEBUGDont_Filter_purenoise_sims: bool = False
+    """Debuging param.
+       If True, the noise simulations and TRUE noise sims will NOT be filtered if filter_noise is true. So only noise IN the full sky sims (As+n) is filtered."""
     generate_sims_for_TF: bool = False
     """If True, power law simulations will be generated and filtered for the Transfer Function pipeline step"""
     TF_power_law_amp: float = 1.0
