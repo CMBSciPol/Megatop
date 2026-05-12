@@ -7,10 +7,9 @@ import numpy as np
 
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
-from megatop.pipeline.mocker import get_noise
 from megatop.utils import Timer, logger, mock, passband
 from megatop.utils.mask import apply_binary_mask, read_nhits_maps
-from megatop.utils.mock import get_noise_experiment, get_noise_map_from_white_noise
+from megatop.utils.mock import get_noise_experiment
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
 from megatop.utils.preproc import read_input_maps
 
@@ -169,7 +168,14 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
-    noise_freq_maps = get_noise(config, binary_mask, nhits_maps)
+
+    noise_freq_maps = np.array(
+        [
+            hp.read_map(manager.get_noise_maps_filenames(sub=0)[i_f], field=None)
+            for i_f, _f in enumerate(config.frequencies)
+        ]
+    )
+    # noise_freq_maps = get_noise(config, binary_mask, nhits_maps)
 
     # if config.noise_sim_pars.noise_option == NoiseOption.WHITE:
     #     n_ell, map_white_noise_levels = mock.get_noise(config, fsky_binary)
@@ -222,7 +228,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
         noise_experiment = {}
 
         # Fixing id_sim to 0 for seed (seed is changing from freq to freq)
-        id_sim = 0
+        # id_sim = 0
         for exp in experiments_map_set:
             try:
                 assert exp in experiments_noiseconfig
@@ -242,11 +248,11 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
             logger.warning("Check fsky correction in noise plots!")
             if noise_config_exp.noise_option == NoiseOption.WHITE:
                 white_noise_level = noise_experiment[exp]["map_white_noise_levels"][idx_freq]
-                noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
-                    noise_experiment[exp]["map_white_noise_levels"][idx_freq],
-                    config.nside,
-                    [id_sim, i_map_set],
-                )
+                # noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
+                #     noise_experiment[exp]["map_white_noise_levels"][idx_freq],
+                #     config.nside,
+                #     [id_sim, i_map_set],
+                # )
 
                 cl_model[i_map_set, 0] = (
                     (white_noise_level[np.newaxis] / np.sqrt(2) * np.pi / 180 / 60) ** 2
