@@ -64,6 +64,8 @@ docs = [
 "megatop-cl2r_mcmc-plot" = "megatop.plot.mcmc_plotter:main"
 "megatop-binning-run" = "megatop.pipeline.binner_maker:main"
 "megatop-TFcomputing-run" = "megatop.pipeline.TF_computation_interface:main"
+"megatop-jaxpreproc-run" = "megatop.pipeline.precomputationer:main"
+"megatop-obsmatsanity-run" = "megatop.pipeline.obsmat_sanity_checker:main"
 
 
 [tool.ruff]
