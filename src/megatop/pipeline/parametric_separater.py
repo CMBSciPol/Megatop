@@ -15,6 +15,7 @@ import numpy as np  # noqa: E402
 from fgbuster.component_model import CMB, Dust, Synchrotron  # noqa: E402
 from fgbuster.mixingmatrix import MixingMatrix  # noqa: E402
 from fgbuster.separation_recipes import _format_alms  # noqa: E402
+from furax_cs import SOLVER_NAMES  # noqa: E402
 from mpi4py.futures import MPICommExecutor  # noqa: E402
 
 from megatop import Config, DataManager  # noqa: E402
@@ -434,6 +435,11 @@ def megabuster_comp_sep(
 
     megabuster_options = config.parametric_sep_pars.get_megabuster_options_as_dict()
 
+    solver_name = megabuster_options["solver_name"]
+    assert solver_name in SOLVER_NAMES.__args__, (
+        f"Solver name must be one of {SOLVER_NAMES.__args__}."
+    )
+
     # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
 
@@ -471,7 +477,12 @@ def megabuster_comp_sep(
         use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
         central_freq_op=central_freq_op,
         matrix_precond=matrix_precond,
-        dictionary_parameters_minimization=dict_parameters_minimization,
+        dictionary_parameters_minimization={
+            "max_iter": max_iter,
+            "tol": tol,
+            "solver_name": solver_name,
+            "options": megabuster_options.get("minimizer_options", dict()),
+        },
         dictionary_parameters_CG={
             "max_steps_CG": megabuster_options["max_steps_CG"],
             "tol_CG": megabuster_options["tol_CG"],
