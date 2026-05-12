@@ -242,7 +242,6 @@ class GeneralConfig:
 class PreProcessingConfig:
     common_beam_correction: float = 100
     # beam_fwhms: list[float] | None = None
-    DEBUGskippreproc: bool = False
     correct_for_TF: bool = False
     sum_TF_column: bool = True
 
