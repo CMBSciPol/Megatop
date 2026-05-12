@@ -22,9 +22,6 @@ PLANCK_MASK_GALPLANE_URL = (
 
 
 def mask_handler(manager: DataManager, config: Config):
-    mask_dir = manager.path_to_masks
-    mask_dir.mkdir(parents=True, exist_ok=True)
-
     # Get nhits map
 
     with Timer("hitmap"):
@@ -160,6 +157,7 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     mask_handler(manager, config)
     # test_mask(manager)

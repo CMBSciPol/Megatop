@@ -25,6 +25,18 @@ pip install megatop[mpi] @ git+https://github.com/CMBSciPol/Megatop.git
 
 Refer to the [mpi4py documentation](https://mpi4py.readthedocs.io/en/stable/install.html) for more information.
 
+To use [Snakemake](https://snakemake.readthedocs.io/) to orchestrate the pipeline (recommended, requires Python >= 3.11):
+
+```bash
+pip install megatop[snake] @ git+https://github.com/CMBSciPol/Megatop.git
+```
+
+Both extras can be combined:
+
+```bash
+pip install "megatop[mpi,snake] @ git+https://github.com/CMBSciPol/Megatop.git"
+```
+
 ## Development
 
 You should clone the [repository](https://github.com/CMBSciPol/Megatop) and install in editable mode with the `dev` dependency group.
