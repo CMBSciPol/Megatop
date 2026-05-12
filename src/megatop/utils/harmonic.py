@@ -33,6 +33,8 @@ __all__ = [
     "anafast",
     "getlmax",
     "map2alm",
+    "gauss_beam",
+    "smooth",
     "synfast",
 ]
 
@@ -125,6 +127,7 @@ def _ducc_adjoint_synthesis(maps, *, spin, lmax=None, mmax=None, nthreads=None):
 
 def _map2alm_healpix_iter(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None):
     """Jacobi iteration over ``_ducc_adjoint_synthesis``. Uses ducc0 shapes."""
+    maps = np.where(maps == hp.UNSEEN, 0.0, maps)
     nside = hp.npix2nside(maps.shape[-1])
     kw = {"spin": spin, "lmax": lmax, "mmax": mmax, "nthreads": nthreads}
     alm = _ducc_adjoint_synthesis(maps, **kw)
@@ -156,6 +159,11 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
         spin: Spin weight: ``0`` (T), ``2`` (Q/U), or a list like ``[0, 2]``
             for mixed-spin fields. HEALPix splits the map axis by spin group;
             CAR passes to pixell.
+
+            Unlike healpy's ``pol=True``, TQU → TEB requires ``spin=[0, 2]``
+            explicitly. With ``spin=[0, 2]`` and a ``(3, npix)`` input the
+            output is ``(3, nalm)`` with rows ``[alm_T, alm_E, alm_B]``.
+            Batch dimensions are supported: ``(batch, 3, npix)`` → ``(batch, 3, nalm)``.
         lmax: Bandlimit. HEALPix default: ``3 * nside - 1``; CAR: library default.
         mmax: Azimuthal bandlimit (HEALPix only). Defaults to ``lmax``.
         niter: Refinement steps. HEALPix: Jacobi iterations; CAR: passed to pixell.
@@ -166,24 +174,17 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
     """
     if _is_car(maps):
         return curvedsky.map2alm(maps, spin=spin, lmax=lmax, niter=niter)
+    kw = {"lmax": lmax, "mmax": mmax, "niter": niter, "nthreads": nthreads}
     if isinstance(spin, (list, tuple)):
         alms_out = []
         idx = 0
         for s in spin:
             nmaps = 1 if s == 0 else 2
-            alms_out.append(
-                _map2alm_healpix(
-                    maps[idx : idx + nmaps],
-                    spin=s,
-                    lmax=lmax,
-                    mmax=mmax,
-                    niter=niter,
-                    nthreads=nthreads,
-                )
-            )
+            # _map2alm_healpix_iter uses ducc0 ([ntrans,] nmaps, npix) convention directly
+            alms_out.append(_map2alm_healpix_iter(maps[..., idx : idx + nmaps, :], spin=s, **kw))
             idx += nmaps
-        return np.concatenate(alms_out, axis=0)
-    return _map2alm_healpix(maps, spin=spin, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads)
+        return np.concatenate(alms_out, axis=-2)
+    return _map2alm_healpix(maps, spin=spin, **kw)
 
 
 def alm2map(
@@ -209,6 +210,10 @@ def alm2map(
         spin: Spin weight: ``0`` (T), ``2`` (Q/U), or a list like ``[0, 2]``
             for mixed-spin fields. HEALPix splits the alm axis by spin group;
             CAR passes to pixell.
+
+            TEB → TQU requires ``spin=[0, 2]``. With a ``(3, nalm)`` input the
+            output is ``(3, npix)`` with rows ``[T, Q, U]``.
+            Batch dimensions are supported: ``(batch, 3, nalm)`` → ``(batch, 3, npix)``.
         nside: HEALPix resolution. Mutually exclusive with CAR options.
         shape: CAR pixel shape. Used with ``wcs``.
         wcs: CAR world coordinate system. Used with ``shape``.
@@ -244,14 +249,14 @@ def alm2map(
         out_idx = idx = 0
         for s in spin:
             nmaps = 1 if s == 0 else 2
-            alm_seg = alms[idx : idx + nmaps]
-            out_seg = out[out_idx : out_idx + nmaps] if inplace else None
-            result = _alm2map_healpix(alm_seg, spin=s, out=out_seg, **kw)
+            # _ducc_synthesis uses ([ntrans,] nmaps, nalm) convention directly
+            out_seg = out[..., out_idx : out_idx + nmaps, :] if inplace else None
+            result = _ducc_synthesis(alms[..., idx : idx + nmaps, :], spin=s, out=out_seg, **kw)
             if not inplace:
                 maps_out.append(result)
             idx += nmaps
             out_idx += nmaps
-        return out if inplace else np.concatenate(maps_out, axis=0)
+        return out if inplace else np.concatenate(maps_out, axis=-2)
     return _alm2map_healpix(alms, spin=spin, out=out, **kw)
 
 
@@ -362,6 +367,71 @@ def almxfl(alms, fl, *, mmax=None, inplace=False):
     for i in range(out.shape[0]):
         hp.almxfl(out[i], fl, mmax=mmax, inplace=True)
     return out
+
+
+def gauss_beam(fwhm_arcmin, lmax, *, pol=False):
+    """Wrapper around ``healpy.gauss_beam`` with FWHM in arcminutes.
+
+    See healpy documentation for full details. The only difference is that
+    ``fwhm_arcmin`` is in arcminutes whereas healpy's ``fwhm`` is in radians.
+    """
+    return hp.gauss_beam(np.radians(fwhm_arcmin / 60), lmax=lmax, pol=pol)
+
+
+def smooth(
+    maps,
+    fwhm_arcmin,
+    *,
+    pol=False,
+    lmax=None,
+    nside=None,
+    shape=None,
+    wcs=None,
+    out=None,
+    niter=3,
+    nthreads=None,
+):
+    """Smooth a map with a Gaussian beam.
+
+    When no output geometry is given the input geometry is reused:
+    HEALPix nside is inferred from the input pixel count; CAR shape and
+    WCS are copied from the input enmap.
+
+    Args:
+        maps: Input map — HEALPix ``(..., npix)`` ndarray or CAR
+            ``pixell.enmap.ndmap`` ``(..., ny, nx)``.
+        fwhm_arcmin: FWHM of the Gaussian beam in arcminutes.
+        pol: If ``True``, treat ``maps`` as TQU and apply separate T and P
+            beams (spin ``[0, 2]``). If ``False`` (default), apply a single
+            spin-0 beam to all components.
+        lmax: Bandlimit. Inferred from the alm output of ``map2alm`` if
+            ``None``.
+        nside: HEALPix output resolution. Defaults to input nside.
+        shape: CAR output pixel shape. Defaults to input shape.
+        wcs: CAR world coordinate system. Defaults to input WCS.
+        out: Pre-allocated output map written in-place and returned.
+        niter: Jacobi iterations for the forward SHT (HEALPix).
+        nthreads: ducc0 thread count (HEALPix).
+
+    Returns:
+        Smoothed map, same type and geometry as input unless overridden.
+    """
+    spin = [0, 2] if pol else 0
+    alms = map2alm(maps, spin=spin, lmax=lmax, niter=niter, nthreads=nthreads)
+    lmax_alm = getlmax(alms)
+    if pol:
+        bl = gauss_beam(fwhm_arcmin, lmax_alm, pol=True)  # (lmax+1, 4)
+        almxfl(alms[0], bl[:, 0], inplace=True)
+        almxfl(alms[1:], bl[:, 1], inplace=True)
+    else:
+        almxfl(alms, gauss_beam(fwhm_arcmin, lmax_alm), inplace=True)
+    if _is_car(maps):
+        if out is None and shape is None:
+            shape = maps.shape
+            wcs = maps.wcs
+    elif out is None and nside is None and shape is None:
+        nside = hp.npix2nside(np.asarray(maps).shape[-1])
+    return alm2map(alms, spin=spin, nside=nside, shape=shape, wcs=wcs, out=out, nthreads=nthreads)
 
 
 def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthreads=None):
