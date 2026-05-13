@@ -436,9 +436,8 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
-    nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
-    func = partial(func_noise, manager, config, binary_mask, nhits_maps)
+    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    func = partial(func_noise, manager, config, binary_mask, common_nhits_map)
 
     if filtering := (
         config.map_sim_pars.filter_noise and config.map_sim_pars.DEBUGfilter_purenoise_sims
