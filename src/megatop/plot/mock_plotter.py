@@ -173,7 +173,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
     noise_freq_maps = np.array(
         [
-            hp.read_map(manager.get_noise_maps_filenames(sub=0)[i_f], field=None)
+            hp.read_map(manager.get_noise_maps_filenames(id_sim=0)[i_f], field=None)
             for i_f, _f in enumerate(config.frequencies)
         ]
     )
