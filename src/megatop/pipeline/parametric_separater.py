@@ -16,7 +16,6 @@ from fgbuster.component_model import CMB, Dust, Synchrotron  # noqa: E402
 from fgbuster.mixingmatrix import MixingMatrix  # noqa: E402
 from fgbuster.separation_recipes import _format_alms  # noqa: E402
 from furax_cs import SOLVER_NAMES  # noqa: E402
-from mpi4py.futures import MPICommExecutor  # noqa: E402
 
 from megatop import Config, DataManager  # noqa: E402
 from megatop.utils import Timer, logger, mask, passband  # noqa: E402
@@ -119,7 +118,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     std_instr = fg.observation_helpers.standardize_instrument(instrument)
 
     with Timer("load-alms"):
-        preproc_alms_fname = manager.get_path_to_preprocessed_alms(sub=id_sim)
+        preproc_alms_fname = manager.get_path_to_preprocessed_alms(id_sim)
         logger.debug(f"Loading input maps from {preproc_alms_fname}")
         data_alms = np.load(preproc_alms_fname)
 
@@ -132,7 +131,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         std_instr,
         data_alms_lmin,
         config.nside,
-        config.parametric_sep_pars.harmonic_lmax - 1,
+        config.parametric_sep_pars.harmonic_lmax,
         invN=invN,
         invNlm=invNlm,
         mask=None,
@@ -205,7 +204,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
                     res.s_alm[i],
                     nside=config.nside,
                     spin=2,
-                    lmax=config.parametric_sep_pars.harmonic_lmax - 1,
+                    lmax=config.parametric_sep_pars.harmonic_lmax,
                 )  # lmax=3 * config.nside
                 for i in range(res.s_alm.shape[0])
             ]
@@ -219,7 +218,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
             "Beam and Transfer functions handling? "
         )  # TODO: Beam and Transfer functions handling?
         with Timer("load-maps"):
-            preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+            preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
             logger.debug(f"Loading input maps from {preproc_maps_fname}")
             freq_maps_preprocessed = np.load(preproc_maps_fname)
         freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
@@ -279,18 +278,16 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     tol = config.parametric_sep_pars.minimize_tol
     method = config.parametric_sep_pars.minimize_method
 
-    # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
-    # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
-    binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
 
     with Timer("load-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
 
     freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
         freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
-    )
+    )  # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
     res = fg.separation_recipes.weighted_comp_sep(
         components,
@@ -546,12 +543,10 @@ def megabuster_comp_sep(
 
 
 def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int | None = None):
-    path = manager.get_path_to_components(sub=id_sim)
-    path.mkdir(parents=True, exist_ok=True)
-    fname_results = manager.get_path_to_compsep_results(sub=id_sim)
+    fname_results = manager.get_path_to_compsep_results(id_sim)
     if config.parametric_sep_pars.use_harmonic_compsep:
-        fname_compalms = manager.get_path_to_components_alms(sub=id_sim)
-    fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
+        fname_compalms = manager.get_path_to_components_alms(id_sim)
+    fname_compmaps = manager.get_path_to_components_maps(id_sim)
 
     res_dict = {}
     for attr in dir(res):
@@ -607,9 +602,7 @@ def compsep_and_save(
 def main():
     parser = argparse.ArgumentParser(description="Component separation")
     parser.add_argument("--config", type=Path, required=True, help="config file")
-    parser.add_argument(
-        "--start_nsim", type=int, required=False, default=0, help="Simulation number to start with"
-    )
+    parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -618,6 +611,11 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    if args.sim is not None:
+        compsep_and_save(config, manager, id_sim=args.sim)
+        return
 
     if config.parametric_sep_pars.use_megabuster:
         noisecov, obsmat_operator_rhs, central_freq_op, matrix_precond = load_megabuster_operators(
@@ -639,7 +637,21 @@ def main():
             matrix_precond,
             id_sim=None,
         )
+    elif size < 2:
+        for i in range(n_sim_sky):
+            result = compsep_and_save(
+                config,
+                manager,
+                noisecov,
+                obsmat_operator_rhs,
+                central_freq_op,
+                matrix_precond,
+                id_sim=i,
+            )
+            logger.info(f"Finished component separation on map {result + 1} / {n_sim_sky}")
     else:
+        from mpi4py.futures import MPICommExecutor
+
         with MPICommExecutor() as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} workers")

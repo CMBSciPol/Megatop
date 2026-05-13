@@ -47,8 +47,8 @@ def generate_mask_sim(manager: DataManager, config: Config, int_n_sim):
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
     Cl_cmb_model_pureB = Cl_cmb_model.copy()
-    Cl_cmb_model_pureB[0][[1]] = 0.0
-    Cl_cmb_model_pureB[0][[3]] = 0.0
+    Cl_cmb_model_pureB[[1]] = 0.0
+    Cl_cmb_model_pureB[[3]] = 0.0
 
     realization_list = np.arange(int_n_sim) if rank == 0 else None
     print(realization_list)

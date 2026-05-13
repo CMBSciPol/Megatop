@@ -1,11 +1,12 @@
+from __future__ import annotations
+
 import argparse
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import healpy as hp
 import numpy as np
-from mpi4py.futures import MPICommExecutor
-from mpi4py.MPI import Comm
 from numpy.typing import NDArray
 
 from megatop import Config, DataManager
@@ -13,25 +14,39 @@ from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
 from megatop.utils.TF_utils import get_alms_from_cls, power_law_cl
 
+if TYPE_CHECKING:
+    from mpi4py.MPI import Comm
+
 _POOL_EXECUTOR_THRESHOLD = 2
 
 
 @function_timer("get-noise-map")
 def get_noise(
-    config: Config, binary_mask: NDArray, nhits_maps: NDArray, id_sim: int = 0
+    config: Config,
+    binary_mask: NDArray,
+    common_nhits_map: NDArray,
+    id_sim: int = 0,
+    *,
+    extra_seed=None,
 ) -> NDArray:
-    fsky_binary = binary_mask.mean()
+    fsky_nhits = common_nhits_map.mean()
+    seed = [config.noise_sim_pars.seed, id_sim]
+    if extra_seed is not None:
+        seed.append(extra_seed)
+    logger.debug(f"Noise {seed = }")
     noise_freq_maps = mock.get_full_sky_noise_freq_maps(
         config.map_sets,
         config.noise_sim_pars,
-        fsky_binary=fsky_binary,
+        fsky_nhits=fsky_nhits,
         nside=config.nside,
+        lmax=config.lmax,
         id_sim=id_sim,
+        seed=seed,
     )
     logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
     if config.noise_sim_pars.include_nhits:
-        _ = mock.include_hits_noise(noise_freq_maps, nhits_maps, binary_mask)
+        _ = mock.include_hits_noise(noise_freq_maps, common_nhits_map, binary_mask)
 
     return noise_freq_maps
 
@@ -41,14 +56,8 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     # Performing the CMB simulation with synfast
     logger.debug("Computing CMB map from fiducial spectra")
 
-    # at this point, cmb_seed should be set in the config...
-    cmb_seed = config.map_sim_pars.cmb_seed
-    if cmb_seed is None:
-        msg = "The CMB seed must be set in the configuration beforehand!"
-        raise RuntimeError(msg)
-
     # incorporate realization id into the seed if CMB is not fixed
-    seed = [cmb_seed]
+    seed = [config.map_sim_pars.cmb_seed]
     if not config.map_sim_pars.single_cmb:
         seed.append(id_sim)
     logger.debug(f"CMB {seed = }")
@@ -56,7 +65,9 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(
         manager, DEBUG_noEmodes=config.map_sim_pars.DEBUG_noEmodes
     )
-    cmb_map = mock.generate_map_cmb(Cl_cmb_model, config.nside, cmb_seed=seed)
+    cmb_map = mock.generate_map_cmb(
+        Cl_cmb_model, nside=config.nside, lmax=config.lmax, cmb_seed=seed
+    )
     logger.debug(f"CMB map has shape {cmb_map.shape}")
     return cmb_map
 
@@ -68,6 +79,7 @@ def get_foregrounds(config: Config) -> NDArray:
     fg_freq_maps = mock.generate_map_fgs_pysm(
         config.map_sets,
         config.nside,
+        config.lmax,
         config.map_sim_pars.sky_model,
     )
     logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
@@ -92,9 +104,7 @@ def save_simu(
     """Save a sky realization."""
     # get appropriate filenames based on type
     filenames = (
-        manager.get_noise_maps_filenames(sub=id_sim)
-        if is_noise
-        else manager.get_maps_filenames(sub=id_sim)
+        manager.get_noise_maps_filenames(id_sim) if is_noise else manager.get_maps_filenames(id_sim)
     )
 
     # save the maps
@@ -140,7 +150,7 @@ def save_TFsims(
 ) -> None:
     """Save an unfiltered and filtered TF realization."""
     # get appropriate filenames based on type
-    filenames_unfiltered, filenames_filtered = manager.get_maps_sim_for_TF_filenames(sub=id_sim)
+    filenames_unfiltered, filenames_filtered = manager.get_maps_sim_for_TF_filenames(id_sim)
 
     # save the maps
     for f in range(len(filenames_unfiltered)):  # loop over frequencies
@@ -175,13 +185,15 @@ def _map(func, iterable, comm: Comm, force_seq: bool = False):
     Yields:
         Results of mapping function over iterable.
     """
-    if force_seq or comm.Get_size() < _POOL_EXECUTOR_THRESHOLD:
+    if force_seq or comm is None or comm.Get_size() < _POOL_EXECUTOR_THRESHOLD:
         # Process sequentially
         logger.info("Processing sequentially")
         for result in map(func, iterable):
             yield result
     else:
         # Use CommExecutor for parallel processing
+        from mpi4py.futures import MPICommExecutor
+
         with MPICommExecutor(comm=comm) as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} processes")
@@ -292,7 +304,7 @@ def func_signal(
     manager: DataManager,
     config: Config,
     binary_mask: NDArray,
-    nhits_maps: NDArray,
+    common_nhits_map: NDArray,
     *,
     obsmat_funcs: dict | None = None,
 ) -> int:
@@ -307,7 +319,13 @@ def func_signal(
     # generate the components
     cmb = get_cmb(manager, config, id_sim=id_sim)
     fg = get_foregrounds(config)
-    noise = get_noise(config, binary_mask, nhits_maps, id_sim=id_sim)
+    noise = get_noise(
+        config,
+        binary_mask,
+        common_nhits_map,
+        id_sim=id_sim,
+        extra_seed=config.map_sim_pars.cmb_seed,
+    )
 
     # broadcast CMB to all frequencies
     sky = cmb[None, ...] + fg
@@ -315,7 +333,9 @@ def func_signal(
     # apply beam and pixel window function correction
     with Timer("beam-freq-maps"):
         for i_f, _f in enumerate(config.frequencies):
-            sky[i_f] = mock.beam_winpix_correction(config.nside, sky[i_f], config.beams[i_f])
+            sky[i_f] = mock.beam_winpix_correction(
+                config.nside, sky[i_f], config.beams[i_f], config.lmax
+            )
 
     # If filter_noise is True, we add the noise to the sky sims before applying filtering.
     if config.map_sim_pars.filter_noise:
@@ -356,14 +376,14 @@ def func_noise(
     manager: DataManager,
     config: Config,
     binary_mask: NDArray,
-    nhits_maps: NDArray,
+    common_nhits_map: NDArray,
     id_sim: int,
     *,
     obsmat_funcs: dict | None = None,
 ) -> int:
     """Generate a noise realization."""
     # Offseting id_sim by n_sim to avoid having the same noise seed as in func_signal
-    noise = get_noise(config, binary_mask, nhits_maps, id_sim=id_sim + config.map_sim_pars.n_sim)
+    noise = get_noise(config, binary_mask, common_nhits_map, id_sim=id_sim)
     if config.map_sim_pars.filter_noise and not config.map_sim_pars.DEBUGDont_Filter_purenoise_sims:
         with Timer("filter-freq-maps"):
             for i_f, (key, func) in enumerate(obsmat_funcs.items()):
@@ -375,7 +395,7 @@ def func_noise(
 
 
 def process_signal(config: Config, manager: DataManager, comm: Comm):
-    rank = comm.Get_rank()
+    rank = 0 if comm is None else comm.Get_rank()
     n_sim = config.map_sim_pars.n_sim
 
     if n_sim == 0:
@@ -386,14 +406,13 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
-    nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
+    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
     func = partial(
         func_signal,
         manager=manager,
         config=config,
         binary_mask=binary_mask,
-        nhits_maps=nhits_maps,
+        common_nhits_map=common_nhits_map,
     )
 
     if filtering := config.map_sim_pars.filter_sims:
@@ -406,7 +425,7 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
 
 
 def process_noise(config: Config, manager: DataManager, comm: Comm):
-    rank = comm.Get_rank()
+    rank = 0 if comm is None else comm.Get_rank()
     n_sim = config.noise_sim_pars.n_sim
 
     if n_sim == 0:
@@ -434,7 +453,7 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
 
 def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
     """Generate pure T, E and pure B map with power law spectra for Transfer Function Computation."""
-    rank = comm.Get_rank()
+    rank = 0 if comm is None else comm.Get_rank()
     n_sim = config.map_sim_pars.TF_n_sim
 
     if n_sim == 0:
@@ -462,10 +481,47 @@ def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
         logger.info(f"Finished TF simulation {result + 1} / {n_sim}")
 
 
+def main_signal():
+    """Entry point for generating a single sky realization."""
+    parser = argparse.ArgumentParser(description="Generate a single sky realization")
+    parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, required=True, help="simulation index to generate")
+    parser.add_argument("--map-set", type=str, default=None, help="map set name to generate")
+
+    args = parser.parse_args()
+    config = Config.load_yaml(args.config)
+    if args.map_set is not None:
+        config.map_sets = [ms for ms in config.map_sets if ms.name == args.map_set]
+    manager = DataManager(config)
+    manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    func_signal(args.sim, manager, config, binary_mask, common_nhits_map)
+
+
+def main_noise():
+    """Entry point for generating a single noise realization."""
+    parser = argparse.ArgumentParser(description="Generate a single noise realization")
+    parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, required=True, help="simulation index to generate")
+    parser.add_argument("--map-set", type=str, default=None, help="map set name to generate")
+
+    args = parser.parse_args()
+    config = Config.load_yaml(args.config)
+    if args.map_set is not None:
+        config.map_sets = [ms for ms in config.map_sets if ms.name == args.map_set]
+    manager = DataManager(config)
+    manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    func_noise(manager, config, binary_mask, common_nhits_map, args.sim)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Script for generating signal and noise realizations",
-        epilog="mpi4py is required to run this script",
+        description="Script for generating signal and noise realizations"
     )
     parser.add_argument("--config", type=Path, required=True, help="config file")
 
@@ -478,36 +534,21 @@ def main():
     world, rank, size = get_world()
     num_sets = len(config.map_sets)
     color = rank % num_sets
-    scomm = world.Split(color=color, key=rank)
-    srank = scomm.Get_rank()
-    ssize = scomm.Get_size()
+    if world is not None:
+        scomm = world.Split(color=color, key=rank)
+        srank = scomm.Get_rank()
+        ssize = scomm.Get_size()
+        num_groups = min(size, num_sets)
+    else:
+        scomm = None
+        srank = ssize = 0
+        num_groups = 1
 
-    # Now split the configuration for the different groups
-    num_groups = min(size, num_sets)
-
-    # We need to handle the CMB seed carefully
-    # If not provided, generate a common one that will be shared by all groups
-    cmb_seed = config.map_sim_pars.cmb_seed
-    if cmb_seed is None:
-        if rank == 0:
-            # Process 0 generates the seed for everyone from a random source
-            rng = np.random.default_rng()
-            cmb_seed = rng.integers(2**32)
-            logger.debug(f"Common CMB seed: {cmb_seed}")
-        config.map_sim_pars.cmb_seed = int(world.bcast(cmb_seed, root=0))
-
-    # Dump the full configuration including the generated seed, before splitting the map sets
     if rank == 0:
         manager.dump_config()
-        # Also create the directories for the noise and signal maps
-        for i in range(config.map_sim_pars.n_sim):
-            manager.get_path_to_maps_sub(i).mkdir(parents=True, exist_ok=True)
-        for i in range(config.noise_sim_pars.n_sim + 100):
-            manager.get_path_to_noise_maps_sub(i).mkdir(parents=True, exist_ok=True)
-        if config.map_sim_pars.generate_sims_for_TF:
-            for i in range(config.map_sim_pars.TF_n_sim):
-                manager.get_path_to_TF_sims_sub(i).mkdir(parents=True, exist_ok=True)
-    world.Barrier()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+    if world is not None:
+        world.Barrier()
 
     # Split the configuration
     sconf = config.split_map_sets(num_groups, color=color)

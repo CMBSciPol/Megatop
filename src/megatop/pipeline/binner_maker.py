@@ -39,7 +39,6 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
         )
 
         path_unlensed_scalar_tensor_r1_dest = manager.path_to_unlensed_scalar_tensor_r1
-        path_unlensed_scalar_tensor_r1_dest.parent.mkdir(parents=True, exist_ok=True)
         hp.write_cl(
             filename=path_unlensed_scalar_tensor_r1_dest,
             cl=Cls_unlensed_scalar_tensor_r1,
@@ -69,7 +68,6 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
         )
 
         path_lensed_scalar_dest = manager.path_to_lensed_scalar
-        path_lensed_scalar_dest.parent.mkdir(parents=True, exist_ok=True)
         hp.write_cl(filename=path_lensed_scalar_dest, cl=Cls_lensed_scalar, overwrite=True)
 
         logger.info(f"Saved spectra (lensed scalar) for parameters {camb_cosmo_pars_dict}.")
@@ -79,7 +77,6 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
             config.fiducial_cmb.fiducial_unlensed_scalar_tensor_r1
         )
         path_unlensed_scalar_tensor_r1_dest = manager.path_to_unlensed_scalar_tensor_r1
-        path_unlensed_scalar_tensor_r1_dest.parent.mkdir(parents=True, exist_ok=True)
         logger.info(
             f"Copying fiducial unlensed tensor spectra from {path_unlensed_scalar_tensor_r1_source} to {path_unlensed_scalar_tensor_r1_dest}."
         )
@@ -92,7 +89,6 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
 
         path_lensed_scalar_source = config.fiducial_cmb.fiducial_lensed_scalar
         path_lensed_scalar_dest = manager.path_to_lensed_scalar
-        path_lensed_scalar_dest.parent.mkdir(parents=True, exist_ok=True)
         logger.info(
             f"Copying fiducial lensed scalar spectra from {path_lensed_scalar_source} to {path_lensed_scalar_dest}."
         )
@@ -120,15 +116,13 @@ def binning_maker(manager: DataManager, config: Config):
     else:
         logger.info("No custom bin provided, creating standard binning using create_binning()")
         bin_low, bin_high, bin_centre = create_binning(
-            config.nside,
+            config.lmax,
             config.map2cl_pars.delta_ell,
-            config.map2cl_pars.delta_ell,
-            # end_first_bin=config.lmin
+            config.map2cl_pars.uniform_start,
         )
     bin_index_lminlmax = np.where((bin_low >= config.lmin) & (bin_high <= config.lmax))[0]
 
     path = manager.path_to_binning
-    path.parent.mkdir(parents=True, exist_ok=True)
     np.savez(
         path,
         bin_low=bin_low,
@@ -152,6 +146,7 @@ def main():
     print(f"Rank {rank} of {size} is running")
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     binning_maker(manager=manager, config=config)
     fiducial_cmb_spectra_computer(manager=manager, config=config)

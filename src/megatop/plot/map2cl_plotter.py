@@ -18,7 +18,7 @@ def plot_map2cl(manager, id_sim=None):
     bin_centre_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_centre_lminlmax"]
     bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
     try:
-        path_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+        path_all_Cls = manager.get_path_to_spectra_cross_components(id_sim)
         all_Cls_ = np.load(path_all_Cls, allow_pickle=True)
     except FileNotFoundError:
         logger.warning(f"Spectra file not found for id_sim={id_sim} at Path:{path_all_Cls}")

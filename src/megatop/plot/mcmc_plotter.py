@@ -113,15 +113,7 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
 
     for id_sim in range(n_sim_sky):
         try:
-            # TODO: cleaner test, flag?
-            fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
-            # binning_info = np.load(manager.path_to_binning, allow_pickle=True)
-            # ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
-            # Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))["CMBxCMB"][3][ls_bins_lminlmax_idx]
-            # Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))["Noise_CMBxNoise_CMB"][3][ls_bins_lminlmax_idx]
-            # if np.any(Cl_CMBxCMB_BB_est<0) or np.any(Nl_CMBxCMB_BB_est<0):
-            #     logger.error(f"negative bins in Cl CMB or Nl, skipping id_sim={id_sim} in plot_all_cornerplots")
-            # else:
+            fname_chains = manager.get_path_to_mcmc_chains(id_sim)
             mcmc = np.load(fname_chains, allow_pickle=True)
             chains = mcmc["mcmc_chains"]
             param_names = mcmc["param_names"]
@@ -175,7 +167,7 @@ def plot_single_cornerplot(manager: DataManager, config: Config, id_sim: int | N
     A_lens_sim = config.map_sim_pars.A_lens
 
     try:
-        fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+        fname_chains = manager.get_path_to_mcmc_chains(id_sim)
         mcmc = np.load(fname_chains, allow_pickle=True)
     except FileNotFoundError:
         logger.error(
@@ -220,15 +212,15 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
     # Load spectra data
     try:
-        Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+        Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
             "CMBxCMB"
         ][3][ls_bins_lminlmax_idx]
-        Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+        Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
             "DustxDust"
         ][3][ls_bins_lminlmax_idx]
     except FileNotFoundError:
         logger.error(
-            f"Spectrum file not found for id_sim={id_sim}, for paths {manager.get_path_to_spectra_cross_components(sub=id_sim)}, skipping plot_spectra_comparison"
+            f"Spectrum file not found for id_sim={id_sim}, for paths {manager.get_path_to_spectra_cross_components(id_sim)}, skipping plot_spectra_comparison"
         )
         return
 
@@ -241,12 +233,12 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
     else:
         try:
-            Nl_CMBxCMB_BB_est = np.load(
-                manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
-            )["Noise_CMBxNoise_CMB"][3][ls_bins_lminlmax_idx]
+            Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))[
+                "Noise_CMBxNoise_CMB"
+            ][3][ls_bins_lminlmax_idx]
         except FileNotFoundError:
             logger.error(
-                f"Noise spectrum file not found for id_sim={id_sim}, for paths {manager.get_path_to_noise_spectra_cross_components(sub=id_sim)}, skipping plot_spectra_comparison"
+                f"Noise spectrum file not found for id_sim={id_sim}, for paths {manager.get_path_to_noise_spectra_cross_components(id_sim)}, skipping plot_spectra_comparison"
             )
             return
 
@@ -257,11 +249,9 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     ls_bins_lminlmax_centre = binning_info["bin_centre_lminlmax"]
 
     if config.cl2r_pars.load_model_spectra:
-        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][
-            : 2 * config.nside + config.map2cl_pars.delta_ell
-        ]
+        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: config.lmax + 1]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
-            : 2 * config.nside + config.map2cl_pars.delta_ell
+            : config.lmax + 1
         ]
     else:
         Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(
@@ -271,7 +261,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     # Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
 
     # Load estimated parameters from MCMC chains
-    fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+    fname_chains = manager.get_path_to_mcmc_chains(id_sim)
     mcmc = np.load(fname_chains, allow_pickle=True)
     chains = mcmc["mcmc_chains"]
     param_names = mcmc["param_names"]
@@ -341,7 +331,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     )
 
     ax.plot(
-        np.arange(0, 2 * config.nside + config.map2cl_pars.delta_ell),
+        np.arange(0, config.lmax + 1),
         Cl_BB_prim_est,
         label=r"$C_\ell^{prim, \rm est} = r^{\rm est} \cdot C_\ell^{\rm prim}(r=1)$ "
         + r",  $r^{\rm est} = $"
@@ -352,7 +342,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     )
 
     ax.plot(
-        np.arange(0, 2 * config.nside + config.map2cl_pars.delta_ell),
+        np.arange(0, config.lmax + 1),
         Cl_BB_lensing_est,
         label=r"$C_\ell^{lensing, \rm est} = A_{\rm lens}^{\rm est} \cdot C_\ell^{\rm prim}(r=0)$"
         + r",  $A_{\rm lens}^{\rm est} = $"

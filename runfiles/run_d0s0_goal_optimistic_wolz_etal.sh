@@ -1,12 +1,8 @@
 #!/bin/bash
 
-PARAM_FILE="../paramfiles/default_config.yaml"
+PARAM_FILE="../paramfiles/d0s0_goal_optimistic_wolz_etal.yaml"
 
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
-
-conda init bash
-source ~/.bashrc
-conda activate megatop
 
 
 echo "------------------------------------------------------------"
@@ -34,12 +30,12 @@ echo ""
 echo "Plotting mocker outputs"
 megatop-mock-plot --config ${PARAM_FILE}
 
-echo "------------------------------------------------------------"
-echo "|            TRANSFER FUNCTION COMPUTATION                  |"
-echo "------------------------------------------------------------"
-megatop-TFcomputing-run --config ${PARAM_FILE}
-echo ""
-echo ""
+# echo "------------------------------------------------------------"
+# echo "|            TRANSFER FUNCTION COMPUTATION                  |"
+# echo "------------------------------------------------------------"
+# megatop-TFcomputing-run --config ${PARAM_FILE}
+# echo ""
+# echo ""
 
 echo "------------------------------------------------------------"
 echo "|                       PRE-PROCESSER                      |"

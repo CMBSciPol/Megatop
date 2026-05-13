@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 import numpy as np
 from attrs import Factory, asdict, define, evolve, field
+from attrs.converters import optional
 
 from megatop._converter import yaml_converter
 
@@ -17,7 +18,6 @@ __all__ = [
     "MapSetConfig",
     "MapSimConfig",
     "MasksConfig",
-    "NoiseCovmatConfig",
     "NoiseSimConfig",
     "OutputDirsConfig",
     "PlotsConfig",
@@ -115,8 +115,8 @@ class _CAMBCosmoPars:
 @define
 class FiducialCMBConfig:
     # root: Path = field(converter=Path)
-    fiducial_lensed_scalar: Path | None = None
-    fiducial_unlensed_scalar_tensor_r1: Path | None = None
+    fiducial_lensed_scalar: Path | None = field(default=None, converter=optional(Path))
+    fiducial_unlensed_scalar_tensor_r1: Path | None = field(default=None, converter=optional(Path))
     compute_from_camb: bool = field(default=True)
     # root: Path | None = field(default=None)
     camb_cosmo_pars: _CAMBCosmoPars = Factory(_CAMBCosmoPars)
@@ -146,6 +146,12 @@ class FiducialCMBConfig:
             raise ValueError(msg)
 
 
+def _nhits_map_path_converter(v: Any) -> Literal["SO_nominal"] | Path | None:
+    if v is None or v == "SO_nominal":
+        return v
+    return Path(v)
+
+
 @define(slots=False)
 class MapSetConfig:
     name: str = field(init=False)  # derived from freq_tag and exp_tag
@@ -155,13 +161,15 @@ class MapSetConfig:
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     simfoTF_prefix: str = "simforTF_"
-    obsmat_path: Path = field(converter=Path, default=".")
-    TF_path: Path = field(converter=Path, default=".")
+    obsmat_path: Path | None = field(default=None, converter=optional(Path))
+    TF_path: Path | None = field(default=None, converter=optional(Path))
     suffix_obsmat_scipy: str = ""  # Modification megabuster
     suffix_eigen_decomp: str = ""  # Modification megabuster
     passband_filename: str = ""
-    nhits_map_path: str | Path | None = field(default=None)
-    depth_map_path: Path | None = field(default=None)
+    nhits_map_path: Literal["SO_nominal"] | Path | None = field(
+        default=None, converter=_nhits_map_path_converter
+    )
+    depth_map_path: Path | None = field(default=None, converter=optional(Path))
 
     def __attrs_post_init__(self) -> None:
         self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
@@ -204,7 +212,7 @@ class MasksConfig:
     gal_key: ValidPlanckGalKey | None = field(default=None)
 
     include_sources: bool = False
-    input_sources_mask: Path | None = None
+    input_sources_mask: Path | None = field(default=None, converter=optional(Path))
     sources_mask_name: str = "sources_mask"
     mock_nsources: int = 100
     mock_sources_hole_radius: float = 4
@@ -223,14 +231,14 @@ class MasksConfig:
 @define
 class GeneralConfig:
     nside: int = 512
-    lmin: int = 30
+    lmin: int = 30  # TODO: used ?
     lmax: int = field(default=1000)
 
     @lmax.validator
     def check(self, attribute, value):
-        """Check that lmax <= 3 * nside - 1"""
-        if value > (three_nside_minus_one := 3 * self.nside - 1):
-            msg = f"{attribute.name}={value} must be less than or equal to {three_nside_minus_one=}"
+        """Check that lmax <= 2 * nside"""
+        if value > (two_nside := 2 * self.nside):
+            msg = f"{attribute.name}={value} must be less than or equal to {two_nside=}"
             raise ValueError(msg)
 
 
@@ -238,14 +246,8 @@ class GeneralConfig:
 class PreProcessingConfig:
     common_beam_correction: float = 100
     # beam_fwhms: list[float] | None = None
-    DEBUGskippreproc: bool = False
     correct_for_TF: bool = False
     sum_TF_column: bool = True
-
-
-@define
-class NoiseCovmatConfig:
-    save_preprocessed_noise_maps: bool = True
 
 
 @define
@@ -301,9 +303,15 @@ class CompSepConfig:
 @define
 class Map2ClConfig:
     delta_ell: int | list[int] = 10
+    """Width of uniform multipole bins."""
+    uniform_start: int | None = None
+    """If set, first bin spans [2, uniform_start - 1] and uniform bins of width delta_ell start at uniform_start."""
     purify_e: bool = field(default=False)
+    """Purify E modes in NaMaster field construction."""
     purify_b: bool = True
+    """Purify B modes in NaMaster field construction."""
     n_iter_namaster: int = 3
+    """Number of iterations for NaMaster map2alm."""
     DEBUG_cut_scales: bool = False
     custom_binning_path: Path = field(converter=Path, default=".")
     """Path to custon binning scheme sotred in an .npz file. Directory must contain three entries as lists of same size stored under: bin_low, bin_high.
@@ -334,8 +342,8 @@ class MapSimConfig:
     """Tensor to scalar ratio value in the generated CMB simulations"""
     A_lens: float = 1
     """A_lens value in the generated CMB simulations"""
-    cmb_seed: int | None = None
-    """Optional integer seed for the CMB."""
+    cmb_seed: int = 67
+    """Integer seed for the CMB."""
     single_cmb: bool = False
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
@@ -408,6 +416,8 @@ ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig
 class NoiseSimConfig:
     n_sim: int = 1
     include_nhits: bool = True
+    seed: int = 42
+    """Integer seed for the noise simulations."""
 
     DEBUG_save_TRUEnoise_simulations: bool = False
     experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict(SO=SOConfig()))
@@ -453,7 +463,6 @@ class Config:
     masks_pars: MasksConfig = Factory(MasksConfig)
     general_pars: GeneralConfig = Factory(GeneralConfig)
     pre_proc_pars: PreProcessingConfig = Factory(PreProcessingConfig)
-    noise_cov_pars: NoiseCovmatConfig = Factory(NoiseCovmatConfig)
     parametric_sep_pars: CompSepConfig = Factory(CompSepConfig)
     map2cl_pars: Map2ClConfig = Factory(Map2ClConfig)
     plot_pars: PlotsConfig = Factory(PlotsConfig)
@@ -483,6 +492,22 @@ class Config:
         ) and self.parametric_sep_pars.use_megabuster:
             msg = "All obsmat_path in map_sets must be different when using megabuster as compsep."
             raise ValueError(msg)
+
+        # Check that obsmat_path are all different
+        obsmat_paths = [map_set.obsmat_path for map_set in self.map_sets]
+        if (
+            len(obsmat_paths) != len(set(obsmat_paths))
+            and not np.all(np.array(obsmat_paths) == Path())
+        ) and self.parametric_sep_pars.use_megabuster:
+            msg = "All obsmat_path in map_sets must be different when using megabuster as compsep."
+            raise ValueError(msg)
+
+        # Validate obsmat_path for all map sets if filter_sims=True
+        if self.map_sim_pars.filter_sims:
+            for map_set in self.map_sets:
+                if map_set.obsmat_path is None:
+                    msg = f"Map set '{map_set.name}' requires obsmat_path because filter_sims=True."
+                    raise ValueError(msg)
 
     @classmethod
     def load_yaml(cls, path: str | Path) -> "Config":

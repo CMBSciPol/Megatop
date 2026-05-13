@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import Path
 
 import healpy as hp
@@ -8,10 +9,12 @@ import numpy as np
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
 from megatop.utils import Timer, logger, mock, passband
-from megatop.utils.mask import apply_binary_mask, read_nhits_maps
+from megatop.utils.mask import apply_binary_mask
 from megatop.utils.mock import get_noise_experiment
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
 from megatop.utils.preproc import read_input_maps
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def plot_fiducial_spectra(manager: DataManager):
@@ -66,13 +69,13 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
         logger.info("Using passband-integration for the mocker step.")
 
     fg_freq_maps = mock.generate_map_fgs_pysm(
-        config.map_sets, config.nside, config.map_sim_pars.sky_model
+        config.map_sets, config.nside, config.lmax, config.map_sim_pars.sky_model
     )
     fg_freq_maps_beamed = np.zeros_like(fg_freq_maps)
 
     for i_f, _f in enumerate(config.frequencies):
         fg_freq_maps_beamed[i_f] = mock.beam_winpix_correction(
-            config.nside, fg_freq_maps[i_f], config.beams[i_f]
+            config.nside, fg_freq_maps[i_f], config.beams[i_f], config.lmax
         )
     binary_mask = hp.read_map(manager.path_to_binary_mask)
 
@@ -93,8 +96,10 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
         cls = []
         cls_beamed = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(fg_freq_maps[i_f]))
-            cls_beamed.append(hp.anafast(fg_freq_maps_beamed[i_f]))
+            cls.append(hp.anafast(fg_freq_maps[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH))
+            cls_beamed.append(
+                hp.anafast(fg_freq_maps_beamed[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH)
+            )
         cls = np.array(cls)
         cls_beamed = np.array(cls_beamed)
 
@@ -123,7 +128,7 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
 def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
     cmb_map = mock.generate_map_cmb(
-        Cl_cmb_model, config.nside, cmb_seed=config.map_sim_pars.cmb_seed
+        Cl_cmb_model, config.nside, config.lmax, cmb_seed=config.map_sim_pars.cmb_seed
     )
 
     plot_dir = manager.path_to_mock_plots
@@ -141,7 +146,7 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
         )
 
     if cls:
-        cls = hp.anafast(cmb_map)
+        cls = hp.anafast(cmb_map, lmax=config.lmax, datapath=HEALPY_DATA_PATH)
         cls = np.array(cls)
 
         plotTTEEBB_diff(
@@ -160,14 +165,11 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
 def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-
-    fsky_binary = sum(binary_mask) / len(binary_mask)
-    list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
-    nhits_maps = read_nhits_maps(list_hitmapname, nside=config.nside)
-    nhits_maps_rescaled = nhits_maps / np.max(nhits_maps, axis=1, keepdims=True)
+    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
 
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
+    # noise_freq_maps = get_noise(config, binary_mask, common_nhits_map)
 
     noise_freq_maps = np.array(
         [
@@ -191,11 +193,6 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
     noise_freq_maps = apply_binary_mask(noise_freq_maps, binary_mask, unseen=True)
 
-    # if config.noise_sim_pars.include_nhits:
-    #     noise_freq_maps = mock.include_hits_noise(
-    #         noise_freq_maps, nhits_maps_rescaled, binary_mask
-    #     )  # TODO move reading of maps to manager
-
     if maps:
         freq_maps_plotter(
             config,
@@ -209,18 +206,13 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(noise_freq_maps[i_f]))
+            cls.append(
+                hp.anafast(noise_freq_maps[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH)
+            )
         cls = np.array(cls)
 
-        # if config.noise_sim_pars.include_nhits:
-        #     fsky_correction = (
-        #         nhits_maps_rescaled[..., np.where(binary_mask == 1)[0]].mean() * fsky_binary
-        #     )
-        # else:
-        #     fsky_correction = 1.0
-        fsky_from_nhits = np.sqrt(np.mean(nhits_maps_rescaled**2, axis=-1))
-        # import IPython; IPython.embed()
-        cl_model = np.ones_like(cls)
+        fsky_from_nhits = np.sqrt(np.mean(common_nhits_map**2))
+        cl_model = np.zeros_like(cls)
         noise_config = config.noise_sim_pars
 
         experiments_map_set = set([map_set.exp_tag for map_set in config.map_sets])
@@ -237,15 +229,13 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 logger.error(msg)
                 raise RuntimeError(msg) from e
             noise_experiment[exp] = get_noise_experiment(
-                exp, noise_config.experiments[exp], fsky_binary=fsky_binary, nside=config.nside
+                exp, noise_config.experiments[exp], fsky_nhits=fsky_from_nhits, lmax=config.lmax
             )
         for i_map_set, map_set in enumerate(config.map_sets):
             exp = map_set.exp_tag
             noise_config_exp = noise_config.experiments[exp]
             idx_freq = noise_config_exp.default_bands.index(map_set.freq_tag)
             logger.debug(f"Map {exp}_{map_set.freq_tag} has index {idx_freq}.")
-            # TODO: WHY THIS FSKY CORRECTION???
-            logger.warning("Check fsky correction in noise plots!")
             if noise_config_exp.noise_option == NoiseOption.WHITE:
                 white_noise_level = noise_experiment[exp]["map_white_noise_levels"][idx_freq]
                 # noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
@@ -255,44 +245,24 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 # )
 
                 cl_model[i_map_set, 0] = (
-                    (white_noise_level[np.newaxis] / np.sqrt(2) * np.pi / 180 / 60) ** 2
-                    # (white_noise_level[np.newaxis] / np.sqrt(2) / hp.nside2resol(config.nside, arcmin=True)) ** 2
-                    # * fsky_binary
-                    # / fsky_correction
-                    * fsky_from_nhits[i_map_set] ** 1
-                    / 2
-                )
+                    white_noise_level[np.newaxis] / np.sqrt(2) * np.pi / 180 / 60
+                ) ** 2 * fsky_from_nhits
                 cl_model[i_map_set, 1] = (
-                    (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
-                    # (white_noise_level[np.newaxis] / hp.nside2resol(config.nside, arcmin=True)) ** 2
-                    # * fsky_binary
-                    # / fsky_correction
-                    * fsky_from_nhits[i_map_set] ** 1
-                    / 2
-                )
+                    white_noise_level[np.newaxis] * np.pi / 180 / 60
+                ) ** 2 * fsky_from_nhits
                 cl_model[i_map_set, 2] = (
-                    (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
-                    # (white_noise_level[np.newaxis] / hp.nside2resol(config.nside, arcmin=True)) ** 2
-                    # * fsky_binary
-                    # / fsky_correction
-                    * fsky_from_nhits[i_map_set] ** 1
-                    / 2
-                )
+                    white_noise_level[np.newaxis] * np.pi / 180 / 60
+                ) ** 2 * fsky_from_nhits
             elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
                 n_ell = noise_experiment[exp]["noise_spectra"][idx_freq]
-                cl_model[:, 1, 2:-1] = (
-                    n_ell * fsky_from_nhits[i_map_set] ** 1 / 2
-                )  # * fsky_binary / fsky_correction
-                cl_model[:, 2, 2:-1] = (
-                    n_ell * fsky_from_nhits[i_map_set] ** 1 / 2
-                )  # * fsky_binary / fsky_correction
+                cl_model[:, 1, 2:] = n_ell
+                cl_model[:, 2, 2:] = n_ell
             elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
                 cl_model[i_map_set] = 0.0
             else:
                 raise NotImplementedError(
                     f"Noise option {noise_config_exp.noise_option} not implemented."
                 )
-            # import IPython; IPython.embed()
 
         plotTTEEBB_diff(
             plot_dir=plot_dir,
@@ -312,7 +282,7 @@ def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    combined_maps = np.array(read_input_maps(manager.get_maps_filenames(sub=id_sim)))
+    combined_maps = np.array(read_input_maps(manager.get_maps_filenames(id_sim)))
     binary_mask = hp.read_map(manager.path_to_binary_mask)
 
     combined_maps = apply_binary_mask(combined_maps, binary_mask, unseen=True)
@@ -330,7 +300,7 @@ def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(combined_maps[i_f]))
+            cls.append(hp.anafast(combined_maps[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH))
         cls = np.array(cls)
 
         plotTTEEBB(

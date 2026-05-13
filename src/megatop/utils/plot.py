@@ -13,7 +13,6 @@ def freq_maps_plotter(
     plot_name,
     vmin=None,
     vmax=None,
-    cmap=cm.RdBu,
     cmap_set_under="w",
     component="CMB",
 ):
@@ -42,8 +41,6 @@ def freq_maps_plotter(
     if vmax is None:
         vmax = {"I": None, "Q": None, "U": None}
 
-    cmap.set_under(cmap_set_under)
-
     plt.figure(figsize=(20, 7))
     k = 0
 
@@ -71,15 +68,28 @@ def freq_maps_plotter(
     for j_stokes, stokes in enumerate(stokes_list):
         for i_f, fr in enumerate(enum_freq):
             title_map = f"{component} {stokes}" if enum_freq == [0] else f"{fr} GHz {stokes}"
-
-            hp.mollview(
-                map_set[i_f, j_stokes],
-                cmap=cmap,
-                title=title_map,
-                min=vmin[stokes],
-                max=vmax[stokes],
-                sub=(row, column, k + 1),
-            )
+            if stokes == "I":
+                cmap = cm.RdBu
+                cmap.set_under(cmap_set_under)
+                hp.mollview(
+                    map_set[i_f, j_stokes],
+                    cmap=cmap,
+                    title=title_map,
+                    min=vmin[stokes],
+                    max=vmax[stokes],
+                    sub=(row, column, k + 1),
+                )
+            else:
+                cmap = cm.Greys
+                cmap.set_under(cmap_set_under)
+                hp.mollview(
+                    map_set[i_f, j_stokes],
+                    cmap=cmap,
+                    title=title_map,
+                    min=vmin[stokes],
+                    max=vmax[stokes],
+                    sub=(row, column, k + 1),
+                )
             k += 1
 
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")

@@ -7,7 +7,6 @@ import emcee
 import healpy as hp
 import numpy as np
 from camb import initialpower
-from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
@@ -216,10 +215,10 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
     try:
-        Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+        Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
             "CMBxCMB"
         ][3][binning_info["bin_index_lminlmax"]]
-        Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+        Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
             "DustxDust"
         ][3][binning_info["bin_index_lminlmax"]]
 
@@ -231,9 +230,9 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
             # TODO: test case when only one experiment is noiseless?
             Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
         else:
-            Nl_CMBxCMB_BB_est = np.load(
-                manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
-            )["Noise_CMBxNoise_CMB"][3][binning_info["bin_index_lminlmax"]]
+            Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))[
+                "Noise_CMBxNoise_CMB"
+            ][3][binning_info["bin_index_lminlmax"]]
     except FileNotFoundError:
         logger.error(f"CMB or Noise spectra not found for id_sim={id_sim}")
         return None
@@ -254,16 +253,12 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     )
 
     if config.cl2r_pars.load_model_spectra:
-        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][
-            : 2 * config.nside + config.map2cl_pars.delta_ell
-        ]
+        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: config.lmax + 1]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
-            : 2 * config.nside + config.map2cl_pars.delta_ell
+            : config.lmax + 1
         ]
     else:
-        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(
-            0, 2 * config.nside + config.map2cl_pars.delta_ell
-        )
+        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, config.lmax)
 
     # 2. init mcmc parameters:
     if not dust_marg and not sync_marg:
@@ -338,9 +333,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     logger.info(f"Mean parameters {param_names}: {np.mean(chains, axis=0)}")
     # 4. save mcmc chains:
-    path = manager.get_path_to_mcmc(sub=id_sim)
-    path.mkdir(parents=True, exist_ok=True)
-    fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+    fname_chains = manager.get_path_to_mcmc_chains(id_sim)
 
     np.savez(
         fname_chains,
@@ -353,8 +346,9 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cl to r estmation")
+    parser = argparse.ArgumentParser(description="Cl to r estimation")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -363,11 +357,22 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    if args.sim is not None:
+        run_mcmc_and_save(manager, config, id_sim=args.sim)
+        return
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:
         run_mcmc_and_save(manager=manager, config=config)
+    elif size < 2:
+        for i in range(n_sim_sky):
+            result = run_mcmc_and_save(manager, config, id_sim=i)
+            logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
     else:
+        from mpi4py.futures import MPICommExecutor
+
         with MPICommExecutor() as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} workers")
