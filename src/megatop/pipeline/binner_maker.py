@@ -16,6 +16,7 @@ from megatop.utils.spectra import compute_spectra_from_camb
 def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
     if config.fiducial_cmb.compute_from_camb:
         camb_cosmo_pars_dict = config.fiducial_cmb.get_camb_cosmo_pars_as_dict()
+        lmax = 2 * config.nside
         logger.info(
             f"Generating spectra from CAMB (unlensed scalar+tensor r=1) for parameters {camb_cosmo_pars_dict}."
         )
@@ -31,10 +32,10 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
 
         Cls_unlensed_scalar_tensor_r1 = np.array(
             [
-                Cls_unlensed_scalar_tensor_r1_TT[:2000],
-                Cls_unlensed_scalar_tensor_r1_EE[:2000],
-                Cls_unlensed_scalar_tensor_r1_BB[:2000],
-                Cls_unlensed_scalar_tensor_r1_TE[:2000],
+                Cls_unlensed_scalar_tensor_r1_TT[:lmax +1],
+                Cls_unlensed_scalar_tensor_r1_EE[:lmax +1],
+                Cls_unlensed_scalar_tensor_r1_BB[:lmax +1],
+                Cls_unlensed_scalar_tensor_r1_TE[:lmax +1],
             ]
         )
 
@@ -60,10 +61,10 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
         )
         Cls_lensed_scalar = np.array(
             [
-                Cls_lensed_scalar_TT[:2000],
-                Cls_lensed_scalar_EE[:2000],
-                Cls_lensed_scalar_BB[:2000],
-                Cls_lensed_scalar_TE[:2000],
+                Cls_lensed_scalar_TT[:lmax +1],
+                Cls_lensed_scalar_EE[:lmax +1],
+                Cls_lensed_scalar_BB[:lmax +1],
+                Cls_lensed_scalar_TE[:lmax +1],
             ]
         )
 

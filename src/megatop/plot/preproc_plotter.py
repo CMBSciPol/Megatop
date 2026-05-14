@@ -33,7 +33,7 @@ def plot_preprocessed_maps(manager, config, id_sim=None, maps=True, cls=True):
         freq_maps_plotter(config, freq_maps_preprocessed, plot_dir, "pre_processed_maps")
 
     if cls:  # plotting the spectra
-        lmax = 3 * config.nside
+        lmax = 2 * config.nside
         spectra_array = []
         for i in range(len(config.frequencies)):
             spectra_array.append(

@@ -77,8 +77,11 @@ def generate_map_fgs_pysm(
                 f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"
             )
             r = hp.Rotator(coord=[input_coord, output_coord])
-            # m = r.rotate_map_pixel(m)
-            m = r.rotate_map_alms(m, lmax=lmax, datapath=HEALPY_DATA_PATH)
+            if HEALPY_DATA_PATH is not None:
+                m = r.rotate_map_alms(m, lmax=lmax, datapath=HEALPY_DATA_PATH)
+            else:
+                # Avoid downloading healpy weights during tests/offline runs.
+                m = r.rotate_map_pixel(m)
         maps_fgs.append(m)
     return np.array(maps_fgs)
 
@@ -207,7 +210,8 @@ def get_noise_experiment(
             ],
             dtype=float,
         )
-        n_ell = np.zeros((len(white_noise_levels), 3 * nside - 1), dtype=float)
+        # create noise spectra array matching lmax = 2*nside
+        n_ell = np.zeros((len(white_noise_levels), 2 * nside), dtype=float)
 
 
     elif type(noise_config_exp) is ExternalNoiseMapconfig:
@@ -297,7 +301,7 @@ def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float, lmax: int):
         nside,
         pol=True,
         lmax=lmax,
-        datapath=HEALPY_DATA_PATH,
+        # datapath=HEALPY_DATA_PATH,
     )  # Pixel window function of input maps
 
     sm_corr_T = Bl_gauss_fwhm[:, 0] * wpix_in[0]

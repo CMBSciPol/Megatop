@@ -67,6 +67,16 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
         Cl_cmb_model, nside=config.nside, lmax=config.lmax, cmb_seed=seed
     )
     logger.debug(f"CMB map has shape {cmb_map.shape}")
+    
+    # Apply birefringence rotation to E and B modes
+    if config.map_sim_pars.Birefringence != 0:
+        cmb_map_brut = cmb_map.copy()
+        Beta = (np.pi / 180) * config.map_sim_pars.Birefringence
+        # Rotation matrix for E and B modes mixing
+        cmb_map[1, :] = np.cos(2 * Beta) * cmb_map_brut[1, :] - np.sin(2 * Beta) * cmb_map_brut[2, :]
+        cmb_map[2, :] = np.sin(2 * Beta) * cmb_map_brut[1, :] + np.cos(2 * Beta) * cmb_map_brut[2, :]
+        logger.debug(f"Applied birefringence rotation of {config.map_sim_pars.Birefringence} degrees")
+    
     return cmb_map
 
 

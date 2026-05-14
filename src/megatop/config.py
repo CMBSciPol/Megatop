@@ -87,8 +87,6 @@ class DataDirsConfig:
     passbands: str = "passbands"
     noise_maps: str = "noise_maps"
     TF_sims_maps: str = "TF_sims_maps"
-
-
 @define
 class OutputDirsConfig:
     root: Path = field(converter=Path)
@@ -103,6 +101,8 @@ class OutputDirsConfig:
     noise_spectra: str = "noise_spectra"
     mcmc: str = "mcmc"
     fiducial_cmb: str = "fiducial_cmb"
+    prepoc_diag_precond: str = "diag_precond"  # Modification megabuster
+    precomputation: str = "precomputation"  # Modification megabuster
 
 
 @define
@@ -166,8 +166,10 @@ class MapSetConfig:
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     simfoTF_prefix: str = "simforTF_"
-    obsmat_path: Path | None = field(default=None, converter=optional(Path))
-    TF_path: Path | None = field(default=None, converter=optional(Path))
+    obsmat_path: Path = field(converter=Path, default=".")
+    TF_path: Path = field(converter=Path, default=".")
+    suffix_obsmat_scipy: str = ""  # Modification megabuster
+    suffix_eigen_decomp: str = ""  # Modification megabuster
     passband_filename: str = ""
     nhits_map_path: Literal["SO_nominal"] | Path | None = field(
         default=None, converter=_nhits_map_path_converter
@@ -259,6 +261,11 @@ class PreProcessingConfig:
 
 
 @define
+class NoiseCovmatConfig:
+    save_preprocessed_noise_maps: bool = True
+
+
+@define
 class _MinimizeOptions:
     disp: bool = False
     gtol: float = 1e-12
@@ -268,8 +275,17 @@ class _MinimizeOptions:
 
 
 @define
+class _MEGABUSTEROptions:  # Modification megabuster
+    max_steps_CG: int = 200
+    tol_CG: float = 1e-6
+    use_preconditioner_diag: bool = False
+    use_preconditioner_pinv: bool = False
+
+@define
 class CompSepConfig:
     use_harmonic_compsep: bool = False
+    use_megabuster: bool = False
+    """If True, use MEGABUSTER solver instead of FGBuster for component separation."""
     harmonic_lmax: int = 2 * 128  # TODO: use config.nside
     harmonic_lmin: int = 30
     harmonic_delta_ell: int = 10  # TODO: harmonize with binning from map2cl
@@ -280,6 +296,7 @@ class CompSepConfig:
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
+    megabuster_options: _MEGABUSTEROptions = Factory(_MEGABUSTEROptions)
     passband_int: bool = False
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
@@ -291,6 +308,10 @@ class CompSepConfig:
         if self.minimize_method == "TNC":
             options["maxfun"] = options.pop("maxiter")
         return options
+    
+    def get_megabuster_options_as_dict(self) -> dict[str, Any]:
+        """Return the megabuster options as a dictionary."""
+        return asdict(self.megabuster_options)
 
 
 @define
@@ -333,6 +354,8 @@ class MapSimConfig:
     """Tensor to scalar ratio value in the generated CMB simulations"""
     A_lens: float = 1
     """A_lens value in the generated CMB simulations"""
+    Birefringence: float = 0
+    """Birefringence rotation angle in degrees"""
     cmb_seed: int = 67
     """Integer seed for the CMB."""
     single_cmb: bool = False
@@ -434,6 +457,7 @@ def default_prior_bounds() -> dict[str, list[float]]:
     return {
         "r": [-0.02, 1.0],
         "A_{lens}": [0.0, 2.0],
+        "Birefringence": [0, 1],
         "A_{dust}": [0.0, 1.0],
         "A_{sync}": [0.0, 1.0],
     }
@@ -457,6 +481,12 @@ class Cl2rConfig:
     """Minimum multipole ell used in the cosmological analysis."""
     lmax_cosmo_analysis: int | None = None
     """Maximum multipole ell used in the cosmological analysis."""
+
+    def __attrs_post_init__(self) -> None:
+        """Fill in any missing prior bounds with the built-in defaults."""
+        defaults = default_prior_bounds()
+        for key, value in defaults.items():
+            self.prior_bounds.setdefault(key, value)
 
 
 @define
@@ -494,7 +524,7 @@ class Config:
         # Validate obsmat_path for all map sets if filter_sims=True
         if self.map_sim_pars.filter_sims:
             for map_set in self.map_sets:
-                if map_set.obsmat_path is None:
+                if map_set.obsmat_path is None or map_set.obsmat_path == Path("."):
                     msg = f"Map set '{map_set.name}' requires obsmat_path because filter_sims=True."
                     raise ValueError(msg)
 

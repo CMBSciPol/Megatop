@@ -50,7 +50,7 @@ def plot_noisecov(manager, config, maps=True, cls=True):
         )
 
     if cls:
-        lmax = 3 * config.nside
+        lmax = 2 * config.nside
         spectra_array = []
         for i in range(len(config.frequencies)):
             spectra_array.append(

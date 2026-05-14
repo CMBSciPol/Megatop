@@ -87,7 +87,7 @@ def plot_all_spectra(manager, config):
     plot_dir = manager.path_to_spectra_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Saving plots to %s", plot_dir) 
+    logger.info("Saving plots to %s", plot_dir)
 
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
@@ -95,6 +95,18 @@ def plot_all_spectra(manager, config):
 
     Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : config.lmax + 1]
     nmt_bins = load_nmt_binning(manager)
+
+    # validate Cl length against binning edges
+    binning_info_full = np.load(manager.path_to_binning, allow_pickle=True)
+    expected_n_ells = int(np.max(binning_info_full["bin_high"]) + 1)
+    actual_n_ells = Cl_cmb_model.shape[-1]
+    if actual_n_ells < expected_n_ells:
+        raise ValueError(
+            f"Cl_cmb_model has wrong size: {actual_n_ells} < expected {expected_n_ells} (check lmax/nside harmonization)"
+        )
+    if actual_n_ells > expected_n_ells:
+        # truncate to expected length
+        Cl_cmb_model = Cl_cmb_model[:, :expected_n_ells]
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, bin_index_lminlmax]
 
@@ -388,6 +400,18 @@ def plot_noise_spectra(manager, config, id_sim=None):
 
     Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : config.lmax + 1]
     nmt_bins = load_nmt_binning(manager)
+
+    # validate Cl length against binning edges
+    binning_info_full = np.load(manager.path_to_binning, allow_pickle=True)
+    expected_n_ells = int(np.max(binning_info_full["bin_high"]) + 1)
+    actual_n_ells = Cl_cmb_model.shape[-1]
+    if actual_n_ells < expected_n_ells:
+        raise ValueError(
+            f"Cl_cmb_model has wrong size: {actual_n_ells} < expected {expected_n_ells} (check lmax/nside harmonization)"
+        )
+    if actual_n_ells > expected_n_ells:
+        # truncate to expected length
+        Cl_cmb_model = Cl_cmb_model[:, :expected_n_ells]
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, binning_info["bin_index_lminlmax"]]
 

@@ -6,6 +6,7 @@ import camb
 import emcee
 import healpy as hp
 import numpy as np
+import scipy.linalg as la
 from camb import initialpower
 
 from megatop import Config, DataManager
@@ -57,60 +58,107 @@ def compute_generic_Cl(lmin, lmax):
         cosmo_params.InitPower = infl_params
         results = camb.get_results(cosmo_params)
         if r == 0:
+            # Returns TT, EE, BB, TE - we want EE and BB
             return results.get_cmb_power_spectra(cosmo_params, CMB_unit="muK", raw_cl=True)[
                 "total"
-            ][:, 2]
+            ][:, 1:3]
         if r == 1:
+            # Returns TT, EE, BB, TE - we want BB
             return results.get_cmb_power_spectra(cosmo_params, CMB_unit="muK", raw_cl=True)[
                 "unlensed_total"
             ][:, 2]
         return None
 
+    # Get lensed EE and BB
+    Cl_lensed = get_Cl(0)[lmin : lmax + 1, :]
+    Cl_EE = Cl_lensed[:, 0]  # EE
+    Cl_BB_lensing_generic = Cl_lensed[:, 1]  # BB (lensing)
+    
+    # Get unlensed BB (primordial)
     Cl_BB_prim_generic = get_Cl(1)[lmin : lmax + 1]
-    Cl_BB_lensing_generic = get_Cl(0)[lmin : lmax + 1]
 
-    return Cl_BB_prim_generic, Cl_BB_lensing_generic
+    return Cl_EE, Cl_BB_prim_generic, Cl_BB_lensing_generic
 
 
 def Cl_CMB_model(
     theta,
     dust_marg,
     sync_marg,
+    Cl_EE,
     Cl_BB_prim_generic,
     Cl_BB_lensing_generic,
     Cl_DustxDust_BB_est,
+    Nl_CMBxCMB_EE_est,
     Nl_CMBxCMB_BB_est,
+    Nl_CMBxCMB_EB_est,
+    Nl_CMBxCMB_BE_est,
     ls_bins_lminlmax_idx,
     nmt_bins,
 ):
     if not dust_marg and not sync_marg:
-        r, A_lens = theta
+        r, A_lens, Birefringence = theta
+        Beta = (np.pi / 180) * Birefringence  # Convert degrees to radians
         Cl_BB_prim = r * Cl_BB_prim_generic
         Cl_BB_lensing = A_lens * Cl_BB_lensing_generic
         Cl_BB_CMB = Cl_BB_prim + Cl_BB_lensing
 
-        Cl_BB_CMB_binned = nmt_bins.bin_cell(Cl_BB_CMB)[..., ls_bins_lminlmax_idx]
+        # Apply birefringence mixing to E and B modes
+        CL_EE_obs = (np.cos(2 * Beta) ** 2) * Cl_EE + (np.sin(2 * Beta) ** 2) * Cl_BB_CMB
+        CL_BB_obs = (np.cos(2 * Beta) ** 2) * Cl_BB_CMB + (np.sin(2 * Beta) ** 2) * Cl_EE
+        CL_EB_obs = 0.5 * (np.sin(4 * Beta)) * (Cl_EE - Cl_BB_CMB)
+        CL_BE_obs = 0.5 * (np.sin(4 * Beta)) * (Cl_EE - Cl_BB_CMB)
 
-        return Cl_BB_CMB_binned + Nl_CMBxCMB_BB_est
+        # Bin the spectra
+        CL_EE_obs = nmt_bins.bin_cell(CL_EE_obs)[..., ls_bins_lminlmax_idx]
+        CL_BB_obs = nmt_bins.bin_cell(CL_BB_obs)[..., ls_bins_lminlmax_idx]
+        CL_EB_obs = nmt_bins.bin_cell(CL_EB_obs)[..., ls_bins_lminlmax_idx]
+        CL_BE_obs = nmt_bins.bin_cell(CL_BE_obs)[..., ls_bins_lminlmax_idx]
+
+        # Add noise
+        CL_EE_obs = CL_EE_obs + Nl_CMBxCMB_EE_est
+        CL_BB_obs = CL_BB_obs + Nl_CMBxCMB_BB_est
+        CL_EB_obs = CL_EB_obs + Nl_CMBxCMB_EB_est
+        CL_BE_obs = CL_BE_obs + Nl_CMBxCMB_BE_est
+
+        # Return 2x2 covariance matrix
+        C = np.array([[CL_EE_obs, CL_EB_obs], [CL_BE_obs, CL_BB_obs]])
+        return C
 
     if dust_marg and not sync_marg:
-        r, A_lens, A_dust = theta
+        r, A_lens, Birefringence, A_dust = theta
+        Beta = (np.pi / 180) * Birefringence
         Cl_BB_prim = r * Cl_BB_prim_generic
         Cl_BB_lensing = A_lens * Cl_BB_lensing_generic
         Cl_BB_dust = A_dust * Cl_DustxDust_BB_est
+        Cl_BB_CMB = Cl_BB_prim + Cl_BB_lensing + Cl_BB_dust
 
-        Cl_BB_CMB = Cl_BB_prim + Cl_BB_lensing
-        Cl_BB_CMB_binned = nmt_bins.bin_cell(Cl_BB_CMB)[..., ls_bins_lminlmax_idx]
+        # Apply birefringence mixing
+        CL_EE_obs = (np.cos(2 * Beta) ** 2) * Cl_EE + (np.sin(2 * Beta) ** 2) * Cl_BB_CMB
+        CL_BB_obs = (np.cos(2 * Beta) ** 2) * Cl_BB_CMB + (np.sin(2 * Beta) ** 2) * Cl_EE
+        CL_EB_obs = 0.5 * (np.sin(4 * Beta)) * (Cl_EE - Cl_BB_CMB)
+        CL_BE_obs = 0.5 * (np.sin(4 * Beta)) * (Cl_EE - Cl_BB_CMB)
 
-        Cl_BB_CMB_dust_binned = Cl_BB_CMB_binned + Cl_BB_dust
-        return Cl_BB_CMB_dust_binned + Nl_CMBxCMB_BB_est
+        # Bin the spectra
+        CL_EE_obs = nmt_bins.bin_cell(CL_EE_obs)[..., ls_bins_lminlmax_idx]
+        CL_BB_obs = nmt_bins.bin_cell(CL_BB_obs)[..., ls_bins_lminlmax_idx]
+        CL_EB_obs = nmt_bins.bin_cell(CL_EB_obs)[..., ls_bins_lminlmax_idx]
+        CL_BE_obs = nmt_bins.bin_cell(CL_BE_obs)[..., ls_bins_lminlmax_idx]
+
+        # Add noise
+        CL_EE_obs = CL_EE_obs + Nl_CMBxCMB_EE_est
+        CL_BB_obs = CL_BB_obs + Nl_CMBxCMB_BB_est
+        CL_EB_obs = CL_EB_obs + Nl_CMBxCMB_EB_est
+        CL_BE_obs = CL_BE_obs + Nl_CMBxCMB_BE_est
+
+        C = np.array([[CL_EE_obs, CL_EB_obs], [CL_BE_obs, CL_BB_obs]])
+        return C
 
     if not dust_marg and sync_marg:
-        r, A_lens, A_sync = theta
+        r, A_lens, Birefringence, A_sync = theta
         return None
 
     if dust_marg and sync_marg:
-        r, A_lens, A_dust, A_sync = theta
+        r, A_lens, Birefringence, A_dust, A_sync = theta
         return None
 
     return None
@@ -120,26 +168,30 @@ def prior_bounds(theta, dust_marg, sync_marg, prior_bounds_dict):
     lower_bound_r, upper_bound_r = prior_bounds_dict["r"]
     lower_bound_A_lens, upper_bound_A_lens = prior_bounds_dict["A_{lens}"]
     lower_bound_A_dust, upper_bound_A_dust = prior_bounds_dict["A_{dust}"]
+    lower_bound_Birefringence, upper_bound_Birefringence = prior_bounds_dict["Birefringence"]
 
     if not dust_marg and not sync_marg:
-        r, A_lens = theta
-        if (lower_bound_r <= r <= upper_bound_r) and (
-            lower_bound_A_lens <= A_lens <= upper_bound_A_lens
+        r, A_lens, Birefringence = theta
+        if (
+            (lower_bound_r <= r <= upper_bound_r)
+            and (lower_bound_A_lens <= A_lens <= upper_bound_A_lens)
+            and (lower_bound_Birefringence <= Birefringence <= upper_bound_Birefringence)
         ):
             return 0.0
     if dust_marg and not sync_marg:
-        r, A_lens, A_dust = theta
+        r, A_lens, Birefringence, A_dust = theta
         if (
             (lower_bound_r <= r <= upper_bound_r)
             and (lower_bound_A_lens <= A_lens <= upper_bound_A_lens)
             and (lower_bound_A_dust <= A_dust <= upper_bound_A_dust)
+            and (lower_bound_Birefringence <= Birefringence <= upper_bound_Birefringence)
         ):
             return 0.0
     if not dust_marg and sync_marg:
-        r, A_lens, A_sync = theta
+        r, A_lens, Birefringence, A_sync = theta
         return None
     if dust_marg and sync_marg:
-        r, A_lens, A_dust, A_sync = theta
+        r, A_lens, Birefringence, A_dust, A_sync = theta
         return None
     return -np.inf
 
@@ -149,11 +201,18 @@ def logL_cosmo(
     dust_marg,
     sync_marg,
     fsky_obs,
+    Cl_EE,
     Cl_BB_prim_generic,
     Cl_BB_lensing_generic,
+    Cl_CMBxCMB_EE_est,
     Cl_CMBxCMB_BB_est,
+    Cl_CMBxCMB_EB_est,
+    Cl_CMBxCMB_BE_est,
     Cl_DustxDust_BB_est,
+    Nl_CMBxCMB_EE_est,
     Nl_CMBxCMB_BB_est,
+    Nl_CMBxCMB_EB_est,
+    Nl_CMBxCMB_BE_est,
     ls_bins_lminlmax_idx,
     delta_l,
     nmt_bins,
@@ -165,14 +224,18 @@ def logL_cosmo(
     if prior_check != 0.0:
         return prior_check
 
-    Cl_CMBxCMB_BB_model = Cl_CMB_model(
+    Cov = Cl_CMB_model(
         theta,
         dust_marg,
         sync_marg,
+        Cl_EE,
         Cl_BB_prim_generic,
         Cl_BB_lensing_generic,
         Cl_DustxDust_BB_est,
+        Nl_CMBxCMB_EE_est,
         Nl_CMBxCMB_BB_est,
+        Nl_CMBxCMB_EB_est,
+        Nl_CMBxCMB_BE_est,
         ls_bins_lminlmax_idx,
         nmt_bins,
     )
@@ -185,15 +248,23 @@ def logL_cosmo(
     ell_mask_analysis = (bin_centre >= lmin_analysis) & (bin_centre <= lmax_analysis)
 
     bin_centre = bin_centre[ell_mask_analysis]
-    Cl_CMBxCMB_BB_model = Cl_CMBxCMB_BB_model[ell_mask_analysis]
-    Cl_CMBxCMB_BB_est = Cl_CMBxCMB_BB_est[ell_mask_analysis]
 
-    log_L = -(1 / 2) * np.sum(
-        (2 * bin_centre + 1)
-        * fsky_obs
-        * delta_l
-        * ((Cl_CMBxCMB_BB_est / Cl_CMBxCMB_BB_model) + np.log(Cl_CMBxCMB_BB_model))
+    Cov = Cov[:, :, ell_mask_analysis]
+    Cl_CMBxCMB_EE_est = Cl_CMBxCMB_EE_est[ell_mask_analysis]
+    Cl_CMBxCMB_BB_est = Cl_CMBxCMB_BB_est[ell_mask_analysis]
+    Cl_CMBxCMB_EB_est = Cl_CMBxCMB_EB_est[ell_mask_analysis]
+    Cl_CMBxCMB_BE_est = Cl_CMBxCMB_BE_est[ell_mask_analysis]
+
+    C_est = np.array(
+        [
+            [Cl_CMBxCMB_EE_est, Cl_CMBxCMB_EB_est],
+            [Cl_CMBxCMB_EB_est, Cl_CMBxCMB_BB_est],
+        ]
     )
+
+    prod = np.linalg.inv(Cov.transpose(2, 0, 1)) @ C_est.transpose(2, 0, 1)
+    Tr_list = np.trace(prod, axis1=1, axis2=2) + np.log(np.linalg.det(Cov.transpose(2, 0, 1)))
+    log_L = -(1 / 2) * np.sum((2 * bin_centre + 1) * fsky_obs * delta_l * Tr_list)
 
     if np.isnan(log_L):
         return 0.0
@@ -205,30 +276,33 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
 
-    # nhits_map = hp.read_map(manager.path_to_nhits_map)
-    # nhits_map /= np.max(nhits_map)
-    # fsky_obs = np.mean(nhits_map)
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
     fsky_obs = np.mean(analysis_mask)
-    # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
-    # fsky_obs = np.sqrt(mean_fsky)
 
-    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][3]
-    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
-        "DustxDust"
-    ][3]
+    # Load CMB cross-component spectra (EE, BB, EB)
+    spec_data = np.load(manager.get_path_to_spectra_cross_components(id_sim))
+    Cl_CMBxCMB_EE_est = spec_data["CMBxCMB"][0]  # EE is index 0 (spin-2 fields)
+    Cl_CMBxCMB_EB_est = spec_data["CMBxCMB"][1]  # EB is index 1
+    Cl_CMBxCMB_BE_est = spec_data["CMBxCMB"][2]  # BE is index 2
+    Cl_CMBxCMB_BB_est = spec_data["CMBxCMB"][3]  # BB is index 3
+
+    Cl_DustxDust_BB_est = spec_data["DustxDust"][3]
 
     all_noise_options = [
         config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
         for map_set in config.map_sets
     ]
     if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
-        # TODO: test case when only one experiment is noiseless?
+        Nl_CMBxCMB_EE_est = np.zeros_like(Cl_CMBxCMB_EE_est)
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
+        Nl_CMBxCMB_EB_est = np.zeros_like(Cl_CMBxCMB_EB_est)
+        Nl_CMBxCMB_BE_est = np.zeros_like(Cl_CMBxCMB_BE_est)
     else:
-        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))[
-            "Noise_CMBxNoise_CMB"
-        ][3]
+        noise_spec = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))
+        Nl_CMBxCMB_EE_est = noise_spec["Noise_CMBxNoise_CMB"][0]
+        Nl_CMBxCMB_EB_est = noise_spec["Noise_CMBxNoise_CMB"][1]
+        Nl_CMBxCMB_BE_est = noise_spec["Noise_CMBxNoise_CMB"][2]
+        Nl_CMBxCMB_BB_est = noise_spec["Noise_CMBxNoise_CMB"][3]
 
     nmt_bins = load_nmt_binning(manager)
 
@@ -247,27 +321,28 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     if config.cl2r_pars.load_model_spectra:
         Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: config.lmax + 1]
+        Cl_EE = hp.read_cl(manager.path_to_lensed_scalar)[1][: config.lmax + 1]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
             : config.lmax + 1
         ]
     else:
-        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, config.lmax)
+        Cl_EE, Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, config.lmax)
 
-    # 2. init mcmc parameters:
+    # 2. init mcmc parameters (now with Birefringence):
     if not dust_marg and not sync_marg:
-        param_names = ["r", "A_{lens}"]
-        theta_init_guess = [0.005, 0.5]
-        theta_offsets = [0.005, 0.1]
+        param_names = ["r", "A_{lens}", "Birefringence"]
+        theta_init_guess = [0.005, 0.5, 0.0]
+        theta_offsets = [0.005, 0.1, 1.0]
     if dust_marg and not sync_marg:
-        param_names = ["r", "A_{lens}", "A_{dust}"]
-        theta_init_guess = [0.005, 0.5, 0.01]
-        theta_offsets = [0.005, 0.1, 0.005]
+        param_names = ["r", "A_{lens}", "Birefringence", "A_{dust}"]
+        theta_init_guess = [0.005, 0.5, 0.0, 0.01]
+        theta_offsets = [0.005, 0.1, 1.0, 0.005]
     if not dust_marg and sync_marg:
-        param_names = ["r", "A_{lens}", "A_{sync}"]
+        param_names = ["r", "A_{lens}", "Birefringence", "A_{sync}"]
         theta_init_guess = None
         theta_offsets = None
     if dust_marg and sync_marg:
-        param_names = ["r", "A_{lens}", "A_{dust}", "A_{sync}"]
+        param_names = ["r", "A_{lens}", "Birefringence", "A_{dust}", "A_{sync}"]
         theta_init_guess = None
         theta_offsets = None
 
@@ -294,11 +369,18 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
             dust_marg,
             sync_marg,
             fsky_obs,
+            Cl_EE,
             Cl_BB_prim_generic,
             Cl_BB_lensing_generic,
+            Cl_CMBxCMB_EE_est,
             Cl_CMBxCMB_BB_est,
+            Cl_CMBxCMB_EB_est,
+            Cl_CMBxCMB_BE_est,
             Cl_DustxDust_BB_est,
+            Nl_CMBxCMB_EE_est,
             Nl_CMBxCMB_BB_est,
+            Nl_CMBxCMB_EB_est,
+            Nl_CMBxCMB_BE_est,
             ls_bins_lminlmax_idx,
             delta_l,
             nmt_bins,

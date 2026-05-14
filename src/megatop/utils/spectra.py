@@ -126,7 +126,7 @@ def compute_auto_cross_cl_from_maps_dict(
 
 def get_common_beam_wpix(common_beam_fwhm_arcmin: float, nside: int, lmax: int):
     wpix_out = hp.pixwin(
-        nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
+        nside, pol=True, lmax=2 * nside, # datapath=HEALPY_DATA_PATH
     )  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(np.radians(common_beam_fwhm_arcmin / 60.0), lmax=lmax, pol=True)
 
@@ -138,7 +138,7 @@ def get_effective_beam_noise_preproc(freqs, A, beams, nside: int, lmax: int):
         nside,
         pol=True,
         lmax=lmax,
-        datapath=HEALPY_DATA_PATH,
+        # datapath=HEALPY_DATA_PATH,
     )  # Pixel window function of output maps
     Bl_gauss_common = 1
 
@@ -157,7 +157,7 @@ def get_effective_beam_noise_preproc(freqs, A, beams, nside: int, lmax: int):
 
 def get_effective_common_beam(beam_fwhm_arcmin: float, frequencies, nside: int, lmax: int, A):
     wpix_out = hp.pixwin(
-        nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
+        nside, pol=True, lmax=lmax, #datapath=HEALPY_DATA_PATH
     )  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(
         np.radians(beam_fwhm_arcmin / 60),

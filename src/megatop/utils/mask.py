@@ -282,7 +282,7 @@ def get_spin_derivatives(map):
         First and second spin derivatives of the input map.
     """
     nside = hp.npix2nside(np.shape(map)[-1])
-    ell = np.arange(3 * nside)
+    ell = np.arange(2 * nside)
     alpha1i = np.sqrt(ell * (ell + 1.0))
     alpha2i = np.sqrt((ell - 1.0) * ell * (ell + 1.0) * (ell + 2.0))
     first = hp.alm2map(hp.almxfl(hp.map2alm(map, datapath=HEALPY_DATA_PATH), alpha1i), nside=nside)

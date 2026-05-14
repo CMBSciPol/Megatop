@@ -14,6 +14,91 @@ from .timer import function_timer
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
+def _apply_npipe_unbeaming(
+    alms: tuple, frequency: int | str, npipe_beam_path: Path, lmax: int | None = None
+):
+    """Attempt to reverse NPIPE beam + T->P leakage from a set of alms.
+
+    alms: (alm_T, alm_E, alm_B)
+    frequency: frequency tag (int or str) used to find the proper beam/leak files
+    npipe_beam_path: directory containing beam/leakage files
+    """
+    import glob
+
+    alm_T, alm_E, alm_B = alms
+
+    freq_str = f"{int(frequency):03d}" if isinstance(frequency, int) or str(frequency).isdigit() else str(frequency)
+
+    p = Path(npipe_beam_path)
+    if not p.exists():
+        raise FileNotFoundError(f"NPIPE beam path {p} does not exist")
+
+    # Construct expected filenames (NPIPE naming convention provided by user)
+    # e.g. Bl_TEB_npipe6v20_030GHzx030GHz.fits and Wl_npipe6v20_030GHzx030GHz.fits
+    bl_name = f"Bl_TEB_npipe6v20_{freq_str}GHzx{freq_str}GHz.fits"
+    wl_name = f"Wl_npipe6v20_{freq_str}GHzx{freq_str}GHz.fits"
+
+    bl_file = p / bl_name
+    wl_file = p / wl_name
+
+    if not bl_file.exists():
+        raise FileNotFoundError(f"Could not find expected NPIPE beam file '{bl_name}' in {p}")
+
+    # load arrays: try healpy.read_cl then numpy.load
+    def _load_cl(path: Path):
+        try:
+            return hp.read_cl(str(path))
+        except Exception:
+            try:
+                data = np.load(path, allow_pickle=True)
+                # if npz-like, try to extract arrays
+                if isinstance(data, np.lib.npyio.NpzFile):
+                    # pick first array
+                    return data[list(data.keys())[0]]
+                return data
+            except Exception:
+                # try text
+                return np.loadtxt(path)
+
+    bl = hp.read_cl(str(bl_file))
+    wl = None
+    if wl_file is not None:
+        wl = hp.read_cl(str(wl_file))
+
+    # perform debeaming and T->P leakage subtraction using the same approach as the user-provided snippet
+    alm_corr_T = alm_T.copy()
+    alm_corr_E = alm_E.copy()
+    alm_corr_B = alm_B.copy()
+
+    # inverse beam for T
+    inv_bl_T = 1.0 / bl[0]
+    T_debeamed = hp.almxfl(alm_corr_T.copy(), inv_bl_T)
+
+    if wl is not None:
+        # apply leakage correction to pol components
+        for i in range(1, 3):
+            w = wl[i].ravel().copy()
+            w[w < 0] = 0
+            w = np.sqrt(w)
+            leak = hp.almxfl(T_debeamed, w)
+            if i == 1:
+                alm_corr_E -= leak
+            else:
+                alm_corr_B -= leak
+
+    # debeam all components
+    alm_debeam_T = alm_corr_T.copy()
+    alm_debeam_E = alm_corr_E.copy()
+    alm_debeam_B = alm_corr_B.copy()
+
+    for i, alm in enumerate((alm_debeam_T, alm_debeam_E, alm_debeam_B)):
+        inv_bl = 1.0 / bl[i]
+        hp.almxfl(alm, inv_bl, inplace=True)
+
+    return alm_debeam_T, alm_debeam_E, alm_debeam_B
+
+
+
 @function_timer("common-beam-and-nside")
 def common_beam_and_nside(
     nside: int,
@@ -21,9 +106,12 @@ def common_beam_and_nside(
     frequency_beams: list[float],
     freq_maps: list[npt.ArrayLike],
     lmax: int,
+    frequency_tags: list[int] | None = None,
     output_alms: bool = False,
     DEBUGtruncatealms: bool = False,
     DEBUGlm_range: tuple[int, int] | None = None,
+    npipe_beam_correction: bool = False,
+    npipe_beam_path: Path | None = None,
 ):
     # TODO: remove DEBUGtruncatealms and DEBUGlm_range after testing
     nside_input_maps = [hp.npix2nside(freq_maps[i].shape[-1]) for i in range(len(frequency_beams))]
@@ -57,14 +145,20 @@ def common_beam_and_nside(
             hp.get_nside(freq_maps[i_beam][0]),
             pol=True,
             lmax=lmax,
-            datapath=HEALPY_DATA_PATH,
+            # datapath=HEALPY_DATA_PATH,
         )  # Pixel window function of input maps
         wpix_in[1][0:2] = 1.0  # in order not to divide by 0
 
         # beam corrections
         Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam / 60), lmax=lmax, pol=True)
 
-        bl_correction = Bl_gauss_common / Bl_gauss_fwhm
+        # If we applied the NPIPE unbeamning earlier, the input alms/maps are effectively
+        # deconvolved of the original input beam. In that case we should NOT divide by
+        # the input (frequency) beam here — we only want to apply the common beam.
+        if npipe_beam_correction:
+            bl_correction = Bl_gauss_common
+        else:
+            bl_correction = Bl_gauss_common / Bl_gauss_fwhm
 
         sm_corr_T = bl_correction[:, 0] * wpix_out[0] / wpix_in[0]
         sm_corr_P = bl_correction[:, 1] * wpix_out[1] / wpix_in[1]
@@ -81,6 +175,23 @@ def common_beam_and_nside(
             iter=10,
             datapath=HEALPY_DATA_PATH,
         )
+        #   apply NPIPE-specific reverse beam + T->P leakage correction
+        if npipe_beam_correction and npipe_beam_path is not None and frequency_tags is not None:
+            try:
+                alm_in_T, alm_in_E, alm_in_B = _apply_npipe_unbeaming(
+                    (alm_in_T, alm_in_E, alm_in_B),
+                    frequency=frequency_tags[i_beam],
+                    npipe_beam_path=Path(npipe_beam_path),
+                    lmax=lmax_convolution,
+                )
+                logger.info(f"Applied NPIPE unbeam/leakage correction for freq index {i_beam}")
+            except Exception as exc:  # pragma: no cover - best-effort; don't break pipeline
+                logger.warning(f"NPIPE unbeam correction failed: {exc}; continuing without it")
+        elif npipe_beam_correction:
+            logger.warning(
+                "NPIPE beam correction requested but frequency_tags or npipe_beam_path is missing; skipping NPIPE correction"
+            )
+        # here lmax seems to play an important role
 
         # change beam and wpix
         alm_out_T = hp.almxfl(alm_in_T, sm_corr_T)
@@ -156,6 +267,9 @@ def alm_common_beam(
     freq_maps: list[npt.ArrayLike],
     analysis_mask: npt.ArrayLike,
     harmonic_analysis_lmax: int,
+    frequency_tags: list[int] | None = None,
+    npipe_beam_correction: bool = False,
+    npipe_beam_path: Path | None = None,
 ):
     data_alms = np.array(
         [
@@ -181,12 +295,21 @@ def alm_common_beam(
         pol=True,
     )[:, 1]  # E polarization beam; shape (harmonic_analysis_lmax + 1,)
 
-    beam4namaster = np.array(
-        [
-            hp.gauss_beam(np.radians(beam / 60), lmax=harmonic_analysis_lmax, pol=True)[:, 1]
-            / common_beam_ell
-            for beam in frequency_beams
-        ]
+    if npipe_beam_correction:
+        # Inputs were debeamed already; beam4namaster should be 1/common_beam_ell so that
+        # applying 1/beam4namaster multiplies by common_beam_ell.
+        beam4namaster = np.array([1.0 / common_beam_ell for _ in frequency_beams])
+    else:
+        beam4namaster = np.array(
+            [
+                hp.gauss_beam(np.radians(beam / 60), lmax=2 * nside, pol=True)[:-1, 1] / common_beam_ell
+                for beam in frequency_beams
+            ]
+        )
+    beam4namaster = beam4namaster[..., : harmonic_analysis_lmax - 1]
+
+    assert beam4namaster.shape[-1] == hp.Alm.getlmax(data_alms.shape[-1]), (
+        f"beam4namaster shape {beam4namaster.shape} does not match data_alms shape {data_alms.shape}"
     )
 
     for f in range(data_alms.shape[0]):

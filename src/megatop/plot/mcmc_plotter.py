@@ -132,6 +132,11 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     gd_plot.settings.alpha_factor_contour_lines = 0.4
     gd_plot.settings.line_styles = ["-"] * n_sim_sky
 
+    # Build markers dictionary - include Birefringence if it exists in param_names
+    markers_dict = {"r": r_sim, "A_{lens}": A_lens_sim}
+    if any("Birefringence" in s for s in param_names):
+        markers_dict["Birefringence"] = config.map_sim_pars.Birefringence
+    
     gd_plot.triangle_plot(
         all_samples,
         filled=False,
@@ -142,7 +147,7 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
         contour_colors=["darkblue"] * n_sim_sky,
         contour_args=[{"lw": 1.0, "color": "darkblue", "alpha": 0.4} for i in range(n_sim_sky)],
         # contour_colors=colors,
-        markers={"r": r_sim, "A_{lens}": A_lens_sim},
+        markers=markers_dict,
     )
 
     stats_params_dict = get_params_statistics(manager, config)
@@ -175,13 +180,18 @@ def plot_single_cornerplot(manager: DataManager, config: Config, id_sim: int | N
     gd_plot.settings.figure_legend_frame = False
     gd_plot.settings.alpha_filled_add = 0.4
 
+    # Build markers dictionary - include Birefringence if it exists in param_names
+    markers_dict = {"r": r_sim, "A_{lens}": A_lens_sim}
+    if "Birefringence" in param_names:
+        markers_dict["Birefringence"] = config.map_sim_pars.Birefringence
+    
     gd_plot.triangle_plot(
         [samples],
         filled=True,
         legend_loc="upper right",
         line_args=[{"lw": 1.5, "color": "darkblue"}],
         contour_colors=["darkblue"],
-        markers={"r": r_sim, "A_{lens}": A_lens_sim},
+        markers=markers_dict,
     )
 
     # Save figure:
@@ -200,23 +210,30 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     # lmax = config.general_pars.lmax
     sky_model = "".join(config.map_sim_pars.sky_model)
 
-    # Load spectra data
-    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][3]
-    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
-        "DustxDust"
-    ][3]
+    # Load spectra data (NaMaster spin-2: index 0=EE, 1=EB, 2=BE, 3=BB)
+    spec_data = np.load(manager.get_path_to_spectra_cross_components(id_sim=id_sim))
+    Cl_CMBxCMB_EE_est = spec_data["CMBxCMB"][0]
+    Cl_CMBxCMB_EB_est = spec_data["CMBxCMB"][1]
+    Cl_CMBxCMB_BE_est = spec_data["CMBxCMB"][2]
+    Cl_CMBxCMB_BB_est = spec_data["CMBxCMB"][3]
+    Cl_DustxDust_BB_est = spec_data["DustxDust"][3]
+    Cl_DustxDust_EB_est = spec_data["DustxDust"][1]
 
     all_noise_options = [
         config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
         for map_set in config.map_sets
     ]
-    if not np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
-        # TODO: test case when only one experiment is noiseless?
+    if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+        Nl_CMBxCMB_EE_est = np.zeros_like(Cl_CMBxCMB_EE_est)
+        Nl_CMBxCMB_EB_est = np.zeros_like(Cl_CMBxCMB_EB_est)
+        Nl_CMBxCMB_BE_est = np.zeros_like(Cl_CMBxCMB_BE_est)
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
     else:
-        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))[
-            "Noise_CMBxNoise_CMB"
-        ][3]
+        noise_spec = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim=id_sim))
+        Nl_CMBxCMB_EE_est = noise_spec["Noise_CMBxNoise_CMB"][0]
+        Nl_CMBxCMB_EB_est = noise_spec["Noise_CMBxNoise_CMB"][1]
+        Nl_CMBxCMB_BE_est = noise_spec["Noise_CMBxNoise_CMB"][2]
+        Nl_CMBxCMB_BB_est = noise_spec["Noise_CMBxNoise_CMB"][3]
 
     nmt_bins = load_nmt_binning(manager)
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
@@ -230,12 +247,12 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
             : config.lmax + 1
         ]
     else:
-        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
+        Cl_EE, Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 2 * config.nside - 1)
 
     # Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
 
     # Load estimated parameters from MCMC chains
-    fname_chains = manager.get_path_to_mcmc_chains(id_sim)
+    fname_chains = manager.get_path_to_mcmc_chains(id_sim=id_sim)
     mcmc = np.load(fname_chains, allow_pickle=True)
     chains = mcmc["mcmc_chains"]
     param_names = mcmc["param_names"]
@@ -243,13 +260,13 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     theta_est = samples.getMeans()
 
     if not dust_marg and not sync_marg:
-        r_est, A_lens_est = theta_est
+        r_est, A_lens_est, Birefringence_est = theta_est
     if dust_marg and not sync_marg:
-        r_est, A_lens_est, A_dust_est = theta_est
+        r_est, A_lens_est, Birefringence_est, A_dust_est = theta_est
     if not dust_marg and sync_marg:
-        r_est, A_lens_est, A_sync_est = theta_est
+        r_est, A_lens_est, Birefringence_est, A_sync_est = theta_est
     if dust_marg and sync_marg:
-        r_est, A_lens_est, A_dust_est, A_sync_est = theta_est
+        r_est, A_lens_est, Birefringence_est, A_dust_est, A_sync_est = theta_est
 
     # Compute individual Cl components
     Cl_BB_prim_est = r_est * Cl_BB_prim_generic
@@ -258,17 +275,24 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         Cl_BB_dust_est = A_dust_est * Cl_DustxDust_BB_est
 
     # Compute model spectrum based on estimated parameters
-    Cl_CMBxCMB_BB_model = Cl_CMB_model(
+    # Note: Cl_CMB_model now returns a 2x2 covariance matrix, we extract BB component
+    Cov_model = Cl_CMB_model(
         theta_est,
         dust_marg,
         sync_marg,
+        Cl_EE,
         Cl_BB_prim_generic,
         Cl_BB_lensing_generic,
         Cl_DustxDust_BB_est,
+        Nl_CMBxCMB_EE_est,
         Nl_CMBxCMB_BB_est,
+        Nl_CMBxCMB_EB_est,
+        Nl_CMBxCMB_BE_est,
         ls_bins_lminlmax_idx,
         nmt_bins,
     )
+    # Extract BB component from covariance matrix [EE, EB; BE, BB]
+    Cl_CMBxCMB_BB_model = Cov_model[1, 1, :]
 
     # Plot spectra
     fig, ax = plt.subplots(figsize=(12, 6))

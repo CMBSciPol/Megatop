@@ -13,6 +13,7 @@ from megatop.utils import Timer, logger, mask, passband
 from megatop.utils.compsep import set_alm_tozero_below_lmin
 from megatop.utils.mpi import get_world
 
+import megabuster as mb
 
 def get_and_format_inv_Nl(manager: DataManager, config: Config):
     """
@@ -273,6 +274,98 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     return res
 
 
+def megabuster_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
+    """
+    Component separation using MEGABUSTER solver.
+    
+    MEGABUSTER is an alternative to FGBuster that uses Conjugate Gradient optimization
+    with optional preconditioning for faster convergence.
+    """
+    if not HAS_MEGABUSTER:
+        raise ImportError(
+            "megabuster is not installed. Install it to use use_megabuster=True in config."
+        )
+    
+    with Timer("load-covmat"):
+        noisecov_fname = manager.path_to_pixel_noisecov
+        logger.debug(f"Loading covmat from {noisecov_fname}")
+        noisecov = np.load(noisecov_fname)
+
+    timer = Timer()
+    timer.start("do-compsep")
+
+    if config.parametric_sep_pars.passband_int:
+        logger.info("Megabuster does not support passband integration yet.")
+        msg_passband = "Please use FGBuster (use_harmonic_compsep or default weighted_comp_sep) for this feature."
+        raise NotImplementedError(msg_passband)
+
+    if config.parametric_sep_pars.include_synchrotron:
+        components = ["cmb", "dust", "synchrotron"]
+    else:
+        components = ["cmb", "dust"]
+
+    # Get optimization options
+    minimize_options = config.parametric_sep_pars.get_minimize_options_as_dict()
+    megabuster_options = config.parametric_sep_pars.get_megabuster_options_as_dict()
+    
+    max_iter = minimize_options["maxiter"] if config.parametric_sep_pars.minimize_method != "TNC" else minimize_options["maxfun"]
+    tol = config.parametric_sep_pars.minimize_tol
+
+    # Load binary mask and apply masking
+    binary_mask = hp.read_map(manager.path_to_binary_mask)
+
+    with Timer("load-maps"):
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
+        logger.debug(f"Loading input maps from {preproc_maps_fname}")
+        freq_maps_preprocessed = np.load(preproc_maps_fname)
+
+    # Mask Q/U maps (polarization only for component separation)
+    freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
+        freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
+    )
+    noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
+    
+    # Compute inverse noise covariance (handling masked regions)
+    inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
+    inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
+        1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
+    )
+
+    logger.debug(f"Running MEGABUSTER component separation with components: {components}")
+    
+    # Call MEGABUSTER component separation
+    res = mb.compsep.perform_compsep(
+        first_guess_params={"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
+        fixed_params={"temp_dust": 20.0},
+        sky_map=freq_maps_preprocessed_QU_masked,
+        frequencies=np.array(config.frequencies),
+        invN_matrix=inverse_noisecov_QU_masked,
+        do_minimization=True,
+        binary_mask=binary_mask,
+        obs_mat_operator=None,
+        obsmat_operator_rhs=None,
+        use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
+        use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
+        central_freq_op=None,
+        matrix_precond=None,
+        dictionary_parameters_minimization={"max_iter": max_iter, "tol": tol},
+        dictionary_parameters_CG={
+            "max_steps_CG": megabuster_options["max_steps_CG"],
+            "tol_CG": megabuster_options["tol_CG"],
+        },
+        ordering_parameter=["beta_dust", "beta_pl"],
+        ordering_component=components,
+        dust_nu0=150.0,
+        synchrotron_nu0=150.0,
+    )
+
+    logger.info(f"Success: {res.success} -> {res.message}")
+    logger.info(f"Spectral parameters: {res.x}")
+    timer.stop("do-compsep")
+
+    return res
+
+
 def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int | None = None):
     fname_results = manager.get_path_to_compsep_results(id_sim)
     if config.parametric_sep_pars.use_harmonic_compsep:
@@ -303,6 +396,8 @@ def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = 
     with Timer("weighted-compsep"):
         if config.parametric_sep_pars.use_harmonic_compsep:
             res = harmonic_comp_sep_interface(manager, config, id_sim=id_sim)
+        elif config.parametric_sep_pars.use_megabuster:
+            res = megabuster_comp_sep(manager, config, id_sim=id_sim)
         else:
             res = weighted_comp_sep(manager, config, id_sim=id_sim)
     save_compsep_results(manager, config, res, id_sim=id_sim)

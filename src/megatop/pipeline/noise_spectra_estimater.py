@@ -245,7 +245,7 @@ def noise_spectra_estimator(
 
     else:
         mean_noise_spectra = None
-
+    
     if rank == root:
         fname = manager.get_path_to_noise_spectra_cross_components(id_sim_sky)
         logger.info(f"Saving estimated noise spectra to {fname}")
