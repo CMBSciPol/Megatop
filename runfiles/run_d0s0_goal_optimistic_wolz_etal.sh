@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PARAM_FILE="../paramfiles/d0s0_goal_optimisitc_wolz_etal.yaml"
+PARAM_FILE="../paramfiles/d0s0_goal_optimistic_wolz_etal.yaml"
 
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 
@@ -45,6 +45,11 @@ echo ""
 echo ""
 echo "Plotting pre-processer outputs"
 megatop-preproc-plot --config ${PARAM_FILE}
+
+echo "------------------------------------------------------------"
+echo "|                  NOISE PREPROCESSING                     |"
+echo "------------------------------------------------------------"
+megatop-noise-preproc-run --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"

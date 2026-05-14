@@ -47,8 +47,7 @@ map_sets:
     file_prefix: ''
     noise_prefix: noise_
     simfoTF_prefix: simforTF_
-    obsmat_path: .
-    TF_path: .
+
     passband_filename: ''
     depth_map_path: null
   - freq_tag: 145
@@ -58,8 +57,7 @@ map_sets:
     file_prefix: ''
     noise_prefix: noise_
     simfoTF_prefix: simforTF_
-    obsmat_path: .
-    TF_path: .
+
     passband_filename: ''
     depth_map_path: null
   - freq_tag: 225
@@ -69,8 +67,7 @@ map_sets:
     file_prefix: ''
     noise_prefix: noise_
     simfoTF_prefix: simforTF_
-    obsmat_path: .
-    TF_path: .
+
     passband_filename: ''
     depth_map_path: null
 
@@ -96,16 +93,12 @@ masks_pars:
 general_pars:
   nside: 64
   lmin: 30
-  lmax: 150
+  lmax: 100
 
 pre_proc_pars:
   common_beam_correction: 60.0
-  DEBUGskippreproc: false
   correct_for_TF: false
   sum_TF_column: true
-
-noise_cov_pars:
-  save_preprocessed_noise_maps: true
 
 parametric_sep_pars:
   include_synchrotron: true
@@ -155,6 +148,7 @@ map_sim_pars:
 noise_sim_pars:
   n_sim: 2
   include_nhits: false
+  seed: 43
   experiments:
     SO:
       usev3p1: true

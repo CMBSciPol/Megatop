@@ -207,10 +207,12 @@ class DataManager:
         names = [dest / map_set.map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
 
-    def get_obsmat_filenames(self) -> list[Path]:
+    def get_obsmat_filenames(self) -> list[Path | None]:
         """Get the list of filenames for the observation matrices."""
-        names = [map_set.obsmat_path for map_set in self._config.map_sets]
-        return [name.with_suffix(".npz") for name in names]
+        return [
+            None if map_set.obsmat_path is None else map_set.obsmat_path.with_suffix(".npz")
+            for map_set in self._config.map_sets
+        ]
 
     @property
     def path_to_TF_output_dir(self) -> Path:
@@ -272,9 +274,8 @@ class DataManager:
     def get_TF_filenames(self) -> list[Path | None]:
         """Get the list of filenames for the Transfer Functions.
 
-        Returns ``None`` for any map set whose ``TF_path`` is unset (the ``'.'``
-        sentinel in the config), signalling that no TF is available for that
-        frequency.
+        Returns ``None`` for any map set whose ``TF_path`` is unset (``None``),
+        signalling that no TF is available for that frequency.
         """
         if self._config.map_sim_pars.generate_sims_for_TF:
             logger.info("Internal TF used, generating TF path on the fly")
@@ -287,7 +288,7 @@ class DataManager:
             name_list = []
             for map_set in self._config.map_sets:
                 name = map_set.TF_path
-                if name == Path():
+                if name is None:
                     name_list.append(None)
                 else:
                     name_list.append(name.with_suffix(".npz"))
@@ -461,6 +462,18 @@ class DataManager:
         fname = self.path_to_covar / "covar_cl_unbinned"
         return fname.with_suffix(".npy")
 
+    def get_path_to_nl_noisecov_contrib(self, id_sim: int | None = None) -> Path:
+        fname = "nl_noisecov_contrib"
+        if id_sim is not None:
+            fname += f"_{id_sim:04d}"
+        return (self.path_to_covar / fname).with_suffix(".npy")
+
+    def get_path_to_nl_noisecov_contrib_unbinned(self, id_sim: int | None = None) -> Path:
+        fname = "nl_noisecov_contrib_unbinned"
+        if id_sim is not None:
+            fname += f"_{id_sim:04d}"
+        return (self.path_to_covar / fname).with_suffix(".npy")
+
     @property
     def path_to_effectiv_bins_harmonic_compsep(self) -> Path:
         fname = self.path_to_covar / "effective_bins_lminmax"
@@ -472,3 +485,189 @@ class DataManager:
         # NB: originally saved to 'path_to_components' but it is a covariance after all...
         fname = self.path_to_covar / "invAtNA"
         return fname.with_suffix(".npy")
+
+    # Per-step I/O declarations
+    # -------------------------
+    # Each pair of inputs_X / outputs_X methods declares the files read and written
+    # by pipeline step X.  These serve three purposes:
+    #   1. Documentation of data flow
+    #   2. Pre-flight existence checks
+    #   3. Snakemake rule generation
+
+    def inputs_mask(self) -> list[Path]:
+        if self._config.use_depth_maps:
+            return [m.depth_map_path for m in self._config.map_sets if m.depth_map_path is not None]
+        # nhits_map_path can be "SO_nominal" (downloaded at runtime) or an actual file
+        return [
+            m.nhits_map_path for m in self._config.map_sets if isinstance(m.nhits_map_path, Path)
+        ]
+
+    def outputs_mask(self) -> list[Path]:
+        outputs = [
+            self.path_to_common_nhits_map,
+            self.path_to_binary_mask,
+            self.path_to_analysis_mask,
+            *[self.path_to_nhits_map(m) for m in self._config.map_sets],
+        ]
+        if self._config.masks_pars.include_galactic:
+            outputs.append(self.path_to_galactic_mask)
+        return outputs
+
+    def inputs_binner(self) -> list[Path]:
+        if not self._config.fiducial_cmb.compute_from_camb:
+            return [
+                Path(self._config.fiducial_cmb.fiducial_lensed_scalar),
+                Path(self._config.fiducial_cmb.fiducial_unlensed_scalar_tensor_r1),
+            ]
+        return []
+
+    def outputs_binner(self) -> list[Path]:
+        return [
+            self.path_to_binning,
+            self.path_to_lensed_scalar,
+            self.path_to_unlensed_scalar_tensor_r1,
+        ]
+
+    def inputs_mock_signal(self, id_sim: int) -> list[Path]:
+        inputs = [
+            self.path_to_lensed_scalar,
+            self.path_to_unlensed_scalar_tensor_r1,
+            self.path_to_binary_mask,
+            *[self.path_to_nhits_map(m) for m in self._config.map_sets],
+        ]
+        if self._config.map_sim_pars.filter_sims:
+            inputs.extend(p for p in self.get_obsmat_filenames() if p is not None)
+        return inputs
+
+    def outputs_mock_signal(self, id_sim: int, map_set: str | None = None) -> list[Path]:
+        files = self.get_maps_filenames(id_sim)
+        if map_set is not None:
+            return [f for ms, f in zip(self._config.map_sets, files) if ms.name == map_set]
+        return files
+
+    def inputs_mock_noise(self, id_sim: int) -> list[Path]:
+        return [
+            self.path_to_binary_mask,
+            *[self.path_to_nhits_map(m) for m in self._config.map_sets],
+        ]
+
+    def outputs_mock_noise(self, id_sim: int, map_set: str | None = None) -> list[Path]:
+        files = self.get_noise_maps_filenames(id_sim)
+        if map_set is not None:
+            return [f for ms, f in zip(self._config.map_sets, files) if ms.name == map_set]
+        return files
+
+    def inputs_preproc(self, id_sim: int | None = None) -> list[Path]:
+        inputs = [
+            *self.get_maps_filenames(id_sim),
+            self.path_to_analysis_mask,
+            self.path_to_binary_mask,
+        ]
+        if self._config.pre_proc_pars.correct_for_TF:
+            inputs.extend(p for p in self.get_TF_filenames() if p is not None)
+        return inputs
+
+    def outputs_preproc(self, id_sim: int | None = None) -> list[Path]:
+        if self._config.parametric_sep_pars.use_harmonic_compsep:
+            return [self.get_path_to_preprocessed_alms(id_sim)]
+        return [self.get_path_to_preprocessed_maps(id_sim)]
+
+    def inputs_noise_preproc(self, id_sim: int | None = None) -> list[Path]:
+        inputs = [
+            *self.get_noise_maps_filenames(id_sim),
+            self.path_to_analysis_mask,
+        ]
+        if self._config.parametric_sep_pars.use_harmonic_compsep:
+            inputs += [self.path_to_binning, self.path_to_lensed_scalar]
+            if self._config.pre_proc_pars.correct_for_TF:
+                inputs.extend(p for p in self.get_TF_filenames() if p is not None)
+        return inputs
+
+    def outputs_noise_preproc(self, id_sim: int | None = None) -> list[Path]:
+        outputs = [self.get_path_to_preprocessed_noise_maps(id_sim)]
+        if self._config.parametric_sep_pars.use_harmonic_compsep:
+            outputs += [
+                self.get_path_to_nl_noisecov_contrib(id_sim),
+                self.get_path_to_nl_noisecov_contrib_unbinned(id_sim),
+            ]
+        return outputs
+
+    def inputs_noisecov(self) -> list[Path]:
+        n_sim_noise = self._config.noise_sim_pars.n_sim
+        if n_sim_noise is None:
+            return self.outputs_noise_preproc(None)
+        inputs: list[Path] = []
+        for i in range(n_sim_noise):
+            inputs.extend(self.outputs_noise_preproc(i))
+        return inputs
+
+    def outputs_noisecov(self) -> list[Path]:
+        outputs = [self.path_to_pixel_noisecov]
+        if self._config.parametric_sep_pars.use_harmonic_compsep:
+            outputs += [self.path_to_nl_noisecov, self.path_to_nl_noisecov_unbinned]
+        return outputs
+
+    def inputs_compsep(self, id_sim: int | None = None) -> list[Path]:
+        if self._config.parametric_sep_pars.use_harmonic_compsep:
+            preproc_input = self.get_path_to_preprocessed_alms(id_sim)
+            noisecov_inputs = [self.path_to_nl_noisecov, self.path_to_nl_noisecov_unbinned]
+        else:
+            preproc_input = self.get_path_to_preprocessed_maps(id_sim)
+            noisecov_inputs = [self.path_to_pixel_noisecov]
+        return [
+            preproc_input,
+            self.path_to_binary_mask,
+            self.path_to_analysis_mask,
+            *noisecov_inputs,
+        ]
+
+    def outputs_compsep(self, id_sim: int | None = None) -> list[Path]:
+        outputs = [
+            self.get_path_to_compsep_results(id_sim),
+            self.get_path_to_components_maps(id_sim),
+        ]
+        if self._config.parametric_sep_pars.use_harmonic_compsep:
+            outputs.append(self.get_path_to_components_alms(id_sim))
+        return outputs
+
+    def inputs_map2cl(self, id_sim: int | None = None) -> list[Path]:
+        inputs = [
+            self.get_path_to_components_maps(id_sim),
+            self.path_to_binning,
+            self.path_to_analysis_mask,
+            self.path_to_binary_mask,
+        ]
+        if self._config.pre_proc_pars.correct_for_TF:
+            inputs.append(self.get_path_to_compsep_results(id_sim))
+            inputs.extend(p for p in self.get_TF_filenames() if p is not None)
+        return inputs
+
+    def outputs_map2cl(self, id_sim: int | None = None) -> list[Path]:
+        return [self.get_path_to_spectra_cross_components(id_sim)]
+
+    def inputs_noisespectra(self, id_sim: int | None = None) -> list[Path]:
+        n_sim_noise = self._config.noise_sim_pars.n_sim
+        noise_inputs = [self.get_path_to_preprocessed_noise_maps(i) for i in range(n_sim_noise)]
+        return [
+            self.get_path_to_compsep_results(id_sim),
+            self.path_to_analysis_mask,
+            self.path_to_binary_mask,
+            self.path_to_binning,
+            *noise_inputs,
+        ]
+
+    def outputs_noisespectra(self, id_sim: int | None = None) -> list[Path]:
+        return [self.get_path_to_noise_spectra_cross_components(id_sim)]
+
+    def inputs_cl2r(self, id_sim: int | None = None) -> list[Path]:
+        return [
+            self.get_path_to_spectra_cross_components(id_sim),
+            self.get_path_to_noise_spectra_cross_components(id_sim),
+            self.path_to_binning,
+            self.path_to_analysis_mask,
+            self.path_to_lensed_scalar,
+            self.path_to_unlensed_scalar_tensor_r1,
+        ]
+
+    def outputs_cl2r(self, id_sim: int | None = None) -> list[Path]:
+        return [self.get_path_to_mcmc_chains(id_sim)]

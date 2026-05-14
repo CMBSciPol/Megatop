@@ -1,6 +1,9 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -13,16 +16,18 @@ authors = [
     { name = "Simon Biquard" },
     { name = "Amalia Aguilar" },
 ]
-version = "0.1.0"
+dynamic = ["version"]
 description = "A map-based CMB polarization data analysis pipeline"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "attrs",
     "camb",
     "cattrs",
     "emcee",
-    "fgbuster @ git+https://github.com/fgbuster/fgbuster.git@672ac19e21833c3bf3d87b0ee0452219851b042e",
+    "fgbuster @ git+https://github.com/fgbuster/fgbuster.git",
     "getdist",
     "healpy",
     "matplotlib",
@@ -35,13 +40,20 @@ dependencies = [
 
 [project.optional-dependencies]
 mpi = ["mpi4py"]
+sht = [
+    "ducc0",
+    "pixell",
+]
+snake = [
+    "snakemake; python_version >= '3.11'",
+]
 
 [dependency-groups]
 dev = ["pytest"]
 docs = [
-    "zensical>=0.0.21",
-    "mkdocstrings-python>=2.0.1",
-    "griffe-fieldz>=0.4.0"
+    "zensical>=0.0.37",
+    "mkdocstrings-python>=2.0.3",
+    "griffe-fieldz>=0.5.0"
 ]
 
 [project.scripts]
@@ -56,6 +68,7 @@ docs = [
 "megatop-mock-noise-run" = "megatop.pipeline.mocker:main_noise"
 "megatop-mock-plot" = "megatop.plot.mock_plotter:main"
 "megatop-noisecov-run" = "megatop.pipeline.pixel_noisecov_estimater:main"
+"megatop-noise-preproc-run" = "megatop.pipeline.noise_preprocesser:main"
 "megatop-noisecov-plot" = "megatop.plot.noise_cov_plotter:main"
 "megatop-preproc-run" = "megatop.pipeline.preprocesser:main"
 "megatop-preproc-plot" = "megatop.plot.preproc_plotter:main"
