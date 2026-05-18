@@ -6,6 +6,8 @@ import numpy as np
 import scipy as sp
 from pysm3 import Sky, units
 
+import megatop.utils.harmonic as hu
+
 from ..config import (
     CustomSATConfig,
     ExternalNoiseMapconfig,
@@ -47,9 +49,9 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
 def generate_map_cmb(Cl_cmb_model, nside: int, lmax: int, cmb_seed: list[int] | int | None = None):
     # TODO write tests
     # Fixing seed if required
-    # hp.synfast uses the legacy numpy random number generator
+    # synfast uses the legacy numpy random number generator
     np.random.seed(cmb_seed)  # noqa: NPY002
-    map_CMB = hp.synfast(Cl_cmb_model, nside=nside, lmax=lmax, new=True, pixwin=False)
+    map_CMB = hu.synfast(Cl_cmb_model, nside=nside, lmax=lmax, new=True)
 
     # Resetting seed
     np.random.seed(None)  # noqa: NPY002
@@ -235,18 +237,14 @@ def get_noise_map_from_noise_spectra(n_ell, nside: int, lmax: int, seed=None):
     noise_spectra[0, 2:] = n_ell / 2
     noise_spectra[1, 2:] = n_ell
     noise_spectra[2, 2:] = n_ell
-    # hp.synfast uses the legacy numpy random number generator
+    # synfast uses the legacy numpy random number generator
     np.random.seed(seed)  # noqa: NPY002
-    noise_maps = hp.synfast(
-        (
-            noise_spectra[0],
-            noise_spectra[1],
-            noise_spectra[2],
-            np.zeros_like(noise_spectra[2]),
+    noise_maps = hu.synfast(
+        np.array(
+            [noise_spectra[0], noise_spectra[1], noise_spectra[2], np.zeros_like(noise_spectra[2])]
         ),
-        new=True,
-        pixwin=False,
         nside=nside,
+        new=True,
     )
     return noise_maps
 
@@ -270,7 +268,7 @@ def include_hits_noise(noise_maps, common_nhits_map, binary_mask):
 def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float, lmax: int):
     # here lmax seems to play an important role
     logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
-    alms_T, alms_Q, alms_U = hp.map2alm(freq_map, lmax=lmax, pol=True, datapath=HEALPY_DATA_PATH)
+    alms_in = hu.map2alm(freq_map, spin=[0, 2], lmax=lmax)
     Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam_FWHM / 60), lmax=lmax, pol=True)
     wpix_in = hp.pixwin(
         nside,
@@ -283,21 +281,10 @@ def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float, lmax: int):
     sm_corr_P = Bl_gauss_fwhm[:, 1] * wpix_in[1]
 
     # change beam and wpix
-    alm_out_T = hp.almxfl(alms_T, sm_corr_T)
-    alm_out_E = hp.almxfl(alms_Q, sm_corr_P)
-    alm_out_B = hp.almxfl(alms_U, sm_corr_P)
+    hu.almxfl(alms_in[0], sm_corr_T, inplace=True)
+    hu.almxfl(alms_in[1:], sm_corr_P, inplace=True)
 
-    # alm-->mapf
-    alms_out_T, alms_out_Q, alms_out_U = hp.alm2map(
-        [alm_out_T, alm_out_E, alm_out_B],
-        nside,
-        lmax=lmax,
-        pixwin=False,
-        fwhm=0.0,
-        pol=True,
-    )
-    freq_map_beamed = [alms_out_T, alms_out_Q, alms_out_U]
-    return np.array(freq_map_beamed)
+    return hu.alm2map(alms_in, spin=[0, 2], nside=nside, lmax=lmax)
 
 
 def load_observation_matrix(nside: int, map_sets, obsmat_filenames) -> dict:
