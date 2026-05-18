@@ -546,7 +546,3 @@ class Config(StrictModel):
     @property
     def use_nhits_maps(self) -> bool:
         return not self.use_depth_maps
-
-    @property
-    def use_custom_beams(self) -> bool:
-        return self.pre_proc_pars.beam_fwhms is not None
