@@ -4,6 +4,7 @@ import pytest
 
 from megatop import DataManager
 from megatop.config import (
+    CAMBCosmoPars,
     Config,
     DataDirsConfig,
     FiducialCMBConfig,
@@ -15,7 +16,6 @@ from megatop.config import (
     SOConfig,
     V3Noise,
     V3Sensitivity,
-    _CAMBCosmoPars,
 )
 
 
@@ -78,7 +78,7 @@ def minimal_config():
     return Config(
         data_dirs=DataDirsConfig(root="data"),
         output_dirs=OutputDirsConfig(root="out"),
-        fiducial_cmb=FiducialCMBConfig(compute_from_camb=True, camb_cosmo_pars=_CAMBCosmoPars()),
+        fiducial_cmb=FiducialCMBConfig(compute_from_camb=True, camb_cosmo_pars=CAMBCosmoPars()),
         map_sets=[MapSetConfig(freq_tag=93, exp_tag="SO", beam=30.0, nhits_map_path="SO_nominal")],
     )
 
@@ -101,7 +101,7 @@ def test_filter_sims_with_obsmat_path_passes() -> None:
     Config(
         data_dirs=DataDirsConfig(root="data"),
         output_dirs=OutputDirsConfig(root="out"),
-        fiducial_cmb=FiducialCMBConfig(compute_from_camb=True, camb_cosmo_pars=_CAMBCosmoPars()),
+        fiducial_cmb=FiducialCMBConfig(compute_from_camb=True, camb_cosmo_pars=CAMBCosmoPars()),
         map_sets=[
             MapSetConfig(
                 freq_tag=93,

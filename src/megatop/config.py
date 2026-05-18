@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic_core import core_schema
 
 __all__ = [
+    "CAMBCosmoPars",
     "Config",
     "CompSepConfig",
     "DataDirsConfig",
@@ -111,7 +112,7 @@ class OutputDirsConfig(StrictModel):
     fiducial_cmb: str = "fiducial_cmb"
 
 
-class _CAMBCosmoPars(StrictModel):
+class CAMBCosmoPars(StrictModel):
     H0: float = 67.5
     ombh2: float = 0.022
     omch2: float = 0.122
@@ -120,26 +121,16 @@ class _CAMBCosmoPars(StrictModel):
     ns: float = 0.965
     extra_args: dict[str, Any] | None = None
 
+    def as_camb_kwargs(self) -> dict[str, Any]:
+        """Kwargs ready for ``camb.set_params(**...)``: extras merged first, named fields win on collision."""
+        return (self.extra_args or {}) | self.model_dump(exclude={"extra_args"})
+
 
 class FiducialCMBConfig(StrictModel):
     fiducial_lensed_scalar: Path | None = None
     fiducial_unlensed_scalar_tensor_r1: Path | None = None
     compute_from_camb: bool = True
-    camb_cosmo_pars: _CAMBCosmoPars = Field(default_factory=_CAMBCosmoPars)
-
-    def get_camb_cosmo_pars_as_dict(self) -> dict[str, Any]:
-        """Return the cosmo parameters for CAMB as a dictionary."""
-        pars = {
-            "H0": self.camb_cosmo_pars.H0,
-            "ombh2": self.camb_cosmo_pars.ombh2,
-            "omch2": self.camb_cosmo_pars.omch2,
-            "tau": self.camb_cosmo_pars.tau,
-            "As": self.camb_cosmo_pars.As,
-            "ns": self.camb_cosmo_pars.ns,
-        }
-        if self.camb_cosmo_pars.extra_args:
-            pars.update(self.camb_cosmo_pars.extra_args)
-        return pars
+    camb_cosmo_pars: CAMBCosmoPars = Field(default_factory=CAMBCosmoPars)
 
     @model_validator(mode="after")
     def _check_camb_paths(self):
@@ -481,9 +472,7 @@ class Config(StrictModel):
         return cls(
             data_dirs=DataDirsConfig(root="data_root"),
             output_dirs=OutputDirsConfig(root="output_root"),
-            fiducial_cmb=FiducialCMBConfig(
-                compute_from_camb=True, camb_cosmo_pars=_CAMBCosmoPars()
-            ),
+            fiducial_cmb=FiducialCMBConfig(compute_from_camb=True, camb_cosmo_pars=CAMBCosmoPars()),
             map_sets=[
                 MapSetConfig(freq_tag=27, exp_tag="SO", nhits_map_path="SO_nominal", beam=91.0),
                 MapSetConfig(freq_tag=39, exp_tag="SO", nhits_map_path="SO_nominal", beam=63.0),
