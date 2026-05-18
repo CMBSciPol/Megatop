@@ -50,12 +50,23 @@ class NameSerializedIntEnum(IntEnum):
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source, handler):
+        valid_names = list(cls.__members__)
+
         def validate(v):
             if isinstance(v, cls):
                 return v
             if isinstance(v, str):
+                if v not in cls.__members__:
+                    raise ValueError(
+                        f"Invalid {cls.__name__} name {v!r}. Valid names: {valid_names}"
+                    )
                 return cls[v]
-            return cls(v)
+            try:
+                return cls(v)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid {cls.__name__} value {v!r}. Valid values: {[m.value for m in cls]}"
+                )
 
         return core_schema.no_info_plain_validator_function(
             validate,
@@ -462,7 +473,9 @@ class Config(StrictModel):
         """
         filename = Path(path).with_suffix(".yaml")
         filename.parent.mkdir(parents=True, exist_ok=True)
-        filename.write_text(yaml.safe_dump(self.model_dump(mode="json"), sort_keys=False))
+        filename.write_text(
+            yaml.safe_dump(self.model_dump(mode="json", exclude_none=True), sort_keys=False)
+        )
 
     @classmethod
     def get_example(cls) -> "Config":
@@ -498,6 +511,7 @@ class Config(StrictModel):
         all_indices = np.arange(len(self.map_sets))
         my_indices = np.array_split(all_indices, num_colors)[color % num_colors]
         subset = [ms for i, ms in enumerate(self.map_sets) if i in my_indices]
+        # model_copy skips validators by design — subset validity is guaranteed by construction.
         return self.model_copy(update={"map_sets": subset})
 
     @property
