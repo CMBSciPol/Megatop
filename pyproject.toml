@@ -23,15 +23,14 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
-    "attrs",
     "camb",
-    "cattrs",
     "emcee",
     "fgbuster @ git+https://github.com/fgbuster/fgbuster.git",
     "getdist",
     "healpy",
     "matplotlib",
     "numpy",
+    "pydantic >= 2.7",
     "pymaster",
     "pysm3 >= 3.4.4",
     "pyyaml",

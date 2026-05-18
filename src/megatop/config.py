@@ -3,10 +3,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
-from attrs import Factory, asdict, define, evolve, field
-from attrs.converters import optional
-
-from megatop._converter import yaml_converter
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic_core import core_schema
 
 __all__ = [
     "Config",
@@ -43,7 +42,31 @@ class NoiseOption(Enum):
     NOISE_MAP = "noise_map"
 
 
-class V3Sensitivity(IntEnum):
+class NameSerializedIntEnum(IntEnum):
+    """IntEnum that serializes by member name, not numeric value.
+
+    YAML round-trip preserves names like ``GOAL`` / ``OPTIMISTIC`` rather than
+    integers. Accepts the enum itself, a name string, or the int value on input.
+    """
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source, handler):
+        def validate(v):
+            if isinstance(v, cls):
+                return v
+            if isinstance(v, str):
+                return cls[v]
+            return cls(v)
+
+        return core_schema.no_info_plain_validator_function(
+            validate,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda v: v.name, return_schema=core_schema.str_schema()
+            ),
+        )
+
+
+class V3Sensitivity(NameSerializedIntEnum):
     """V3calc sensitivity assumption."""
 
     THRESHOLD = 0
@@ -51,7 +74,7 @@ class V3Sensitivity(IntEnum):
     GOAL = 2
 
 
-class V3Noise(IntEnum):
+class V3Noise(NameSerializedIntEnum):
     """V3calc 1/f noise assumption."""
 
     WHITE = 2
@@ -60,21 +83,14 @@ class V3Noise(IntEnum):
     SUPER_PESSIMISTIC = 3
 
 
-# Register structure hooks for the V3Sensitivity and V3Noise enums
-# That should be done in _converter.py, but only unstructure hooks are working
-@yaml_converter.register_structure_hook
-def structure_V3Sensitivity(val: Any, _) -> V3Sensitivity:
-    return V3Sensitivity[val]
+class StrictModel(BaseModel):
+    """Base class: forbid unknown keys; subclasses inherit."""
+
+    model_config = ConfigDict(extra="forbid")
 
 
-@yaml_converter.register_structure_hook
-def structure_V3Noise(val: Any, _) -> V3Noise:
-    return V3Noise[val]
-
-
-@define
-class DataDirsConfig:
-    root: Path = field(converter=Path)
+class DataDirsConfig(StrictModel):
+    root: Path
     maps: str = "maps"
     beams: str = "beams"
     passbands: str = "passbands"
@@ -82,9 +98,8 @@ class DataDirsConfig:
     TF_sims_maps: str = "TF_sims_maps"
 
 
-@define
-class OutputDirsConfig:
-    root: Path = field(converter=Path)
+class OutputDirsConfig(StrictModel):
+    root: Path
     masks: str = "masks"
     binning: str = "binning"
     transfer_functions: str = "transfer_functions"
@@ -98,9 +113,7 @@ class OutputDirsConfig:
     fiducial_cmb: str = "fiducial_cmb"
 
 
-@define
-class _CAMBCosmoPars:
-    # Alens: float = 1.0
+class _CAMBCosmoPars(StrictModel):
     H0: float = 67.5
     ombh2: float = 0.022
     omch2: float = 0.122
@@ -110,72 +123,80 @@ class _CAMBCosmoPars:
     extra_args: dict[str, Any] | None = None
 
 
-@define
-class FiducialCMBConfig:
-    # root: Path = field(converter=Path)
-    fiducial_lensed_scalar: Path | None = field(default=None, converter=optional(Path))
-    fiducial_unlensed_scalar_tensor_r1: Path | None = field(default=None, converter=optional(Path))
-    compute_from_camb: bool = field(default=True)
-    # root: Path | None = field(default=None)
-    camb_cosmo_pars: _CAMBCosmoPars = Factory(_CAMBCosmoPars)
+class FiducialCMBConfig(StrictModel):
+    fiducial_lensed_scalar: Path | None = None
+    fiducial_unlensed_scalar_tensor_r1: Path | None = None
+    compute_from_camb: bool = True
+    camb_cosmo_pars: _CAMBCosmoPars = Field(default_factory=_CAMBCosmoPars)
 
     def get_camb_cosmo_pars_as_dict(self) -> dict[str, Any]:
         """Return the cosmo parameters for CAMB as a dictionary."""
-        pars = {}
-        pars["H0"] = self.camb_cosmo_pars.H0
-        pars["ombh2"] = self.camb_cosmo_pars.ombh2
-        pars["omch2"] = self.camb_cosmo_pars.omch2
-        pars["tau"] = self.camb_cosmo_pars.tau
-        pars["As"] = self.camb_cosmo_pars.As
-        pars["ns"] = self.camb_cosmo_pars.ns
+        pars = {
+            "H0": self.camb_cosmo_pars.H0,
+            "ombh2": self.camb_cosmo_pars.ombh2,
+            "omch2": self.camb_cosmo_pars.omch2,
+            "tau": self.camb_cosmo_pars.tau,
+            "As": self.camb_cosmo_pars.As,
+            "ns": self.camb_cosmo_pars.ns,
+        }
         if self.camb_cosmo_pars.extra_args:
-            for key, value in self.camb_cosmo_pars.extra_args.items():
-                pars[key] = value
+            pars.update(self.camb_cosmo_pars.extra_args)
         return pars
 
-    @compute_from_camb.validator
-    def check(self, attribute, value):
-        """Check that the path to the fiducial CMB spectra is provided if they are not to be computed using CAMB."""
-        if (not value) and (
-            (self.fiducial_lensed_scalar is None)
-            or (self.fiducial_unlensed_scalar_tensor_r1 is None)
+    @model_validator(mode="after")
+    def _check_camb_paths(self):
+        if not self.compute_from_camb and (
+            self.fiducial_lensed_scalar is None or self.fiducial_unlensed_scalar_tensor_r1 is None
         ):
-            msg = "Need to provide the path to the fiducial CMB spectra in fiducial_cmb if they are not to be computed using CAMB."
+            msg = (
+                "Need to provide the path to the fiducial CMB spectra in fiducial_cmb "
+                "if they are not to be computed using CAMB."
+            )
             raise ValueError(msg)
+        return self
 
 
-def _nhits_map_path_converter(v: Any) -> Literal["SO_nominal"] | Path | None:
-    if v is None or v == "SO_nominal":
-        return v
-    return Path(v)
+class MapSetConfig(StrictModel):
+    # arbitrary_types_allowed lets passband.passband_constructor attach
+    # np.ndarray runtime fields (frequency, weight) without YAML round-trip.
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
-
-@define(slots=False)
-class MapSetConfig:
-    name: str = field(init=False)  # derived from freq_tag and exp_tag
     freq_tag: int
     exp_tag: str
     beam: float
     file_prefix: str = ""
     noise_prefix: str = "noise_"
     simfoTF_prefix: str = "simforTF_"
-    obsmat_path: Path | None = field(default=None, converter=optional(Path))
-    TF_path: Path | None = field(default=None, converter=optional(Path))
+    obsmat_path: Path | None = None
+    TF_path: Path | None = None
     passband_filename: str = ""
-    nhits_map_path: Literal["SO_nominal"] | Path | None = field(
-        default=None, converter=_nhits_map_path_converter
-    )
-    depth_map_path: Path | None = field(default=None, converter=optional(Path))
+    nhits_map_path: Literal["SO_nominal"] | Path | None = None
+    depth_map_path: Path | None = None
+    # Runtime-only fields populated by passband.passband_constructor; excluded
+    # from YAML dump and absent from paramfiles.
+    frequency: Any = Field(default=None, exclude=True)
+    weight: Any = Field(default=None, exclude=True)
 
-    def __attrs_post_init__(self) -> None:
-        self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"
+    @field_validator("nhits_map_path", mode="before")
+    @classmethod
+    def _coerce_nhits_map_path(cls, v):
+        if v is None or v == "SO_nominal":
+            return v
+        return Path(v)
 
-    @nhits_map_path.validator
-    def check(self, attribute, value):
-        """Check that either nhits_map or depth_map are given"""
-        if self.depth_map_path is None and value is None:
-            msg = f"Need to give either a depth map or a nhits_map (which can be SO_nonimal) for {attribute.name} in config."
+    @model_validator(mode="after")
+    def _check_hits_or_depth(self):
+        if self.depth_map_path is None and self.nhits_map_path is None:
+            msg = (
+                "Need to give either a depth map or a nhits_map (which can be SO_nominal) "
+                "for MapSetConfig in config."
+            )
             raise ValueError(msg)
+        return self
+
+    @property
+    def name(self) -> str:
+        return f"{self.exp_tag}_f{self.freq_tag:03d}"
 
     @property
     def map_filename(self) -> str:
@@ -186,12 +207,11 @@ class MapSetConfig:
         return self.noise_prefix + self.name
 
     @property
-    def simforTF_map_filename(self) -> str:
+    def simforTF_map_filename(self) -> list[str]:
         return [self.simfoTF_prefix + f"pure{s}_" + self.name for s in ["T", "E", "B"]]
 
 
-@define
-class MasksConfig:
+class MasksConfig(StrictModel):
     nhits_map_name: str = "nhits_map"
     analysis_mask_name: str = "analysis_mask"
     binary_mask_name: str = "binary_mask"
@@ -202,52 +222,45 @@ class MasksConfig:
     binary_mask_zero_threshold: float = 1e-1
     fwhm_arcmin_smooth_nhits: float = 60
 
-    # TODO: option to give the direct path to the galactic mask?
     include_galactic: bool = False
     galactic_mask_name: str = "galactic_mask"
-    gal_key: ValidPlanckGalKey | None = field(default=None)
+    gal_key: ValidPlanckGalKey | None = None
 
     include_sources: bool = False
-    input_sources_mask: Path | None = field(default=None, converter=optional(Path))
+    input_sources_mask: Path | None = None
     sources_mask_name: str = "sources_mask"
     mock_nsources: int = 100
     mock_sources_hole_radius: float = 4
 
-    # DEBUG_output_apod_binary_mask: bool = False
-    # DEBUGapod_binary_mask_name: str = "apod_binary_mask"
-
-    @gal_key.validator
-    def _check_gal_key(self, attribute, value):
-        """Check that gal_key is set if include_galactic is True."""
-        if self.include_galactic and value is None:
-            msg = f"{attribute.name} must not be None if using include_galactic"
+    @model_validator(mode="after")
+    def _check_gal_key(self):
+        if self.include_galactic and self.gal_key is None:
+            msg = "gal_key must not be None if using include_galactic"
             raise ValueError(msg)
+        return self
 
 
-@define
-class GeneralConfig:
+class GeneralConfig(StrictModel):
     nside: int = 512
     lmin: int = 30  # TODO: used ?
-    lmax: int = field(default=1000)
+    lmax: int = 1000
 
-    @lmax.validator
-    def check(self, attribute, value):
-        """Check that lmax <= 2 * nside"""
-        if value > (two_nside := 2 * self.nside):
-            msg = f"{attribute.name}={value} must be less than or equal to {two_nside=}"
+    @model_validator(mode="after")
+    def _check_lmax(self):
+        two_nside = 2 * self.nside
+        if self.lmax > two_nside:
+            msg = f"lmax={self.lmax} must be less than or equal to two_nside={two_nside}"
             raise ValueError(msg)
+        return self
 
 
-@define
-class PreProcessingConfig:
+class PreProcessingConfig(StrictModel):
     common_beam_correction: float = 100
-    # beam_fwhms: list[float] | None = None
     correct_for_TF: bool = False
     sum_TF_column: bool = True
 
 
-@define
-class _MinimizeOptions:
+class _MinimizeOptions(StrictModel):
     disp: bool = False
     gtol: float = 1e-12
     eps: float = 1e-12
@@ -255,8 +268,7 @@ class _MinimizeOptions:
     ftol: float = 1e-12
 
 
-@define
-class CompSepConfig:
+class CompSepConfig(StrictModel):
     use_harmonic_compsep: bool = False
     harmonic_lmax: int = 2 * 128  # TODO: use config.nside
     harmonic_lmin: int = 30
@@ -266,7 +278,7 @@ class CompSepConfig:
     include_synchrotron: bool = True
     minimize_method: str = "TNC"
     minimize_tol: float = 1e-18
-    minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
+    minimize_options: _MinimizeOptions = Field(default_factory=_MinimizeOptions)
     passband_int: bool = False
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
@@ -274,46 +286,42 @@ class CompSepConfig:
 
         If the minimize method is 'TNC', rename 'maxiter' to 'maxfun'.
         """
-        options = asdict(self.minimize_options)
+        options = self.minimize_options.model_dump()
         if self.minimize_method == "TNC":
             options["maxfun"] = options.pop("maxiter")
         return options
 
 
-@define
-class Map2ClConfig:
+class Map2ClConfig(StrictModel):
     delta_ell: int | list[int] = 10
     """Width of uniform multipole bins."""
     uniform_start: int | None = None
     """If set, first bin spans [2, uniform_start - 1] and uniform bins of width delta_ell start at uniform_start."""
-    purify_e: bool = field(default=False)
+    purify_e: bool = False
     """Purify E modes in NaMaster field construction."""
     purify_b: bool = True
     """Purify B modes in NaMaster field construction."""
     n_iter_namaster: int = 3
     """Number of iterations for NaMaster map2alm."""
 
-    @purify_e.validator
-    def check(self, attribute, value):
-        """Check that the purify_e argument is set to false if purify_b is true"""
-        if self.purify_b and value:
-            msg = f"Cannot purify both E and B modes spectra simultaneously. Set {attribute.name} to False in your config."
+    @model_validator(mode="after")
+    def _check_purify(self):
+        if self.purify_b and self.purify_e:
+            msg = "Cannot purify both E and B modes spectra simultaneously. Set purify_e to False in your config."
             raise ValueError(msg)
+        return self
 
 
-@define
-class PlotsConfig:
+class PlotsConfig(StrictModel):
     lmin_plot: int = 30
     lmax_plot: int = 1_000
 
 
-@define
-class MapSimConfig:
+class MapSimConfig(StrictModel):
     n_sim: int = 1
-    sky_model: list[str] = field(factory=lambda: ["d0", "s0"])
+    sky_model: list[str] = Field(default_factory=lambda: ["d0", "s0"])
     """Pysm sky models included in the foreground simulations."""
     cmb_sim_no_pysm: bool = True
-    # noise_option: NoiseOption = NoiseOption.ONE_OVER_F
     r_input: float = 0
     """Tensor to scalar ratio value in the generated CMB simulations"""
     A_lens: float = 1
@@ -336,27 +344,26 @@ class MapSimConfig:
     passband_int: bool = False
     """If True, sky maps will be integrated over the passbands provided in the map_sets. Passbands will also be included in the SED computation in the component separation."""
 
-    @sky_model.validator
-    def check(self, attribute, value):
-        """Check that the sky model only contains dust and/or synchrotron templates"""
+    @field_validator("sky_model")
+    @classmethod
+    def is_dust_or_synchrotron(cls, value: list[str]) -> list[str]:
         if not all(template.startswith(("d", "s")) for template in value):
-            msg = f"{attribute.name} only supports 'd*' (dust) and 's*' (synchrotron) models"
+            msg = "sky_model only supports 'd*' (dust) and 's*' (synchrotron) models"
             raise ValueError(msg)
+        return value
 
 
-@define
-class SOConfig:
+class SOConfig(StrictModel):
     usev3p1: bool = True
-    default_bands: list[float] = field(factory=lambda: [27, 39, 93, 145, 225, 280])
-    noise_option: NoiseOption = field(default=NoiseOption.ONE_OVER_F)
+    default_bands: list[float] = Field(default_factory=lambda: [27, 39, 93, 145, 225, 280])
+    noise_option: NoiseOption = NoiseOption.ONE_OVER_F
     v3_sensitivity_mode: V3Sensitivity = V3Sensitivity.GOAL
     v3_one_over_f_mode: V3Noise = V3Noise.OPTIMISTIC
-    Ntubes_years: list[float] | None = field(factory=lambda: [1.0, 9.0, 5.0])
+    Ntubes_years: list[float] | None = Field(default_factory=lambda: [1.0, 9.0, 5.0])
     SAC_yrs_LF: float | None = 1.0
 
 
-@define
-class CustomSATConfig:
+class CustomSATConfig(StrictModel):
     default_bands: float | list[float]
     sensitivities: float | list[float]
     Ntubes_years: float | int
@@ -365,27 +372,26 @@ class CustomSATConfig:
     noise_option: NoiseOption
 
 
-@define
-class ExternalNoiseMapconfig:
+class ExternalNoiseMapconfig(StrictModel):
     default_bands: float | list[float]
     root: Path
     prefix: str
     suffix: str
-    noise_option: NoiseOption = field(default=NoiseOption.NOISE_MAP)
+    noise_option: NoiseOption = NoiseOption.NOISE_MAP
     correction: float = 1.0
 
 
 ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig
-# ValidExperimentConfig = SOConfig | ExternalNoiseMapconfig
 
 
-@define
-class NoiseSimConfig:
+class NoiseSimConfig(StrictModel):
     n_sim: int = 1
     include_nhits: bool = True
     seed: int = 42
     """Integer seed for the noise simulations."""
-    experiments: dict[str, ValidExperimentConfig] = field(factory=lambda: dict(SO=SOConfig()))
+    experiments: dict[str, ValidExperimentConfig] = Field(
+        default_factory=lambda: {"SO": SOConfig()}
+    )
 
 
 def default_prior_bounds() -> dict[str, list[float]]:
@@ -397,13 +403,12 @@ def default_prior_bounds() -> dict[str, list[float]]:
     }
 
 
-@define
-class Cl2rConfig:
+class Cl2rConfig(StrictModel):
     dust_marg: bool = False
     """If True, the cosmological likelihood is marginalised over dust amplitude which scales the dust power spectrum computed from the dust map obtained from the component separation step"""
     sync_marg: bool = False
     """If True, the cosmological likelihood is marginalised over synchrotron amplitude which scales the synchrotron power spectrum computed from the synchrotron map obtained from the component separation step"""
-    prior_bounds: dict[str, list] = Factory(default_prior_bounds)
+    prior_bounds: dict[str, list[float]] = Field(default_factory=default_prior_bounds)
     load_model_spectra: bool = True
     n_walkers: int = 200
     """Number of walkers used in the MCMC of the cosmological likelihood"""
@@ -417,50 +422,51 @@ class Cl2rConfig:
     """Maximum multipole ell used in the cosmological analysis."""
 
 
-@define
-class Config:
+class Config(StrictModel):
     """Class holding the global configuration for Megatop."""
 
     data_dirs: DataDirsConfig
     output_dirs: OutputDirsConfig
     fiducial_cmb: FiducialCMBConfig
-    map_sets: list[MapSetConfig] = Factory(list)
-    masks_pars: MasksConfig = Factory(MasksConfig)
-    general_pars: GeneralConfig = Factory(GeneralConfig)
-    pre_proc_pars: PreProcessingConfig = Factory(PreProcessingConfig)
-    parametric_sep_pars: CompSepConfig = Factory(CompSepConfig)
-    map2cl_pars: Map2ClConfig = Factory(Map2ClConfig)
-    plot_pars: PlotsConfig = Factory(PlotsConfig)
-    map_sim_pars: MapSimConfig = Factory(MapSimConfig)
-    noise_sim_pars: NoiseSimConfig = Factory(NoiseSimConfig)
-    cl2r_pars: Cl2rConfig = Factory(Cl2rConfig)
+    map_sets: list[MapSetConfig] = Field(default_factory=list)
+    masks_pars: MasksConfig = Field(default_factory=MasksConfig)
+    general_pars: GeneralConfig = Field(default_factory=GeneralConfig)
+    pre_proc_pars: PreProcessingConfig = Field(default_factory=PreProcessingConfig)
+    parametric_sep_pars: CompSepConfig = Field(default_factory=CompSepConfig)
+    map2cl_pars: Map2ClConfig = Field(default_factory=Map2ClConfig)
+    plot_pars: PlotsConfig = Field(default_factory=PlotsConfig)
+    map_sim_pars: MapSimConfig = Field(default_factory=MapSimConfig)
+    noise_sim_pars: NoiseSimConfig = Field(default_factory=NoiseSimConfig)
+    cl2r_pars: Cl2rConfig = Field(default_factory=Cl2rConfig)
 
-    def __attrs_post_init__(self) -> None:
-        """Perform consistency checks after initialization."""
-        # TODO: use validators
+    @model_validator(mode="after")
+    def _check_consistency(self):
         if len(self.frequencies) != len(self.beams):
             msg = "Not the same number of frequencies and beam sizes"
             raise ValueError(msg)
 
-        # Validate passband_filename for all map sets if passband_int=True
         if self.map_sim_pars.passband_int or self.parametric_sep_pars.passband_int:
             for map_set in self.map_sets:
                 if not map_set.passband_filename:
-                    msg = f"Map set '{map_set.name}' requires a non-empty passband_filename because passband_int=True."
+                    msg = (
+                        f"Map set '{map_set.name}' requires a non-empty passband_filename "
+                        "because passband_int=True."
+                    )
                     raise ValueError(msg)
 
-        # Validate obsmat_path for all map sets if filter_sims=True
         if self.map_sim_pars.filter_sims:
             for map_set in self.map_sets:
                 if map_set.obsmat_path is None:
                     msg = f"Map set '{map_set.name}' requires obsmat_path because filter_sims=True."
                     raise ValueError(msg)
 
+        return self
+
     @classmethod
     def load_yaml(cls, path: str | Path) -> "Config":
         """Load and instantiate a ``Config`` from a YAML file."""
-        data = Path(path).read_text()
-        return yaml_converter.loads(data, cls)
+        data = yaml.safe_load(Path(path).read_text())
+        return cls.model_validate(data)
 
     def dump_yaml(self, path: str | Path) -> None:
         """Dump the config to a YAML file.
@@ -469,8 +475,7 @@ class Config:
         """
         filename = Path(path).with_suffix(".yaml")
         filename.parent.mkdir(parents=True, exist_ok=True)
-        data = yaml_converter.dumps(self)
-        filename.write_text(data)
+        filename.write_text(yaml.safe_dump(self.model_dump(mode="json"), sort_keys=False))
 
     @classmethod
     def get_example(cls) -> "Config":
@@ -482,7 +487,6 @@ class Config:
                 compute_from_camb=True, camb_cosmo_pars=_CAMBCosmoPars()
             ),
             map_sets=[
-                # typical SO configuration
                 MapSetConfig(freq_tag=27, exp_tag="SO", nhits_map_path="SO_nominal", beam=91.0),
                 MapSetConfig(freq_tag=39, exp_tag="SO", nhits_map_path="SO_nominal", beam=63.0),
                 MapSetConfig(freq_tag=93, exp_tag="SO", nhits_map_path="SO_nominal", beam=30.0),
@@ -492,7 +496,7 @@ class Config:
             ],
         )
 
-    def split_map_sets(self, num_colors: int, color: int = 0):
+    def split_map_sets(self, num_colors: int, color: int = 0) -> "Config":
         """Split the configuration into color groups (similar to MPI_Comm_split).
 
         Returns a different configuration based on a color value, allowing for parallel processing
@@ -507,9 +511,9 @@ class Config:
                 color. All other configuration parameters remain unchanged.
         """
         all_indices = np.arange(len(self.map_sets))
-        # modulo to ensure access within bounds
         my_indices = np.array_split(all_indices, num_colors)[color % num_colors]
-        return evolve(self, map_sets=[ms for i, ms in enumerate(self.map_sets) if i in my_indices])
+        subset = [ms for i, ms in enumerate(self.map_sets) if i in my_indices]
+        return self.model_copy(update={"map_sets": subset})
 
     @property
     def nside(self) -> int:

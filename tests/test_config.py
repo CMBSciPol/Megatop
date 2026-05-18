@@ -10,11 +10,12 @@ from megatop.config import (
     GeneralConfig,
     MapSetConfig,
     MapSimConfig,
+    NoiseSimConfig,
     OutputDirsConfig,
+    SOConfig,
     V3Noise,
     V3Sensitivity,
     _CAMBCosmoPars,
-    yaml_converter,
 )
 
 
@@ -37,11 +38,21 @@ def test_map_set_name():
 
 
 @pytest.mark.parametrize("class_", [V3Sensitivity, V3Noise])
-def test_structure_int_enums(class_) -> None:
-    """Check that the converter un/structures our IntEnum subclasses by name."""
+def test_int_enum_round_trip_by_name(class_) -> None:
+    """IntEnum subclasses serialize by name and accept name on input."""
     for name, member in class_.__members__.items():
-        assert yaml_converter.structure(name, class_) == member
-        assert yaml_converter.unstructure(member) == name
+        if class_ is V3Sensitivity:
+            cfg = NoiseSimConfig(experiments={"SO": SOConfig(v3_sensitivity_mode=member)})
+            dumped = cfg.model_dump(mode="json")
+            assert dumped["experiments"]["SO"]["v3_sensitivity_mode"] == name
+            reloaded = NoiseSimConfig.model_validate(dumped)
+            assert reloaded.experiments["SO"].v3_sensitivity_mode is member
+        else:
+            cfg = NoiseSimConfig(experiments={"SO": SOConfig(v3_one_over_f_mode=member)})
+            dumped = cfg.model_dump(mode="json")
+            assert dumped["experiments"]["SO"]["v3_one_over_f_mode"] == name
+            reloaded = NoiseSimConfig.model_validate(dumped)
+            assert reloaded.experiments["SO"].v3_one_over_f_mode is member
 
 
 def test_split_map_sets_one_group(example_config: Config) -> None:
