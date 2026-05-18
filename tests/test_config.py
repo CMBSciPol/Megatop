@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import TypeAdapter
 
 from megatop import DataManager
 from megatop.config import (
@@ -11,9 +12,7 @@ from megatop.config import (
     GeneralConfig,
     MapSetConfig,
     MapSimConfig,
-    NoiseSimConfig,
     OutputDirsConfig,
-    SOConfig,
     V3Noise,
     V3Sensitivity,
 )
@@ -58,19 +57,10 @@ def test_nhits_map_path_union_resolution():
 @pytest.mark.parametrize("class_", [V3Sensitivity, V3Noise])
 def test_int_enum_round_trip_by_name(class_) -> None:
     """IntEnum subclasses serialize by name and accept name on input."""
+    ta = TypeAdapter(class_)
     for name, member in class_.__members__.items():
-        if class_ is V3Sensitivity:
-            cfg = NoiseSimConfig(experiments={"SO": SOConfig(v3_sensitivity_mode=member)})
-            dumped = cfg.model_dump(mode="json")
-            assert dumped["experiments"]["SO"]["v3_sensitivity_mode"] == name
-            reloaded = NoiseSimConfig.model_validate(dumped)
-            assert reloaded.experiments["SO"].v3_sensitivity_mode is member
-        else:
-            cfg = NoiseSimConfig(experiments={"SO": SOConfig(v3_one_over_f_mode=member)})
-            dumped = cfg.model_dump(mode="json")
-            assert dumped["experiments"]["SO"]["v3_one_over_f_mode"] == name
-            reloaded = NoiseSimConfig.model_validate(dumped)
-            assert reloaded.experiments["SO"].v3_one_over_f_mode is member
+        assert ta.dump_python(member, mode="json") == name
+        assert ta.validate_python(name) is member
 
 
 def test_split_map_sets_one_group(example_config: Config) -> None:
