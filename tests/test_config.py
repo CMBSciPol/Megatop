@@ -37,6 +37,24 @@ def test_map_set_name():
     assert map_set.name == "SAT4_f027"
 
 
+def test_nhits_map_path_union_resolution():
+    """Smart-union resolves nhits_map_path to literal, Path, or None without a custom validator."""
+    common = {"freq_tag": 27, "exp_tag": "SAT4", "beam": 30}
+
+    so = MapSetConfig(**common, nhits_map_path="SO_nominal")
+    assert so.nhits_map_path == "SO_nominal"
+    assert not isinstance(so.nhits_map_path, Path)
+
+    p = MapSetConfig(**common, nhits_map_path="/some/path.fits")
+    assert isinstance(p.nhits_map_path, Path)
+    assert p.nhits_map_path == Path("/some/path.fits")
+
+    # nhits_map_path=None requires depth_map_path
+    n = MapSetConfig(**common, nhits_map_path=None, depth_map_path="/some/depth.fits")
+    assert n.nhits_map_path is None
+    assert n.depth_map_path == Path("/some/depth.fits")
+
+
 @pytest.mark.parametrize("class_", [V3Sensitivity, V3Noise])
 def test_int_enum_round_trip_by_name(class_) -> None:
     """IntEnum subclasses serialize by name and accept name on input."""

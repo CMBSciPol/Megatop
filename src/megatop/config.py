@@ -133,7 +133,7 @@ class FiducialCMBConfig(StrictModel):
     camb_cosmo_pars: CAMBCosmoPars = Field(default_factory=CAMBCosmoPars)
 
     @model_validator(mode="after")
-    def _check_camb_paths(self):
+    def fiducial_paths_required_unless_computed_from_camb(self):
         if not self.compute_from_camb and (
             self.fiducial_lensed_scalar is None or self.fiducial_unlensed_scalar_tensor_r1 is None
         ):
@@ -166,15 +166,8 @@ class MapSetConfig(StrictModel):
     frequency: Any = Field(default=None, exclude=True)
     weight: Any = Field(default=None, exclude=True)
 
-    @field_validator("nhits_map_path", mode="before")
-    @classmethod
-    def _coerce_nhits_map_path(cls, v):
-        if v is None or v == "SO_nominal":
-            return v
-        return Path(v)
-
     @model_validator(mode="after")
-    def _check_hits_or_depth(self):
+    def require_depth_or_nhits_map(self):
         if self.depth_map_path is None and self.nhits_map_path is None:
             msg = (
                 "Need to give either a depth map or a nhits_map (which can be SO_nominal) "
@@ -222,7 +215,7 @@ class MasksConfig(StrictModel):
     mock_sources_hole_radius: float = 4
 
     @model_validator(mode="after")
-    def _check_gal_key(self):
+    def gal_key_required_when_galactic_included(self):
         if self.include_galactic and self.gal_key is None:
             msg = "gal_key must not be None if using include_galactic"
             raise ValueError(msg)
@@ -235,7 +228,7 @@ class GeneralConfig(StrictModel):
     lmax: int = 1000
 
     @model_validator(mode="after")
-    def _check_lmax(self):
+    def lmax_at_most_two_nside(self):
         two_nside = 2 * self.nside
         if self.lmax > two_nside:
             msg = f"lmax={self.lmax} must be less than or equal to two_nside={two_nside}"
@@ -294,7 +287,7 @@ class Map2ClConfig(StrictModel):
     """Number of iterations for NaMaster map2alm."""
 
     @model_validator(mode="after")
-    def _check_purify(self):
+    def purify_e_and_b_are_mutually_exclusive(self):
         if self.purify_b and self.purify_e:
             msg = "Cannot purify both E and B modes spectra simultaneously. Set purify_e to False in your config."
             raise ValueError(msg)
@@ -429,11 +422,14 @@ class Config(StrictModel):
     cl2r_pars: Cl2rConfig = Field(default_factory=Cl2rConfig)
 
     @model_validator(mode="after")
-    def _check_consistency(self):
+    def frequencies_and_beams_have_same_length(self):
         if len(self.frequencies) != len(self.beams):
             msg = "Not the same number of frequencies and beam sizes"
             raise ValueError(msg)
+        return self
 
+    @model_validator(mode="after")
+    def passband_int_requires_passband_filename(self):
         if self.map_sim_pars.passband_int or self.parametric_sep_pars.passband_int:
             for map_set in self.map_sets:
                 if not map_set.passband_filename:
@@ -442,13 +438,15 @@ class Config(StrictModel):
                         "because passband_int=True."
                     )
                     raise ValueError(msg)
+        return self
 
+    @model_validator(mode="after")
+    def filter_sims_requires_obsmat_path(self):
         if self.map_sim_pars.filter_sims:
             for map_set in self.map_sets:
                 if map_set.obsmat_path is None:
                     msg = f"Map set '{map_set.name}' requires obsmat_path because filter_sims=True."
                     raise ValueError(msg)
-
         return self
 
     @classmethod
