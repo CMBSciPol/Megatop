@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 
 import camb
 import healpy as hp
@@ -11,8 +12,21 @@ from megatop.utils import logger
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
+CAMBSpectraKey = Literal[
+    "total",
+    "unlensed_scalar",
+    "unlensed_total",
+    "lensed_scalar",
+    "tensor",
+    "lens_potential",
+]
 
-def compute_spectra_from_camb(r: float, cosmo_pars: CAMBCosmoPars, which: str = "total"):
+
+def compute_spectra_from_camb(
+    r: float,
+    cosmo_pars: CAMBCosmoPars,
+    which: CAMBSpectraKey = "total",
+):
     """
     Compute CMB TT, EE, BB, TE spectra from CAMB.
     Parameters
@@ -30,7 +44,6 @@ def compute_spectra_from_camb(r: float, cosmo_pars: CAMBCosmoPars, which: str = 
     """
 
     cosmo_params = camb.set_params(**cosmo_pars.as_camb_kwargs())
-
     cosmo_params.set_for_lmax(2000, lens_potential_accuracy=1)
     cosmo_params.WantTensors = True
 
