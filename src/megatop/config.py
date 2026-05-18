@@ -23,13 +23,11 @@ __all__ = [
     "PreProcessingConfig",
     "V3Noise",
     "V3Sensitivity",
-    "ValidApoType",
     "ValidPlanckGalKey",
     "ValidExperimentConfig",
 ]
 
 
-ValidApoType = Literal["C1", "C2", "Smooth"]
 ValidPlanckGalKey = Literal[
     "GAL020", "GAL040", "GAL060", "GAL070", "GAL080", "GAL090", "GAL097", "GAL099"
 ]
@@ -218,7 +216,7 @@ class MasksConfig(StrictModel):
 
     apod_radius: float = 10
     apod_radius_point_source: float = 4
-    apod_type: ValidApoType = "C1"
+    apod_type: Literal["C1", "C2", "Smooth"] = "C1"
     binary_mask_zero_threshold: float = 1e-1
     fwhm_arcmin_smooth_nhits: float = 60
 
