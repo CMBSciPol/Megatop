@@ -1,7 +1,5 @@
 from pathlib import Path
 
-from attrs import define
-
 from .config import Config
 from .utils import logger
 
@@ -10,11 +8,11 @@ __all__ = [
 ]
 
 
-@define
 class DataManager:
     """Class for managing data products for Megatop."""
 
-    _config: Config
+    def __init__(self, config: Config) -> None:
+        self._config = config
 
     def dump_config(self, filename: str | Path = "config_log") -> None:
         """Serialize the DataManager's Config to a yaml file.
