@@ -69,7 +69,7 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
     noise_freq_maps = []
     for noise_filename in manager.get_noise_maps_filenames(id_real):
         logger.debug(f"Importing noise map: {noise_filename}")
-        noise_freq_maps.append(hp.read_map(noise_filename, field=None))
+        noise_freq_maps.append(hp.read_map(noise_filename, field=None, dtype=np.float64))
 
     # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
@@ -95,7 +95,7 @@ def _harmonic_nl_contrib(
     ell_min = config.parametric_sep_pars.harmonic_lmin
     ell_max = config.parametric_sep_pars.harmonic_lmax
 
-    mask_analysis = hp.read_map(manager.path_to_analysis_mask)
+    mask_analysis = hp.read_map(manager.path_to_analysis_mask, dtype=np.float64)
 
     if config.parametric_sep_pars.harmonic_delta_ell != 1:
         with Timer("init-namaster-workspace"):

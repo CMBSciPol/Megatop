@@ -120,7 +120,7 @@ def read_input_maps(list_mapnames: list[Path]) -> list[npt.ArrayLike]:
     freq_maps_input = []
     for mapname in list_mapnames:
         logger.debug(f"Reading map from {mapname}")
-        freq_maps_input.append(hp.read_map(mapname, field=None))
+        freq_maps_input.append(hp.read_map(mapname, field=None, dtype=np.float64))
     return freq_maps_input
 
 
