@@ -6,6 +6,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 
+import megatop.utils.harmonic as hu
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
 from megatop.pipeline.mocker import get_noise
@@ -97,10 +98,8 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
         cls = []
         cls_beamed = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(fg_freq_maps[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH))
-            cls_beamed.append(
-                hp.anafast(fg_freq_maps_beamed[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH)
-            )
+            cls.append(hu.anafast(fg_freq_maps[i_f], lmax=config.lmax))
+            cls_beamed.append(hu.anafast(fg_freq_maps_beamed[i_f], lmax=config.lmax))
         cls = np.array(cls)
         cls_beamed = np.array(cls_beamed)
 
@@ -147,7 +146,7 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
         )
 
     if cls:
-        cls = hp.anafast(cmb_map, lmax=config.lmax, datapath=HEALPY_DATA_PATH)
+        cls = hu.anafast(cmb_map, lmax=config.lmax)
         cls = np.array(cls)
 
         plotTTEEBB_diff(
@@ -187,9 +186,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(
-                hp.anafast(noise_freq_maps[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH)
-            )
+            cls.append(hu.anafast(noise_freq_maps[i_f], lmax=config.lmax))
         cls = np.array(cls)
 
         fsky_from_nhits = np.sqrt(np.mean(common_nhits_map**2))
@@ -276,7 +273,7 @@ def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True
     if cls:
         cls = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hp.anafast(combined_maps[i_f], lmax=config.lmax, datapath=HEALPY_DATA_PATH))
+            cls.append(hu.anafast(combined_maps[i_f], lmax=config.lmax))
         cls = np.array(cls)
 
         plotTTEEBB(

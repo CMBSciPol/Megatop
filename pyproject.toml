@@ -24,6 +24,7 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "camb",
+    "ducc0",
     "emcee",
     "fgbuster @ git+https://github.com/fgbuster/fgbuster.git",
     "getdist",
@@ -31,6 +32,7 @@ dependencies = [
     "matplotlib",
     "numpy",
     "pydantic >= 2.7",
+    "pixell",
     "pymaster",
     "pysm3 >= 3.4.4",
     "pyyaml",
@@ -39,10 +41,6 @@ dependencies = [
 
 [project.optional-dependencies]
 mpi = ["mpi4py"]
-sht = [
-    "ducc0",
-    "pixell",
-]
 snake = [
     "snakemake; python_version >= '3.11'",
 ]
