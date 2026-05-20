@@ -1,9 +1,11 @@
 from pathlib import Path
 
 import pytest
+from pydantic import TypeAdapter
 
 from megatop import DataManager
 from megatop.config import (
+    CAMBCosmoPars,
     Config,
     DataDirsConfig,
     FiducialCMBConfig,
@@ -13,8 +15,6 @@ from megatop.config import (
     OutputDirsConfig,
     V3Noise,
     V3Sensitivity,
-    _CAMBCosmoPars,
-    yaml_converter,
 )
 
 
@@ -36,12 +36,31 @@ def test_map_set_name():
     assert map_set.name == "SAT4_f027"
 
 
+def test_nhits_map_path_union_resolution():
+    """Smart-union resolves nhits_map_path to literal, Path, or None without a custom validator."""
+    common = {"freq_tag": 27, "exp_tag": "SAT4", "beam": 30}
+
+    so = MapSetConfig(**common, nhits_map_path="SO_nominal")
+    assert so.nhits_map_path == "SO_nominal"
+    assert not isinstance(so.nhits_map_path, Path)
+
+    p = MapSetConfig(**common, nhits_map_path="/some/path.fits")
+    assert isinstance(p.nhits_map_path, Path)
+    assert p.nhits_map_path == Path("/some/path.fits")
+
+    # nhits_map_path=None requires depth_map_path
+    n = MapSetConfig(**common, nhits_map_path=None, depth_map_path="/some/depth.fits")
+    assert n.nhits_map_path is None
+    assert n.depth_map_path == Path("/some/depth.fits")
+
+
 @pytest.mark.parametrize("class_", [V3Sensitivity, V3Noise])
-def test_structure_int_enums(class_) -> None:
-    """Check that the converter un/structures our IntEnum subclasses by name."""
+def test_int_enum_round_trip_by_name(class_) -> None:
+    """IntEnum subclasses serialize by name and accept name on input."""
+    ta = TypeAdapter(class_)
     for name, member in class_.__members__.items():
-        assert yaml_converter.structure(name, class_) == member
-        assert yaml_converter.unstructure(member) == name
+        assert ta.dump_python(member, mode="json") == name
+        assert ta.validate_python(name) is member
 
 
 def test_split_map_sets_one_group(example_config: Config) -> None:
@@ -67,7 +86,7 @@ def minimal_config():
     return Config(
         data_dirs=DataDirsConfig(root="data"),
         output_dirs=OutputDirsConfig(root="out"),
-        fiducial_cmb=FiducialCMBConfig(compute_from_camb=True, camb_cosmo_pars=_CAMBCosmoPars()),
+        fiducial_cmb=FiducialCMBConfig(compute_from_camb=True, camb_cosmo_pars=CAMBCosmoPars()),
         map_sets=[MapSetConfig(freq_tag=93, exp_tag="SO", beam=30.0, nhits_map_path="SO_nominal")],
     )
 
@@ -90,7 +109,7 @@ def test_filter_sims_with_obsmat_path_passes() -> None:
     Config(
         data_dirs=DataDirsConfig(root="data"),
         output_dirs=OutputDirsConfig(root="out"),
-        fiducial_cmb=FiducialCMBConfig(compute_from_camb=True, camb_cosmo_pars=_CAMBCosmoPars()),
+        fiducial_cmb=FiducialCMBConfig(compute_from_camb=True, camb_cosmo_pars=CAMBCosmoPars()),
         map_sets=[
             MapSetConfig(
                 freq_tag=93,

@@ -8,6 +8,8 @@ import healpy as hp
 import numpy as np
 import pymaster as nmt
 
+import megatop.utils.harmonic as hu
+
 from .logger import logger
 from .timer import function_timer
 
@@ -53,17 +55,7 @@ def smooth_mask(mask, fwhm_arcmin):
     """
     Smooth mask(s) with a (gaussian) beam.
     """
-    if mask.ndim > 1:
-        mask_smoothed = []
-        for m in mask:
-            mask_smoothed.append(
-                hp.smoothing(m, fwhm=np.radians(fwhm_arcmin / 60.0), datapath=HEALPY_DATA_PATH)
-            )
-        mask_smoothed = np.array(mask_smoothed)
-    else:
-        mask_smoothed = hp.smoothing(
-            mask, fwhm=np.radians(fwhm_arcmin / 60.0), datapath=HEALPY_DATA_PATH
-        )
+    mask_smoothed = hu.smooth(mask, fwhm_arcmin)
     mask_smoothed[mask_smoothed < 0] = 0
     return mask_smoothed
 
@@ -75,7 +67,7 @@ def read_depth_maps(list_depthmapname: list[Path], nside: int):
     depth_maps = []
     for depthmapname in list_depthmapname:
         depth_maps.append(hp.ud_grade(hp.read_map(depthmapname, field=0), nside_out=nside))
-    return np.array(depth_maps)
+    return np.array(depth_maps, dtype=np.float64)
 
 
 def read_nhits_maps(list_hitmapname: list[Path], nside: int):
@@ -102,7 +94,7 @@ def read_nhits_maps(list_hitmapname: list[Path], nside: int):
             nhits_maps.append(
                 hp.ud_grade(hp.read_map(hitmapname, field=0), nside_out=nside, power=-2)
             )
-    return np.array(nhits_maps)
+    return np.array(nhits_maps, dtype=np.float64)
 
 
 def norm_smooth_nhits_maps(nhits_maps, fwhm_arcmin_nhits):
@@ -187,11 +179,7 @@ def get_binary_mask_from_nhits(nhits_map, nside, zero_threshold=1e-3):
     -------
     binary_mask: array
     """
-    nhits_smoothed = hp.smoothing(
-        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64),
-        fwhm=np.pi / 180,
-        datapath=HEALPY_DATA_PATH,
-    )
+    nhits_smoothed = hu.smooth(hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64), 60.0)
     nhits_smoothed[nhits_smoothed < 0] = 0
     nhits_smoothed /= np.amax(nhits_smoothed)
     binary_mask = np.zeros_like(nhits_smoothed)
@@ -285,8 +273,9 @@ def get_spin_derivatives(map):
     ell = np.arange(3 * nside)
     alpha1i = np.sqrt(ell * (ell + 1.0))
     alpha2i = np.sqrt((ell - 1.0) * ell * (ell + 1.0) * (ell + 2.0))
-    first = hp.alm2map(hp.almxfl(hp.map2alm(map, datapath=HEALPY_DATA_PATH), alpha1i), nside=nside)
-    second = hp.alm2map(hp.almxfl(hp.map2alm(map, datapath=HEALPY_DATA_PATH), alpha2i), nside=nside)
+    alm = hu.map2alm(map, spin=0)
+    first = hu.alm2map(hu.almxfl(alm, alpha1i), spin=0, nside=nside)
+    second = hu.alm2map(hu.almxfl(alm, alpha2i), spin=0, nside=nside)
 
     return first, second
 

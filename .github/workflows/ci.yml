@@ -49,7 +49,7 @@ jobs:
           sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
 
       - name: Sync project
-        run: uv sync --extra sht --dev --managed-python
+        run: uv sync --dev --managed-python
 
       - name: Run tests
         run: uv run pytest -vv

@@ -17,9 +17,9 @@ from megatop.utils.spectra import compute_spectra_from_camb
 
 def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
     if config.fiducial_cmb.compute_from_camb:
-        camb_cosmo_pars_dict = config.fiducial_cmb.get_camb_cosmo_pars_as_dict()
+        cosmo_pars = config.fiducial_cmb.camb_cosmo_pars
         logger.info(
-            f"Generating spectra from CAMB (unlensed scalar+tensor r=1) for parameters {camb_cosmo_pars_dict}."
+            f"Generating spectra from CAMB (unlensed scalar+tensor r=1) for parameters {cosmo_pars}."
         )
         # Generate and save fiducial unlensed scalar and tensor spectra:
         (
@@ -27,9 +27,7 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
             Cls_unlensed_scalar_tensor_r1_EE,
             Cls_unlensed_scalar_tensor_r1_BB,
             Cls_unlensed_scalar_tensor_r1_TE,
-        ) = compute_spectra_from_camb(
-            r=1.0, cosmo_params_dict=camb_cosmo_pars_dict, which="unlensed_total"
-        )
+        ) = compute_spectra_from_camb(r=1.0, cosmo_pars=cosmo_pars, which="unlensed_total")
 
         Cls_unlensed_scalar_tensor_r1 = np.array(
             [
@@ -47,18 +45,12 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
             overwrite=True,
         )
 
-        logger.info(
-            f"Saved spectra (unlensed scalar+tensor) for parameters {camb_cosmo_pars_dict}."
-        )
+        logger.info(f"Saved spectra (unlensed scalar+tensor) for parameters {cosmo_pars}.")
 
-        logger.info(
-            f"Generating spectra from CAMB (lensed scalar) for parameters {camb_cosmo_pars_dict}."
-        )
+        logger.info(f"Generating spectra from CAMB (lensed scalar) for parameters {cosmo_pars}.")
         # Generate and save fiducial lensed scalar spectra:
         Cls_lensed_scalar_TT, Cls_lensed_scalar_EE, Cls_lensed_scalar_BB, Cls_lensed_scalar_TE = (
-            compute_spectra_from_camb(
-                r=0.0, cosmo_params_dict=camb_cosmo_pars_dict, which="lensed_scalar"
-            )
+            compute_spectra_from_camb(r=0.0, cosmo_pars=cosmo_pars, which="lensed_scalar")
         )
         Cls_lensed_scalar = np.array(
             [
@@ -72,7 +64,7 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
         path_lensed_scalar_dest = manager.path_to_lensed_scalar
         hp.write_cl(filename=path_lensed_scalar_dest, cl=Cls_lensed_scalar, overwrite=True)
 
-        logger.info(f"Saved spectra (lensed scalar) for parameters {camb_cosmo_pars_dict}.")
+        logger.info(f"Saved spectra (lensed scalar) for parameters {cosmo_pars}.")
 
     else:
         path_unlensed_scalar_tensor_r1_source = (

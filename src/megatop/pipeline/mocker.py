@@ -11,6 +11,7 @@ import healpy as hp
 import numpy as np
 from numpy.typing import NDArray
 
+import megatop.utils.harmonic as hu
 from megatop import Config, DataManager
 from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
@@ -223,9 +224,9 @@ def func_TF_sims(
     logger.info(f"alms B = {alms_TEB[2]}")
 
     # Generating pure T, E and B maps from alms:
-    map_pure_T = hp.alm2map(alms_TEB * np.array([1, 0, 0])[:, None], nside=config.nside)
-    map_pure_E = hp.alm2map(alms_TEB * np.array([0, 1, 0])[:, None], nside=config.nside)
-    map_pure_B = hp.alm2map(alms_TEB * np.array([0, 0, 1])[:, None], nside=config.nside)
+    map_pure_T, map_pure_E, map_pure_B = hu.alm2map(
+        np.eye(3)[:, :, None] * alms_TEB, spin=[0, 2], nside=config.nside
+    )
 
     unfiltered_freq_map_pure_T = np.array([map_pure_T] * len(config.frequencies))
     unfiltered_freq_map_pure_E = np.array([map_pure_E] * len(config.frequencies))

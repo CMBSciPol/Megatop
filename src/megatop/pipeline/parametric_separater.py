@@ -10,6 +10,7 @@ import numpy as np
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
 
+import megatop.utils.harmonic as hu
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger, mask, passband
 from megatop.utils.compsep import set_alm_tozero_below_lmin
@@ -147,17 +148,12 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         logger.info(
             "Harmonic Compsep: Computing component map from output alms, this might induce some edge effect..."
         )
-        res.s = np.array(
-            [
-                hp.alm2map_spin(
-                    res.s_alm[i],
-                    nside=config.nside,
-                    spin=2,
-                    lmax=config.parametric_sep_pars.harmonic_lmax,
-                )  # lmax=3 * config.nside
-                for i in range(res.s_alm.shape[0])
-            ]
-        )
+        res.s = hu.alm2map(
+            res.s_alm,
+            spin=2,
+            nside=config.nside,
+            lmax=config.parametric_sep_pars.harmonic_lmax,
+        )  # lmax=3 * config.nside
         # remove binary mask to avoid double application when entering namaster:
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)
         res.s[..., np.where(binary_mask != 0)] /= analysis_mask[np.where(binary_mask != 0)]
