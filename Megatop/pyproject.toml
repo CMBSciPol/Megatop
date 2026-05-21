@@ -1,0 +1,87 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[project]
+name = "Megatop"
+authors = [
+    { name = "Baptiste Jost" },
+    { name = "Benjamin Beringue" },
+    { name = "Simon Biquard" },
+    { name = "Amalia Aguilar" },
+]
+version = "0.1.0"
+description = "A map-based CMB polarization data analysis pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "attrs",
+    "camb",
+    "cattrs",
+    "emcee",
+    "fgbuster @ git+https://github.com/fgbuster/fgbuster.git@672ac19e21833c3bf3d87b0ee0452219851b042e",
+    "getdist",
+    "healpy",
+    "matplotlib",
+    "numpy",
+    "pymaster",
+    "pysm3 >= 3.4.1a2",
+    "pyyaml",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+mpi = ["mpi4py"]
+
+[dependency-groups]
+dev = ["pytest"]
+docs = [
+    "zensical>=0.0.21",
+    "mkdocstrings-python>=2.0.1",
+    "griffe-fieldz>=0.4.0"
+]
+
+[project.scripts]
+"megatop-compsep-run" = "megatop.pipeline.parametric_separater:main"
+"megatop-compsep-plot" = "megatop.plot.comp_sep_plotter:main"
+"megatop-map2cl-run" = "megatop.pipeline.map_to_cler:main"
+"megatop-map2cl-plot" = "megatop.plot.map2cl_plotter:main"
+"megatop-mask-run" = "megatop.pipeline.mask_handler:main"
+"megatop-mask-plot" = "megatop.plot.mask_plotter:main"
+"megatop-mock-run" = "megatop.pipeline.mocker:main"
+"megatop-mock-plot" = "megatop.plot.mock_plotter:main"
+"megatop-noisecov-run" = "megatop.pipeline.pixel_noisecov_estimater:main"
+"megatop-noisecov-plot" = "megatop.plot.noise_cov_plotter:main"
+"megatop-preproc-run" = "megatop.pipeline.preprocesser:main"
+"megatop-preproc-plot" = "megatop.plot.preproc_plotter:main"
+"megatop-noisespectra-run" = "megatop.pipeline.noise_spectra_estimater:main"
+"megatop-noisespectra-plot" = "megatop.plot.noise_spectra_plotter:main"
+"megatop-cl2r-run" = "megatop.pipeline.cl2r_estimater:main"
+"megatop-cl2r-plot" = "megatop.plot.r_stats_plotter:main"
+"megatop-cl2r_mcmc-plot" = "megatop.plot.mcmc_plotter:main"
+"megatop-binning-run" = "megatop.pipeline.binner_maker:main"
+"megatop-TFcomputing-run" = "megatop.pipeline.TF_computation_interface:main"
+"megatop-jaxpreproc-run" = "megatop.pipeline.precomputationer:main"
+"megatop-obsmatsanity-run" = "megatop.pipeline.obsmat_sanity_checker:main"
+
+
+[tool.ruff]
+fix = true            # autofix issues when possible
+force-exclude = true  # useful with ruff-pre-commit plugin
+line-length = 100
+exclude = ["scripts"]
+
+[tool.ruff.lint]
+extend-select = [
+    "ARG001", # flake8-unused-function-argument
+    "EXE",  # flake8-executable
+    "I",   # isort
+    "NPY", # NumPy specific rules
+    "PTH", # flake8-use-pathlib
+    "SIM", # flake8-simplify
+    "T10", # flake8-debugger
+    "UP",  # pyupgrade
+]
