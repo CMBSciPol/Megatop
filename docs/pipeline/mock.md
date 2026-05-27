@@ -1,3 +1,0 @@
-# Mocks
-
-::: megatop.pipeline.mocker

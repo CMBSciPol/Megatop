@@ -1,3 +1,0 @@
-# `megatop`
-
-::: megatop

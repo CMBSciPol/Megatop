@@ -56,7 +56,7 @@ map2cl_pars:
 map_sets:
 - TF_path: .
   angles_central_value_degrees: 1.0
-  angles_uncertainty_degrees: 0.1
+  angles_uncertainty_degrees: null
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -71,7 +71,7 @@ map_sets:
   suffix_obsmat_scipy: ''
 - TF_path: .
   angles_central_value_degrees: 5.0
-  angles_uncertainty_degrees: 0.1
+  angles_uncertainty_degrees: null
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -86,7 +86,7 @@ map_sets:
   suffix_obsmat_scipy: ''
 - TF_path: .
   angles_central_value_degrees: 10.0
-  angles_uncertainty_degrees: 0.1
+  angles_uncertainty_degrees: null
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -101,7 +101,7 @@ map_sets:
   suffix_obsmat_scipy: ''
 - TF_path: .
   angles_central_value_degrees: 20.0
-  angles_uncertainty_degrees: 0.1
+  angles_uncertainty_degrees: null
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -116,7 +116,7 @@ map_sets:
   suffix_obsmat_scipy: ''
 - TF_path: .
   angles_central_value_degrees: 40.0
-  angles_uncertainty_degrees: 0.1
+  angles_uncertainty_degrees: null
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -131,7 +131,7 @@ map_sets:
   suffix_obsmat_scipy: ''
 - TF_path: .
   angles_central_value_degrees: 60.0
-  angles_uncertainty_degrees: 0.1
+  angles_uncertainty_degrees: null
   beam: 0.0
   depth_map_path: null
   exp_tag: SO-SAT
@@ -158,7 +158,7 @@ map_sim_pars:
   filter_noise: false
   filter_sims: false
   generate_sims_for_TF: false
-  n_sim: 2
+  n_sim: 1
   passband_int: false
   r_input: 0.0
   single_cmb: false

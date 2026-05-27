@@ -1,3 +1,0 @@
-# Preprocessing
-
-::: megatop.pipeline.preprocesser
