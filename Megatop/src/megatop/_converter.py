@@ -1,21 +1,35 @@
 from enum import IntEnum
-
+from typing import Union, get_args, get_origin
 from cattrs.preconf.pyyaml import make_converter
 
 __all__ = [
     "yaml_converter",
 ]
 
-
 def _is_intenum(cls):
-    return issubclass(cls, IntEnum)
+    try:
+        return issubclass(cls, IntEnum)
+    except TypeError:
+        return False
 
+def _is_optional_float(cls):
+    return (
+        get_origin(cls) is Union
+        and float in get_args(cls)
+        and type(None) in get_args(cls)
+    )
 
-# YAML converter that catches typos
 yaml_converter = make_converter(forbid_extra_keys=True)
 
-# unstructure IntEnum subclasses by name instead of value
 yaml_converter.register_unstructure_hook_func(_is_intenum, lambda val: val.name)
 
-# TODO: that one doesn't work -- it's not called
-# yaml_converter.register_structure_hook_func(_is_intenum, lambda val, cls: cls[val])
+yaml_converter.register_structure_hook_func(
+    _is_optional_float,
+    lambda val, _: None if (val is None or val == 'None') else float(val)
+)
+
+# Override le hook pour float pour gérer les strings 'None'
+yaml_converter.register_structure_hook(
+    float,
+    lambda val, _: None if (val is None or val == 'None') else float(val)
+)

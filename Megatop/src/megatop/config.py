@@ -163,7 +163,7 @@ class MapSetConfig:
     nhits_map_path: str | Path | None = field(default=None)
     depth_map_path: Path | None = field(default=None)
     angles_central_value_degrees: float = 0.0
-    angles_uncertainty_degrees: float = 0.0
+    angles_uncertainty_degrees: float | None = None
 
     def __attrs_post_init__(self) -> None:
         self.name = f"{self.exp_tag}_f{self.freq_tag:03d}"

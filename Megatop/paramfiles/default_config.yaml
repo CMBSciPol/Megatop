@@ -14,7 +14,7 @@ map_sets:
   #beam: 91.
   beam: 0.
   angles_central_value_degrees : 1.0
-  angles_uncertainty_degrees : 0.1
+  angles_uncertainty_degrees : None
   # angle_incertanty_degrees = 0 Corresponds to no prior case and not ideal infinite precision case, as prior = 0 lead to divergence in the Likelihood.
   
 - exp_tag: SO-SAT
@@ -24,7 +24,7 @@ map_sets:
   #beam: 63.
   beam: 0.
   angles_central_value_degrees : 5.0
-  angles_uncertainty_degrees : 0.1
+  angles_uncertainty_degrees : None
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -33,7 +33,7 @@ map_sets:
   #beam: 30.
   beam: 0.
   angles_central_value_degrees : 10.0
-  angles_uncertainty_degrees : 0.1
+  angles_uncertainty_degrees : None
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -42,7 +42,7 @@ map_sets:
   #beam: 17.
   beam: 0.
   angles_central_value_degrees : 20.0
-  angles_uncertainty_degrees : 0.1
+  angles_uncertainty_degrees : None
 
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -51,7 +51,7 @@ map_sets:
   #beam: 11.
   beam: 0.
   angles_central_value_degrees : 40.0
-  angles_uncertainty_degrees : 0.1
+  angles_uncertainty_degrees : None
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -60,14 +60,14 @@ map_sets:
   #beam: 9.
   beam: 0.
   angles_central_value_degrees : 60.0
-  angles_uncertainty_degrees : 0.1
+  angles_uncertainty_degrees : None
 
 map_sim_pars:
   A_lens: 1
   cmb_seed: 1
   cmb_sim_no_pysm: true
   filter_sims: false
-  n_sim: 2
+  n_sim: 1
   r_input: 0.0
   Birefringence: 0.35
   single_cmb: false
