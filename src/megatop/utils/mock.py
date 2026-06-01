@@ -211,7 +211,7 @@ def get_noise_experiment(
             dtype=float,
         )
         # create noise spectra array matching lmax = 2*nside
-        n_ell = np.zeros((len(white_noise_levels), 2 * nside), dtype=float)
+        n_ell = np.zeros((len(white_noise_levels), lmax), dtype=float)
 
 
     elif type(noise_config_exp) is ExternalNoiseMapconfig:
@@ -225,7 +225,8 @@ def get_noise_experiment(
             for fr in noise_config_exp.default_bands
         ]  
         external_map_list = [
-            hp.read_map(fname) for fname in fname_list
+            noise_config_exp.correction * hp.read_map(fname, field=None)
+            for fname in fname_list
         ]
         return {"noise_map": external_map_list}
 

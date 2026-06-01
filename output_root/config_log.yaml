@@ -16,6 +16,9 @@ cl2r_pars:
     A_{sync}:
     - 0.0
     - 1.0
+    Birefringence:
+    - 0
+    - 1
     r:
     - -0.02
     - 1.0
@@ -24,9 +27,12 @@ data_dirs:
   TF_sims_maps: TF_sims_maps
   beams: beams
   maps: maps
+  maps_root: null
   noise_maps: noise_maps
+  noise_maps_root: null
   passbands: passbands
-  root: /lustre/work/cgubeno/Megatop/default_config_256/data_root
+  passbands_root: null
+  root: data_root
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2.0e-09
@@ -40,14 +46,15 @@ fiducial_cmb:
   fiducial_lensed_scalar: null
   fiducial_unlensed_scalar_tensor_r1: null
 general_pars:
-  lmax: 512
+  lmax: 1000
   lmin: 30
-  nside: 256
+  nside: 512
 map2cl_pars:
   delta_ell: 10
   n_iter_namaster: 3
   purify_b: true
   purify_e: false
+  uniform_start: null
 map_sets:
 - TF_path: .
   beam: 91.0
@@ -60,6 +67,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 63.0
   depth_map_path: null
@@ -71,6 +80,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 30.0
   depth_map_path: null
@@ -82,6 +93,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 17.0
   depth_map_path: null
@@ -93,6 +106,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 11.0
   depth_map_path: null
@@ -104,6 +119,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 9.0
   depth_map_path: null
@@ -115,23 +132,33 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 map_sim_pars:
   A_lens: 1
+  Birefringence: 0
   TF_n_sim: 1
   TF_power_law_amp: 1.0
   TF_power_law_delta_ell: 1
   TF_power_law_index: 2.0
-  cmb_seed: null
+  cmb_seed: 67
   cmb_sim_no_pysm: true
   filter_sims: false
   generate_sims_for_TF: false
-  n_sim: 10
+  input_maps_correction: 1.0
+  input_maps_prefix: ''
+  input_maps_root: null
+  input_maps_suffix: ''
+  n_sim: 1
+  output_coord_pysm_fg: E
   passband_int: false
   r_input: 0
+  remove_input_maps_noise: false
   single_cmb: false
   sky_model:
   - d0
   - s0
+  use_input_maps: false
 masks_pars:
   analysis_mask_name: analysis_mask
   apod_radius: 10
@@ -142,12 +169,14 @@ masks_pars:
   fwhm_arcmin_smooth_nhits: 60
   gal_key: null
   galactic_mask_name: galactic_mask
+  galactic_mask_path: null
   include_galactic: false
   include_sources: false
   input_sources_mask: null
   mock_nsources: 100
   mock_sources_hole_radius: 4
   nhits_map_name: nhits_map
+  rotate_G2C: true
   sources_mask_name: sources_mask
 noise_cov_pars:
   save_preprocessed_noise_maps: true
@@ -171,7 +200,9 @@ noise_sim_pars:
       v3_one_over_f_mode: OPTIMISTIC
       v3_sensitivity_mode: GOAL
   include_nhits: true
-  n_sim: 10
+  n_sim: 1
+  prefer_external_noise_maps: true
+  seed: 42
 output_dirs:
   binning: binning
   components: components
@@ -181,16 +212,24 @@ output_dirs:
   mcmc: mcmc
   noise_spectra: noise_spectra
   plots: plots
+  precomputation: precomputation
+  prepoc_diag_precond: diag_precond
   preproc: preproc
-  root: /lustre/work/cgubeno/Megatop/default_config_256/output_root
+  root: output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:
   alm2map: false
+  dust_temp: 20.0
   harmonic_delta_ell: 10
   harmonic_lmax: 256
   harmonic_lmin: 30
   include_synchrotron: true
+  megabuster_options:
+    max_steps_CG: 200
+    tol_CG: 1.0e-06
+    use_preconditioner_diag: false
+    use_preconditioner_pinv: false
   minimize_method: TNC
   minimize_options:
     disp: false
@@ -201,11 +240,13 @@ parametric_sep_pars:
   minimize_tol: 1.0e-18
   passband_int: false
   use_harmonic_compsep: false
+  use_megabuster: false
 plot_pars:
   lmax_plot: 1000
   lmin_plot: 30
 pre_proc_pars:
   DEBUGskippreproc: false
+  beam_fwhms: null
   common_beam_correction: 100
   correct_for_TF: false
   sum_TF_column: true

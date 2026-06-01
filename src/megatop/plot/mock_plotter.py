@@ -70,7 +70,11 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
         logger.info("Using passband-integration for the mocker step.")
 
     fg_freq_maps = mock.generate_map_fgs_pysm(
-        config.map_sets, config.nside, config.lmax, config.map_sim_pars.sky_model
+        config.map_sets,
+        config.nside,
+        config.lmax,
+        config.map_sim_pars.sky_model,
+        output_coord=config.map_sim_pars.output_coord_pysm_fg,
     )
     fg_freq_maps_beamed = np.zeros_like(fg_freq_maps)
 
@@ -235,6 +239,8 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 cl_model[:, 2, 2:] = n_ell
             elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
                 cl_model[i_map_set] = 0.0
+            elif noise_config_exp.noise_option == NoiseOption.NOISE_MAP:
+                cl_model[i_map_set] = cls[i_map_set]
             else:
                 raise NotImplementedError(
                     f"Noise option {noise_config_exp.noise_option} not implemented."

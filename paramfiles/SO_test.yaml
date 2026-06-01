@@ -24,9 +24,12 @@ data_dirs:
   TF_sims_maps: TF_sims_maps
   beams: beams
   maps: maps
+  maps_root: null
   noise_maps: noise_maps
+  noise_maps_root: null
   passbands: passbands
-  root: /lustre/work/cgubeno/Megatop/Tests/SO_config_500noise_tests/data_root
+  passbands_root: null
+  root: /lustre/work/cgubeno/Megatop/Tests/SO_config_npipe_maps/data_root
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2.0e-09
@@ -40,7 +43,7 @@ fiducial_cmb:
   fiducial_lensed_scalar: null
   fiducial_unlensed_scalar_tensor_r1: null
 general_pars:
-  lmax: 300
+  lmax: 256
   lmin: 30
   nside: 128
 map2cl_pars:
@@ -50,128 +53,149 @@ map2cl_pars:
   purify_e: false
 map_sets:
 - TF_path: .
-  beam: 91.0
+  beam: 32.3
   depth_map_path: null
-  exp_tag: SO
+  exp_tag: PLANCK
   file_prefix: ''
-  freq_tag: 27
+  freq_tag: 30
   nhits_map_path: SO_nominal
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
 - TF_path: .
-  beam: 63.0
+  beam: 27.0
   depth_map_path: null
-  exp_tag: SO
+  exp_tag: PLANCK
   file_prefix: ''
-  freq_tag: 39
+  freq_tag: 44
   nhits_map_path: SO_nominal
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
 - TF_path: .
-  beam: 30.0
+  beam: 13.3
   depth_map_path: null
-  exp_tag: SO
+  exp_tag: PLANCK
   file_prefix: ''
-  freq_tag: 93
+  freq_tag: 70
   nhits_map_path: SO_nominal
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
 - TF_path: .
-  beam: 17.0
+  beam: 9.7
   depth_map_path: null
-  exp_tag: SO
+  exp_tag: PLANCK
   file_prefix: ''
-  freq_tag: 145
+  freq_tag: 100
   nhits_map_path: SO_nominal
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
 - TF_path: .
-  beam: 11.0
+  beam: 7.2
   depth_map_path: null
-  exp_tag: SO
+  exp_tag: PLANCK
   file_prefix: ''
-  freq_tag: 225
+  freq_tag: 143
   nhits_map_path: SO_nominal
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
 - TF_path: .
-  beam: 9.0
+  beam: 5.0
   depth_map_path: null
-  exp_tag: SO
+  exp_tag: PLANCK
   file_prefix: ''
-  freq_tag: 280
+  freq_tag: 217
+  nhits_map_path: SO_nominal
+  noise_prefix: noise_
+  obsmat_path: .
+  passband_filename: ''
+  simfoTF_prefix: simforTF_
+- TF_path: .
+  beam: 4.8
+  depth_map_path: null
+  exp_tag: PLANCK
+  file_prefix: ''
+  freq_tag: 353
   nhits_map_path: SO_nominal
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
 map_sim_pars:
-  A_lens: 1
+  A_lens: 1.0
+  Birefringence: 0.0
   TF_n_sim: 1
   TF_power_law_amp: 1.0
   TF_power_law_delta_ell: 1
   TF_power_law_index: 2.0
-  cmb_seed: null
+  cmb_seed: 67
   cmb_sim_no_pysm: true
   filter_sims: false
   generate_sims_for_TF: false
+  input_maps_correction: 1000000.0
+  input_maps_prefix: npipe6v20_
+  input_maps_root: /lustre/work/SO-MEGATOP/NPIPE/nside256_coordsG/npipe6v20_sim
+  input_maps_suffix: _map
+  id_offset: 1
   n_sim: 100
+  output_coord_pysm_fg: G
   passband_int: false
-  r_input: 0
+  r_input: 0.0
+  remove_input_maps_noise: false
   single_cmb: false
   sky_model:
   - d0
   - s0
+  use_input_maps: true
 masks_pars:
   analysis_mask_name: analysis_mask
-  apod_radius: 10
-  apod_radius_point_source: 4
+  apod_radius: 10.0
+  apod_radius_point_source: 4.0
   apod_type: C1
   binary_mask_name: binary_mask
   binary_mask_zero_threshold: 0.1
-  fwhm_arcmin_smooth_nhits: 60
+  fwhm_arcmin_smooth_nhits: 60.0
   gal_key: null
   galactic_mask_name: galactic_mask
+  galactic_mask_path: null
   include_galactic: false
   include_sources: false
   input_sources_mask: null
   mock_nsources: 100
-  mock_sources_hole_radius: 4
+  mock_sources_hole_radius: 4.0
   nhits_map_name: nhits_map
+  rotate_G2C: true
   sources_mask_name: sources_mask
 noise_cov_pars:
   save_preprocessed_noise_maps: true
 noise_sim_pars:
   experiments:
-    SO:
-      Ntubes_years:
-      - 0.33  #divide by 3 for test
-      - 3.0
-      - 2.33
-      SAC_yrs_LF: 1.0
+    PLANCK:
+      correction: 1000000.0
       default_bands:
-      - 27
-      - 39
-      - 93
-      - 145
-      - 225
-      - 280
-      noise_option: noise_spectra
-      usev3p1: true
-      v3_one_over_f_mode: OPTIMISTIC
-      v3_sensitivity_mode: GOAL
+      - 30.0
+      - 44.0
+      - 70.0
+      - 100.0
+      - 143.0
+      - 217.0
+      - 353.0
+      id_sim_suffix: false
+      noise_option: noise_map
+      prefix: npipe6v20_
+      root: /lustre/work/SO-MEGATOP/NPIPE/nside256_coordsG/npipe6v20_sim
+      suffix: _residual
   include_nhits: true
-  n_sim: 500
+  n_sim: 100
+  prefer_external_noise_maps: true
 output_dirs:
   binning: binning
   components: components
@@ -182,11 +206,12 @@ output_dirs:
   noise_spectra: noise_spectra
   plots: plots
   preproc: preproc
-  root: /lustre/work/cgubeno/Megatop/Tests/SO_config_500noise_tests/output_root
+  root: /lustre/work/cgubeno/Megatop/Tests/SO_config_npipe_maps/output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:
   alm2map: false
+  dust_temp: 20.0
   harmonic_delta_ell: 10
   harmonic_lmax: 256
   harmonic_lmin: 30
@@ -206,6 +231,6 @@ plot_pars:
   lmin_plot: 30
 pre_proc_pars:
   DEBUGskippreproc: false
-  common_beam_correction: 100
+  common_beam_correction: 100.0
   correct_for_TF: false
   sum_TF_column: true

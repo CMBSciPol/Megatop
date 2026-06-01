@@ -20,7 +20,7 @@ cl2r_pars:
     - -0.2
     - 1.0
     r:
-    - -0.02
+    - -0.2
     - 1.0
   sync_marg: false
 data_dirs:
@@ -29,7 +29,7 @@ data_dirs:
   maps: maps
   noise_maps: noise_maps
   passbands: passbands
-  root: /lustre/work/cgubeno/Megatop/White_Noise/wn_300noise_beam40/data_root
+  root: /lustre/work/cgubeno/Megatop/White_Noise/wn_2000noise/data_root
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2e-09
@@ -191,7 +191,7 @@ noise_sim_pars:
         217: 85.5
         353: 379.9
   include_nhits: True
-  n_sim: 300
+  n_sim: 2000
 output_dirs:
   binning: binning
   components: components
@@ -202,7 +202,7 @@ output_dirs:
   noise_spectra: noise_spectra
   plots: plots
   preproc: preproc
-  root: /lustre/work/cgubeno/Megatop/White_Noise/wn_300noise_beam40/output_root
+  root: /lustre/work/cgubeno/Megatop/White_Noise/wn_2000noise/output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:

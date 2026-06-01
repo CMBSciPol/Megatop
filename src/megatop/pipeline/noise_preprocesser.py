@@ -22,6 +22,7 @@ import numpy as np
 from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
+from megatop.config import ExternalNoiseMapconfig
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
@@ -65,10 +66,46 @@ def get_reduced_TF(transfer):
 
 
 def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | None) -> np.ndarray:
+    has_external_noise_cfg = any(
+        type(config.noise_sim_pars.experiments[map_set.exp_tag]) is ExternalNoiseMapconfig
+        for map_set in config.map_sets
+    )
+    using_external_noise_maps = (
+        config.noise_sim_pars.prefer_external_noise_maps and has_external_noise_cfg
+    )
+
     noise_freq_maps = []
-    for noise_filename in manager.get_noise_maps_filenames(id_real):
+    for i_noise, noise_filename in enumerate(manager.get_noise_maps_filenames(id_real)):
         logger.debug(f"Importing noise map: {noise_filename}")
-        noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
+
+        map_set = config.map_sets[i_noise]
+        noise_cfg = config.noise_sim_pars.experiments.get(map_set.exp_tag)
+        correction = 1.0
+        if using_external_noise_maps and type(noise_cfg) is ExternalNoiseMapconfig:
+            correction = noise_cfg.correction
+
+        noise_map = np.asarray(correction * hp.read_map(noise_filename, field=None), dtype=np.float64)
+
+        # Keep map arrays in native shape. Converting to list + object ndarray can
+        # collapse the pixel axis when frequencies have mixed NSIDE values.
+        if noise_map.ndim == 1:
+            msg = (
+                f"Noise map {noise_filename} has shape {noise_map.shape}; expected at least "
+                "3 Stokes components (T, Q, U)."
+            )
+            raise ValueError(msg)
+        if noise_map.shape[0] < 3:
+            msg = (
+                f"Noise map {noise_filename} has only {noise_map.shape[0]} components; "
+                "expected at least 3 (T, Q, U)."
+            )
+            raise ValueError(msg)
+        if noise_map.shape[0] > 3:
+            logger.warning(
+                f"Noise map {noise_filename} has {noise_map.shape[0]} components; "
+                "using the first 3 (T, Q, U)."
+            )
+        noise_freq_maps.append(noise_map[:3])
 
     # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
@@ -77,8 +114,11 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
         nside=config.nside,
         common_beam=config.pre_proc_pars.common_beam_correction,
         frequency_beams=config.beams,
-        freq_maps=np.array(noise_freq_maps, dtype=object),
+        freq_maps=noise_freq_maps,
         lmax=config.lmax,
+        npipe_beam_correction=config.pre_proc_pars.npipe_beam_correction,
+        npipe_beam_path=config.pre_proc_pars.npipe_beam_path,
+        frequency_tags=config.frequencies,
     )
 
 
@@ -180,6 +220,7 @@ def noise_preprocess_realisation(config: Config, manager: DataManager, id_sim: i
         preprocessed = _preprocess_noise_maps(config, manager, id_sim)
 
     out_maps = manager.get_path_to_preprocessed_noise_maps(id_sim)
+    out_maps.parent.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving pre-processed noise maps to {out_maps}")
     np.save(out_maps, preprocessed)
 
@@ -187,6 +228,7 @@ def noise_preprocess_realisation(config: Config, manager: DataManager, id_sim: i
         nl_binned, nl_unbinned = _harmonic_nl_contrib(config, manager, preprocessed)
         out_nl = manager.get_path_to_nl_noisecov_contrib(id_sim)
         out_nl_unbinned = manager.get_path_to_nl_noisecov_contrib_unbinned(id_sim)
+        out_nl.parent.mkdir(parents=True, exist_ok=True)
         logger.info(f"Saving nl contribution to {out_nl}")
         np.save(out_nl, nl_binned)
         logger.info(f"Saving unbinned nl contribution to {out_nl_unbinned}")

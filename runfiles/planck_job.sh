@@ -19,7 +19,7 @@ ENV_BIN="$HOME/.conda/envs/megatop/bin"
 export PATH="$ENV_BIN:$PATH"
 hash -r
 
-PARAM_FILE="/home/cgubeno/Megatop/paramfiles/planck_wn_test.yaml"
+PARAM_FILE="/home/cgubeno/Megatop/paramfiles/npipe_d0s0.yaml"
 
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 
@@ -64,6 +64,13 @@ echo ""
 echo ""
 echo "Plotting pre-processer outputs"
 mpirun -n 1 megatop-preproc-plot --config ${PARAM_FILE}
+
+echo "------------------------------------------------------------"
+echo "|                  NOISE PREPROCESSING                     |"
+echo "------------------------------------------------------------"
+mpirun -n 50 megatop-noise-preproc-run --config ${PARAM_FILE}
+echo ""
+echo ""
 
 echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"

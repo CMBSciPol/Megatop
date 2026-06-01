@@ -2,8 +2,8 @@
 #PBS -N npipe_planck
 #PBS -o /home/cgubeno/log/
 #PBS -e /home/cgubeno/log/
-#PBS -l select=1:ncpus=50:mem=160gb
-#PBS -l walltime=12:00:00
+#PBS -l select=1:ncpus=50:mem=375gb
+#PBS -l walltime=100:00:00
 #PBS -u cgubeno
 #PBS -m ae
 #PBS -q small
@@ -18,78 +18,85 @@ ENV_BIN="$HOME/.conda/envs/megatop/bin"
 export PATH="$ENV_BIN:$PATH"
 hash -r
 
-PARAM_FILE="/home/cgubeno/Megatop/paramfiles/planck_npipe_masked_bir.yaml"
+PARAM_FILE="/home/cgubeno/Megatop/paramfiles/planck_npipe_masked_bir_test.yaml"
 
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 echo ""
 
-# echo "------------------------------------------------------------"
-# echo "|                        MASK-HANDLER                      |"
-# echo "------------------------------------------------------------"
-# mpirun -n 1 megatop-mask-run --config ${PARAM_FILE}
-# echo ""
-# echo ""
-# echo "Plotting mask outputs"
-# mpirun -n 1 megatop-mask-plot --config ${PARAM_FILE}
+echo "------------------------------------------------------------"
+echo "|                        MASK-HANDLER                      |"
+echo "------------------------------------------------------------"
+mpirun -n 1 megatop-mask-run --config ${PARAM_FILE}
+echo ""
+echo ""
+echo "Plotting mask outputs"
+mpirun -n 1 megatop-mask-plot --config ${PARAM_FILE}
 
-# echo "------------------------------------------------------------"
-# echo "|                       BINNING-MAKER                      |"
-# echo "------------------------------------------------------------"
-# mpirun -n 1 megatop-binning-run --config ${PARAM_FILE}
-# echo ""
-# echo ""
+echo "------------------------------------------------------------"
+echo "|                       BINNING-MAKER                      |"
+echo "------------------------------------------------------------"
+mpirun -n 1 megatop-binning-run --config ${PARAM_FILE}
+echo ""
+echo ""
 
-# #no longer mocker part
+#no longer mocker part
 
-# echo "------------------------------------------------------------"
-# echo "|            TRANSFER FUNCTION COMPUTATION                  |"
-# echo "------------------------------------------------------------"
-# mpirun -n 1 megatop-TFcomputing-run --config ${PARAM_FILE}
-# echo ""
-# echo ""
+echo "------------------------------------------------------------"
+echo "|            TRANSFER FUNCTION COMPUTATION                  |"
+echo "------------------------------------------------------------"
+mpirun -n 1 megatop-TFcomputing-run --config ${PARAM_FILE}
+echo ""
+echo ""
 
-# echo "------------------------------------------------------------"
-# echo "|                       PRE-PROCESSER                      |"
-# echo "------------------------------------------------------------"
-# mpirun -n 50 megatop-preproc-run --config ${PARAM_FILE}
-# echo ""
-# echo ""
-# echo "Plotting pre-processer outputs"
-# mpirun -n 1 megatop-preproc-plot --config ${PARAM_FILE}
+echo "------------------------------------------------------------"
+echo "|                       PRE-PROCESSER                      |"
+echo "------------------------------------------------------------"
+mpirun -n 50 megatop-preproc-run --config ${PARAM_FILE}
+echo ""
+echo ""
+echo "Plotting pre-processer outputs"
+mpirun -n 1 megatop-preproc-plot --config ${PARAM_FILE}
 
-# echo "------------------------------------------------------------"
-# echo "|                NOISE-COVARIANCE COMPUTATION              |"
-# echo "------------------------------------------------------------"
-# mpirun -n 50 megatop-noisecov-run --config ${PARAM_FILE}
-# echo ""
-# echo ""
-# echo "Plotting noise covariance outputs"
-# mpirun -n 1 megatop-noisecov-plot --config ${PARAM_FILE}
+echo "------------------------------------------------------------"
+echo "|                  NOISE PREPROCESSING                     |"
+echo "------------------------------------------------------------"
+mpirun -n 50 megatop-noise-preproc-run --config ${PARAM_FILE}
+echo ""
+echo ""
 
-# echo "------------------------------------------------------------"
-# echo "|                    COMPONENT SEPARATION                  |"
-# echo "------------------------------------------------------------"
-# mpirun -n 50 megatop-compsep-run --config ${PARAM_FILE}
-# echo ""
-# echo ""
-# echo "Plotting component separater outputs"
-# mpirun -n 1 megatop-compsep-plot --config ${PARAM_FILE}
+echo "------------------------------------------------------------"
+echo "|                NOISE-COVARIANCE COMPUTATION              |"
+echo "------------------------------------------------------------"
+mpirun -n 50 megatop-noisecov-run --config ${PARAM_FILE}
+echo ""
+echo ""
+echo "Plotting noise covariance outputs"
+mpirun -n 1 megatop-noisecov-plot --config ${PARAM_FILE}
 
-# echo "------------------------------------------------------------"
-# echo "|                     SPECTRA ESTIMATION                   |"
-# echo "------------------------------------------------------------"
-# mpirun -n 50 megatop-map2cl-run --config ${PARAM_FILE}
-# echo ""
-# echo ""
-# echo "Plotting spectra estimater outputs"
-# mpirun -n 1 megatop-map2cl-plot --config ${PARAM_FILE}
+echo "------------------------------------------------------------"
+echo "|                    COMPONENT SEPARATION                  |"
+echo "------------------------------------------------------------"
+mpirun -n 50 megatop-compsep-run --config ${PARAM_FILE}
+echo ""
+echo ""
+echo "Plotting component separater outputs"
+mpirun -n 1 megatop-compsep-plot --config ${PARAM_FILE}
 
-# echo "------------------------------------------------------------"
-# echo "|                  NOISE SPECTRA ESTIMATION                |"
-# echo "------------------------------------------------------------"
-# mpirun -n 50 megatop-noisespectra-run --config ${PARAM_FILE}
-# echo ""
-# echo ""
+echo "------------------------------------------------------------"
+echo "|                     SPECTRA ESTIMATION                   |"
+echo "------------------------------------------------------------"
+mpirun -n 50 megatop-map2cl-run --config ${PARAM_FILE}
+echo ""
+echo ""
+echo "Plotting spectra estimater outputs"
+mpirun -n 1 megatop-map2cl-plot --config ${PARAM_FILE}
+
+echo "------------------------------------------------------------"
+echo "|                  NOISE SPECTRA ESTIMATION                |"
+echo "------------------------------------------------------------"
+mpirun -n 50 megatop-noisespectra-run --config ${PARAM_FILE}
+echo ""
+echo ""
 echo "Plotting noise spectra estimater outputs"
 mpirun -n 1 megatop-noisespectra-plot --config ${PARAM_FILE}
 

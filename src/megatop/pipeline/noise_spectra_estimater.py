@@ -59,10 +59,18 @@ def noise_spectra_estimator(
     MemoryUsage(f"rank = {rank} ")
 
     n_sim_noise = config.noise_sim_pars.n_sim
+    has_external_noise_cfg = any(
+        type(config.noise_sim_pars.experiments[map_set.exp_tag]) is ExternalNoiseMapconfig
+        for map_set in config.map_sets
+    )
+    using_external_noise_maps = (
+        config.noise_sim_pars.prefer_external_noise_maps and has_external_noise_cfg
+    )
+
     map_noise_corrections = []
     for map_set in config.map_sets:
         cfg = config.noise_sim_pars.experiments.get(map_set.exp_tag)
-        if type(cfg) is ExternalNoiseMapconfig:
+        if using_external_noise_maps and type(cfg) is ExternalNoiseMapconfig:
             map_noise_corrections.append(cfg.correction)
         else:
             map_noise_corrections.append(1.0)
@@ -187,6 +195,7 @@ def noise_spectra_estimator(
                     common_beam=config.pre_proc_pars.common_beam_correction,
                     frequency_beams=config.beams,
                     freq_maps=noise_freq_maps,
+                    lmax=config.lmax,
                 )
 
         # Applying component-separation operator

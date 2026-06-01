@@ -32,7 +32,7 @@ data_dirs:
   noise_maps_root: null
   passbands: bandpass_formatted
   passbands_root: /lustre/work/SO-MEGATOP/NPIPE
-  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky70_nobir_debug2/data_root
+  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky60_nobir_debug3/data_root
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2.0e-09
@@ -188,7 +188,7 @@ masks_pars:
   binary_mask_name: binary_mask
   binary_mask_zero_threshold: 0.1
   fwhm_arcmin_smooth_nhits: 60.0
-  gal_key: GAL070
+  gal_key: GAL060
   galactic_mask_name: galactic_mask
   galactic_mask_path: /lustre/work/SO-MEGATOP/NPIPE/masks/HFI_Mask_GalPlane-apo0_2048_R2.00.fits
   include_galactic: true
@@ -204,7 +204,7 @@ noise_cov_pars:
 noise_sim_pars:
   experiments:
     PLANCK:
-      correction: 1000000.0
+      correction: 1e6
       default_bands:
       - 30.0
       - 44.0
@@ -232,7 +232,7 @@ output_dirs:
   precomputation: precomputation
   prepoc_diag_precond: diag_precond
   preproc: preproc
-  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky70_nobir_debug2/output_root
+  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky60_nobir_debug3/output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:

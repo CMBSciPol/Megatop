@@ -13,6 +13,8 @@ from megatop.plot.r_stats_plotter import get_params_statistics
 from megatop.utils import logger
 from megatop.utils.binning import load_nmt_binning
 
+import IPython
+
 
 def add_error_bars_to_getdist_plot(gd_plot, stats_params_dict):
     """Adds error bars to the GetDist plot based on the statistics dictionary."""
@@ -210,30 +212,32 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     # lmax = config.general_pars.lmax
     sky_model = "".join(config.map_sim_pars.sky_model)
 
-    # Load spectra data (NaMaster spin-2: index 0=EE, 1=EB, 2=BE, 3=BB)
-    spec_data = np.load(manager.get_path_to_spectra_cross_components(id_sim=id_sim))
-    Cl_CMBxCMB_EE_est = spec_data["CMBxCMB"][0]
-    Cl_CMBxCMB_EB_est = spec_data["CMBxCMB"][1]
-    Cl_CMBxCMB_BE_est = spec_data["CMBxCMB"][2]
-    Cl_CMBxCMB_BB_est = spec_data["CMBxCMB"][3]
-    Cl_DustxDust_BB_est = spec_data["DustxDust"][3]
-    Cl_DustxDust_EB_est = spec_data["DustxDust"][1]
+    # Load spectra data
+    Cl_CMBxCMB_EE_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][0]
+    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][3]
+    Cl_CMBxCMB_EB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][1]
+    Cl_CMBxCMB_BE_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][2]
+    #Cl_DustxDust_EE_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
+    #    "DustxDust"
+    #][0]
+    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["DustxDust"][3]
+    Cl_DustxDust_EB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["DustxDust"][1]
 
     all_noise_options = [
         config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
         for map_set in config.map_sets
     ]
-    if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+    if not np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+        # TODO: test case when only one experiment is noiseless?
         Nl_CMBxCMB_EE_est = np.zeros_like(Cl_CMBxCMB_EE_est)
+        Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
         Nl_CMBxCMB_EB_est = np.zeros_like(Cl_CMBxCMB_EB_est)
         Nl_CMBxCMB_BE_est = np.zeros_like(Cl_CMBxCMB_BE_est)
-        Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
     else:
-        noise_spec = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim=id_sim))
-        Nl_CMBxCMB_EE_est = noise_spec["Noise_CMBxNoise_CMB"][0]
-        Nl_CMBxCMB_EB_est = noise_spec["Noise_CMBxNoise_CMB"][1]
-        Nl_CMBxCMB_BE_est = noise_spec["Noise_CMBxNoise_CMB"][2]
-        Nl_CMBxCMB_BB_est = noise_spec["Noise_CMBxNoise_CMB"][3]
+        Nl_CMBxCMB_EE_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))["Noise_CMBxNoise_CMB"][0]
+        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))["Noise_CMBxNoise_CMB"][3]
+        Nl_CMBxCMB_EB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))["Noise_CMBxNoise_CMB"][1]
+        Nl_CMBxCMB_BE_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))["Noise_CMBxNoise_CMB"][2]
 
     nmt_bins = load_nmt_binning(manager)
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
@@ -243,30 +247,31 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
 
     if config.cl2r_pars.load_model_spectra:
         Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: config.lmax + 1]
-        Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
-            : config.lmax + 1
-        ]
+        Cl_EE = hp.read_cl(manager.path_to_lensed_scalar)[1][: config.lmax + 1]
+        Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][: config.lmax + 1]
     else:
-        Cl_EE, Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 2 * config.nside - 1)
+        Cl_EE, Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, config.lmax)
 
-    # Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
+    
 
     # Load estimated parameters from MCMC chains
-    fname_chains = manager.get_path_to_mcmc_chains(id_sim=id_sim)
+    fname_chains = manager.get_path_to_mcmc_chains(id_sim)
     mcmc = np.load(fname_chains, allow_pickle=True)
     chains = mcmc["mcmc_chains"]
     param_names = mcmc["param_names"]
     samples = MCSamples(samples=chains, names=param_names, labels=param_names)
     theta_est = samples.getMeans()
 
+    # IPython.embed()  # Debugging line - can be removed after verification
+
     if not dust_marg and not sync_marg:
-        r_est, A_lens_est, Birefringence_est = theta_est
+        r_est, A_lens_est, Birefringence = theta_est
     if dust_marg and not sync_marg:
-        r_est, A_lens_est, Birefringence_est, A_dust_est = theta_est
+        r_est, A_lens_est, Birefringence, A_dust_est = theta_est
     if not dust_marg and sync_marg:
-        r_est, A_lens_est, Birefringence_est, A_sync_est = theta_est
+        r_est, A_lens_est, Birefringence, A_sync_est = theta_est
     if dust_marg and sync_marg:
-        r_est, A_lens_est, Birefringence_est, A_dust_est, A_sync_est = theta_est
+        r_est, A_lens_est, Birefringence, A_dust_est, A_sync_est = theta_est
 
     # Compute individual Cl components
     Cl_BB_prim_est = r_est * Cl_BB_prim_generic

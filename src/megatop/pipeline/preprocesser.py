@@ -117,6 +117,10 @@ def preprocess_map(
             common_beam=config.pre_proc_pars.common_beam_correction,
             frequency_beams=config.beams,
             freq_maps=input_maps,
+            lmax=config.lmax,
+            npipe_beam_correction=config.pre_proc_pars.npipe_beam_correction,
+            npipe_beam_path=config.pre_proc_pars.npipe_beam_path,
+            frequency_tags=config.frequencies,
         )
         logger.info(f"Pre-processed maps have shape: {freq_maps_convolved.shape}")
 
@@ -129,20 +133,23 @@ def preprocess_map(
     logger.info("Using harmonic pipeline for component separation. Pre-processing will output alms")
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
-        freq_beams = config.beams
-        common_beam = config.pre_proc_pars.common_beam_correction
-        if config.pre_proc_pars.DEBUGskippreproc:
-            freq_beams = np.array([0.0] * len(config.frequencies))
-            common_beam = 0.0
-        freq_alms_convolved = alm_common_beam(
-            nside=config.nside,
-            common_beam=common_beam,
-            frequency_beams=freq_beams,
-            freq_maps=np.array(input_maps),
-            analysis_mask=analysis_mask,
-            harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
-        )
-        logger.info(f"Pre-processed alms have shape: {freq_alms_convolved.shape}")
+    freq_beams = config.beams
+    common_beam = config.pre_proc_pars.common_beam_correction
+    if config.pre_proc_pars.DEBUGskippreproc:
+        freq_beams = np.array([0.0] * len(config.frequencies))
+        common_beam = 0.0
+    freq_alms_convolved = alm_common_beam(
+        nside=config.nside,
+        common_beam=common_beam,
+        frequency_beams=freq_beams,
+        freq_maps=np.array(input_maps),
+        analysis_mask=analysis_mask,
+        harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
+        npipe_beam_correction=config.pre_proc_pars.npipe_beam_correction,
+        npipe_beam_path=config.pre_proc_pars.npipe_beam_path,
+        frequency_tags=config.frequencies,
+    )
+    logger.info(f"Pre-processed alms have shape: {freq_alms_convolved.shape}")
 
     if config.pre_proc_pars.correct_for_TF:
         logger.warning("Including transfer function in the pre-processed alms. ")

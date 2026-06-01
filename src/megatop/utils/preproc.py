@@ -182,7 +182,7 @@ def common_beam_and_nside(
                     (alm_in_T, alm_in_E, alm_in_B),
                     frequency=frequency_tags[i_beam],
                     npipe_beam_path=Path(npipe_beam_path),
-                    lmax=lmax_convolution,
+                    lmax=lmax,
                 )
                 logger.info(f"Applied NPIPE unbeam/leakage correction for freq index {i_beam}")
             except Exception as exc:  # pragma: no cover - best-effort; don't break pipeline

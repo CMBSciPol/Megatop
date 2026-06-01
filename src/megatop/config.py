@@ -254,10 +254,14 @@ class GeneralConfig:
 
 @define
 class PreProcessingConfig:
+    beam_fwhms: list[float] | None = None
     common_beam_correction: float = 100
     # beam_fwhms: list[float] | None = None
+    DEBUGskippreproc: bool = False
     correct_for_TF: bool = False
     sum_TF_column: bool = True
+    npipe_beam_correction: bool = False
+    npipe_beam_path: Path | None = None
 
 
 @define
@@ -383,6 +387,8 @@ class MapSimConfig:
     """Prefix used for provided map filenames (e.g. 'npipe6v20_')."""
     input_maps_suffix: str = ""
     """Suffix used for provided map filenames before extension (e.g. '_residual')."""
+    id_offset: int = 0
+    """Offset for the realization IDs."""
     input_maps_correction: float = 1.0
     """Multiplicative factor applied to loaded input maps (e.g. 1e6 for K -> uK)."""
     remove_input_maps_noise: bool = False
@@ -429,6 +435,7 @@ class ExternalNoiseMapconfig:
     root: Path
     prefix: str
     suffix: str
+    id_sim_suffix : bool = False
     noise_option: NoiseOption = field(default=NoiseOption.NOISE_MAP)
     correction: float = 1.0
     
@@ -500,6 +507,7 @@ class Config:
     masks_pars: MasksConfig = Factory(MasksConfig)
     general_pars: GeneralConfig = Factory(GeneralConfig)
     pre_proc_pars: PreProcessingConfig = Factory(PreProcessingConfig)
+    noise_cov_pars: NoiseCovmatConfig = Factory(NoiseCovmatConfig)
     parametric_sep_pars: CompSepConfig = Factory(CompSepConfig)
     map2cl_pars: Map2ClConfig = Factory(Map2ClConfig)
     plot_pars: PlotsConfig = Factory(PlotsConfig)

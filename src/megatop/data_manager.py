@@ -189,11 +189,12 @@ class DataManager:
 
             prefix = self._config.map_sim_pars.input_maps_prefix
             suffix = self._config.map_sim_pars.input_maps_suffix
+            id_offset = self._config.map_sim_pars.id_offset
 
             # External NPIPE maps are organized by realization directories root/0001, root/0002, ...
             # while Megatop simulation ids start at 0.
             if id_sim is not None:
-                dest = root / f"{id_sim + 1:04d}"
+                dest = root / f"{id_sim + id_offset:04d}"
             else:
                 dest = root
 
@@ -234,6 +235,7 @@ class DataManager:
             self.path_to_masks,
             self.path_to_fiducial_cmb,
             self.path_to_binning.parent,
+            self.path_to_preproc,
             self.path_to_covar,
         ]:
             path.mkdir(parents=True, exist_ok=True)
@@ -312,21 +314,27 @@ class DataManager:
         if external_cfgs:
             cfg = external_cfgs[0]
 
+            # support an optional id offset for input datasets (useful when
+            # external directories start at a different numbering than 0)
+            id_offset = getattr(self._config.map_sim_pars, "id_offset", 0)
+
             if id_sim is None:
                 folder = cfg.root
             else:
-                # Try root/00xx first, then root/00(x+1) for datasets indexed from 1.
-                candidate = cfg.root / f"{id_sim:04d}"
-                if candidate.exists():
-                    folder = candidate
-                else:
-                    folder = cfg.root / f"{id_sim + 1:04d}"
+                # Use the configured offset directly. The user can set
+                # map_sim_pars.id_offset to 0, 1, -199, etc. in the YAML.
+                folder = cfg.root / f"{id_sim + id_offset:04d}"
 
             residual_folder = folder / "residual"
             base = residual_folder if residual_folder.exists() else folder
 
+            if cfg.id_sim_suffix: 
+                suffix = f'{cfg.suffix}{id_sim + id_offset:04d}'  
+            else:
+                suffix = cfg.suffix
+
             names = [
-                base / f"{cfg.prefix}{map_set.freq_tag:03d}{cfg.suffix}"
+                base / f"{cfg.prefix}{map_set.freq_tag:03d}{suffix}"
                 for map_set in self._config.map_sets
             ]
             return [name.with_suffix(".fits") for name in names]
@@ -389,7 +397,7 @@ class DataManager:
         fname = "noise_maps_preprocessed"
         if id_sim is not None:
             fname += f"_{id_sim:04d}"
-        fname = self.path_to_covar / fname
+        fname = self.path_to_preproc / fname
         return fname.with_suffix(".npy")
 
     def get_path_to_noise_maps_sub(self, id_sim: int) -> Path:
