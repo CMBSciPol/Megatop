@@ -62,7 +62,7 @@ def smooth_mask(mask, fwhm_arcmin):
 
 def read_depth_maps(list_depthmapname: list[Path], nside: int):
     """
-    Read depth maps and ud_grade.
+    Read depth maps and ud_grade. Maps are assumed equatorial (celestial).
     """
     depth_maps = []
     for depthmapname in list_depthmapname:
@@ -72,7 +72,7 @@ def read_depth_maps(list_depthmapname: list[Path], nside: int):
 
 def read_nhits_maps(list_hitmapname: list[Path], nside: int):
     """
-    Read hit maps and ud_grade.
+    Read hit maps and ud_grade. Maps are assumed equatorial (celestial).
     """
     nhits_maps = []
     SO_NOMINAL_NHITS = None
