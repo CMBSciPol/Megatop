@@ -13,8 +13,8 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 91.
   beam: 0.
-  angles_central_value_degrees : 1.0
-  angles_uncertainty_degrees : None
+  angles_central_value_degrees : 0.0
+  angles_uncertainty_degrees : 0.1
   # angle_incertanty_degrees = 0 Corresponds to no prior case and not ideal infinite precision case, as prior = 0 lead to divergence in the Likelihood.
   
 - exp_tag: SO-SAT
@@ -23,7 +23,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 63.
   beam: 0.
-  angles_central_value_degrees : 5.0
+  angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : None
   
 - exp_tag: SO-SAT
@@ -32,7 +32,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 30.
   beam: 0.
-  angles_central_value_degrees : 10.0
+  angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : None
   
 - exp_tag: SO-SAT
@@ -41,7 +41,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 17.
   beam: 0.
-  angles_central_value_degrees : 20.0
+  angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : None
 
 - exp_tag: SO-SAT
@@ -50,7 +50,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 11.
   beam: 0.
-  angles_central_value_degrees : 40.0
+  angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : None
   
 - exp_tag: SO-SAT
@@ -59,7 +59,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 9.
   beam: 0.
-  angles_central_value_degrees : 60.0
+  angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : None
 
 map_sim_pars:
@@ -124,18 +124,19 @@ output_dirs:
   root: /Users/landais/Desktop/UV/ProtoMegatop2/Megatop/outputs
 
 parametric_sep_pars:
-  alm2map: false
+  alm2map: False
   harmonic_delta_ell: 10
   harmonic_lmax: 256
   harmonic_lmin: 30
   include_synchrotron: true
   megabuster_options:
-    max_steps_CG: 2500
+    max_steps_CG: 5000
     tol_CG: 1.0e-8
-    use_preconditioner_diag: false
-    use_preconditioner_pinv: false
-    use_obsmat: false
-    use_calibration_matrix: True
+    use_preconditioner_diag: False
+    use_preconditioner_pinv: False
+    use_obsmat: False
+    use_calibration_matrix:  False
+    use_beam_operator: True
     use_hessienne: False
     use_hmc: False
     n_warm: 50
@@ -143,7 +144,7 @@ parametric_sep_pars:
     max_iter: 200
   minimize_method: TNC
   minimize_options:
-    disp: false
+    disp: False
     eps: 1.0e-12
     ftol: 1.0e-16
     gtol: 1.0e-16

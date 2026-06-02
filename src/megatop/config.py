@@ -273,6 +273,7 @@ class _MEGABUSTEROptions:  # Modification megabuster
     n_warm: int = 1000
     n_samples: int = 10000
     use_obsmat: bool = False
+    use_beam_operator: bool = False
     max_iter: int = 100
 
 

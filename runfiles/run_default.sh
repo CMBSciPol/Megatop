@@ -12,53 +12,53 @@ conda activate megatop
 echo "------------------------------------------------------------"
 echo "|                        MASK-HANDLER                      |"
 echo "------------------------------------------------------------"
-megatop-mask-run --config ${PARAM_FILE}
+#megatop-mask-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting mask outputs"
-megatop-mask-plot --config ${PARAM_FILE}
+#megatop-mask-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                       BINNING-MAKER                      |"
 echo "------------------------------------------------------------"
-megatop-binning-run --config ${PARAM_FILE}
+#megatop-binning-run --config ${PARAM_FILE}
 echo ""
 echo ""
 
 echo "------------------------------------------------------------"
 echo "|                           MOCKER                         |"
 echo "------------------------------------------------------------"
-megatop-mock-run --config ${PARAM_FILE}
+#megatop-mock-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting mocker outputs"
-megatop-mock-plot --config ${PARAM_FILE}
+#megatop-mock-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|            TRANSFER FUNCTION COMPUTATION                  |"
 echo "------------------------------------------------------------"
-megatop-TFcomputing-run --config ${PARAM_FILE}
+#megatop-TFcomputing-run --config ${PARAM_FILE}
 echo ""
 echo ""
 
 echo "------------------------------------------------------------"
 echo "|                       PRE-PROCESSER                      |"
 echo "------------------------------------------------------------"
-megatop-preproc-run --config ${PARAM_FILE}
+#megatop-preproc-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting pre-processer outputs"
-megatop-preproc-plot --config ${PARAM_FILE}
+#megatop-preproc-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"
 echo "------------------------------------------------------------"
 #FI_PROVIDER=tcp mpirun -n 10 python $(which megatop-noisecov-run) --config ${PARAM_FILE}
-megatop-noisecov-run --config ${PARAM_FILE}
+#megatop-noisecov-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting noise covariance outputs"
-megatop-noisecov-plot --config ${PARAM_FILE}
+#megatop-noisecov-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                    COMPONENT SEPARATION                  |"
@@ -74,31 +74,31 @@ echo "------------------------------------------------------------"
 echo "|                     SPECTRA ESTIMATION                   |"
 echo "------------------------------------------------------------"
 #FI_PROVIDER=tcp mpirun -n 10 python $(which megatop-map2cl-run) --config ${PARAM_FILE}
-megatop-map2cl-run --config ${PARAM_FILE}
+#megatop-map2cl-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting spectra estimater outputs"
-megatop-map2cl-plot --config ${PARAM_FILE}
+#megatop-map2cl-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                  NOISE SPECTRA ESTIMATION                |"
 echo "------------------------------------------------------------"
 #FI_PROVIDER=tcp mpirun -n 10 python $(which megatop-noisespectra-run) --config ${PARAM_FILE}
-megatop-noisespectra-run --config ${PARAM_FILE}
+#megatop-noisespectra-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting noise spectra estimater outputs"
-megatop-noisespectra-plot --config ${PARAM_FILE}
+#megatop-noisespectra-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|            COSMOLOGICAL PARAMETERS ESTIMATION            |"
 echo "------------------------------------------------------------"
 #FI_PROVIDER=tcp mpirun -n 10 python $(which megatop-cl2r-run) --config ${PARAM_FILE}
-megatop-cl2r-run --config ${PARAM_FILE}
+#megatop-cl2r-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting r statistics"
-megatop-cl2r-plot --config ${PARAM_FILE}
+#megatop-cl2r-plot --config ${PARAM_FILE}
 echo ""
 echo "Plotting mcmc results statistics"
-megatop-cl2r_mcmc-plot --config ${PARAM_FILE}
+#megatop-cl2r_mcmc-plot --config ${PARAM_FILE}

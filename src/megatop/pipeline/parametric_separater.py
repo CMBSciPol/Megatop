@@ -469,48 +469,94 @@ def megabuster_comp_sep(
     }
 
     #Get miscalibration angles prior
-    if megabuster_options["use_calibration_matrix"]:
-        angles_prior_dict = {"angle_central_value": config.angle_central_value, "angle_uncertainty": config.angle_uncertainty}
-        angles_names = [f'angle_{i}' for i in range(len(config.angle_uncertainty))]
-        solver_name = "ADABK0"
+    #if megabuster_options["use_calibration_matrix"]:
+    angles_prior_dict = {"angle_central_value": config.angle_central_value, "angle_uncertainty": config.angle_uncertainty}
+    angles_names = [f'angle_{i}' for i in range(len(config.angle_uncertainty))]
+    #if megabuster_options["use_calibration_matrix"]:
+    solver_name = "ADABK0"
+    #solver_name="scipy_tnc",
+    #solver_name="optax_lbfgs",
 
     # import IPython; IPython.embed()
-    res = mb.compsep.perform_compsep(
-        config,
-        manager,
-        first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
-        fixed_params={"temp_dust": 20.0},
-        sky_map=freq_maps_preprocessed_QU_masked,
-        frequencies=np.array(config.frequencies),
-        invN_matrix=inverse_noisecov_QU_masked,
-        do_minimization=True,
-        binary_mask=binary_mask,
-        obs_mat_operator=None,
-        obsmat_operator_rhs=obsmat_operator_rhs,
-        use_calibration_matrix = megabuster_options["use_calibration_matrix"],
-        use_obsmat = megabuster_options["use_obsmat"],
-        angles_prior_dict = angles_prior_dict,
-        angles_names = angles_names,
-        use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
-        use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
-        central_freq_op=central_freq_op,
-        matrix_precond=matrix_precond,
-        solver_name=solver_name,
-        dictionary_parameters_minimization=dict_parameters_minimization,
-        dictionary_parameters_CG={
-            "max_steps_CG": megabuster_options["max_steps_CG"],
-            "tol_CG": megabuster_options["tol_CG"],
-        },
-        ordering_parameter=ordering_pars+angles_names,
-        ordering_component=components,
-        dust_nu0=150.0,
-        synchrotron_nu0=150.0,
-        # components_list=components, #TODO: For future when no_synch options is merged in megabuster
-        use_hessienne = megabuster_options["use_hessienne"],
-        use_hmc = megabuster_options["use_hmc"],
-        n_warm = megabuster_options["n_warm"],
-        n_samples = megabuster_options["n_samples"],
-    )
+    #res = mb.compsep_nude.perform_compsep(
+
+    if megabuster_options["use_beam_operator"]:
+        res = mb.beam_compsep.perform_compsep(
+        #res = mb.compsep_nude.perform_compsep(
+            config,
+            manager,
+            first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
+            fixed_params={"temp_dust": 20.0},
+            sky_map=freq_maps_preprocessed_QU_masked,
+            frequencies=np.array(config.frequencies),
+            invN_matrix=inverse_noisecov_QU_masked,
+            do_minimization=True,
+            binary_mask=binary_mask,
+            obs_mat_operator=None,
+            obsmat_operator_rhs=obsmat_operator_rhs,
+            use_calibration_matrix = megabuster_options["use_calibration_matrix"],
+            use_obsmat = megabuster_options["use_obsmat"],
+            angles_prior_dict = angles_prior_dict,
+            angles_names = angles_names,
+            use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
+            use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
+            central_freq_op=central_freq_op,
+            matrix_precond=matrix_precond,
+            solver_name=solver_name,
+            dictionary_parameters_minimization=dict_parameters_minimization,
+            dictionary_parameters_CG={
+                "max_steps_CG": megabuster_options["max_steps_CG"],
+                "tol_CG": megabuster_options["tol_CG"],
+            },
+            ordering_parameter=ordering_pars+angles_names,
+            ordering_component=components,
+            dust_nu0=150.0,
+            synchrotron_nu0=150.0,
+            # components_list=components, #TODO: For future when no_synch options is merged in megabuster
+            use_hessienne = megabuster_options["use_hessienne"],
+            use_hmc = megabuster_options["use_hmc"],
+            n_warm = megabuster_options["n_warm"],
+            n_samples = megabuster_options["n_samples"],
+        )
+    else:
+        res = mb.compsep.perform_compsep(
+            config,
+            manager,
+            first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
+            fixed_params={"temp_dust": 20.0},
+            sky_map=freq_maps_preprocessed_QU_masked,
+            frequencies=np.array(config.frequencies),
+            invN_matrix=inverse_noisecov_QU_masked,
+            do_minimization=True,
+            binary_mask=binary_mask,
+            obs_mat_operator=None,
+            obsmat_operator_rhs=obsmat_operator_rhs,
+            use_calibration_matrix = megabuster_options["use_calibration_matrix"],
+            use_obsmat = megabuster_options["use_obsmat"],
+            angles_prior_dict = angles_prior_dict,
+            angles_names = angles_names,
+            use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
+            use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
+            central_freq_op=central_freq_op,
+            matrix_precond=matrix_precond,
+            solver_name=solver_name,
+            dictionary_parameters_minimization=dict_parameters_minimization,
+            dictionary_parameters_CG={
+                "max_steps_CG": megabuster_options["max_steps_CG"],
+                "tol_CG": megabuster_options["tol_CG"],
+            },
+            ordering_parameter=ordering_pars+angles_names,
+            ordering_component=components,
+            dust_nu0=150.0,
+            synchrotron_nu0=150.0,
+            # components_list=components, #TODO: For future when no_synch options is merged in megabuster
+            use_hessienne = megabuster_options["use_hessienne"],
+            use_hmc = megabuster_options["use_hmc"],
+            n_warm = megabuster_options["n_warm"],
+            n_samples = megabuster_options["n_samples"],
+        )
+
+
     if config.map2cl_pars.DEBUG_cut_scales and not apply_before_paramestimation:
         # I'm keeping this in for now until we have full confirmation that the Obs(noise_1/f) is correct
         logger.warning("TEST: Applying smooth cut at large scales to component maps")
