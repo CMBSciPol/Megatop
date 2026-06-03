@@ -171,7 +171,10 @@ class MapSetConfig(StrictModel):
     TF_path: Path | None = None
     passband_filename: str = ""
     nhits_map_path: Literal["SO_nominal"] | Path | None = None
+    """Hit-count map. ``"SO_nominal"`` downloads the SO nominal SAT hitmap.
+    Assumed to be in equatorial (celestial) coordinates, like all pipeline products."""
     depth_map_path: Path | None = None
+    """Depth (noise) map used to derive hit counts. Assumed equatorial (celestial)."""
     # Runtime-only fields populated by passband.passband_constructor; excluded
     # from YAML dump and absent from paramfiles.
     frequency: Any = Field(default=None, exclude=True)

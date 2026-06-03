@@ -37,9 +37,7 @@ def test_shape_fg_map():
     map_sets[0].weight = 1
     map_sets[1].frequency = 200
     map_sets[1].weight = 1
-    freq_maps = mock.generate_map_fgs_pysm(
-        map_sets, NSIDE, 2 * NSIDE, ["d0"], input_coord="G", output_coord="E"
-    )
+    freq_maps = mock.generate_map_fgs_pysm(map_sets, NSIDE, 2 * NSIDE, ["d0"])
     assert freq_maps.shape == (2, 3, hp.nside2npix(NSIDE))
 
 

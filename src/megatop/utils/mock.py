@@ -64,22 +64,16 @@ def generate_map_fgs_pysm(
     nside: int,
     lmax: int,
     sky_model: list[str],
-    input_coord: str = "G",
-    output_coord: str = "E",
 ):
-    # TODO write tests
+    # pysm emits in galactic coordinates; rotate to equatorial (the pipeline frame).
     logger.debug(f"Generating FG maps for {[m.freq_tag for m in map_sets]} GHz")
     sky = Sky(nside=nside, preset_strings=sky_model, output_unit=units.uK_CMB)
+    rotator = hp.Rotator(coord=["G", "C"])
     maps_fgs = []
     for map_set in map_sets:
         m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value
-        if input_coord != output_coord:
-            logger.debug(
-                f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"
-            )
-            r = hp.Rotator(coord=[input_coord, output_coord])
-            # m = r.rotate_map_pixel(m)
-            m = r.rotate_map_alms(m, lmax=lmax, datapath=HEALPY_DATA_PATH)
+        logger.debug(f"Rotating {map_set.freq_tag}GHz foreground map from G to C")
+        m = rotator.rotate_map_alms(m, lmax=lmax, datapath=HEALPY_DATA_PATH)
         maps_fgs.append(m)
     return np.array(maps_fgs)
 
