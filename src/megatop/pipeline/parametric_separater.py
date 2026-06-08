@@ -14,6 +14,7 @@ from megatop.utils.compsep import set_alm_tozero_below_lmin
 from megatop.utils.mpi import get_world
 
 import megabuster as mb
+from megatop.utils.utils import MemoryUsage
 
 def get_and_format_inv_Nl(manager: DataManager, config: Config):
     """
@@ -195,6 +196,8 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
 
 
 def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
+    MemoryUsage("Start COMPONENT SEPARATION")
+    
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
         logger.debug(f"Loading covmat from {noisecov_fname}")
@@ -270,6 +273,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
     timer.stop("do-compsep")
+    MemoryUsage("END COMPONENT SEPARATION")
 
     return res
 
@@ -379,6 +383,7 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
         ):  # remove component maps to avoid saving twice. #TODO should we specify explicitely which fields are saved ?
             res_dict[attr] = getattr(res, attr)
     # Saving result dict
+    MemoryUsage("COMPONENT SEPARATION : SAVING RESULTS")
     logger.info(f"Saving compsep results to {fname_results}")
     np.savez(fname_results, **res_dict)
 
@@ -388,11 +393,14 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
         np.save(fname_compalms, res.s_alm)
 
     # Saving component maps
+    MemoryUsage("COMPONENT SEPARATION : SAVING COMPONENT MAPS")
     logger.info(f"Saving component maps to {fname_compmaps}")
     np.save(fname_compmaps, res.s)
 
 
 def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = None):
+
+    MemoryUsage("BEGINNING OF COMPONENT SEPARATION (?) ")
     with Timer("weighted-compsep"):
         if config.parametric_sep_pars.use_harmonic_compsep:
             res = harmonic_comp_sep_interface(manager, config, id_sim=id_sim)
@@ -401,6 +409,7 @@ def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = 
         else:
             res = weighted_comp_sep(manager, config, id_sim=id_sim)
     save_compsep_results(manager, config, res, id_sim=id_sim)
+    MemoryUsage("END OF COMPONENT SEPARATION ")
     return id_sim
 
 

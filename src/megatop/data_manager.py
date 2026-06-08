@@ -322,7 +322,7 @@ class DataManager:
                 folder = cfg.root
             else:
                 # Use the configured offset directly. The user can set
-                # map_sim_pars.id_offset to 0, 1, -199, etc. in the YAML.
+                # map_sim_pars.id_offset to 0, 1, 200, etc. in the YAML.
                 folder = cfg.root / f"{id_sim + id_offset:04d}"
 
             residual_folder = folder / "residual"

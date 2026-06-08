@@ -243,6 +243,8 @@ class GeneralConfig:
     nside: int = 512
     lmin: int = 30  # TODO: used ?
     lmax: int = field(default=1000)
+    mocker_is_skipped: bool = False
+    """Parameter used in the snakefile in case the mocker is skipped"""
 
     @lmax.validator
     def check(self, attribute, value):

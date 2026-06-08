@@ -260,6 +260,8 @@ def noise_spectra_estimator(
         logger.info(f"Saving estimated noise spectra to {fname}")
         np.savez(fname, **mean_noise_spectra)
 
+    MemoryUsage("END OF NOISE SPECTRA ESTIMATION")
+
     return id_sim_sky
 
 

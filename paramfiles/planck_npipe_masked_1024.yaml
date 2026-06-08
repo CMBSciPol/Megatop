@@ -17,7 +17,7 @@ cl2r_pars:
     - 0.0
     - 1.0
     Birefringence:
-    - -0.2
+    - -1.0
     - 1.0
     r:
     - -0.2
@@ -32,7 +32,7 @@ data_dirs:
   noise_maps_root: null
   passbands: bandpass_formatted
   passbands_root: /lustre/work/SO-MEGATOP/NPIPE
-  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky60_nobir_debug3/data_root
+  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky70_nobir_1024_beam/data_root
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2.0e-09
@@ -55,14 +55,16 @@ fiducial_cmb:
   fiducial_lensed_scalar: null
   fiducial_unlensed_scalar_tensor_r1: null
 general_pars:
-  lmax: 512
+  lmax: 2048
   lmin: 30
-  nside: 256
+  nside: 1024
+  mocker_is_skipped: true
 map2cl_pars:
   delta_ell: 10
   n_iter_namaster: 3
   purify_b: true
   purify_e: false
+  uniform_start: null
 map_sets:
 - TF_path: .
   beam: 32.3
@@ -70,7 +72,7 @@ map_sets:
   exp_tag: PLANCK
   file_prefix: ''
   freq_tag: 30
-  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside256.fits
+  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside1024.fits
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: planck_passband_030_020426.tbl
@@ -83,7 +85,7 @@ map_sets:
   exp_tag: PLANCK
   file_prefix: ''
   freq_tag: 44
-  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside256.fits
+  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside1024.fits
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: planck_passband_044_020426.tbl
@@ -96,7 +98,7 @@ map_sets:
   exp_tag: PLANCK
   file_prefix: ''
   freq_tag: 70
-  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside256.fits
+  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside1024.fits
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: planck_passband_070_020426.tbl
@@ -109,7 +111,7 @@ map_sets:
   exp_tag: PLANCK
   file_prefix: ''
   freq_tag: 100
-  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside256.fits
+  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside1024.fits
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: planck_passband_100_020426.tbl
@@ -122,7 +124,7 @@ map_sets:
   exp_tag: PLANCK
   file_prefix: ''
   freq_tag: 143
-  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside256.fits
+  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside1024.fits
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: planck_passband_143_020426.tbl
@@ -135,7 +137,7 @@ map_sets:
   exp_tag: PLANCK
   file_prefix: ''
   freq_tag: 217
-  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside256.fits
+  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside1024.fits
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: planck_passband_217_020426.tbl
@@ -148,7 +150,7 @@ map_sets:
   exp_tag: PLANCK
   file_prefix: ''
   freq_tag: 353
-  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside256.fits
+  nhits_map_path: /home/cgubeno/Megatop/data/full_sky_ones_nside1024.fits
   noise_prefix: noise_
   obsmat_path: .
   passband_filename: planck_passband_353_020426.tbl
@@ -166,9 +168,10 @@ map_sim_pars:
   cmb_sim_no_pysm: true
   filter_sims: false
   generate_sims_for_TF: false
+  id_offset: 200
   input_maps_correction: 1000000.0
   input_maps_prefix: npipe6v20_
-  input_maps_root: /lustre/work/SO-MEGATOP/NPIPE/nside256_coordsG/npipe6v20_sim
+  input_maps_root: /lustre/work/SO-MEGATOP/planck2020/npipe/npipe6v20_sim
   input_maps_suffix: _map
   n_sim: 100
   output_coord_pysm_fg: G
@@ -188,7 +191,7 @@ masks_pars:
   binary_mask_name: binary_mask
   binary_mask_zero_threshold: 0.1
   fwhm_arcmin_smooth_nhits: 60.0
-  gal_key: GAL060
+  gal_key: GAL070
   galactic_mask_name: galactic_mask
   galactic_mask_path: /lustre/work/SO-MEGATOP/NPIPE/masks/HFI_Mask_GalPlane-apo0_2048_R2.00.fits
   include_galactic: true
@@ -204,7 +207,7 @@ noise_cov_pars:
 noise_sim_pars:
   experiments:
     PLANCK:
-      correction: 1e6
+      correction: 1000000.0
       default_bands:
       - 30.0
       - 44.0
@@ -213,13 +216,15 @@ noise_sim_pars:
       - 143.0
       - 217.0
       - 353.0
+      id_sim_suffix: true
       noise_option: noise_map
-      prefix: npipe6v20_
-      root: /lustre/work/SO-MEGATOP/NPIPE/nside256_coordsG/npipe6v20_sim
-      suffix: _residual
+      prefix: residual_npipe6v20_
+      root: /lustre/work/SO-MEGATOP/planck2020/npipe/npipe6v20_sim
+      suffix: _
   include_nhits: true
   n_sim: 100
   prefer_external_noise_maps: true
+  seed: 42
 output_dirs:
   binning: binning
   components: components
@@ -232,12 +237,12 @@ output_dirs:
   precomputation: precomputation
   prepoc_diag_precond: diag_precond
   preproc: preproc
-  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky60_nobir_debug3/output_root
+  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky70_nobir_1024_beam/output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:
   alm2map: false
-  dust_temp: null
+  dust_temp: 19.5
   harmonic_delta_ell: 10
   harmonic_lmax: 256
   harmonic_lmin: 30
@@ -259,10 +264,13 @@ parametric_sep_pars:
   use_harmonic_compsep: false
   use_megabuster: false
 plot_pars:
-  lmax_plot: 1000
+  lmax_plot: 700
   lmin_plot: 30
 pre_proc_pars:
   DEBUGskippreproc: false
+  beam_fwhms: null
   common_beam_correction: 35.0
   correct_for_TF: false
+  npipe_beam_correction: true
+  npipe_beam_path: /lustre/work/SO-MEGATOP/NPIPE/RIMO/simulated_maps/npipe_aux/beam_window_functions/full_frequency
   sum_TF_column: true

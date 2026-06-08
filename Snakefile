@@ -24,12 +24,19 @@ manager = DataManager(mt)
 N_SKY = mt.map_sim_pars.n_sim
 N_NOISE = mt.noise_sim_pars.n_sim
 MAP_SETS = [ms.name for ms in mt.map_sets]
+MOCKER_IS_SKIPPED = mt.general_pars.mocker_is_skipped
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 def S(*path_lists):
     """Flatten DataManager Path lists to strings for Snakemake."""
-    return [str(p) for lst in path_lists for p in lst]
+    flattened = []
+    for item in path_lists:
+        if isinstance(item, (str, Path)):
+            flattened.append(str(item))
+        else:
+            flattened.extend(str(p) for p in item)
+    return flattened
 
 
 # ── Target ────────────────────────────────────────────────────────────────────
@@ -84,22 +91,23 @@ rule noisecov:
 
 
 # ── Per-noise-sim rules ───────────────────────────────────────────────────────
-for _i, _ms in product(range(N_NOISE), MAP_SETS):
+if not MOCKER_IS_SKIPPED:
+    for _i, _ms in product(range(N_NOISE), MAP_SETS):
 
-    rule:
-        name: f"mock_noise_{_i:04d}_{_ms}"
-        input:
-            S(manager.inputs_mock_noise(_i))
-        output:
-            S(manager.outputs_mock_noise(_i, map_set=_ms))
-        log:
-            str(LOGS / f"mock_noise_{_i:04d}_{_ms}.log")
-        params:
-            config=MEGATOP_CONFIG,
-            sim=_i,
-            map_set=_ms,
-        shell:
-            "megatop-mock-noise-run --config {params.config} --sim {params.sim} --map-set {params.map_set} > {log} 2>&1"
+        rule:
+            name: f"mock_noise_{_i:04d}_{_ms}"
+            input:
+                S(manager.inputs_mock_noise(_i))
+            output:
+                S(manager.outputs_mock_noise(_i, map_set=_ms))
+            log:
+                str(LOGS / f"mock_noise_{_i:04d}_{_ms}.log")
+            params:
+                config=MEGATOP_CONFIG,
+                sim=_i,
+                map_set=_ms,
+            shell:
+                "megatop-mock-noise-run --config {params.config} --sim {params.sim} --map-set {params.map_set} > {log} 2>&1"
 
 for _i in range(N_NOISE):
 
@@ -114,27 +122,30 @@ for _i in range(N_NOISE):
         params:
             config=MEGATOP_CONFIG,
             sim=_i,
+        resources:
+            mem_mb=10000 
         shell:
             "megatop-noise-preproc-run --config {params.config} --sim {params.sim} > {log} 2>&1"
 
 
 # ── Per-sky-sim rules ─────────────────────────────────────────────────────────
-for _i, _ms in product(range(N_SKY), MAP_SETS):
+if not MOCKER_IS_SKIPPED:
+    for _i, _ms in product(range(N_SKY), MAP_SETS):
 
-    rule:
-        name: f"mock_signal_{_i:04d}_{_ms}"
-        input:
-            S(manager.inputs_mock_signal(_i))
-        output:
-            S(manager.outputs_mock_signal(_i, map_set=_ms))
-        log:
-            str(LOGS / f"mock_signal_{_i:04d}_{_ms}.log")
-        params:
-            config=MEGATOP_CONFIG,
-            sim=_i,
-            map_set=_ms,
-        shell:
-            "megatop-mock-signal-run --config {params.config} --sim {params.sim} --map-set {params.map_set} > {log} 2>&1"
+        rule:
+            name: f"mock_signal_{_i:04d}_{_ms}"
+            input:
+                S(manager.inputs_mock_signal(_i))
+            output:
+                S(manager.outputs_mock_signal(_i, map_set=_ms))
+            log:
+                str(LOGS / f"mock_signal_{_i:04d}_{_ms}.log")
+            params:
+                config=MEGATOP_CONFIG,
+                sim=_i,
+                map_set=_ms,
+            shell:
+                "megatop-mock-signal-run --config {params.config} --sim {params.sim} --map-set {params.map_set} > {log} 2>&1"
 
 for _i in range(N_SKY):
 
@@ -163,6 +174,8 @@ for _i in range(N_SKY):
         params:
             config=MEGATOP_CONFIG,
             sim=_i,
+        # resources:
+        #     mem_mb=20000
         shell:
             "megatop-compsep-run --config {params.config} --sim {params.sim} > {log} 2>&1"
 
@@ -216,6 +229,15 @@ for _i in range(N_SKY):
 
 _id_repr = 0 if N_SKY > 0 else None
 
+_mock_plot_inputs = (
+    S(manager.outputs_binner(), manager.outputs_mask(), *manager.get_maps_filenames(_id_repr))
+    if MOCKER_IS_SKIPPED and N_SKY > 0
+    else S(manager.outputs_binner(), manager.outputs_mask(),
+           *[manager.outputs_mock_signal(0, map_set=ms) for ms in MAP_SETS])
+    if N_SKY > 0
+    else S(manager.outputs_binner(), manager.outputs_mask())
+)
+
 _all_cl2r = (
     S(*[manager.outputs_cl2r(i) for i in range(N_SKY)])
     if N_SKY > 0
@@ -251,10 +273,7 @@ rule plot_mask:
 
 rule plot_mock:
     input:
-        S(manager.outputs_binner(), manager.outputs_mask(),
-          *[manager.outputs_mock_signal(0, map_set=ms) for ms in MAP_SETS])
-        if N_SKY > 0
-        else S(manager.outputs_binner(), manager.outputs_mask())
+        _mock_plot_inputs
     output:
         touch(str(manager.path_to_mock_plots / ".done"))
     log:
