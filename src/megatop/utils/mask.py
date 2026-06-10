@@ -7,6 +7,7 @@ from urllib.request import urlopen
 import healpy as hp
 import numpy as np
 import pymaster as nmt
+from pixell import enmap
 
 import megatop.utils.harmonic as hu
 
@@ -280,11 +281,58 @@ def get_spin_derivatives(map):
     return first, second
 
 
-def get_fsky(nhits_map, binary_mask, analysis_mask):
-    fsky_nhits = np.mean(nhits_map)
-    fsky_binary = np.mean(binary_mask)
-    fsky_analysis = np.mean(analysis_mask)
-    return fsky_nhits, fsky_binary, fsky_analysis
+def wmoment(field, p):
+    r"""Solid-angle-weighted moment of a weight/mask map: $\int W^p\,d\Omega / 4\pi$.
+
+    HEALPix pixels are equal-area, so this reduces to `mean(field**p)`. CAR pixels
+    vary in area as $\cos(\mathrm{dec})$, so the moment must be area-weighted via
+    `enmap.pixsizemap`; a plain `mean` is wrong there.
+
+    Common uses (with $W$ the normalized weight, `mask` binary):
+
+    - `wmoment(W, 2)` — pseudo-$C_\ell$ amplitude / debias normalization
+    - `wmoment(mask, 1)` — geometric (binary) sky fraction
+    - `wmoment(W, 2)**2 / wmoment(W, 4)` — variance / effective-DOF fsky
+      (Hivon et al. 2002, $w_2^2/w_4$)
+    """
+    if isinstance(field, enmap.ndmap):
+        area = enmap.pixsizemap(field.shape, field.wcs)
+        return float(np.sum(area * field**p) / (4 * np.pi))
+    return float(np.mean(field**p))
+
+
+def fsky_effective(nhits):
+    r"""Effective sky fraction $\langle \mathrm{nhits}\rangle$.
+
+    Equivalent uniform-depth survey area: the V3p1 noise-amplitude input (the
+    area the integration time is spread over). Smaller than geometric, because
+    shallow edges discount the area.
+    """
+    return wmoment(nhits, 1)
+
+
+def fsky_geom(binary_mask):
+    r"""Geometric sky fraction $\langle \mathrm{mask}\rangle$.
+
+    Solid-angle survey fraction; the debias factor for a pseudo-$C_\ell$ measured
+    by `anafast` on a binary-masked map.
+    """
+    return wmoment(binary_mask, 1)
+
+
+def fsky_w2(field):
+    r"""Amplitude / debias normalization $\langle W^2\rangle$ (MCM row-sum)."""
+    return wmoment(field, 2)
+
+
+def fsky_dof(field):
+    r"""Effective-DOF sky fraction for variance / error bars.
+
+    Hivon et al. 2002 mode-count factor $f_{\rm sky}\,w_2^2/w_4 = \langle W^2\rangle^2 / \langle W^4\rangle$.
+    Reduces to the geometric fraction for a binary mask; smaller for an apodized
+    one (apodization loses modes).
+    """
+    return wmoment(field, 2) ** 2 / wmoment(field, 4)
 
 
 @function_timer("apply-binary-mask")

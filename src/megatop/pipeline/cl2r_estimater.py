@@ -10,7 +10,7 @@ from camb import initialpower
 
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
-from megatop.utils import logger
+from megatop.utils import logger, mask
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 
@@ -148,7 +148,7 @@ def logL_cosmo(
     theta,
     dust_marg,
     sync_marg,
-    fsky_obs,
+    fsky,
     Cl_BB_prim_generic,
     Cl_BB_lensing_generic,
     Cl_CMBxCMB_BB_est,
@@ -190,7 +190,7 @@ def logL_cosmo(
 
     log_L = -(1 / 2) * np.sum(
         (2 * bin_centre + 1)
-        * fsky_obs
+        * fsky
         * delta_l
         * ((Cl_CMBxCMB_BB_est / Cl_CMBxCMB_BB_model) + np.log(Cl_CMBxCMB_BB_model))
     )
@@ -205,13 +205,10 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
 
-    # nhits_map = hp.read_map(manager.path_to_nhits_map)
-    # nhits_map /= np.max(nhits_map)
-    # fsky_obs = np.mean(nhits_map)
+    # Gaussian likelihood mode count: the effective DOF fsky (Hivon w2^2/w4),
+    # not the plain mask mean. Equal for a binary mask, smaller when apodized.
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    fsky_obs = np.mean(analysis_mask)
-    # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
-    # fsky_obs = np.sqrt(mean_fsky)
+    fsky = mask.fsky_dof(analysis_mask)
 
     Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][3]
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
@@ -293,7 +290,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         args=(
             dust_marg,
             sync_marg,
-            fsky_obs,
+            fsky,
             Cl_BB_prim_generic,
             Cl_BB_lensing_generic,
             Cl_CMBxCMB_BB_est,
