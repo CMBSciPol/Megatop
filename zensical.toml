@@ -29,6 +29,7 @@ nav = [
   { "API reference" = [
       "api/megatop.md",
       "api/config.md",
+      "api/landscapes.md",
       "api/utils.md"
   ] },
 ]
@@ -46,6 +47,7 @@ inventories = ["https://docs.python.org/3/objects.inv"]
 paths = ["src"]
 options.docstring_style = "google"
 options.docstring_section_style = "list"
+options.relative_crossrefs = true
 options.show_root_members_full_path = true
 options.extensions = ["griffe_fieldz"]  # for attrs
 
