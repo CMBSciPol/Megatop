@@ -100,7 +100,10 @@ def single_map_plotter(m, config, plot_path, *, title="", cmap=None, vmin=None, 
     plt.figure(figsize=(16, 9))
     if config.is_car:
         ax = plt.gca()
-        im = ax.imshow(np.asarray(m), cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
+        # masked pixels carry hp.UNSEEN; show them blank rather than letting the
+        # sentinel blow up the colour scale (imshow has no UNSEEN handling)
+        data = np.where(np.asarray(m) < -1e30, np.nan, m)
+        im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
         ax.set_title(title)
         ax.set_xticks([])
         ax.set_yticks([])
