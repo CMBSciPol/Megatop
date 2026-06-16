@@ -2,8 +2,16 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from megatop.utils import logger
+
+
+def _attach_colorbar(im, ax):
+    """Colorbar sized to exactly match the (CAR) image axes height."""
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="3%", pad=0.05)
+    return im.figure.colorbar(im, cax=cax)
 
 
 def freq_maps_plotter(
@@ -75,7 +83,7 @@ def freq_maps_plotter(
                 im = ax.imshow(m, cmap=cmap, vmin=vmin[stokes], vmax=vmax[stokes], origin="lower")
                 ax.set_xticks([])
                 ax.set_yticks([])
-                plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+                _attach_colorbar(im, ax)
             else:
                 hp.mollview(
                     m,
@@ -84,6 +92,7 @@ def freq_maps_plotter(
                     min=vmin[stokes],
                     max=vmax[stokes],
                     sub=(row, column, k + 1),
+                    xsize=1600,
                 )
             k += 1
 
@@ -107,11 +116,11 @@ def single_map_plotter(m, config, plot_path, *, title="", cmap=None, vmin=None, 
         ax.set_title(title)
         ax.set_xticks([])
         ax.set_yticks([])
-        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        _attach_colorbar(im, ax)
     else:
-        hp.mollview(m, cmap=cmap, cbar=True, title=title, min=vmin, max=vmax)
+        hp.mollview(m, cmap=cmap, cbar=True, title=title, min=vmin, max=vmax, xsize=2000)
         hp.graticule()
-    plt.savefig(plot_path, bbox_inches="tight")
+    plt.savefig(plot_path, bbox_inches="tight", dpi=150)
     plt.close()
 
 
@@ -272,8 +281,8 @@ def plotTTEEBB_diff(
         None
     """
 
-    ell = np.arange(0, Cl_data.shape[-1])
-    norm = ell * (ell + 1) / 2 / np.pi
+    lmin = 2
+    ell = np.arange(Cl_data.shape[-1])
 
     if Cl_data.ndim == 2:
         Cl_data = Cl_data[np.newaxis, ...]
@@ -281,8 +290,11 @@ def plotTTEEBB_diff(
         Cl_model = Cl_model[np.newaxis, ...]
     Cl_model = Cl_model[..., ell]
 
-    if not use_D_ell:
-        norm = 1
+    ell = ell[lmin:]
+    Cl_data = Cl_data[..., lmin:]
+    Cl_model = Cl_model[..., lmin:]
+
+    norm = ell * (ell + 1) / 2 / np.pi if use_D_ell else 1
 
     fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(15, 15))
     for f in range(Cl_data.shape[0]):
