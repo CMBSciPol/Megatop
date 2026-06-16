@@ -59,7 +59,7 @@ jobs:
         if: matrix.python-version == '3.12'
         uses: actions/cache@v4
         with:
-          path: ~/.local/share/pysm3
+          path: ~/.astropy/cache
           key: pysm3-${{ runner.os }}-network
           restore-keys: pysm3-${{ runner.os }}-
 
@@ -100,7 +100,7 @@ jobs:
       - name: Cache pysm3 template data
         uses: actions/cache@v4
         with:
-          path: ~/.local/share/pysm3
+          path: ~/.astropy/cache
           key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
           restore-keys: pysm3-${{ runner.os }}-
 
@@ -149,7 +149,7 @@ jobs:
       - name: Cache pysm3 template data
         uses: actions/cache@v4
         with:
-          path: ~/.local/share/pysm3
+          path: ~/.astropy/cache
           key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
           restore-keys: pysm3-${{ runner.os }}-
 
