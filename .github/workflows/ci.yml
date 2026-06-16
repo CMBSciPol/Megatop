@@ -89,6 +89,9 @@ jobs:
           restore-keys: pysm3-${{ runner.os }}-
 
       - name: Run e2e pipeline
+        env:
+          # Use the small committed ns0064 hitmap fixture (no NERSC download).
+          SO_NOMINAL_HITMAP_PATH: ${{ github.workspace }}/tests/data/norm_nHits_SA_35FOV_ns0064.fits
         run: source .venv/bin/activate && bash runfiles/run_e2e_check.sh paramfiles/e2e_check.yaml ${{ matrix.mpi && '--np 2' || '' }}
 
   e2e-snakemake:
@@ -121,6 +124,9 @@ jobs:
           restore-keys: pysm3-${{ runner.os }}-
 
       - name: Run e2e pipeline via Snakemake
+        env:
+          # Use the small committed ns0064 hitmap fixture (no NERSC download).
+          SO_NOMINAL_HITMAP_PATH: ${{ github.workspace }}/tests/data/norm_nHits_SA_35FOV_ns0064.fits
         run: uv run snakemake --cores 4 --configfile paramfiles/e2e_check.yaml
 
       - name: Run plot rules

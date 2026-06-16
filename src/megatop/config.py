@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic_core import core_schema
 
 __all__ = [
+    "SO_NOMINAL",
     "CAMBCosmoPars",
     "Config",
     "CompSepConfig",
@@ -32,6 +33,12 @@ __all__ = [
 ValidPlanckGalKey = Literal[
     "GAL020", "GAL040", "GAL060", "GAL070", "GAL080", "GAL090", "GAL097", "GAL099"
 ]
+
+# Sentinel value for nhits_map_path meaning "fetch the SO nominal SAT hitmap".
+# Defined once; the typed constant lets the checker flag any drift between the
+# Literal and runtime comparisons (e.g. in megatop.utils.mask).
+SONominalKey = Literal["SO_nominal"]
+SO_NOMINAL = "SO_nominal"
 
 
 class NoiseOption(Enum):
@@ -170,7 +177,7 @@ class MapSetConfig(StrictModel):
     obsmat_path: Path | None = None
     TF_path: Path | None = None
     passband_filename: str = ""
-    nhits_map_path: Literal["SO_nominal"] | Path | None = None
+    nhits_map_path: SONominalKey | Path | None = None
     """Hit-count map. ``"SO_nominal"`` downloads the SO nominal SAT hitmap.
     Assumed to be in equatorial (celestial) coordinates, like all pipeline products."""
     depth_map_path: Path | None = None
