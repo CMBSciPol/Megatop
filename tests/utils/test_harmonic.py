@@ -27,6 +27,17 @@ def car_tqu_geometry(car_geometry):
     return (3, *shape[-2:]), wcs
 
 
+@pytest.fixture(params=["healpix", "car"])
+def unseen_map(request, car_geometry):
+    """A spin-0 map per pixelization, plus an axis-0 slice to blank."""
+    if request.param == "healpix":
+        base = RNG.standard_normal(hp.nside2npix(NSIDE))
+    else:
+        shape, wcs = car_geometry
+        base = enmap.enmap(RNG.standard_normal(shape), wcs)
+    return base, slice(0, base.shape[0] // 2)
+
+
 def _random_alm(ncomp=1):
     shape = (ncomp, NALM) if ncomp > 1 else (NALM,)
     return RNG.standard_normal(shape) + 1j * RNG.standard_normal(shape)
@@ -126,6 +137,22 @@ class TestMap2Alm:
         assert alms.shape == (3, NALM)
         assert_allclose(alms[0], harmonic.map2alm(tqu[0], spin=0, lmax=LMAX))
         assert_allclose(alms[1:], harmonic.map2alm(tqu[1:], spin=2, lmax=LMAX))
+
+    def test_strips_unseen_sentinel(self, unseen_map):
+        """hp.UNSEEN must be zeroed, not transformed, in either pixelisation."""
+        base, blank = unseen_map
+        masked = base.copy()
+        masked[blank] = hp.UNSEEN
+        zeroed = base.copy()
+        zeroed[blank] = 0.0
+
+        alm_masked = harmonic.map2alm(masked, spin=0, lmax=LMAX)
+        alm_zeroed = harmonic.map2alm(zeroed, spin=0, lmax=LMAX)
+
+        assert_allclose(alm_masked, alm_zeroed)
+        assert np.any(masked == hp.UNSEEN)  # input not mutated (.copy contract)
+        assert np.all(np.isfinite(alm_masked))
+        assert np.abs(alm_masked).max() < 1e6  # no sentinel leakage
 
 
 # ---------------------------------------------------------------------------
