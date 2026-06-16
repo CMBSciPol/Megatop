@@ -54,6 +54,22 @@ jobs:
       - name: Run tests
         run: uv run pytest -vv
 
+      # Cache pysm3 templates so the network test mostly hits the cache.
+      - name: Cache pysm3 template data
+        if: matrix.python-version == '3.12'
+        uses: actions/cache@v5
+        with:
+          path: ~/.astropy/cache
+          key: pysm3-${{ runner.os }}-network
+          restore-keys: pysm3-${{ runner.os }}-
+
+      # Network-dependent tests run on one Python version only and never fail the build.
+      # Failures surface as a GitHub annotation on the job.
+      - name: Run network tests (non-blocking)
+        if: matrix.python-version == '3.12'
+        continue-on-error: true
+        run: uv run pytest -vv -m network
+
   e2e:
     name: End-to-end pipeline check (${{ matrix.mpi && 'MPI' || 'no MPI' }})
     runs-on: ubuntu-latest
@@ -82,13 +98,30 @@ jobs:
           uv pip install ${{ matrix.mpi && '".[mpi]"' || '.' }} --group dev
 
       - name: Cache pysm3 template data
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.local/share/pysm3
+          path: ~/.astropy/cache
           key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
           restore-keys: pysm3-${{ runner.os }}-
 
+      # Serially populate the pysm3 template cache before the pipeline runs, so
+      # concurrent rules don't race on astropy's download lock. Retry with a hard
+      # timeout — the CDS template server occasionally stalls (no client timeout).
+      - name: Pre-fetch pysm3 templates
+        timeout-minutes: 6
+        run: |
+          source .venv/bin/activate
+          for i in 1 2 3; do
+            timeout -k 10 90 python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])" && exit 0
+            echo "pysm fetch failed/stalled (attempt $i), retrying..."
+            sleep 10
+          done
+          exit 1
+
       - name: Run e2e pipeline
+        env:
+          # Use the small committed ns0064 hitmap fixture (no NERSC download).
+          SO_NOMINAL_HITMAP_PATH: ${{ github.workspace }}/tests/data/norm_nHits_SA_35FOV_ns0064.fits
         run: source .venv/bin/activate && bash runfiles/run_e2e_check.sh paramfiles/e2e_check.yaml ${{ matrix.mpi && '--np 2' || '' }}
 
   e2e-snakemake:
@@ -114,13 +147,29 @@ jobs:
         run: uv sync --extra snake --dev --managed-python
 
       - name: Cache pysm3 template data
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.local/share/pysm3
+          path: ~/.astropy/cache
           key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
           restore-keys: pysm3-${{ runner.os }}-
 
+      # Serially populate the pysm3 template cache before the pipeline runs, so
+      # the parallel mock_signal rules don't race on astropy's download lock.
+      # Retry with a hard timeout — the CDS template server occasionally stalls.
+      - name: Pre-fetch pysm3 templates
+        timeout-minutes: 6
+        run: |
+          for i in 1 2 3; do
+            timeout -k 10 90 uv run python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])" && exit 0
+            echo "pysm fetch failed/stalled (attempt $i), retrying..."
+            sleep 10
+          done
+          exit 1
+
       - name: Run e2e pipeline via Snakemake
+        env:
+          # Use the small committed ns0064 hitmap fixture (no NERSC download).
+          SO_NOMINAL_HITMAP_PATH: ${{ github.workspace }}/tests/data/norm_nHits_SA_35FOV_ns0064.fits
         run: uv run snakemake --cores 4 --configfile paramfiles/e2e_check.yaml
 
       - name: Run plot rules

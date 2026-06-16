@@ -1,3 +1,4 @@
+import io
 import os
 import sys
 from pathlib import Path
@@ -10,6 +11,7 @@ import pymaster as nmt
 from pixell import enmap
 
 import megatop.utils.harmonic as hu
+from megatop.config import SO_NOMINAL
 
 from .logger import logger
 from .timer import function_timer
@@ -17,6 +19,10 @@ from .timer import function_timer
 SO_NOMINAL_HITMAP_URL = (
     "https://portal.nersc.gov/cfs/sobs/users/so_bb/norm_nHits_SA_35FOV_ns512.fits"
 )
+
+# Override the SO nominal hitmap source with a local file (e.g. a small fixture
+# for CI/tests). When set, no network access is performed.
+SO_NOMINAL_HITMAP_PATH = os.getenv("SO_NOMINAL_HITMAP_PATH", None)
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
@@ -76,21 +82,26 @@ def read_nhits_maps(list_hitmapname: list[Path], nside: int):
     Read hit maps and ud_grade. Maps are assumed equatorial (celestial).
     """
     nhits_maps = []
-    SO_NOMINAL_NHITS = None
+    so_nominal_nhits = None
     for hitmapname in list_hitmapname:
-        if hitmapname == "SO_nominal":
-            if SO_NOMINAL_NHITS is None:
-                try:
-                    logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
-                    with urlopen(SO_NOMINAL_HITMAP_URL, timeout=10) as _:
-                        # healpy can read directly from the URL
-                        SO_NOMINAL_NHITS = hp.read_map(SO_NOMINAL_HITMAP_URL)
-                        SO_NOMINAL_NHITS = hp.ud_grade(SO_NOMINAL_NHITS, nside, power=-2)
-                except URLError:
-                    logger.error("Nominal hitmap download failed")
-                    logger.error("Exiting mask_handler without creating a mask")
-                    sys.exit()
-            nhits_maps.append(SO_NOMINAL_NHITS)
+        if hitmapname == SO_NOMINAL:
+            if so_nominal_nhits is None:
+                if SO_NOMINAL_HITMAP_PATH is not None:
+                    logger.info(f"Reading nominal hit map from {SO_NOMINAL_HITMAP_PATH}")
+                    so_nominal_nhits = hp.read_map(SO_NOMINAL_HITMAP_PATH)
+                else:
+                    try:
+                        logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
+                        # Fetch once into memory (bounded by timeout), then let healpy
+                        # parse the bytes — avoids a second, unbounded URL read.
+                        with urlopen(SO_NOMINAL_HITMAP_URL, timeout=30) as resp:
+                            so_nominal_nhits = hp.read_map(io.BytesIO(resp.read()))
+                    except URLError:
+                        logger.error("Nominal hitmap download failed")
+                        logger.error("Exiting mask_handler without creating a mask")
+                        sys.exit()
+                so_nominal_nhits = hp.ud_grade(so_nominal_nhits, nside, power=-2)
+            nhits_maps.append(so_nominal_nhits)
         else:
             nhits_maps.append(
                 hp.ud_grade(hp.read_map(hitmapname, field=0), nside_out=nside, power=-2)
