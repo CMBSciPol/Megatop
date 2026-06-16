@@ -41,49 +41,44 @@ def freq_maps_plotter(
     if vmax is None:
         vmax = {"I": None, "Q": None, "U": None}
 
-    plt.figure(figsize=(20, 7))
-    k = 0
-
-    if map_set.shape == (1, 3, map_set.shape[-1]) or map_set.shape == (1, 2, map_set.shape[-1]):
-        enum_freq = [0]
-        row = 1
-        column = map_set.shape[1]
-    elif map_set.shape == (len(config.frequencies), 3, map_set.shape[-1]) or map_set.shape == (
-        len(config.frequencies),
-        2,
-        map_set.shape[-1],
-    ):
-        enum_freq = config.frequencies
-        row = map_set.shape[1]
-        column = len(config.frequencies)
-    else:
+    # CAR maps carry pixel axes (ny, nx) → ndim == 4; HEALPix is 1-D → ndim == 3.
+    car = map_set.ndim == 4
+    nfreq, nstokes = map_set.shape[0], map_set.shape[1]
+    if nstokes not in (2, 3) or nfreq not in (1, len(config.frequencies)):
         logger.error(
-            f"In freq_maps_plotter() map_set doesn't have the right shape, must be (nfreq, nstokes, npix) OR (1, nstokes, npix), here: {map_set.shape}"
+            "In freq_maps_plotter() map_set doesn't have the right shape, must be "
+            f"(nfreq, nstokes, <pixels>) OR (1, nstokes, <pixels>), here: {map_set.shape}"
         )
         msg = "Bad map set shape"
         raise TypeError(msg)
 
-    stokes_list = ["I", "Q", "U"] if map_set.shape[1] == 3 else ["Q", "U"]
+    plt.figure(figsize=(20, 7))
+    k = 0
+    enum_freq = [0] if nfreq == 1 else config.frequencies
+    row, column = (1, nstokes) if nfreq == 1 else (nstokes, nfreq)
+    stokes_list = ["I", "Q", "U"] if nstokes == 3 else ["Q", "U"]
 
     for j_stokes, stokes in enumerate(stokes_list):
         for i_f, fr in enumerate(enum_freq):
             title_map = f"{component} {stokes}" if enum_freq == [0] else f"{fr} GHz {stokes}"
-            if stokes == "I":
-                cmap = cm.RdBu
-                cmap.set_under(cmap_set_under)
-                hp.mollview(
-                    map_set[i_f, j_stokes],
-                    cmap=cmap,
-                    title=title_map,
-                    min=vmin[stokes],
-                    max=vmax[stokes],
-                    sub=(row, column, k + 1),
-                )
+            # copy: set_under mutates the colormap, don't poison the global singleton
+            cmap = (cm.RdBu if stokes == "I" else cm.Greys).copy()
+            cmap.set_under(cmap_set_under)
+            m = map_set[i_f, j_stokes]
+            if car:
+                ax = plt.subplot(row, column, k + 1)
+                ax.set_title(title_map)
+                # masked pixels carry hp.UNSEEN; show them blank rather than
+                # letting the sentinel blow up the colour scale
+                m = np.where(np.asarray(m) < -1e30, np.nan, m)
+                # enmap rows run south→north; origin="lower" keeps north up
+                im = ax.imshow(m, cmap=cmap, vmin=vmin[stokes], vmax=vmax[stokes], origin="lower")
+                ax.set_xticks([])
+                ax.set_yticks([])
+                plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
             else:
-                cmap = cm.Greys
-                cmap.set_under(cmap_set_under)
                 hp.mollview(
-                    map_set[i_f, j_stokes],
+                    m,
                     cmap=cmap,
                     title=title_map,
                     min=vmin[stokes],
@@ -94,6 +89,27 @@ def freq_maps_plotter(
 
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")
     plt.clf()
+
+
+def single_map_plotter(m, config, plot_path, *, title="", cmap=None, vmin=None, vmax=None):
+    """Save a single sky map, dispatching on ``config`` pixelization.
+
+    HEALPix → ``hp.mollview`` + graticule; CAR → ``imshow`` of the ``(ny, nx)``
+    enmap (``origin="lower"`` keeps north up).
+    """
+    plt.figure(figsize=(16, 9))
+    if config.is_car:
+        ax = plt.gca()
+        im = ax.imshow(np.asarray(m), cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
+        ax.set_title(title)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    else:
+        hp.mollview(m, cmap=cmap, cbar=True, title=title, min=vmin, max=vmax)
+        hp.graticule()
+    plt.savefig(plot_path, bbox_inches="tight")
+    plt.close()
 
 
 def freq_maps_plotter_one_stoke(
