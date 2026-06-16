@@ -35,8 +35,8 @@ ValidPlanckGalKey = Literal[
 ]
 
 # Sentinel value for nhits_map_path meaning "fetch the SO nominal SAT hitmap".
-# Defined once; the typed constant lets the checker flag any drift between the
-# Literal and runtime comparisons (e.g. in megatop.utils.mask).
+# SONominalKey is the type for the config field; SO_NOMINAL the runtime value
+# used in comparisons (e.g. in megatop.utils.mask).
 SONominalKey = Literal["SO_nominal"]
 SO_NOMINAL = "SO_nominal"
 
