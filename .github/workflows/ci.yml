@@ -57,7 +57,7 @@ jobs:
       # Cache pysm3 templates so the network test mostly hits the cache.
       - name: Cache pysm3 template data
         if: matrix.python-version == '3.12'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.astropy/cache
           key: pysm3-${{ runner.os }}-network
@@ -98,7 +98,7 @@ jobs:
           uv pip install ${{ matrix.mpi && '".[mpi]"' || '.' }} --group dev
 
       - name: Cache pysm3 template data
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.astropy/cache
           key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
@@ -147,7 +147,7 @@ jobs:
         run: uv sync --extra snake --dev --managed-python
 
       - name: Cache pysm3 template data
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.astropy/cache
           key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
