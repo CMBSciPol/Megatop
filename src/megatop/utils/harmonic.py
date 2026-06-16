@@ -173,6 +173,12 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
         Alm array, last axis in triangular ``(l, m)`` layout.
     """
     if _is_car(maps):
+        # mirror the HEALPix branch: zero hp.UNSEEN sentinels so masked pixels
+        # don't dominate the SHT (copy keeps the enmap wcs for curvedsky)
+        unseen = maps == hp.UNSEEN
+        if np.any(unseen):
+            maps = maps.copy()
+            maps[unseen] = 0.0
         return curvedsky.map2alm(maps, spin=spin, lmax=lmax, niter=niter)
     kw = {"lmax": lmax, "mmax": mmax, "niter": niter, "nthreads": nthreads}
     if isinstance(spin, (list, tuple)):
