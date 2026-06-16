@@ -108,11 +108,11 @@ jobs:
       # concurrent rules don't race on astropy's download lock. Retry with a hard
       # timeout — the CDS template server occasionally stalls (no client timeout).
       - name: Pre-fetch pysm3 templates
-        timeout-minutes: 5
+        timeout-minutes: 6
         run: |
           source .venv/bin/activate
           for i in 1 2 3; do
-            timeout 90 python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])" && exit 0
+            timeout -k 10 90 python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])" && exit 0
             echo "pysm fetch failed/stalled (attempt $i), retrying..."
             sleep 10
           done
@@ -157,10 +157,10 @@ jobs:
       # the parallel mock_signal rules don't race on astropy's download lock.
       # Retry with a hard timeout — the CDS template server occasionally stalls.
       - name: Pre-fetch pysm3 templates
-        timeout-minutes: 5
+        timeout-minutes: 6
         run: |
           for i in 1 2 3; do
-            timeout 90 uv run python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])" && exit 0
+            timeout -k 10 90 uv run python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])" && exit 0
             echo "pysm fetch failed/stalled (attempt $i), retrying..."
             sleep 10
           done
