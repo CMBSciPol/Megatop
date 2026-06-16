@@ -104,6 +104,11 @@ jobs:
           key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
           restore-keys: pysm3-${{ runner.os }}-
 
+      # Serially populate the pysm3 template cache before the pipeline runs,
+      # so concurrent rules don't race on astropy's download lock.
+      - name: Pre-fetch pysm3 templates
+        run: source .venv/bin/activate && python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])"
+
       - name: Run e2e pipeline
         env:
           # Use the small committed ns0064 hitmap fixture (no NERSC download).
@@ -138,6 +143,11 @@ jobs:
           path: ~/.local/share/pysm3
           key: pysm3-${{ runner.os }}-${{ hashFiles('paramfiles/e2e_check.yaml') }}
           restore-keys: pysm3-${{ runner.os }}-
+
+      # Serially populate the pysm3 template cache before the pipeline runs, so
+      # the parallel mock_signal rules don't race on astropy's download lock.
+      - name: Pre-fetch pysm3 templates
+        run: uv run python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])"
 
       - name: Run e2e pipeline via Snakemake
         env:
