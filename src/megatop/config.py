@@ -260,7 +260,9 @@ class HealpixConfig(StrictModel):
     """HEALPix output products at resolution ``nside``."""
 
     nside: int = 512
+    """HEALPix resolution parameter (number of pixels is `12 * nside**2`)."""
     ordering: Literal["ring", "nest"] = "ring"
+    """Pixel ordering; only `ring` is supported."""
 
     @model_validator(mode="after")
     def ring_only(self):
@@ -612,7 +614,8 @@ class Config(StrictModel):
     def nside(self) -> int:
         """The HEALPix working resolution.
 
-        For HEALPix runs this is the product resolution (``landscape.healpix.nside``).
+        For HEALPix runs this is the product resolution
+        ([`HealpixConfig.nside`][megatop.config.HealpixConfig.nside]).
 
         For CAR runs it is the intermediate resolution used for pysm foreground
         generation, derived from ``lmax`` via [`nside_for_lmax`][megatop.config.nside_for_lmax] (survey masks
