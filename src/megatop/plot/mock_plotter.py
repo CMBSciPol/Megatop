@@ -10,9 +10,9 @@ import megatop.utils.harmonic as hu
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
 from megatop.pipeline.mocker import get_noise
-from megatop.utils import Timer, logger, mock, passband
+from megatop.utils import Timer, logger, mask, mock, passband
 from megatop.utils.mask import apply_binary_mask
-from megatop.utils.mock import get_noise_experiment, get_noise_map_from_white_noise
+from megatop.utils.mock import get_noise_experiment
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
 from megatop.utils.preproc import read_input_maps
 
@@ -166,17 +166,17 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
 def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     binary_mask = hp.read_map(manager.path_to_binary_mask)
     common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
     noise_freq_maps = get_noise(config, binary_mask, common_nhits_map)
 
-    noise_freq_maps = apply_binary_mask(noise_freq_maps, binary_mask, unseen=True)
-
     if maps:
+        display_maps = apply_binary_mask(noise_freq_maps.copy(), binary_mask, unseen=True)
         freq_maps_plotter(
             config,
-            noise_freq_maps,
+            display_maps,
             plot_dir,
             "noise_freq_maps.png",
             vmin={"I": -2, "Q": -0.5, "U": -0.5},
@@ -184,12 +184,19 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
         )
 
     if cls:
+        # Weight by the apodized analysis mask (the same mask the real estimators
+        # use), then anafast. The resulting pseudo-Cl is debiased by fsky_w2 =
+        # ⟨W²⟩ to recover the physical Nl (approximate for inhomogeneous noise),
+        # built with the effective fsky that sets the V3p1 noise amplitude.
+        masked_maps = noise_freq_maps * analysis_mask
         cls = []
         for i_f, _f in enumerate(config.frequencies):
-            cls.append(hu.anafast(noise_freq_maps[i_f], lmax=config.lmax))
+            cls.append(hu.anafast(masked_maps[i_f], lmax=config.lmax))
         cls = np.array(cls)
 
-        fsky_from_nhits = np.sqrt(np.mean(common_nhits_map**2))
+        fsky_effective = mask.fsky_effective(common_nhits_map)
+        fsky_w2 = mask.fsky_w2(analysis_mask)
+        cls /= fsky_w2
         cl_model = np.zeros_like(cls)
         noise_config = config.noise_sim_pars
 
@@ -204,7 +211,7 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 logger.error(msg)
                 raise RuntimeError(msg) from e
             noise_experiment[exp] = get_noise_experiment(
-                exp, noise_config.experiments[exp], fsky_nhits=fsky_from_nhits, lmax=config.lmax
+                exp, noise_config.experiments[exp], fsky_effective=fsky_effective, lmax=config.lmax
             )
         for i_map_set, map_set in enumerate(config.map_sets):
             exp = map_set.exp_tag
@@ -213,19 +220,12 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
             logger.debug(f"Map {exp}_{map_set.freq_tag} has index {idx_freq}.")
             if noise_config_exp.noise_option == NoiseOption.WHITE:
                 white_noise_level = noise_experiment[exp]["map_white_noise_levels"][idx_freq]
-                noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
-                    noise_experiment[exp]["map_white_noise_levels"][idx_freq], config.nside
-                )
 
                 cl_model[i_map_set, 0] = (
                     white_noise_level[np.newaxis] / np.sqrt(2) * np.pi / 180 / 60
-                ) ** 2 * fsky_from_nhits
-                cl_model[i_map_set, 1] = (
-                    white_noise_level[np.newaxis] * np.pi / 180 / 60
-                ) ** 2 * fsky_from_nhits
-                cl_model[i_map_set, 2] = (
-                    white_noise_level[np.newaxis] * np.pi / 180 / 60
-                ) ** 2 * fsky_from_nhits
+                ) ** 2
+                cl_model[i_map_set, 1] = (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
+                cl_model[i_map_set, 2] = (white_noise_level[np.newaxis] * np.pi / 180 / 60) ** 2
             elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
                 n_ell = noise_experiment[exp]["noise_spectra"][idx_freq]
                 cl_model[:, 1, 2:] = n_ell

@@ -81,7 +81,7 @@ def generate_map_fgs_pysm(
 def get_full_sky_noise_freq_maps(
     map_sets,
     noise_config: dict,
-    fsky_nhits: float,
+    fsky_effective: float,
     nside: int,
     lmax: int,
     id_sim: int = 0,
@@ -100,7 +100,7 @@ def get_full_sky_noise_freq_maps(
         noise_experiment[exp] = get_noise_experiment(
             exp,
             noise_config.experiments[exp],
-            fsky_nhits=fsky_nhits,
+            fsky_effective=fsky_effective,
             lmax=lmax,
             id_sim=id_sim,
         )
@@ -136,7 +136,7 @@ def get_full_sky_noise_freq_maps(
 def get_noise_experiment(
     exp: str,
     noise_config_exp: ValidExperimentConfig,
-    fsky_nhits: float,
+    fsky_effective: float,
     lmax: int,
     id_sim: int = 0,
 ):
@@ -152,7 +152,7 @@ def get_noise_experiment(
                 survey_years=1.0,  # The scaling wiht time is done through Ntubes_years
             )
             _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-                f_sky=fsky_nhits, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
+                f_sky=fsky_effective, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
             )
         else:
             logger.info(
@@ -164,7 +164,7 @@ def get_noise_experiment(
                 sensitivity_mode=sensitivity_mode,
                 one_over_f_mode=one_over_f_mode,
                 SAC_yrs_LF=noise_config_exp.SAC_yrs_LF,
-                f_sky=fsky_nhits,
+                f_sky=fsky_effective,
                 ell_max=lmax + 1,
                 delta_ell=1,
                 beam_corrected=False,
@@ -184,7 +184,7 @@ def get_noise_experiment(
             survey_years=1.0,
         )
         _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-            f_sky=fsky_nhits, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
+            f_sky=fsky_effective, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
         )
 
     elif type(noise_config_exp) is ExternalNoiseMapconfig:

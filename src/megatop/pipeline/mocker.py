@@ -30,7 +30,6 @@ def get_noise(
     *,
     extra_seed=None,
 ) -> NDArray:
-    fsky_nhits = common_nhits_map.mean()
     seed = [config.noise_sim_pars.seed, id_sim]
     if extra_seed is not None:
         seed.append(extra_seed)
@@ -38,7 +37,7 @@ def get_noise(
     noise_freq_maps = mock.get_full_sky_noise_freq_maps(
         config.map_sets,
         config.noise_sim_pars,
-        fsky_nhits=fsky_nhits,
+        fsky_effective=mask.fsky_effective(common_nhits_map),
         nside=config.nside,
         lmax=config.lmax,
         id_sim=id_sim,
