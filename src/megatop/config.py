@@ -1,11 +1,19 @@
+from __future__ import annotations
+
+import math
 from enum import Enum, IntEnum
+from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_core import core_schema
+
+if TYPE_CHECKING:
+    from megatop.landscapes import AbstractLandscape
+
 
 __all__ = [
     "SO_NOMINAL",
@@ -243,14 +251,58 @@ class MasksConfig(StrictModel):
         return self
 
 
-class GeneralConfig(StrictModel):
+def nside_for_lmax(lmax: int) -> int:
+    """Smallest power-of-two ``nside`` such that `lmax <= 2 * nside`."""
+    return 1 << max(0, math.ceil(math.log2(max(1, lmax) / 2)))
+
+
+class HealpixConfig(StrictModel):
+    """HEALPix output products at resolution ``nside``."""
+
     nside: int = 512
+    ordering: Literal["ring", "nest"] = "ring"
+
+    @model_validator(mode="after")
+    def ring_only(self):
+        if self.ordering != "ring":
+            raise ValueError("only RING ordering is supported")
+        return self
+
+
+class CARConfig(StrictModel):
+    """CAR output products on the geometry read from ``geometry_file``."""
+
+    geometry_file: Path
+    """FITS/HDF file whose (shape, wcs) define the CAR geometry."""
+
+
+class PixelisationConfig(StrictModel):
+    """Output pixelisation (landscape): exactly one of `healpix` or `car`."""
+
+    healpix: HealpixConfig | None = None
+    car: CARConfig | None = None
+
+    @model_validator(mode="after")
+    def exactly_one(self):
+        if (self.healpix is None) == (self.car is None):
+            raise ValueError("exactly one of 'healpix' or 'car' must be set")
+        return self
+
+
+class GeneralConfig(StrictModel):
     lmin: int = 30  # TODO: used ?
     lmax: int = 1000
+    pixelisation: PixelisationConfig = Field(
+        default_factory=lambda: PixelisationConfig(healpix=HealpixConfig())
+    )
 
     @model_validator(mode="after")
     def lmax_at_most_two_nside(self):
-        two_nside = 2 * self.nside
+        # nside bounds the band limit only for HEALPix products; CAR derives its
+        # intermediate resolution from lmax (so the bound holds by construction).
+        if self.pixelisation.healpix is None:
+            return self
+        two_nside = 2 * self.pixelisation.healpix.nside
         if self.lmax > two_nside:
             msg = f"lmax={self.lmax} must be less than or equal to two_nside={two_nside}"
             raise ValueError(msg)
@@ -471,7 +523,7 @@ class Config(StrictModel):
         return self
 
     @classmethod
-    def load_yaml(cls, path: str | Path) -> "Config":
+    def load_yaml(cls, path: str | Path) -> Config:
         """Load and instantiate a ``Config`` from a YAML file."""
         data = yaml.safe_load(Path(path).read_text())
         return cls.model_validate(data)
@@ -488,7 +540,7 @@ class Config(StrictModel):
         )
 
     @classmethod
-    def get_example(cls) -> "Config":
+    def get_example(cls) -> Config:
         """Return an example configuration with one map set"""
         return cls(
             data_dirs=DataDirsConfig(root="data_root"),
@@ -504,7 +556,7 @@ class Config(StrictModel):
             ],
         )
 
-    def split_map_sets(self, num_colors: int, color: int = 0) -> "Config":
+    def split_map_sets(self, num_colors: int, color: int = 0) -> Config:
         """Split the configuration into color groups (similar to MPI_Comm_split).
 
         Returns a different configuration based on a color value, allowing for parallel processing
@@ -525,9 +577,51 @@ class Config(StrictModel):
         return self.model_copy(update={"map_sets": subset})
 
     @property
+    def is_car(self) -> bool:
+        """Whether the pipeline products use CAR (pixell.enmap) pixelization."""
+        return self.general_pars.pixelisation.car is not None
+
+    @cached_property
+    def geometry(self) -> tuple[tuple[int, ...], Any]:
+        """The CAR ``(shape, wcs)`` read from ``geometry_file``.
+
+        Raises:
+            ValueError: if the run is not configured for CAR.
+        """
+        if not self.is_car:
+            raise ValueError("geometry is only defined for CAR runs (landscape.car)")
+        from pixell import enmap
+
+        return enmap.read_map_geometry(str(self.general_pars.pixelisation.car.geometry_file))
+
+    @cached_property
+    def landscape(self) -> AbstractLandscape:
+        """The [`AbstractLandscape`][megatop.landscapes.AbstractLandscape] for this run.
+
+        Single geometry source threaded into map-creating utilities; functions
+        that already hold a map dispatch on the array instead.
+        """
+        from megatop.landscapes import CARLandscape, HealpixLandscape
+
+        if self.is_car:
+            shape, wcs = self.geometry
+            return CARLandscape(shape, wcs)
+        return HealpixLandscape(self.nside)
+
+    @property
     def nside(self) -> int:
-        """The HEALPix nside parameter"""
-        return self.general_pars.nside
+        """The HEALPix working resolution.
+
+        For HEALPix runs this is the product resolution (``landscape.healpix.nside``).
+
+        For CAR runs it is the intermediate resolution used for pysm foreground
+        generation, derived from ``lmax`` via [`nside_for_lmax`][megatop.config.nside_for_lmax] (survey masks
+        are built natively in CAR and do not use it).
+        """
+        healpix = self.general_pars.pixelisation.healpix
+        if healpix is not None:
+            return healpix.nside
+        return nside_for_lmax(self.lmax)
 
     @property
     def lmin(self) -> int:

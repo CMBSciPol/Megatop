@@ -1,9 +1,14 @@
-# End-to-end sanity check configuration.
-# 3 SO frequencies, nside=64, 2 signal + 2 noise sims.
-# Outputs land in /tmp/megatop_e2e_check — safe to delete afterwards.
+# End-to-end sanity check configuration — CAR (pixell.enmap) pixelization.
+# Mirrors e2e_check.yaml but produces CAR maps. The geometry_file must exist
+# before running; generate a small patch with, e.g.:
+#   python -c "from pixell import enmap, utils; \
+#     sh,wcs=enmap.geometry(pos=[[-10*utils.degree,-10*utils.degree],[10*utils.degree,10*utils.degree]], \
+#       res=2*utils.arcmin, proj='car'); \
+#     enmap.write_map_geometry('/tmp/megatop_e2e_check_car/geometry.fits', sh, wcs)"
+# Outputs land in /tmp/megatop_e2e_check_car — safe to delete afterwards.
 
 data_dirs:
-  root: /tmp/megatop_e2e_check/data
+  root: /tmp/megatop_e2e_check_car/data
   maps: maps
   noise_maps: noise_maps
   beams: beams
@@ -11,7 +16,7 @@ data_dirs:
   TF_sims_maps: TF_sims_maps
 
 output_dirs:
-  root: /tmp/megatop_e2e_check/outputs
+  root: /tmp/megatop_e2e_check_car/outputs
   masks: masks
   binning: binning
   transfer_functions: transfer_functions
@@ -36,8 +41,6 @@ fiducial_cmb:
     As: 2.0e-09
     ns: 0.965
 
-# Three frequencies — enough for CMB + dust + synchrotron separation.
-# Beams are realistic SO SAT values (arcmin).
 map_sets:
   - freq_tag: 93
     exp_tag: SO
@@ -46,7 +49,6 @@ map_sets:
     file_prefix: ''
     noise_prefix: noise_
     simfoTF_prefix: simforTF_
-
     passband_filename: ''
     depth_map_path: null
   - freq_tag: 145
@@ -56,7 +58,6 @@ map_sets:
     file_prefix: ''
     noise_prefix: noise_
     simfoTF_prefix: simforTF_
-
     passband_filename: ''
     depth_map_path: null
   - freq_tag: 225
@@ -66,7 +67,6 @@ map_sets:
     file_prefix: ''
     noise_prefix: noise_
     simfoTF_prefix: simforTF_
-
     passband_filename: ''
     depth_map_path: null
 
@@ -74,8 +74,8 @@ masks_pars:
   nhits_map_name: nhits_map
   binary_mask_name: binary_mask
   analysis_mask_name: analysis_mask
-  apod_radius: 10.0
-  apod_radius_point_source: 4.0
+  apod_radius: 1.0
+  apod_radius_point_source: 0.5
   apod_type: C1
   binary_mask_zero_threshold: 0.1
   fwhm_arcmin_smooth_nhits: 60.0
@@ -88,13 +88,13 @@ masks_pars:
   mock_nsources: 100
   mock_sources_hole_radius: 4.0
 
-# nside=64 → pixel ~55 arcmin; lmax=150 (well below the 3*nside-1=191 limit)
+# CAR run: nside is the intermediate HEALPix resolution used before reprojection.
 general_pars:
-  pixelisation:
-    healpix:
-      nside: 64
   lmin: 30
-  lmax: 100
+  lmax: 500
+  pixelisation:
+    car:
+      geometry_file: /tmp/megatop_e2e_check_car/geometry.fits
 
 pre_proc_pars:
   common_beam_correction: 60.0
@@ -169,7 +169,6 @@ noise_sim_pars:
         - 5.0
       SAC_yrs_LF: 1.0
 
-# Reduced MCMC for speed — enough to confirm the pipeline runs end-to-end.
 cl2r_pars:
   dust_marg: false
   sync_marg: false
