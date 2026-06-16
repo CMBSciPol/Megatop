@@ -28,6 +28,7 @@ def test_shape_spectra_noise_map():
     assert freq_maps.shape == (3, hp.nside2npix(NSIDE))
 
 
+@pytest.mark.network
 def test_shape_fg_map():
     map_sets = [
         MapSetConfig(freq_tag=100, exp_tag="test", nhits_map_path="SO_nominal", beam=10.0),
