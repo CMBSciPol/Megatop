@@ -234,12 +234,12 @@ class GeneralConfig:
     lmin: int = 30  # TODO: used ?
     lmax: int = field(default=1000)
 
-    @lmax.validator
-    def check(self, attribute, value):
-        """Check that lmax <= 2 * nside"""
-        if value > (two_nside := 2 * self.nside):
-            msg = f"{attribute.name}={value} must be less than or equal to {two_nside=}"
-            raise ValueError(msg)
+    # @lmax.validator
+    # def check(self, attribute, value):
+    #     """Check that lmax <= 2 * nside"""
+    #     if value > (two_nside := 2 * self.nside):
+    #         msg = f"{attribute.name}={value} must be less than or equal to {two_nside=}"
+    #         raise ValueError(msg)
 
 
 @define
@@ -284,6 +284,8 @@ class CompSepConfig:
     passband_int: bool = False
     use_megabuster: bool = False  # Modification megabuster
     megabuster_options: _MEGABUSTEROptions = Factory(_MEGABUSTEROptions)  # Modification megabuster
+
+    DEBUG_use_TRUE_pixel_noisecov: bool = False
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
         """Return the minimize options as a dictionary.
