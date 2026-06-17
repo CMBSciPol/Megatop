@@ -54,22 +54,6 @@ jobs:
       - name: Run tests
         run: uv run pytest -vv
 
-      # Cache pysm3 templates so the network test mostly hits the cache.
-      - name: Cache pysm3 template data
-        if: matrix.python-version == '3.12'
-        uses: actions/cache@v5
-        with:
-          path: ~/.astropy/cache
-          key: pysm3-${{ runner.os }}-network
-          restore-keys: pysm3-${{ runner.os }}-
-
-      # Network-dependent tests run on one Python version only and never fail the build.
-      # Failures surface as a GitHub annotation on the job.
-      - name: Run network tests (non-blocking)
-        if: matrix.python-version == '3.12'
-        continue-on-error: true
-        run: uv run pytest -vv -m network
-
   e2e:
     name: End-to-end pipeline check (${{ matrix.mpi && 'MPI' || 'no MPI' }})
     runs-on: ubuntu-latest

@@ -78,12 +78,6 @@ docs = [
 "megatop-TFcomputing-run" = "megatop.pipeline.TF_computation_interface:main"
 
 
-[tool.pytest]
-addopts = ["-m", "not network"]
-markers = [
-    "network: test requires network access (pysm templates, remote maps)",
-]
-
 [tool.ruff]
 fix = true            # autofix issues when possible
 force-exclude = true  # useful with ruff-pre-commit plugin
