@@ -150,7 +150,11 @@ def _map2alm_healpix(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None
     return _map2alm_healpix_iter(maps, **kw)
 
 
-def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
+def _default_niter(car: bool) -> int:
+    return 0 if car else 3
+
+
+def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=None, nthreads=None):
     """Forward SHT, dispatching on pixelization.
 
     Args:
@@ -166,13 +170,22 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
             Batch dimensions are supported: ``(batch, 3, npix)`` → ``(batch, 3, nalm)``.
         lmax: Bandlimit. HEALPix default: ``3 * nside - 1``; CAR: library default.
         mmax: Azimuthal bandlimit (HEALPix only). Defaults to ``lmax``.
-        niter: Refinement steps. HEALPix: Jacobi iterations; CAR: passed to pixell.
+        niter: Jacobi refinement steps. ``None`` (default) resolves per pixelization:
+            ``3`` for HEALPix, ``0`` for CAR. HEALPix lacks exact quadrature, so
+            iteration improves accuracy. CAR grids carry exact quadrature weights, so
+            one pass is already exact on the full sky; on a cut-sky enmap iteration is
+            ill-posed and amplifies the unconstrained band-edge modes (a spurious
+            ``Cl[lmax]`` spike). An explicit value overrides the default for either
+            pixelization (pixell accepts ``niter`` for CAR, but it is rarely useful).
         nthreads: ducc0 thread count (HEALPix). ``None`` uses ``MEGATOP_SHT_NTHREADS``.
 
     Returns:
         Alm array, last axis in triangular ``(l, m)`` layout.
     """
-    if _is_car(maps):
+    car = _is_car(maps)
+    if niter is None:
+        niter = _default_niter(car)
+    if car:
         # mirror the HEALPix branch: zero hp.UNSEEN sentinels so masked pixels
         # don't dominate the SHT (copy keeps the enmap wcs for curvedsky)
         unseen = maps == hp.UNSEEN
@@ -394,7 +407,7 @@ def smooth(
     shape=None,
     wcs=None,
     out=None,
-    niter=3,
+    niter=None,
     nthreads=None,
 ):
     """Smooth a map with a Gaussian beam.
@@ -416,7 +429,7 @@ def smooth(
         shape: CAR output pixel shape. Defaults to input shape.
         wcs: CAR world coordinate system. Defaults to input WCS.
         out: Pre-allocated output map written in-place and returned.
-        niter: Jacobi iterations for the forward SHT (HEALPix).
+        niter: Forward-SHT refinement steps; see [`map2alm`][..map2alm].
         nthreads: ducc0 thread count (HEALPix).
 
     Returns:
@@ -440,7 +453,7 @@ def smooth(
     return alm2map(alms, spin=spin, nside=nside, shape=shape, wcs=wcs, out=out, nthreads=nthreads)
 
 
-def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthreads=None):
+def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=None, pol=True, nthreads=None):
     """Compute auto or cross power spectrum.
 
     Routes through ``map2alm`` then ``hp.alm2cl``. For TQU input (``pol=True``),
@@ -452,7 +465,7 @@ def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthrea
         maps2: Second map for cross-spectrum.
         lmax: Bandlimit.
         mmax: Azimuthal bandlimit (HEALPix only — pixell does not expose it).
-        niter: Jacobi iterations for the forward SHT.
+        niter: Forward-SHT refinement steps; see [`map2alm`][..map2alm].
         pol: If ``True`` and the map has a Stokes axis of length 3, decompose
             into TEB and return all six spectra. Raises ``ValueError`` if the
             Stokes axis exists but has length ≠ 3.
