@@ -9,6 +9,40 @@ NSIDE = 8
 RNG = np.random.default_rng()
 
 
+class _FakeEmission:
+    def __init__(self, arr):
+        self.value = arr
+
+
+class _FakeSky:
+    """Offline stand-in for `pysm3.Sky` that records how often it is built."""
+
+    call_count = 0
+
+    def __init__(self, nside, preset_strings=None, output_unit=None):
+        type(self).call_count += 1
+        self.nside = nside
+
+    def get_emission(self, freq, weights=None):
+        return _FakeEmission(RNG.random((3, hp.nside2npix(self.nside))))
+
+
+@pytest.fixture
+def fake_pysm_sky(monkeypatch):
+    """Replace `pysm3.Sky` with an offline stub.
+
+    The real `Sky` downloads template FITS files from a flaky remote (NERSC
+    portal), which makes the foreground tests slow and network-bound. The stub
+    returns random HEALPix emission of the right shape so the tests still
+    exercise megatop's wrapper (`reproject`/`stack`/landscape handling) without
+    any network access. Tests assert `_FakeSky.call_count` to prove the patch
+    actually took effect (otherwise a passing test could be silently hitting
+    the network or a local astropy cache).
+    """
+    _FakeSky.call_count = 0
+    monkeypatch.setattr(mock, "Sky", _FakeSky)
+
+
 def test_fixed_cmb_simulation():
     cl_cmb_model = RNG.random((6, 3 * NSIDE - 1))
     maps_1 = mock.generate_map_cmb(cl_cmb_model, NSIDE, lmax=2 * NSIDE, cmb_seed=1234)
@@ -28,7 +62,7 @@ def test_shape_spectra_noise_map():
     assert freq_maps.shape == (3, hp.nside2npix(NSIDE))
 
 
-@pytest.mark.network
+@pytest.mark.usefixtures("fake_pysm_sky")
 def test_shape_fg_map():
     map_sets = [
         MapSetConfig(freq_tag=100, exp_tag="test", nhits_map_path="SO_nominal", beam=10.0),
@@ -39,6 +73,7 @@ def test_shape_fg_map():
     map_sets[1].frequency = 200
     map_sets[1].weight = 1
     freq_maps = mock.generate_map_fgs_pysm(map_sets, NSIDE, 2 * NSIDE, ["d0"])
+    assert _FakeSky.call_count == 1  # the stub ran, not the real pysm3.Sky
     assert freq_maps.shape == (2, 3, hp.nside2npix(NSIDE))
 
 
