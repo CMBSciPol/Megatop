@@ -67,7 +67,7 @@ def common_beam_and_nside(
         sm_corr_P = bl_correction[:, 1] * wpix_out[1] / wpix_in[1]
 
         # map-->alm
-        alms_in = hu.map2alm(freq_maps[i_beam], spin=[0, 2], lmax=lmax, niter=10)
+        alms_in = hu.map2alm(freq_maps[i_beam], spin=[0, 2], lmax=lmax)
 
         # change beam and wpix
         hu.almxfl(alms_in[0], sm_corr_T, inplace=True)
