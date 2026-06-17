@@ -161,6 +161,7 @@ def logL_cosmo(
     lmin_analysis=None,
     lmax_analysis=None,
 ):
+    # theta = np.append(theta,1) #REMOVE
     prior_check = prior_bounds(theta, dust_marg, sync_marg, prior_bounds_dict)
     if prior_check != 0.0:
         return prior_check
@@ -278,6 +279,9 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         theta_init_guess = None
         theta_offsets = None
 
+    # theta_init_guess = [0.005] #REMOVE
+    # theta_offsets = [0.005] #REMOVE
+
     n_dim, n_walkers, n_steps, n_steps_burnin = (
         len(theta_init_guess),
         config.cl2r_pars.n_walkers,
@@ -369,7 +373,8 @@ def main():
     elif size < 2:
         for i in range(n_sim_sky):
             result = run_mcmc_and_save(manager, config, id_sim=i)
-            logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
+            if result is not None:
+                logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
     else:
         from mpi4py.futures import MPICommExecutor
 
