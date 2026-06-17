@@ -138,6 +138,11 @@ class TestMap2Alm:
         assert_allclose(alms[0], harmonic.map2alm(tqu[0], spin=0, lmax=LMAX))
         assert_allclose(alms[1:], harmonic.map2alm(tqu[1:], spin=2, lmax=LMAX))
 
+    def test_default_niter(self):
+        # niter is a HEALPix-only knob: CAR quadrature is exact in one pass.
+        assert harmonic._default_niter(car=False) == 3
+        assert harmonic._default_niter(car=True) == 0
+
     def test_strips_unseen_sentinel(self, unseen_map):
         """hp.UNSEEN must be zeroed, not transformed, in either pixelisation."""
         base, blank = unseen_map
