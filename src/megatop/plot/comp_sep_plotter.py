@@ -16,7 +16,7 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
+        fname_compmaps = manager.get_path_to_components_maps(id_sim)
         comp_maps = np.load(fname_compmaps)
     except FileNotFoundError:
         logger.warning(
@@ -75,6 +75,9 @@ def plot_compsep_stats(manager: DataManager, config: Config):
             continue
     compsep_results_params = np.array(compsep_results_params)
 
+    logger.info(
+        f"Component separation convergence rate: {convergence_count}/{config.map_sim_pars.n_sim} ({100 * convergence_count / config.map_sim_pars.n_sim:.1f}%))"
+    )
     # param_res_list = np.array(param_res_list)
 
     # Plotting the statistics of the component separation results
