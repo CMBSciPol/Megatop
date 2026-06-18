@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from astropy.wcs import WCS
 
 import megatop.utils.harmonic as hu
+from megatop.config import nside_for_lmax
 
 __all__ = [
     "AbstractLandscape",
@@ -63,6 +64,10 @@ class AbstractLandscape(ABC):
     @abstractmethod
     def pixel_shape(self) -> tuple[int, ...]:
         """Trailing pixel axes: `(npix,)` for HEALPix, `(ny, nx)` for CAR."""
+
+    @abstractmethod
+    def working_nside(self, lmax: int) -> int:
+        """Intermediate HEALPix `nside` for pysm foreground rendering before reprojection."""
 
     @abstractmethod
     def zeros(self, pre_shape, *, dtype=np.float64):
@@ -121,6 +126,11 @@ class HealpixLandscape(AbstractLandscape):
     def pixel_shape(self) -> tuple[int, ...]:
         """Trailing pixel axis: `(npix,)`."""
         return (self.npix,)
+
+    def working_nside(self, lmax: int) -> int:
+        """The output `nside` (HEALPix products are rendered at native resolution)."""
+        del lmax
+        return self.nside
 
     def zeros(self, pre_shape, *, dtype=np.float64):
         """Allocate a zero ndarray of shape `(*pre_shape, npix)`."""
@@ -199,6 +209,10 @@ class CARLandscape(AbstractLandscape):
     def pixel_shape(self) -> tuple[int, ...]:
         """Trailing pixel axes: `(ny, nx)`."""
         return tuple(self.shape[-2:])
+
+    def working_nside(self, lmax: int) -> int:
+        """Smallest power-of-two `nside` supporting `lmax`; pysm renders here, then reprojects."""
+        return nside_for_lmax(lmax)
 
     def zeros(self, pre_shape, *, dtype=np.float64):
         """Allocate a zero `enmap` of shape `(*pre_shape, ny, nx)`."""

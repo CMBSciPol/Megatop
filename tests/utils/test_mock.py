@@ -129,7 +129,7 @@ def test_shape_fg_map():
     map_sets[0].weight = 1
     map_sets[1].frequency = 200
     map_sets[1].weight = 1
-    freq_maps = mock.generate_map_fgs_pysm(map_sets, NSIDE, 2 * NSIDE, ["d0"], HEALPIX)
+    freq_maps = mock.generate_map_fgs_pysm(map_sets, 2 * NSIDE, ["d0"], HEALPIX)
     assert _FakeSky.call_count == 1  # the stub ran, not the real pysm3.Sky
     assert (
         _FakeSky.last_nside == 512
@@ -215,6 +215,6 @@ def test_fg_car(tmp_path):
     map_sets = [MapSetConfig(freq_tag=100, exp_tag="test", nhits_map_path="SO_nominal", beam=10.0)]
     map_sets[0].frequency = 100
     map_sets[0].weight = 1
-    fg = mock.generate_map_fgs_pysm(map_sets, cfg.nside, cfg.lmax, ["d0"], cfg.landscape)
+    fg = mock.generate_map_fgs_pysm(map_sets, cfg.lmax, ["d0"], cfg.landscape)
     assert isinstance(fg, enmap.ndmap)
     assert fg.shape == (1, 3, *shape[-2:])

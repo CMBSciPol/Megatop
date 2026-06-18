@@ -79,17 +79,17 @@ def pysm_render_nside(sky_model: list[str], working_nside: int) -> int:
 
 def generate_map_fgs_pysm(
     map_sets,
-    nside: int,
     lmax: int,
     sky_model: list[str],
     landscape,
 ):
-    # Render PySM at the template-native nside (never below it, which would `ud_grade`/block-average
-    # and suppress high-l power), then let `landscape.reproject` resample harmonically onto the target
-    # geometry. pysm emits HEALPix in galactic coordinates; `reproject` also rotates gal->equ (the
-    # pipeline frame). `nside` is the working/output resolution (config.nside); the render nside is
-    # raised from it to each component's native floor.
-    pysm_nside = pysm_render_nside(sky_model, nside)
+    """Render PySM foregrounds and project them onto the target geometry.
+
+    PySM renders in HEALPix at the template-native nside, then `landscape`
+    reprojects (band-limit to `lmax`, rotate galactic→equatorial, resample onto
+    the target pixelisation).
+    """
+    pysm_nside = pysm_render_nside(sky_model, landscape.working_nside(lmax))
     logger.debug(
         f"Generating FG maps for {[m.freq_tag for m in map_sets]} GHz at nside {pysm_nside}"
     )

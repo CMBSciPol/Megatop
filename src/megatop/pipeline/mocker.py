@@ -74,7 +74,6 @@ def get_foregrounds(config: Config) -> NDArray:
     logger.debug(f"Generating pysm sky {config.sky_model}")
     fg_freq_maps = mock.generate_map_fgs_pysm(
         config.map_sets,
-        config.nside,
         config.lmax,
         config.map_sim_pars.sky_model,
         config.landscape,

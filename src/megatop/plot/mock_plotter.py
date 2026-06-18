@@ -71,7 +71,6 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
     fg_freq_maps = mock.generate_map_fgs_pysm(
         config.map_sets,
-        config.nside,
         config.lmax,
         config.map_sim_pars.sky_model,
         config.landscape,

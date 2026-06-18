@@ -608,23 +608,13 @@ class Config(StrictModel):
         if self.is_car:
             shape, wcs = self.geometry
             return CARLandscape(shape, wcs)
-        return HealpixLandscape(self.nside)
+        # raw config nside (not self.nside, which delegates back here → recursion)
+        return HealpixLandscape(self.general_pars.pixelisation.healpix.nside)
 
     @property
     def nside(self) -> int:
-        """The HEALPix working resolution.
-
-        For HEALPix runs this is the product resolution
-        ([`HealpixConfig.nside`][megatop.config.HealpixConfig.nside]).
-
-        For CAR runs it is the intermediate resolution used for pysm foreground
-        generation, derived from ``lmax`` via [`nside_for_lmax`][megatop.config.nside_for_lmax] (survey masks
-        are built natively in CAR and do not use it).
-        """
-        healpix = self.general_pars.pixelisation.healpix
-        if healpix is not None:
-            return healpix.nside
-        return nside_for_lmax(self.lmax)
+        """The HEALPix working resolution."""
+        return self.landscape.working_nside(self.lmax)
 
     @property
     def lmin(self) -> int:
