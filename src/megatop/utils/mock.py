@@ -59,6 +59,24 @@ def generate_map_cmb(Cl_cmb_model, landscape, lmax: int, cmb_seed: list[int] | i
     return map_CMB
 
 
+# Template native nside per PySM model: we want to avoid PySM `ud_grade`ing from native resolution.
+# - PySM2 d0-d8 / s0-s3: nside-512 template
+# - PySM3 d9, d10, d12, s4, s5, s7: nside-2048 is the minimum available
+# - PySM3 d11, s6: small scales synthesized at the requested nside
+_PYSM_LOW_RES = {"d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "s0", "s1", "s2", "s3"}
+_PYSM_HIGH_RES = {"d9", "d10", "d12", "s4", "s5", "s7"}
+
+
+def pysm_render_nside(sky_model: list[str], working_nside: int) -> int:
+    floor = working_nside
+    for model in sky_model:
+        if model in _PYSM_LOW_RES:
+            floor = max(floor, 512)
+        elif model in _PYSM_HIGH_RES:
+            floor = max(floor, 2048)
+    return floor
+
+
 def generate_map_fgs_pysm(
     map_sets,
     nside: int,
@@ -66,11 +84,16 @@ def generate_map_fgs_pysm(
     sky_model: list[str],
     landscape,
 ):
-    # pysm emits HEALPix in galactic coordinates; `landscape.project` rotates
-    # to equatorial (the pipeline frame) and lands on the target geometry. `nside`
-    # is the pysm working resolution (the intermediate one for CAR runs).
-    logger.debug(f"Generating FG maps for {[m.freq_tag for m in map_sets]} GHz")
-    sky = Sky(nside=nside, preset_strings=sky_model, output_unit=units.uK_CMB)
+    # Render PySM at the template-native nside (never below it, which would `ud_grade`/block-average
+    # and suppress high-l power), then let `landscape.reproject` resample harmonically onto the target
+    # geometry. pysm emits HEALPix in galactic coordinates; `reproject` also rotates gal->equ (the
+    # pipeline frame). `nside` is the working/output resolution (config.nside); the render nside is
+    # raised from it to each component's native floor.
+    pysm_nside = pysm_render_nside(sky_model, nside)
+    logger.debug(
+        f"Generating FG maps for {[m.freq_tag for m in map_sets]} GHz at nside {pysm_nside}"
+    )
+    sky = Sky(nside=pysm_nside, preset_strings=sky_model, output_unit=units.uK_CMB)
     maps_fgs = []
     for map_set in map_sets:
         m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value
