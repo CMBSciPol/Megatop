@@ -30,21 +30,26 @@ def init_workspace(config: Config, manager: DataManager):
 
     # Getting effective beam TODO: add case for input maps (no preproc)
     effective_beam_CMB = get_common_beam_wpix(
-        config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
+        config.pre_proc_pars.common_beam_correction,
+        config.nside,
+        # config.lmax,
+        nmt_bins.lmax,
     )
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
     )
     # Initializing workspace
     with Timer("init-namaster-workspace"):
+        # logger.warning("DEBUUUUUUUUUUUUUUUUUUG: forcing lmax to nmt_bins.lmax instead of config one")
         workspace = initialize_nmt_workspace(
             nmt_bins=nmt_bins,
             analysis_mask=analysis_mask,
-            beam=effective_beam_CMB,
+            beam=effective_beam_CMB[: nmt_bins.lmax + 1],
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
-            lmax=config.lmax,
+            # lmax=config.lmax,
+            lmax=nmt_bins.lmax,
         )
     return workspace, effective_beam_CMB
 
@@ -110,11 +115,11 @@ def noise_spectra_estimator(
 
             try:
                 parameters_foregrounds_x = np.load(
-                    manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True
+                    manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True
                 )["x"]
             except FileNotFoundError:
                 logger.error(
-                    f"Results from comp sep not found for {manager.get_path_to_compsep_results(sub=id_sim_sky)}"
+                    f"Results from comp sep not found for {manager.get_path_to_compsep_results(id_sim_sky)}"
                 )
                 return id_sim_sky
 
@@ -184,20 +189,6 @@ def noise_spectra_estimator(
             }
     MemoryUsage(f"rank = {rank} ")
 
-    # Initializing workspace
-    # with Timer("init-namaster-workspace"):
-    #     fields_init_wsp = nmt.NmtField(
-    #         analysis_mask,
-    #         None,
-    #         spin=2,
-    #         beam=effective_beam_CMB[: nmt_bins.lmax + 1],
-    #         purify_e=config.map2cl_pars.purify_e,
-    #         purify_b=config.map2cl_pars.purify_b,
-    #         n_iter=config.map2cl_pars.n_iter_namaster,
-    #         lmax=nmt_bins.lmax,
-    #     )
-    #     workspaceff = nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
-
     if (
         config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
     ) and not config.parametric_sep_pars.alm2map:
@@ -221,7 +212,8 @@ def noise_spectra_estimator(
                 workspace=workspace_nmt,
                 beam=effective_beam_CMB,
                 n_iter=config.map2cl_pars.n_iter_namaster,
-                lmax=config.lmax,
+                # lmax=config.lmax,
+                lmax=nmt_bins.lmax,
                 purify_b=config.map2cl_pars.purify_b,
                 purify_e=config.map2cl_pars.purify_e,
             )
@@ -270,7 +262,6 @@ def noise_spectra_estimator(
         logger.info(f"in = {rank_realisation_list}")
 
         # if config.noise_cov_pars.save_preprocessed_noise_maps:
-        # TODO if use input maps for compsep then can also just import input noise maps here
         logger.info("Loading pre-processed noise maps")
         if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
             logger.info("Loading TRUE noise simulations saved during preproc step")
@@ -281,81 +272,6 @@ def noise_spectra_estimator(
             noise_freq_maps_preprocessed = np.load(
                 manager.get_path_to_preprocessed_noise_maps(id_real)
             )
-
-        # else:
-        #     nside_in_list = []
-        #     for noise_filename in manager.get_noise_maps_filenames(id_real):
-        #         logger.debug(f"Importing noise map: {noise_filename}")
-        #         noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
-        #         nside_in_list.append(hp.get_nside(noise_freq_maps[-1][-1]))
-
-        #     if np.all(
-        #         np.array(config.pre_proc_pars.common_beam_correction) == np.array(config.beams)
-        #     ):
-        #         logger.info(
-        #             "Common beam correction is the same as the input beam, no need to apply it."
-        #         )
-        #         logger.info(
-        #             "WARNING: this is mostly for testing it might not actually represent the real noise"
-        #         )
-
-        #         noise_freq_maps_preprocessed = noise_freq_maps
-
-        #     else:
-        #         noise_freq_maps = np.array(noise_freq_maps, dtype=object)
-        #         noise_freq_maps_preprocessed = common_beam_and_nside(
-        #             nside=config.nside,
-        #             common_beam=config.pre_proc_pars.common_beam_correction,
-        #             frequency_beams=config.beams,
-        #             freq_maps=noise_freq_maps,
-        #         )
-
-        # Applying component-separation operator
-        if not config.parametric_sep_pars.use_megabuster:
-            noise_map_post_compsep = np.einsum(
-                "ifsp,fsp->isp",
-                W_maxL,
-                noise_freq_maps_preprocessed[:, 1:],
-            )  # slicing noise to remove T #TODO: Any speed improvement ?
-        else:
-            if config.map2cl_pars.DEBUG_cut_scales:
-                logger.warning("TEST: Applying smooth cut at large scales to noise component maps")
-                logger.warning(
-                    "TEST: DOING IT AFTER PARAM ESTIMATION (can't do before for noise maps)"
-                )
-
-                def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
-                    ell = np.arange(lmax + 1)
-                    smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
-                    smooth_cut[:lmin] = 0.0
-                    return smooth_cut
-
-                cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
-                freq_maps_cut = np.zeros_like(noise_freq_maps_preprocessed)
-                for f in range(noise_freq_maps_preprocessed.shape[0]):
-                    alm_comp = hp.map2alm(
-                        [
-                            noise_freq_maps_preprocessed[f, 0],
-                            noise_freq_maps_preprocessed[f, 1],
-                            noise_freq_maps_preprocessed[f, 2],
-                        ],
-                        lmax=3 * config.nside,
-                    )
-                    for s in range(alm_comp.shape[0]):
-                        hp.almxfl(alm_comp[s], cut_array, inplace=True)
-                    freq_maps_cut[f] = hp.alm2map(
-                        alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
-                    )  # removing temperature
-                noise_freq_maps_preprocessed = freq_maps_cut
-
-            # else:
-            #     noise_freq_maps = np.array(noise_freq_maps, dtype=object)
-            #     noise_freq_maps_preprocessed = common_beam_and_nside(
-            #         nside=config.nside,
-            #         common_beam=config.pre_proc_pars.common_beam_correction,
-            #         frequency_beams=config.beams,
-            #         freq_maps=noise_freq_maps,
-            #     )
 
         # Applying component-separation operator
         if not config.parametric_sep_pars.use_megabuster:
@@ -452,13 +368,15 @@ def noise_spectra_estimator(
         #     noise_comp_dict = noise_comp_cut_dict
 
         # Computing auto and cross spectra
+        # logger.warning("DEBUUUUUUUUUUUUUUUUUUG: forcing lmax to nmt_bins.lmax instead of config one")
         noise_Cls = compute_auto_cross_cl_from_maps_dict(
             maps_dict=noise_comp_dict,
             analysis_mask=analysis_mask,
             workspace=workspace_nmt,
             beam=effective_beam_CMB,
             n_iter=config.map2cl_pars.n_iter_namaster,
-            lmax=config.lmax,
+            # lmax=config.lmax,
+            lmax=nmt_bins.lmax,
             purify_b=config.map2cl_pars.purify_b,
             purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
