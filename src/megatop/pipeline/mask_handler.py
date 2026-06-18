@@ -91,9 +91,17 @@ def mask_handler(manager: DataManager, config: Config):
             common_norm_nhits_map = landscape.reproject(
                 common_norm_nhits_map, method="spline", spin=(0,), rot=None
             )
-            galactic_mask = landscape.reproject(galactic_mask, method="spline", spin=(0,), rot=None)
-            # re-threshold the (now fractional) reprojected galactic mask to 0/1
-            galactic_mask = enmap.enmap(np.where(galactic_mask > 0.5, 1.0, 0.0), galactic_mask.wcs)
+            if config.masks_pars.include_galactic:
+                galactic_mask = landscape.reproject(
+                    galactic_mask, method="spline", spin=(0,), rot=None
+                )
+                # re-threshold the (now fractional) reprojected galactic mask to 0/1
+                galactic_mask = enmap.enmap(
+                    np.where(galactic_mask > 0.5, 1.0, 0.0), galactic_mask.wcs
+                )
+            else:
+                # no galactic cut: all-ones on the target geometry (skip a needless SHT)
+                galactic_mask = landscape.zeros(()) + 1.0
         with Timer("binary-mask-car"):
             logger.info(f"Thresholding binary map with {threshold} (CAR-native)")
             binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
