@@ -14,6 +14,22 @@ def _attach_colorbar(im, ax):
     return im.figure.colorbar(im, cax=cax)
 
 
+def _imshow_car(ax, m, *, title="", cmap=None, vmin=None, vmax=None):
+    """Draw a CAR ``(ny, nx)`` enmap on ``ax`` with a height-matched colorbar.
+
+    Masked pixels carry ``hp.UNSEEN``; blank them out as NaN so the sentinel
+    doesn't blow up the colour scale (``imshow`` has no UNSEEN handling).
+    ``enmap`` rows run south→north, so ``origin="lower"`` keeps north up.
+    """
+    data = np.where(np.asarray(m) < -1e30, np.nan, m)
+    im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
+    ax.set_title(title)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    _attach_colorbar(im, ax)
+    return im
+
+
 def freq_maps_plotter(
     config,
     map_set,
@@ -75,15 +91,7 @@ def freq_maps_plotter(
             m = map_set[i_f, j_stokes]
             if car:
                 ax = plt.subplot(row, column, k + 1)
-                ax.set_title(title_map)
-                # masked pixels carry hp.UNSEEN; show them blank rather than
-                # letting the sentinel blow up the colour scale
-                m = np.where(np.asarray(m) < -1e30, np.nan, m)
-                # enmap rows run south→north; origin="lower" keeps north up
-                im = ax.imshow(m, cmap=cmap, vmin=vmin[stokes], vmax=vmax[stokes], origin="lower")
-                ax.set_xticks([])
-                ax.set_yticks([])
-                _attach_colorbar(im, ax)
+                _imshow_car(ax, m, title=title_map, cmap=cmap, vmin=vmin[stokes], vmax=vmax[stokes])
             else:
                 hp.mollview(
                     m,
@@ -108,15 +116,7 @@ def single_map_plotter(m, config, plot_path, *, title="", cmap=None, vmin=None, 
     """
     plt.figure(figsize=(16, 9))
     if config.is_car:
-        ax = plt.gca()
-        # masked pixels carry hp.UNSEEN; show them blank rather than letting the
-        # sentinel blow up the colour scale (imshow has no UNSEEN handling)
-        data = np.where(np.asarray(m) < -1e30, np.nan, m)
-        im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
-        ax.set_title(title)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        _attach_colorbar(im, ax)
+        _imshow_car(plt.gca(), m, title=title, cmap=cmap, vmin=vmin, vmax=vmax)
     else:
         hp.mollview(m, cmap=cmap, cbar=True, title=title, min=vmin, max=vmax, xsize=2000)
         hp.graticule()
