@@ -1,3 +1,5 @@
+"""Build the NaMaster multipole binning and the fiducial CMB templates (CAMB)."""
+
 import argparse
 from pathlib import Path
 
