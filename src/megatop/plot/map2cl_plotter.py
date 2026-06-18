@@ -45,10 +45,10 @@ def plot_all_cmb_spectra(manager, config):
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
     bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
 
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[
-        0, :, : 2 * config.nside + config.map2cl_pars.delta_ell
-    ]
     nmt_bins = load_nmt_binning(manager)
+    logger.warning("DEBUUUUUUUUUUUUUUUUUUG: forcing lmax to nmt_bins.lmax instead of config one")
+    # Cl_cmb_model = get_Cl_CMB_model_from_manager(manager) [:, : config.lmax + 1]
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : nmt_bins.lmax + 1]
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, bin_index_lminlmax]
 
@@ -59,7 +59,7 @@ def plot_all_cmb_spectra(manager, config):
     num_loaded_id = 0
     for id_sim in range(config.map_sim_pars.n_sim):
         try:
-            fname_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+            fname_Cls = manager.get_path_to_spectra_cross_components(id_sim)
             all_Cls = np.load(fname_Cls, allow_pickle=True)
             all_Cls_CMB = all_Cls["CMBxCMB"][:, bin_index_lminlmax]
 
