@@ -63,7 +63,8 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     logger.debug(f"CMB {seed = }")
 
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
-    cmb_map = mock.generate_map_cmb(Cl_cmb_model, config.landscape, lmax=config.lmax, cmb_seed=seed)
+    # synthesise directly on the target geometry; synfast seeds the legacy RNG when seed is set
+    cmb_map = config.landscape.synfast(Cl_cmb_model, lmax=config.lmax, seed=seed)
     logger.debug(f"CMB map has shape {cmb_map.shape}")
     return cmb_map
 

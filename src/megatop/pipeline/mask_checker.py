@@ -55,10 +55,8 @@ def generate_mask_sim(manager: DataManager, config: Config, int_n_sim):
     cl = []
     cl_pureB = []
     for _id_realisation in realization_list:
-        cmb_map = mock.generate_map_cmb(Cl_cmb_model, config.landscape, config.lmax, cmb_seed=None)
-        cmb_map_pureB = mock.generate_map_cmb(
-            Cl_cmb_model_pureB, config.landscape, config.lmax, cmb_seed=None
-        )
+        cmb_map = config.landscape.synfast(Cl_cmb_model, lmax=config.lmax)
+        cmb_map_pureB = config.landscape.synfast(Cl_cmb_model_pureB, lmax=config.lmax)
         b = nmt.NmtBin.from_nside_linear(config.nside, config.map2cl_pars.delta_ell)
         ells_bins = b.get_effective_ells()
         f_2 = nmt.NmtField(analysis_mask, cmb_map[1:], purify_b=True, purify_e=False, beam=None)

@@ -47,18 +47,6 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     return np.array([Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0])
 
 
-def generate_map_cmb(Cl_cmb_model, landscape, lmax: int, cmb_seed: list[int] | int | None = None):
-    # TODO write tests
-    # Fixing seed if required
-    # synfast uses the legacy numpy random number generator
-    np.random.seed(cmb_seed)  # noqa: NPY002
-    # synthesise directly on the target geometry (enmap for CAR, ndarray for HEALPix)
-    map_CMB = landscape.synfast(Cl_cmb_model, lmax=lmax, new=True)
-    # Resetting seed
-    np.random.seed(None)  # noqa: NPY002
-    return map_CMB
-
-
 # Template native nside per PySM model: we want to avoid PySM `ud_grade`ing from native resolution.
 # - PySM2 d0-d8 / s0-s3: nside-512 template
 # - PySM3 d9, d10, d12, s4, s5, s7: nside-2048 is the minimum available
@@ -265,7 +253,7 @@ def get_noise_map_from_noise_spectra(n_ell, lmax: int, landscape, seed=None):
     cl = np.array(
         [noise_spectra[0], noise_spectra[1], noise_spectra[2], np.zeros_like(noise_spectra[2])]
     )
-    return landscape.synfast(cl, lmax=lmax, seed=seed, new=True)
+    return landscape.synfast(cl, lmax=lmax, seed=seed)
 
 
 def include_hits_noise(noise_maps, common_nhits_map, binary_mask):

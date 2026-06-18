@@ -129,11 +129,8 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
 def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
-    cmb_map = mock.generate_map_cmb(
-        Cl_cmb_model,
-        config.landscape,
-        config.lmax,
-        cmb_seed=config.map_sim_pars.cmb_seed,
+    cmb_map = config.landscape.synfast(
+        Cl_cmb_model, lmax=config.lmax, seed=config.map_sim_pars.cmb_seed
     )
 
     plot_dir = manager.path_to_mock_plots

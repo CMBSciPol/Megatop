@@ -78,13 +78,6 @@ def fake_pysm_sky(monkeypatch):
     monkeypatch.setattr(mock, "Sky", _FakeSky)
 
 
-def test_fixed_cmb_simulation():
-    cl_cmb_model = RNG.random((6, 3 * NSIDE - 1))
-    maps_1 = mock.generate_map_cmb(cl_cmb_model, HEALPIX, lmax=2 * NSIDE, cmb_seed=1234)
-    maps_2 = mock.generate_map_cmb(cl_cmb_model, HEALPIX, lmax=2 * NSIDE, cmb_seed=1234)
-    assert np.all(maps_1 == maps_2)
-
-
 def test_shape_white_noise_map():
     freq_maps = mock.get_noise_map_from_white_noise(1.0, HEALPIX)
     assert freq_maps.shape == (3, hp.nside2npix(NSIDE))
@@ -174,15 +167,6 @@ def test_apply_obsmat():
 
 
 # --- CAR mock paths ----------------------------------------------------------
-
-
-def test_cmb_car(tmp_path):
-    cfg, shape = make_car_config(tmp_path)
-    cl = RNG.random((6, 3 * cfg.nside - 1))
-    m = mock.generate_map_cmb(cl, cfg.landscape, lmax=cfg.lmax, cmb_seed=1234)
-    assert isinstance(m, enmap.ndmap)
-    assert m.shape == (3, *shape[-2:])
-    assert np.all(np.isfinite(m))
 
 
 def test_white_noise_car(tmp_path):
