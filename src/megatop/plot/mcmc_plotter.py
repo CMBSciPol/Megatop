@@ -117,6 +117,7 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
             mcmc = np.load(fname_chains, allow_pickle=True)
             chains = mcmc["mcmc_chains"]
             param_names = mcmc["param_names"]
+            # param_names = param_names[:1] # REMOVE, only plot r for now
 
             samples = MCSamples(
                 samples=chains,
@@ -176,6 +177,7 @@ def plot_single_cornerplot(manager: DataManager, config: Config, id_sim: int | N
         return
     chains = mcmc["mcmc_chains"]
     param_names = mcmc["param_names"]
+    # param_names = param_names[:1] # REMOVE, only plot r for now
 
     # Make plot:
     samples = MCSamples(samples=chains, names=param_names, labels=param_names)
@@ -265,11 +267,15 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     mcmc = np.load(fname_chains, allow_pickle=True)
     chains = mcmc["mcmc_chains"]
     param_names = mcmc["param_names"]
+    # param_names = param_names[:1] # REMOVE, only plot r for now
     samples = MCSamples(samples=chains, names=param_names, labels=param_names)
     theta_est = samples.getMeans()
 
     if not dust_marg and not sync_marg:
         r_est, A_lens_est = theta_est
+        # r_est = theta_est[0]
+        # A_lens_est = 1
+        # theta_est = [r_est, A_lens_est]
     if dust_marg and not sync_marg:
         r_est, A_lens_est, A_dust_est = theta_est
     if not dust_marg and sync_marg:
