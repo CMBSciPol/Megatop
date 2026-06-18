@@ -440,7 +440,7 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
     func = partial(func_noise, manager, config, binary_mask, common_nhits_map)
 
     if filtering := (
-        config.map_sim_pars.filter_noise and config.map_sim_pars.DEBUGfilter_purenoise_sims
+        config.map_sim_pars.filter_noise and not config.map_sim_pars.DEBUGDont_Filter_purenoise_sims
     ):
         # Load the obsmat(s) for our map set(s)
         obsmat_funcs = load_obsmat(manager, config)
