@@ -370,6 +370,10 @@ class MapSimConfig:
     """If True, sky maps will be integrated over the passbands provided in the map_sets. Passbands will also be included in the SED computation in the component separation."""
     DEBUG_noEmodes: bool = False
     """Debuging param: sets EE and TE CMB power spectra to 0 in the mocker, in particular in the mock.get_Cl_CMB_model_from_manager() function"""
+    DEBUG_CMB_only: bool = False
+    """Debuging param: sets the foregrounds and the noise to 0 in the mocker"""
+    DEBUG_FG_only: bool = False
+    """Debuging param: sets the CMB and the noise to 0 in the mocker"""
 
     @sky_model.validator
     def check(self, attribute, value):

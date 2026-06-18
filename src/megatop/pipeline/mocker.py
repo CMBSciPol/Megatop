@@ -328,7 +328,12 @@ def func_signal(
     )
 
     # broadcast CMB to all frequencies
-    sky = cmb[None, ...] + fg
+    if config.map_sim_pars.DEBUG_CMB_only:
+        sky = cmb[None, ...] + 0 * fg
+    elif config.map_sim_pars.DEBUG_FG_only:
+        sky = 0 * cmb[None, ...] + fg
+    else:
+        sky = cmb[None, ...] + fg
 
     # apply beam and pixel window function correction
     with Timer("beam-freq-maps"):
@@ -338,7 +343,11 @@ def func_signal(
             )
 
     # If filter_noise is True, we add the noise to the sky sims before applying filtering.
-    if config.map_sim_pars.filter_noise:
+    if (
+        config.map_sim_pars.filter_noise
+        and not config.map_sim_pars.DEBUG_CMB_only
+        and not config.map_sim_pars.DEBUG_FG_only
+    ):
         sky += noise
     # apply filtering
     if obsmat_funcs is not None:
@@ -348,7 +357,11 @@ def func_signal(
                 sky[i_f] = mock.apply_observation_matrix(func, sky[i_f])
 
     # add noise if it was not included before filtering
-    if not config.map_sim_pars.filter_noise:
+    if (
+        not config.map_sim_pars.filter_noise
+        and not config.map_sim_pars.DEBUG_CMB_only
+        and not config.map_sim_pars.DEBUG_FG_only
+    ):
         sky += noise
 
     # mask unobserved pixels
