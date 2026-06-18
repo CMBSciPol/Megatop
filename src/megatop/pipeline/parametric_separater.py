@@ -25,7 +25,7 @@ from megatop.utils.compsep import (  # noqa: E402
     set_alm_tozero_below_lmin,
 )
 from megatop.utils.mpi import get_world  # noqa: E402
-from megatop.utils.utils import MemoryUsage  # noqa: E402
+from megatop.utils.utils import MemoryUsage, PSMemoryUsage  # noqa: E402
 
 
 def _test_N_alm_format(N_alm):
@@ -248,7 +248,16 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
 
 def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
     with Timer("load-covmat"):
-        noisecov_fname = manager.path_to_pixel_noisecov
+        if config.parametric_sep_pars.DEBUG_use_TRUE_pixel_noisecov:
+            assert config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations, (
+                "Cannot use TRUE pixel noisecov if not saved in the first place!"
+            )
+            logger.debug(
+                "Using TRUE pixel noise covariance for this simulation, since DEBUG_use_TRUE_pixel_noisecov is set to True in the config file."
+            )
+            noisecov_fname = manager.path_to_TRUE_pixel_noisecov(id_sim)
+        else:
+            noisecov_fname = manager.path_to_pixel_noisecov
         logger.debug(f"Loading covmat from {noisecov_fname}")
         noisecov = np.load(noisecov_fname)
 
@@ -393,7 +402,7 @@ def megabuster_comp_sep(
     id_sim: int | None = None,
 ):
     with Timer("load-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
 
@@ -582,6 +591,7 @@ def compsep_and_save(
         if config.parametric_sep_pars.use_harmonic_compsep:
             res = harmonic_comp_sep_interface(manager, config, id_sim=id_sim)
         elif config.parametric_sep_pars.use_megabuster:
+            PSMemoryUsage("PSMemory usage BEFORE megabuster_comp_sep()")
             MemoryUsage("Memory usage BEFORE megabuster_comp_sep()")
             res = megabuster_comp_sep(
                 manager,
@@ -593,9 +603,17 @@ def compsep_and_save(
                 id_sim=id_sim,
             )
             MemoryUsage("Memory usage AFTER megabuster_comp_sep()/n/n")
+            PSMemoryUsage("PSMemory usage AFTER megabuster_comp_sep()/n/n")
         else:
+            MemoryUsage("Memory usage BEFORE weighted_comp_sep()")
+            PSMemoryUsage("PSMemory usage BEFORE weighted_comp_sep()")
             res = weighted_comp_sep(manager, config, id_sim=id_sim)
+            MemoryUsage("Memory usage AFTER weighted_comp_sep()/n/n")
+            PSMemoryUsage("PSMemory usage AFTER weighted_comp_sep()/n/n")
     save_compsep_results(manager, config, res, id_sim=id_sim)
+    del res
+    PSMemoryUsage("PSMemory usage AFTER deleting res!!!!!!!!!!!!!")
+
     return id_sim
 
 
@@ -613,19 +631,31 @@ def main():
         manager.dump_config()
         manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
-    if args.sim is not None:
-        compsep_and_save(config, manager, id_sim=args.sim)
-        return
-
     if config.parametric_sep_pars.use_megabuster:
+        PSMemoryUsage("PSMemory usage BEFORE load_megabuster_operators()")
         noisecov, obsmat_operator_rhs, central_freq_op, matrix_precond = load_megabuster_operators(
             manager
         )
+        PSMemoryUsage("PSMemory usage AFTER load_megabuster_operators()")
+
     else:
         noisecov = None
         obsmat_operator_rhs = None
         central_freq_op = None
         matrix_precond = None
+
+    if args.sim is not None:
+        compsep_and_save(
+            config,
+            manager,
+            noisecov,
+            obsmat_operator_rhs,
+            central_freq_op,
+            matrix_precond,
+            id_sim=args.sim,
+        )
+        return
+
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data
         compsep_and_save(
@@ -664,7 +694,7 @@ def main():
                     central_freq_op,
                     matrix_precond,
                 )
-                for result in executor.map(func, range(args.start_nsim, n_sim_sky), unordered=True):
+                for result in executor.map(func, range(n_sim_sky), unordered=True):
                     logger.info(f"Finished component separation on map {result + 1} / {n_sim_sky}")
 
 
