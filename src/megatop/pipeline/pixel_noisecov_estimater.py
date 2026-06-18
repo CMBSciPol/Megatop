@@ -53,6 +53,20 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
     np.save(manager.path_to_pixel_noisecov, pixel_mean)
     logger.info(f"Saved pixel noise covariance to {manager.path_to_pixel_noisecov}")
 
+    if config.parametric_sep_pars.DEBUG_use_TRUE_pixel_noisecov:
+        assert config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations, (
+            "Cannot use TRUE pixel noisecov if not saved in the first place!"
+        )
+        n_sky_sims = config.map_sim_pars.n_sim
+        for id_sim in range(n_sky_sims):
+            true_preproc_noise_maps = np.load(
+                manager.get_path_to_preprocessed_TRUE_noise_maps(id_sim)
+            )
+            true_noise_cov = true_preproc_noise_maps**2
+            np.save(manager.path_to_TRUE_pixel_noisecov(id_sim), true_noise_cov)
+            logger.info(
+                f"Saved TRUE pixel noise covariance for SKY sim {id_sim} to {manager.path_to_TRUE_pixel_noisecov(id_sim)}"
+            )
     if use_harmonic:
         np.save(manager.path_to_nl_noisecov, nl_acc / int_n_sim)
         np.save(manager.path_to_nl_noisecov_unbinned, nl_unbinned_acc / int_n_sim)
