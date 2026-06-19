@@ -194,6 +194,7 @@ def test_beam_car(tmp_path):
     assert np.all(np.isfinite(beamed))
 
 
+@pytest.mark.usefixtures("fake_pysm_sky")
 def test_fg_car(tmp_path):
     cfg, shape = make_car_config(tmp_path)
     map_sets = [MapSetConfig(freq_tag=100, exp_tag="test", nhits_map_path="SO_nominal", beam=10.0)]
