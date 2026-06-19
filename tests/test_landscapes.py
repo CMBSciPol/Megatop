@@ -179,7 +179,8 @@ def test_write_read_roundtrip_car(tmp_path):
     p.write_map(path, m)
     back = p.read_map(path)
     assert isinstance(back, enmap.ndmap)
-    assert np.allclose(back, m)
+    assert back.dtype == m.dtype
+    assert np.array_equal(back, m)
 
 
 def test_write_read_roundtrip_healpix(tmp_path):
@@ -188,7 +189,8 @@ def test_write_read_roundtrip_healpix(tmp_path):
     path = tmp_path / "m.fits"
     p.write_map(path, m, dtype=np.float64)
     back = p.read_map(path)
-    assert np.allclose(back, m)
+    assert back.dtype == m.dtype
+    assert np.array_equal(back, m)
 
 
 # --- stack -------------------------------------------------------------------
