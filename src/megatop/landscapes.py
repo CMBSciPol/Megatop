@@ -94,38 +94,70 @@ class AbstractLandscape(ABC, Generic[MapT]):
         seed: int | Sequence[int] | None = None,
         new: bool = True,
     ) -> MapT:
-        """Synthesise a Gaussian realization of `cl` directly on this geometry."""
+        """Synthesise a Gaussian realization of `cl` directly on this geometry.
+
+        For details about the parameters, see [`synfast`][megatop.utils.harmonic.synfast].
+        """
 
     @abstractmethod
-    def reproject(
+    def reproject_pixel(
         self,
         hp_map: npt.ArrayLike,
         *,
-        harmonic: bool = True,
-        spin: tuple[int, ...] = (0, 2),
+        spin: tuple[int, ...] = (0,),
         extensive: bool = False,
         rot: str | None = None,
-        lmax: int | None = None,
     ) -> MapT:
-        """Bring a HEALPix input onto this scheme, optionally rotating frames.
+        """Resample a HEALPix input in pixel space (no SHT).
 
         Args:
             hp_map: HEALPix input map, shape `(npix,)` or `(ncomp, npix)`.
-            harmonic: `True` resamples in harmonic space (use with CMB/foreground maps);
-                `False` resamples in pixel space with bilinear interpolation (for masks/hit maps).
             spin: Spin of the field components, e.g. `(0, 2)` or `(0,)`.
-            extensive: `True` conserves totals (additive quantities); `False` averages
-                (intensive fields).
-            rot: reproject-style frame string (e.g. `"gal,equ"`); `None` keeps the input frame.
-            lmax: Band limit for the harmonic pass.
-
-        Returns:
-            The input reprojected onto this landscape's geometry.
+                Only matters when used with `rot`, for the Q/U angle correctness.
+            extensive: Whether the map represents an extensive (not intensive) quantity.
+                Use it for quantities proportional to the pixel size (e.g. hit counts).
+            rot: `enmap.reproject`-style coordinate frame rotation (e.g. `"gal,equ"`).
         """
+
+    def reproject_harmonic(
+        self,
+        hp_map: npt.ArrayLike,
+        *,
+        spin: tuple[int, ...] = (0, 2),
+        rot: str | None = None,
+        lmax: int | None = None,
+    ) -> MapT:
+        """Resample a HEALPix input through harmonic space.
+
+        The forward SHT is performed at the input Nyquist limit, then band-limited
+        before synthesis onto the target geometry.
+
+        Args:
+            hp_map: HEALPix input map, shape `(npix,)` or `(ncomp, npix)`.
+            spin: Spin of the field components, e.g. `(0, 2)` or `(0,)`.
+            rot: `enmap.reproject`-style coordinate frame rotation (e.g. `"gal,equ"`).
+            lmax: Band limit for the harmonic synthesis (alm2map).
+        """
+        spin_arg = _spin_arg(spin)
+        # Forward SHT at the input Nyquist limit (not `lmax`): input may not be band-limited
+        alm = hu.map2alm(hp_map, spin=spin_arg)  # `hu.map2alm` zeroes hp.UNSEEN
+        if rot is not None:
+            _rotator(rot).rotate_alm(alm, inplace=True)
+        return self._alm2map(alm, spin=spin_arg, lmax=lmax)
 
     @abstractmethod
     def stack(self, maps: Sequence[MapT]) -> MapT:
         """Stack a list of maps along a new leading axis, preserving geometry."""
+
+    @abstractmethod
+    def _alm2map(
+        self,
+        alm: npt.ArrayLike,
+        *,
+        spin: int | tuple[int, ...] = 0,
+        lmax: int | None = None,
+    ) -> MapT:
+        """Synthesise `alm` onto this geometry, band-limited to `lmax`."""
 
 
 class HealpixLandscape(AbstractLandscape[np.ndarray]):
@@ -161,7 +193,6 @@ class HealpixLandscape(AbstractLandscape[np.ndarray]):
 
     def read_map(self, path: PathLike, *, field: int | Sequence[int] | None = None) -> np.ndarray:
         """Read a HEALPix map via `healpy` (`field=None` reads all components)."""
-        # field=None reads every component; a single-column file still yields a 1-D map
         return hp.read_map(path, field=field, dtype=np.float64)
 
     def write_map(self, path: PathLike, m: np.ndarray, *, dtype: npt.DTypeLike = None) -> None:
@@ -183,32 +214,19 @@ class HealpixLandscape(AbstractLandscape[np.ndarray]):
         """Synthesise a Gaussian realization of `cl` at this `nside`."""
         return hu.synfast(cl, nside=self.nside, lmax=lmax, seed=seed, new=new)
 
-    def reproject(
+    def reproject_pixel(
         self,
         hp_map: npt.ArrayLike,
         *,
-        harmonic: bool = True,
-        spin: tuple[int, ...] = (0, 2),
+        spin: tuple[int, ...] = (0,),
         extensive: bool = False,
         rot: str | None = None,
-        lmax: int | None = None,
     ) -> np.ndarray:
-        """See [`AbstractLandscape.reproject`][..AbstractLandscape.reproject]."""
-        if harmonic:
-            # band-limit and synthesise straight onto the target nside (no ud_grade)
-            spin_arg = (
-                0 if not isinstance(spin, (list, tuple)) or tuple(spin) == (0,) else list(spin)
-            )
-            alm = hu.map2alm(hp_map, spin=spin_arg, lmax=lmax)
-            if rot is not None:
-                _rotator(rot).rotate_alm(alm, inplace=True)
-            return hu.alm2map(alm, nside=self.nside, spin=spin_arg, lmax=lmax)
+        """See [`AbstractLandscape.reproject_pixel`][..AbstractLandscape.reproject_pixel]."""
+        del spin  # `rotate_map_pixel` corrects Q/U itself; ud_grade is component-wise
         m = hp_map
         if rot is not None:
-            # pixel-space rotation (bilinear interp): no SHT, so sharp edges and
-            # positivity survive on masks / heavily-masked nhits maps
             m = _rotator(rot).rotate_map_pixel(m)
-        # real-space resample to the target resolution (no-op when already at nside);
         # power=-2 conserves the sum for additive (extensive) quantities
         return hp.ud_grade(m, nside_out=self.nside, power=-2 if extensive else 0)
 
@@ -216,11 +234,25 @@ class HealpixLandscape(AbstractLandscape[np.ndarray]):
         """Stack maps along a new leading axis as a plain ndarray."""
         return np.array(maps)
 
+    def _alm2map(
+        self,
+        alm: npt.ArrayLike,
+        *,
+        spin: int | tuple[int, ...] = 0,
+        lmax: int | None = None,
+    ) -> np.ndarray:
+        return hu.alm2map(alm, nside=self.nside, spin=spin, lmax=lmax)
+
 
 def _rotator(rot: str) -> hp.Rotator:
     """Build a `healpy.Rotator` from a reproject-style frame string (e.g. `"gal,equ"`)."""
     hp_coord = {"gal": "G", "equ": "C", "cel": "C", "ecl": "E"}
     return hp.Rotator(coord=[hp_coord[c] for c in rot.split(",")])
+
+
+def _spin_arg(spin) -> int | tuple[int, ...]:
+    """Normalise a spin tuple to the SHT argument: scalar `0`, or a tuple for spin pairs."""
+    return 0 if not isinstance(spin, (list, tuple)) or tuple(spin) == (0,) else tuple(spin)
 
 
 class CARLandscape(AbstractLandscape[enmap.ndmap]):
@@ -281,27 +313,24 @@ class CARLandscape(AbstractLandscape[enmap.ndmap]):
         """Synthesise a Gaussian realization of `cl` on this CAR geometry."""
         return hu.synfast(cl, shape=self.shape, wcs=self.wcs, lmax=lmax, seed=seed, new=new)
 
-    def reproject(
+    def reproject_pixel(
         self,
         hp_map: npt.ArrayLike,
         *,
-        harmonic: bool = True,
-        spin: tuple[int, ...] = (0, 2),
+        spin: tuple[int, ...] = (0,),
         extensive: bool = False,
         rot: str | None = None,
-        lmax: int | None = None,
     ) -> enmap.ndmap:
-        """See [`AbstractLandscape.reproject`][..AbstractLandscape.reproject].
+        """See [`AbstractLandscape.reproject_pixel`][..AbstractLandscape.reproject_pixel].
 
-        If present, `hp.UNSEEN` pixels are zeroed before reprojection.
+        Bilinear interpolation is used for the HEALPix->CAR reprojection.
         """
-        hp_map = np.where(hp_map == hp.UNSEEN, 0.0, hp_map)
+        hp_map = np.where(np.asarray(hp_map) == hp.UNSEEN, 0.0, hp_map)
         return reproject.healpix2map(
             hp_map,
             self.shape,
             self.wcs,
-            lmax=lmax,
-            method="harm" if harmonic else "spline",
+            method="spline",
             spin=list(spin),
             extensive=extensive,
             rot=rot,
@@ -310,6 +339,15 @@ class CARLandscape(AbstractLandscape[enmap.ndmap]):
     def stack(self, maps: Sequence[enmap.ndmap]) -> enmap.ndmap:
         """Stack maps along a new leading axis, preserving the `wcs`."""
         return enmap.enmap(np.array(maps), maps[0].wcs)
+
+    def _alm2map(
+        self,
+        alm: npt.ArrayLike,
+        *,
+        spin: int | tuple[int, ...] = 0,
+        lmax: int | None = None,
+    ) -> enmap.ndmap:
+        return hu.alm2map(alm, shape=self.shape, wcs=self.wcs, spin=spin, lmax=lmax)
 
 
 def nside_for_lmax(lmax: int) -> int:

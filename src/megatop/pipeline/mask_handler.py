@@ -83,18 +83,11 @@ def mask_handler(manager: DataManager, config: Config):
         with Timer("reproject-to-car"):
             # Keep per-map enmaps (np.array would strip the WCS), then stack.
             norm_nhits_maps = landscape.stack(
-                [
-                    landscape.reproject(m, harmonic=False, spin=(0,), rot=None)
-                    for m in norm_nhits_maps
-                ]
+                [landscape.reproject_pixel(m, rot=None) for m in norm_nhits_maps]
             )
-            common_norm_nhits_map = landscape.reproject(
-                common_norm_nhits_map, harmonic=False, spin=(0,), rot=None
-            )
+            common_norm_nhits_map = landscape.reproject_pixel(common_norm_nhits_map, rot=None)
             if config.masks_pars.include_galactic:
-                galactic_mask = landscape.reproject(
-                    galactic_mask, harmonic=False, spin=(0,), rot=None
-                )
+                galactic_mask = landscape.reproject_pixel(galactic_mask, rot=None)
                 # re-threshold the (now fractional) reprojected galactic mask to 0/1
                 galactic_mask = enmap.enmap(
                     np.where(galactic_mask > 0.5, 1.0, 0.0), galactic_mask.wcs

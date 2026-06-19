@@ -87,7 +87,7 @@ def generate_map_fgs_pysm(
     for map_set in map_sets:
         m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value
         logger.debug(f"Projecting {map_set.freq_tag}GHz foreground map (gal->equ)")
-        m = landscape.reproject(m, harmonic=True, spin=(0, 2), rot="gal,equ", lmax=lmax)
+        m = landscape.reproject_harmonic(m, spin=(0, 2), rot="gal,equ", lmax=lmax)
         maps_fgs.append(m)
     return landscape.stack(maps_fgs)
 
@@ -144,9 +144,7 @@ def get_full_sky_noise_freq_maps(
         elif noise_config_exp.noise_option == NoiseOption.NOISE_MAP:
             external = noise_experiment[exp]["noise_map"][idx_freq]
             # external maps are HEALPix; resample/reproject onto the target geometry
-            noise_freq_maps[i_map_set] = landscape.reproject(
-                external, harmonic=False, spin=(0, 2), rot=None
-            )
+            noise_freq_maps[i_map_set] = landscape.reproject_pixel(external, rot=None)
         else:
             msg = f"Noise option {noise_config_exp.noise_option} for {exp} is not implemented"
             logger.error(msg)

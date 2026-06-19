@@ -135,7 +135,7 @@ def test_project_car_harmonic_preserves_monopole(tmp_path):
     _, shape, wcs = make_car_config(tmp_path)
     m = np.zeros((3, hp.nside2npix(NSIDE)))
     m[0] = 1.0  # constant T (monopole only); Q=U=0
-    out = land.CARLandscape(shape, wcs).reproject(m, harmonic=True, spin=(0, 2), rot=None)
+    out = land.CARLandscape(shape, wcs).reproject_harmonic(m, spin=(0, 2), rot=None)
     assert isinstance(out, enmap.ndmap)
     assert out.shape == (3, *shape[-2:])
     assert out[0].mean() == pytest.approx(1.0, abs=1e-3)
@@ -144,7 +144,7 @@ def test_project_car_harmonic_preserves_monopole(tmp_path):
 def test_project_car_pixel_keeps_mask_bounded(tmp_path):
     _, shape, wcs = make_car_config(tmp_path)
     mask = np.ones(hp.nside2npix(NSIDE))
-    out = land.CARLandscape(shape, wcs).reproject(mask, harmonic=False, spin=(0,), rot=None)
+    out = land.CARLandscape(shape, wcs).reproject_pixel(mask, rot=None)
     assert np.all(out >= -1e-6)
     assert np.all(out <= 1 + 1e-6)
 
@@ -152,7 +152,7 @@ def test_project_car_pixel_keeps_mask_bounded(tmp_path):
 def test_project_healpix_pixel_resamples():
     # no rotation: a HEALPix reproject is a resample to the target nside
     src = np.arange(hp.nside2npix(NSIDE), dtype=np.float64)
-    out = land.HealpixLandscape(NSIDE // 2).reproject(src, harmonic=False, spin=(0,), rot=None)
+    out = land.HealpixLandscape(NSIDE // 2).reproject_pixel(src, rot=None)
     assert out.shape == (hp.nside2npix(NSIDE // 2),)
 
 
@@ -160,8 +160,8 @@ def test_project_healpix_extensive_conserves_sum():
     # extensive=True must conserve the total (hit counts), unlike the default mean
     src = np.arange(hp.nside2npix(NSIDE), dtype=np.float64)
     p = land.HealpixLandscape(NSIDE // 2)
-    intensive = p.reproject(src, harmonic=False, spin=(0,), rot=None)
-    extensive = p.reproject(src, harmonic=False, spin=(0,), rot=None, extensive=True)
+    intensive = p.reproject_pixel(src, rot=None)
+    extensive = p.reproject_pixel(src, rot=None, extensive=True)
     assert extensive.sum() == pytest.approx(src.sum())
     assert not np.allclose(intensive, extensive)
 
