@@ -48,24 +48,6 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     return np.array([Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0])
 
 
-# Template native nside per PySM model: we want to avoid PySM `ud_grade`ing from native resolution.
-# - PySM2 d0-d8 / s0-s3: nside-512 template
-# - PySM3 d9, d10, d12, s4, s5, s7: nside-2048 is the minimum available
-# - PySM3 d11, s6: small scales synthesized at the requested nside
-_PYSM_LOW_RES = {"d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "s0", "s1", "s2", "s3"}
-_PYSM_HIGH_RES = {"d9", "d10", "d12", "s4", "s5", "s7"}
-
-
-def pysm_render_nside(sky_model: list[str], working_nside: int) -> int:
-    floor = working_nside
-    for model in sky_model:
-        if model in _PYSM_LOW_RES:
-            floor = max(floor, 512)
-        elif model in _PYSM_HIGH_RES:
-            floor = max(floor, 2048)
-    return floor
-
-
 def generate_map_fgs_pysm(
     map_sets,
     lmax: int,
@@ -74,11 +56,13 @@ def generate_map_fgs_pysm(
 ):
     """Render PySM foregrounds and project them onto the target geometry.
 
-    PySM renders in HEALPix at the template-native nside, then `landscape`
-    reprojects (band-limit to `lmax`, rotate galactic→equatorial, resample onto
-    the target pixelisation).
+    PySM renders in HEALPix at the working nside, then `landscape` reprojects in
+    pixel space (rotate galactic→equatorial, resample onto the target
+    pixelisation). Pixel-space reprojection avoids the Gibbs ringing that a
+    harmonic round-trip produces around the bright galactic-plane features of the
+    PySM templates.
     """
-    pysm_nside = pysm_render_nside(sky_model, landscape.working_nside(lmax))
+    pysm_nside = landscape.working_nside(lmax)
     logger.debug(
         f"Generating FG maps for {[m.freq_tag for m in map_sets]} GHz at nside {pysm_nside}"
     )
@@ -87,7 +71,7 @@ def generate_map_fgs_pysm(
     for map_set in map_sets:
         m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value
         logger.debug(f"Projecting {map_set.freq_tag}GHz foreground map (gal->equ)")
-        m = landscape.reproject_harmonic(m, spin=(0, 2), rot="gal,equ", lmax=lmax)
+        m = landscape.reproject_pixel(m, spin=(0, 2), rot="gal,equ")
         maps_fgs.append(m)
     return landscape.stack(maps_fgs)
 

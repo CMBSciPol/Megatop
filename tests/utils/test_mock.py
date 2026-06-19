@@ -51,11 +51,9 @@ class _FakeSky:
     """Offline stand-in for `pysm3.Sky` that records how often it is built."""
 
     call_count = 0
-    last_nside = None
 
     def __init__(self, nside, preset_strings=None, output_unit=None):
         type(self).call_count += 1
-        type(self).last_nside = nside
         self.nside = nside
 
     def get_emission(self, freq, weights=None):
@@ -96,22 +94,6 @@ def test_shape_spectra_noise_map():
     assert freq_maps.shape == (3, hp.nside2npix(NSIDE))
 
 
-@pytest.mark.parametrize(
-    ("sky_model", "working", "expected"),
-    [
-        (["d0", "s0"], 256, 512),  # PySM2 nside-512 templates -> floor 512
-        (["d0", "s0"], 1024, 1024),  # working above floor -> render at working
-        (["d8", "s3"], 256, 512),
-        (["d10"], 256, 2048),  # PySM3 template model: smallest available_nside 2048
-        (["d0", "s5"], 256, 2048),  # any 2048-floor component promotes the render nside
-        (["d11"], 256, 256),  # realization model: synthesized at the working nside, no floor
-        (["d11", "s6"], 512, 512),  # realizations only -> render at working
-    ],
-)
-def test_pysm_render_nside(sky_model, working, expected):
-    assert mock.pysm_render_nside(sky_model, working) == expected
-
-
 @pytest.mark.usefixtures("fake_pysm_sky")
 def test_shape_fg_map():
     map_sets = [
@@ -124,9 +106,6 @@ def test_shape_fg_map():
     map_sets[1].weight = 1
     freq_maps = mock.generate_map_fgs_pysm(map_sets, 2 * NSIDE, ["d0"], HEALPIX)
     assert _FakeSky.call_count == 1  # the stub ran, not the real pysm3.Sky
-    assert (
-        _FakeSky.last_nside == 512
-    )  # rendered at the d0 template native (512), not the output nside
     assert freq_maps.shape == (2, 3, hp.nside2npix(NSIDE))
 
 
