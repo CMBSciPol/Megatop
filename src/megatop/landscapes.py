@@ -43,8 +43,8 @@ __all__ = [
     "CARLandscape",
 ]
 
-# the map type a landscape produces: plain `ndarray` (HEALPix) or `enmap.ndmap` (CAR)
 MapT = TypeVar("MapT", bound=np.ndarray)
+"""The map type a landscape produces: plain `ndarray` (HEALPix) or `enmap.ndmap` (CAR)."""
 
 SR_PER_ARCMIN2 = (np.pi / (180 * 60)) ** 2  # steradian per square arcminute
 
