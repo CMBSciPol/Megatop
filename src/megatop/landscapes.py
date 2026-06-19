@@ -261,8 +261,9 @@ class CARLandscape(AbstractLandscape):
         the alm pass; `None` keeps the frame. `lmax` is unused here (CAR infers
         the band limit from the geometry).
         """
+        hp_map = np.where(hp_map == hp.UNSEEN, 0.0, hp_map)
         return reproject.healpix2map(
-            np.asarray(hp_map),
+            hp_map,
             self.shape,
             self.wcs,
             method=method,

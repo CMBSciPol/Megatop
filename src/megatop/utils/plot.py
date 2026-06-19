@@ -21,7 +21,7 @@ def _imshow_car(ax, m, *, title="", cmap=None, vmin=None, vmax=None):
     doesn't blow up the colour scale (``imshow`` has no UNSEEN handling).
     ``enmap`` rows run south→north, so ``origin="lower"`` keeps north up.
     """
-    data = np.where(np.asarray(m) < -1e30, np.nan, m)
+    data = np.where(np.asarray(m) == hp.UNSEEN, np.nan, m)
     im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
     ax.set_title(title)
     ax.set_xticks([])
