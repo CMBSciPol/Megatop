@@ -36,6 +36,7 @@ dependencies = [
     "pymaster",
     "pysm3 >= 3.4.4",
     "pyyaml",
+    "scipy < 1.18",  # TODO: drop cap when camb new release fixes incompatibility
     "tqdm",
 ]
 
