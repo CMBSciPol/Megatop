@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 import healpy as hp
 import numpy as np
@@ -32,6 +33,8 @@ from pixell import enmap, reproject
 import megatop.utils.harmonic as hu
 
 if TYPE_CHECKING:
+    import numpy.typing as npt
+    from astropy.io.typing import PathLike
     from astropy.wcs import WCS
 
 __all__ = [
@@ -40,16 +43,13 @@ __all__ = [
     "CARLandscape",
 ]
 
-_SR_PER_ARCMIN2 = (np.pi / (180 * 60)) ** 2  # steradian per square arcminute
+# the map type a landscape produces: plain `ndarray` (HEALPix) or `enmap.ndmap` (CAR)
+MapT = TypeVar("MapT", bound=np.ndarray)
+
+SR_PER_ARCMIN2 = (np.pi / (180 * 60)) ** 2  # steradian per square arcminute
 
 
-def _rotator(rot: str) -> hp.Rotator:
-    """Build a `healpy.Rotator` from a reproject-style frame string (e.g. `"gal,equ"`)."""
-    hp_coord = {"gal": "G", "equ": "C", "cel": "C", "ecl": "E"}
-    return hp.Rotator(coord=[hp_coord[c] for c in rot.split(",")])
-
-
-class AbstractLandscape(ABC):
+class AbstractLandscape(ABC, Generic[MapT]):
     """Pixelization scheme plus target geometry.
 
     Concrete subclasses are [`HealpixLandscape`][..HealpixLandscape] (`nside`) and
@@ -70,29 +70,43 @@ class AbstractLandscape(ABC):
         """Intermediate HEALPix `nside` for pysm foreground rendering before reprojection."""
 
     @abstractmethod
-    def zeros(self, pre_shape, *, dtype=np.float64):
+    def zeros(self, pre_shape: tuple[int, ...], *, dtype: npt.DTypeLike = np.float64) -> MapT:
         """Allocate a zero map with leading `pre_shape` (e.g. `(nfreq, 3)`)."""
 
     @abstractmethod
-    def read_map(self, path, *, field=None):
+    def read_map(self, path: PathLike, *, field: int | Sequence[int] | None = None) -> MapT:
         """Read a map from `path` (`field=None` reads all components)."""
 
     @abstractmethod
-    def write_map(self, path, m, *, dtype=None):
+    def write_map(self, path: PathLike, m: MapT, *, dtype: npt.DTypeLike = None) -> None:
         """Write `m` to `path`, casting to `dtype` if given."""
 
     @abstractmethod
-    def pixel_area_arcmin2(self):
+    def pixel_area_arcmin2(self) -> float | np.ndarray:
         """Pixel area in square arcminutes (scalar for HEALPix, `(ny, nx)` for CAR)."""
 
     @abstractmethod
-    def synfast(self, cl, *, lmax=None, seed=None, new=True):
+    def synfast(
+        self,
+        cl: npt.ArrayLike,
+        *,
+        lmax: int | None = None,
+        seed: int | Sequence[int] | None = None,
+        new: bool = True,
+    ) -> MapT:
         """Synthesise a Gaussian realization of `cl` directly on this geometry."""
 
     @abstractmethod
     def reproject(
-        self, hp_map, *, harmonic=True, spin=(0, 2), extensive=False, rot=None, lmax=None
-    ):
+        self,
+        hp_map: npt.ArrayLike,
+        *,
+        harmonic: bool = True,
+        spin: tuple[int, ...] = (0, 2),
+        extensive: bool = False,
+        rot: str | None = None,
+        lmax: int | None = None,
+    ) -> MapT:
         """Bring a HEALPix input onto this scheme, optionally rotating frames.
 
         Args:
@@ -110,11 +124,11 @@ class AbstractLandscape(ABC):
         """
 
     @abstractmethod
-    def stack(self, maps):
+    def stack(self, maps: Sequence[MapT]) -> MapT:
         """Stack a list of maps along a new leading axis, preserving geometry."""
 
 
-class HealpixLandscape(AbstractLandscape):
+class HealpixLandscape(AbstractLandscape[np.ndarray]):
     """HEALPix geometry at a fixed `nside`.
 
     Args:
@@ -123,7 +137,7 @@ class HealpixLandscape(AbstractLandscape):
 
     is_car = False
 
-    def __init__(self, nside: int):
+    def __init__(self, nside: int) -> None:
         self.nside = nside
 
     @property
@@ -141,30 +155,44 @@ class HealpixLandscape(AbstractLandscape):
         del lmax
         return self.nside
 
-    def zeros(self, pre_shape, *, dtype=np.float64):
+    def zeros(self, pre_shape: tuple[int, ...], *, dtype: npt.DTypeLike = np.float64) -> np.ndarray:
         """Allocate a zero ndarray of shape `(*pre_shape, npix)`."""
-        return np.zeros((*tuple(pre_shape), self.npix), dtype=dtype)
+        return np.zeros((*pre_shape, self.npix), dtype=dtype)
 
-    def read_map(self, path, *, field=None):
+    def read_map(self, path: PathLike, *, field: int | Sequence[int] | None = None) -> np.ndarray:
         """Read a HEALPix map via `healpy` (`field=None` reads all components)."""
         # field=None reads every component; a single-column file still yields a 1-D map
         return hp.read_map(path, field=field, dtype=np.float64)
 
-    def write_map(self, path, m, *, dtype=None):
+    def write_map(self, path: PathLike, m: np.ndarray, *, dtype: npt.DTypeLike = None) -> None:
         """Write a HEALPix map via `healpy`, overwriting `path`."""
         hp.write_map(path, m, dtype=dtype, overwrite=True)
 
-    def pixel_area_arcmin2(self):
+    def pixel_area_arcmin2(self) -> float:
         """Pixel area in square arcminutes (scalar; uniform over the sphere)."""
         return hp.nside2resol(self.nside, arcmin=True) ** 2
 
-    def synfast(self, cl, *, lmax=None, seed=None, new=True):
+    def synfast(
+        self,
+        cl: npt.ArrayLike,
+        *,
+        lmax: int | None = None,
+        seed: int | Sequence[int] | None = None,
+        new: bool = True,
+    ) -> np.ndarray:
         """Synthesise a Gaussian realization of `cl` at this `nside`."""
         return hu.synfast(cl, nside=self.nside, lmax=lmax, seed=seed, new=new)
 
     def reproject(
-        self, hp_map, *, harmonic=True, spin=(0, 2), extensive=False, rot=None, lmax=None
-    ):
+        self,
+        hp_map: npt.ArrayLike,
+        *,
+        harmonic: bool = True,
+        spin: tuple[int, ...] = (0, 2),
+        extensive: bool = False,
+        rot: str | None = None,
+        lmax: int | None = None,
+    ) -> np.ndarray:
         """See [`AbstractLandscape.reproject`][..AbstractLandscape.reproject]."""
         if harmonic:
             # band-limit and synthesise straight onto the target nside (no ud_grade)
@@ -184,12 +212,18 @@ class HealpixLandscape(AbstractLandscape):
         # power=-2 conserves the sum for additive (extensive) quantities
         return hp.ud_grade(m, nside_out=self.nside, power=-2 if extensive else 0)
 
-    def stack(self, maps):
+    def stack(self, maps: Sequence[np.ndarray]) -> np.ndarray:
         """Stack maps along a new leading axis as a plain ndarray."""
         return np.array(maps)
 
 
-class CARLandscape(AbstractLandscape):
+def _rotator(rot: str) -> hp.Rotator:
+    """Build a `healpy.Rotator` from a reproject-style frame string (e.g. `"gal,equ"`)."""
+    hp_coord = {"gal": "G", "equ": "C", "cel": "C", "ecl": "E"}
+    return hp.Rotator(coord=[hp_coord[c] for c in rot.split(",")])
+
+
+class CARLandscape(AbstractLandscape[enmap.ndmap]):
     """CAR geometry defined by `shape` and a `pixell` `wcs`.
 
     Args:
@@ -199,7 +233,7 @@ class CARLandscape(AbstractLandscape):
 
     is_car = True
 
-    def __init__(self, shape: tuple[int, ...], wcs: WCS):
+    def __init__(self, shape: tuple[int, ...], wcs: WCS) -> None:
         self.shape = shape
         self.wcs = wcs
 
@@ -212,33 +246,51 @@ class CARLandscape(AbstractLandscape):
         """Smallest power-of-two `nside` supporting `lmax`; pysm renders here, then reprojects."""
         return nside_for_lmax(lmax)
 
-    def zeros(self, pre_shape, *, dtype=np.float64):
+    def zeros(
+        self,
+        pre_shape: tuple[int, ...],
+        *,
+        dtype: npt.DTypeLike = np.float64,
+    ) -> enmap.ndmap:
         """Allocate a zero `enmap` of shape `(*pre_shape, ny, nx)`."""
-        return enmap.zeros((*tuple(pre_shape), *self.shape[-2:]), wcs=self.wcs, dtype=dtype)
+        return enmap.zeros((*pre_shape, *self.shape[-2:]), wcs=self.wcs, dtype=dtype)
 
-    def read_map(self, path, *, field=None):
+    def read_map(self, path: PathLike, *, field: int | Sequence[int] | None = None) -> enmap.ndmap:
         """Read a CAR map via `pixell` (`field` is ignored)."""
-        # the enmap carries its own components; `field` is meaningless for CAR
         del field
         return enmap.read_map(str(path))
 
-    def write_map(self, path, m, *, dtype=None):
+    def write_map(self, path: PathLike, m: enmap.ndmap, *, dtype: npt.DTypeLike = None) -> None:
         """Write a CAR map via `pixell`, casting to `dtype` if given."""
         if dtype is not None and not isinstance(dtype, (list, tuple)):
-            m = m.astype(dtype)
+            m = m.astype(dtype)  # preserves ndmap subclass and wcs
         enmap.write_map(str(path), m)
 
-    def pixel_area_arcmin2(self):
+    def pixel_area_arcmin2(self) -> enmap.ndmap:
         """Per-pixel area map in square arcminutes, shape `(ny, nx)`."""
-        return enmap.pixsizemap(self.shape, self.wcs) / _SR_PER_ARCMIN2
+        return enmap.pixsizemap(self.shape, self.wcs) / SR_PER_ARCMIN2
 
-    def synfast(self, cl, *, lmax=None, seed=None, new=True):
+    def synfast(
+        self,
+        cl: npt.ArrayLike,
+        *,
+        lmax: int | None = None,
+        seed: int | Sequence[int] | None = None,
+        new: bool = True,
+    ) -> enmap.ndmap:
         """Synthesise a Gaussian realization of `cl` on this CAR geometry."""
         return hu.synfast(cl, shape=self.shape, wcs=self.wcs, lmax=lmax, seed=seed, new=new)
 
     def reproject(
-        self, hp_map, *, harmonic=True, spin=(0, 2), extensive=False, rot=None, lmax=None
-    ):
+        self,
+        hp_map: npt.ArrayLike,
+        *,
+        harmonic: bool = True,
+        spin: tuple[int, ...] = (0, 2),
+        extensive: bool = False,
+        rot: str | None = None,
+        lmax: int | None = None,
+    ) -> enmap.ndmap:
         """See [`AbstractLandscape.reproject`][..AbstractLandscape.reproject].
 
         If present, `hp.UNSEEN` pixels are zeroed before reprojection.
@@ -255,7 +307,7 @@ class CARLandscape(AbstractLandscape):
             rot=rot,
         )
 
-    def stack(self, maps):
+    def stack(self, maps: Sequence[enmap.ndmap]) -> enmap.ndmap:
         """Stack maps along a new leading axis, preserving the `wcs`."""
         return enmap.enmap(np.array(maps), maps[0].wcs)
 
