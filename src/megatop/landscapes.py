@@ -22,7 +22,6 @@ off the map itself (`enmap` carries `(shape, wcs)`; a HEALPix ndarray carries
 from __future__ import annotations
 
 import math
-import os
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -41,12 +40,13 @@ __all__ = [
     "CARLandscape",
 ]
 
-HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
-
 _SR_PER_ARCMIN2 = (np.pi / (180 * 60)) ** 2  # steradian per square arcminute
 
-# reproject-style coordinate codes ("gal,equ") → healpy.Rotator codes
-_COORD = {"gal": "G", "equ": "C", "cel": "C", "ecl": "E"}
+
+def _rotator(rot: str) -> hp.Rotator:
+    """Build a `healpy.Rotator` from a reproject-style frame string (e.g. `"gal,equ"`)."""
+    hp_coord = {"gal": "G", "equ": "C", "cel": "C", "ecl": "E"}
+    return hp.Rotator(coord=[hp_coord[c] for c in rot.split(",")])
 
 
 class AbstractLandscape(ABC):
@@ -91,13 +91,22 @@ class AbstractLandscape(ABC):
 
     @abstractmethod
     def reproject(
-        self, hp_map, *, method="harm", spin=(0, 2), extensive=False, rot=None, lmax=None
+        self, hp_map, *, harmonic=True, spin=(0, 2), extensive=False, rot=None, lmax=None
     ):
         """Bring a HEALPix input onto this scheme, optionally rotating frames.
 
-        `rot` is a reproject-style string (e.g. `"gal,equ"`); `None` keeps
-        the frame. `method`/`spin`/`extensive` are CAR reprojection knobs
-        (ignored by HEALPix); `lmax` bounds the HEALPix rotation SHT.
+        Args:
+            hp_map: HEALPix input map, shape `(npix,)` or `(ncomp, npix)`.
+            harmonic: `True` resamples in harmonic space (use with CMB/foreground maps);
+                `False` resamples in pixel space with bilinear interpolation (for masks/hit maps).
+            spin: Spin of the field components, e.g. `(0, 2)` or `(0,)`.
+            extensive: `True` conserves totals (additive quantities); `False` averages
+                (intensive fields).
+            rot: reproject-style frame string (e.g. `"gal,equ"`); `None` keeps the input frame.
+            lmax: Band limit for the harmonic pass.
+
+        Returns:
+            The input reprojected onto this landscape's geometry.
         """
 
     @abstractmethod
@@ -154,37 +163,26 @@ class HealpixLandscape(AbstractLandscape):
         return hu.synfast(cl, nside=self.nside, lmax=lmax, seed=seed, new=new)
 
     def reproject(
-        self, hp_map, *, method="harm", spin=(0, 2), extensive=False, rot=None, lmax=None
+        self, hp_map, *, harmonic=True, spin=(0, 2), extensive=False, rot=None, lmax=None
     ):
-        """Bring a HEALPix input onto this `nside`, optionally rotating frames.
-
-        `method` selects the resampling kernel (mirrors the CAR signature):
-
-        - `"harm"` (band-limited signal): `map2alm` → optional alm-space rotation →
-          `alm2map` **directly at the target nside**. This band-limits to `lmax` without
-          ever calling `ud_grade`, so it avoids the real-space aliasing `ud_grade` would
-          introduce when the input nside differs from the target. Use for CMB/foregrounds.
-        - any other value (e.g. `"spline"`): real-space `ud_grade`, which keeps sharp
-          masks / nhits maps free of SHT ringing.
-
-        `rot` is a reproject-style frame string (e.g. `"gal,equ"`); `lmax` bounds the SHT.
-        `extensive` mirrors the CAR signature and is unused for HEALPix.
-        """
-        if method == "harm":
+        """See [`AbstractLandscape.reproject`][..AbstractLandscape.reproject]."""
+        if harmonic:
             # band-limit and synthesise straight onto the target nside (no ud_grade)
             spin_arg = (
                 0 if not isinstance(spin, (list, tuple)) or tuple(spin) == (0,) else list(spin)
             )
             alm = hu.map2alm(hp_map, spin=spin_arg, lmax=lmax)
             if rot is not None:
-                hp.Rotator(coord=[_COORD[c] for c in rot.split(",")]).rotate_alm(alm, inplace=True)
+                _rotator(rot).rotate_alm(alm, inplace=True)
             return hu.alm2map(alm, nside=self.nside, spin=spin_arg, lmax=lmax)
         m = hp_map
         if rot is not None:
-            rotator = hp.Rotator(coord=[_COORD[c] for c in rot.split(",")])
-            m = rotator.rotate_map_alms(m, lmax=lmax, datapath=HEALPY_DATA_PATH)
-        # real-space resample to the target resolution (no-op when already at nside)
-        return hp.ud_grade(m, nside_out=self.nside)
+            # pixel-space rotation (bilinear interp): no SHT, so sharp edges and
+            # positivity survive on masks / heavily-masked nhits maps
+            m = _rotator(rot).rotate_map_pixel(m)
+        # real-space resample to the target resolution (no-op when already at nside);
+        # power=-2 conserves the sum for additive (extensive) quantities
+        return hp.ud_grade(m, nside_out=self.nside, power=-2 if extensive else 0)
 
     def stack(self, maps):
         """Stack maps along a new leading axis as a plain ndarray."""
@@ -239,34 +237,19 @@ class CARLandscape(AbstractLandscape):
         return hu.synfast(cl, shape=self.shape, wcs=self.wcs, lmax=lmax, seed=seed, new=new)
 
     def reproject(
-        self, hp_map, *, method="harm", spin=(0, 2), extensive=False, rot=None, lmax=None
+        self, hp_map, *, harmonic=True, spin=(0, 2), extensive=False, rot=None, lmax=None
     ):
-        """Reproject a HEALPix input onto this CAR geometry.
+        """See [`AbstractLandscape.reproject`][..AbstractLandscape.reproject].
 
-        Thin wrapper over `pixell.reproject.healpix2map`.
-
-        `method` selects the resampling kernel:
-
-        - `"harm"` (band-limited signal): SHT round-trip; preserves the power
-          spectrum but can ring around sharp edges. Use for CMB/foreground maps.
-        - `"spline"`: avoids ringing and keeps positivity. Use for masks and
-          nhits maps.
-
-        `extensive` controls whether values scale with pixel area: set `True`
-        for additive quantities (hit *counts*, areas) so totals are conserved
-        across the resolution change; keep `False` for intensive fields
-        (signal, normalized hits, masks).
-
-        `rot` is a reproject-style frame string (e.g. `"gal,equ"`) fused into
-        the alm pass; `None` keeps the frame. `lmax` is unused here (CAR infers
-        the band limit from the geometry).
+        If present, `hp.UNSEEN` pixels are zeroed before reprojection.
         """
         hp_map = np.where(hp_map == hp.UNSEEN, 0.0, hp_map)
         return reproject.healpix2map(
             hp_map,
             self.shape,
             self.wcs,
-            method=method,
+            lmax=lmax,
+            method="harm" if harmonic else "spline",
             spin=list(spin),
             extensive=extensive,
             rot=rot,
