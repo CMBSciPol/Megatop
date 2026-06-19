@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from enum import Enum, IntEnum
 from functools import cached_property
 from pathlib import Path
@@ -249,11 +248,6 @@ class MasksConfig(StrictModel):
             msg = "gal_key must not be None if using include_galactic"
             raise ValueError(msg)
         return self
-
-
-def nside_for_lmax(lmax: int) -> int:
-    """Smallest power-of-two ``nside`` such that `lmax <= 2 * nside`."""
-    return 1 << max(0, math.ceil(math.log2(max(1, lmax) / 2)))
 
 
 class HealpixConfig(StrictModel):

@@ -198,3 +198,36 @@ def test_stack_car_preserves_wcs(tmp_path):
     assert isinstance(stacked, enmap.ndmap)
     assert stacked.shape == (2, 3, *shape[-2:])
     assert stacked.wcs is not None
+
+
+# --- working nside ---
+
+
+@pytest.mark.parametrize(
+    ("lmax", "expected"),
+    [
+        (1, 1),
+        (2, 1),
+        (3, 2),
+        (4, 2),
+        (5, 4),
+        (250, 128),
+        (500, 256),
+        (512, 256),
+        (513, 512),
+        (1024, 512),
+    ],
+)
+def test_car_working_nside(lmax, expected):
+    """CAR working nside: smallest power-of-two with lmax <= 2 * nside (pysm render res)."""
+    shape, wcs = enmap.geometry(
+        pos=[[-1 * utils.degree, -1 * utils.degree], [1 * utils.degree, 1 * utils.degree]],
+        res=0.5 * utils.degree,
+        proj="car",
+    )
+    nside = land.CARLandscape(shape, wcs).working_nside(lmax)
+    assert nside == expected
+    # invariant: bound holds and it is the smallest such power of two
+    assert lmax <= 2 * nside
+    assert nside == 1 or lmax > 2 * (nside // 2)
+    assert nside & (nside - 1) == 0  # power of two

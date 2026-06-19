@@ -21,6 +21,7 @@ off the map itself (`enmap` carries `(shape, wcs)`; a HEALPix ndarray carries
 
 from __future__ import annotations
 
+import math
 import os
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
@@ -29,11 +30,10 @@ import healpy as hp
 import numpy as np
 from pixell import enmap, reproject
 
+import megatop.utils.harmonic as hu
+
 if TYPE_CHECKING:
     from astropy.wcs import WCS
-
-import megatop.utils.harmonic as hu
-from megatop.config import nside_for_lmax
 
 __all__ = [
     "AbstractLandscape",
@@ -274,3 +274,8 @@ class CARLandscape(AbstractLandscape):
     def stack(self, maps):
         """Stack maps along a new leading axis, preserving the `wcs`."""
         return enmap.enmap(np.array(maps), maps[0].wcs)
+
+
+def nside_for_lmax(lmax: int) -> int:
+    """Smallest power-of-two ``nside`` such that `lmax <= 2 * nside`."""
+    return 1 << max(0, math.ceil(math.log2(max(1, lmax) / 2)))

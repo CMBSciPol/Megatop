@@ -17,7 +17,6 @@ from megatop.config import (
     PixelisationConfig,
     V3Noise,
     V3Sensitivity,
-    nside_for_lmax,
 )
 
 
@@ -30,31 +29,6 @@ def test_lmax_validator():
     """Check that config instantiation fails when lmax is too high."""
     with pytest.raises(ValueError, match="less than or equal to"):
         GeneralConfig(pixelisation=PixelisationConfig(healpix=HealpixConfig(nside=128)), lmax=500)
-
-
-@pytest.mark.parametrize(
-    ("lmax", "expected"),
-    [
-        (1, 1),
-        (2, 1),
-        (3, 2),
-        (4, 2),
-        (5, 4),
-        (250, 128),
-        (500, 256),
-        (512, 256),
-        (513, 512),
-        (1024, 512),
-    ],
-)
-def test_nside_for_lmax(lmax, expected):
-    """Smallest power-of-two nside satisfying lmax <= 2 * nside."""
-    nside = nside_for_lmax(lmax)
-    assert nside == expected
-    # invariant: bound holds and it is the smallest such power of two
-    assert lmax <= 2 * nside
-    assert nside == 1 or lmax > 2 * (nside // 2)
-    assert nside & (nside - 1) == 0  # power of two
 
 
 def test_map_set_name():
