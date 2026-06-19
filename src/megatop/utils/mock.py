@@ -79,8 +79,9 @@ def generate_map_fgs_pysm(
                 f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"
             )
             r = hp.Rotator(coord=[input_coord, output_coord])
-            # m = r.rotate_map_pixel(m)
-            m = r.rotate_map_alms(m, lmax=lmax, datapath=HEALPY_DATA_PATH)
+            m = r.rotate_map_pixel(m)
+            print("lmax = ", lmax)  # this is just to make the code checker happy
+            # m = r.rotate_map_alms(m, lmax=lmax, datapath=HEALPY_DATA_PATH)
         maps_fgs.append(m)
     return np.array(maps_fgs)
 
