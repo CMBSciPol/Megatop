@@ -19,10 +19,15 @@ def _imshow_car(ax, m, *, title="", cmap=None, vmin=None, vmax=None):
 
     Masked pixels carry ``hp.UNSEEN``; blank them out as NaN so the sentinel
     doesn't blow up the colour scale (``imshow`` has no UNSEEN handling).
-    ``enmap`` rows run south→north, so ``origin="lower"`` keeps north up.
+    ``enmap`` rows run south→north, so ``origin="lower"`` keeps north up. RA is
+    shown increasing leftward (astronomical convention): flip x when the wcs has
+    ``cdelt[0] > 0`` (pixel columns run low→high RA).
     """
     data = np.where(np.asarray(m) == hp.UNSEEN, np.nan, m)
     im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
+    wcs = getattr(m, "wcs", None)
+    if wcs is not None and wcs.wcs.cdelt[0] > 0:
+        ax.invert_xaxis()
     ax.set_title(title)
     ax.set_xticks([])
     ax.set_yticks([])

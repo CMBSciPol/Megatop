@@ -143,6 +143,9 @@ class AbstractLandscape(ABC, Generic[MapT]):
         alm = hu.map2alm(hp_map, spin=spin_arg)  # `hu.map2alm` zeroes hp.UNSEEN
         if rot is not None:
             _rotator(rot).rotate_alm(alm, inplace=True)
+        if lmax is not None:
+            # truncate the Nyquist alm to the output band limit before synthesis
+            alm = hu.truncate_alm(alm, lmax)
         return self._alm2map(alm, spin=spin_arg, lmax=lmax)
 
     @abstractmethod

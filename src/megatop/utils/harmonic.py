@@ -36,6 +36,7 @@ __all__ = [
     "gauss_beam",
     "smooth",
     "synfast",
+    "truncate_alm",
 ]
 
 
@@ -55,6 +56,24 @@ def getlmax(alm, mmax=None) -> int:
         ``lmax`` consistent with ``alm.shape[-1]`` and ``mmax``.
     """
     return hp.Alm.getlmax(alm.shape[-1], mmax=mmax)
+
+
+def truncate_alm(alm, lmax: int):
+    """Band-limit `alm` to `lmax`, re-packing the triangular `(l, m)` layout.
+
+    ``alm2map`` reads the packing for the ``lmax`` it is told, so an ``alm``
+    computed at a higher (e.g. Nyquist) ``lmax`` must be truncated — not merely
+    sliced — before synthesis. Returns `alm` unchanged when `lmax` is already
+    at or above its band limit.
+
+    Args:
+        alm: Alm array `(..., nalm)`; multi-component inputs are truncated row-wise.
+        lmax: Target band limit.
+    """
+    lmax_in = getlmax(np.asarray(alm))
+    if lmax >= lmax_in:
+        return alm
+    return np.asarray(hp.resize_alm(alm, lmax_in, lmax_in, lmax, lmax))
 
 
 @lru_cache(maxsize=8)
