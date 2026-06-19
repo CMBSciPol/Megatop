@@ -129,23 +129,16 @@ class AbstractLandscape(ABC, Generic[MapT]):
     ) -> MapT:
         """Resample a HEALPix input through harmonic space.
 
-        The forward SHT is performed at the input Nyquist limit, then band-limited
-        before synthesis onto the target geometry.
-
         Args:
             hp_map: HEALPix input map, shape `(npix,)` or `(ncomp, npix)`.
             spin: Spin of the field components, e.g. `(0, 2)` or `(0,)`.
             rot: `enmap.reproject`-style coordinate frame rotation (e.g. `"gal,equ"`).
-            lmax: Band limit for the harmonic synthesis (alm2map).
+            lmax: Harmonic band limit of the field.
         """
         spin_arg = _spin_arg(spin)
-        # Forward SHT at the input Nyquist limit (not `lmax`): input may not be band-limited
-        alm = hu.map2alm(hp_map, spin=spin_arg)  # `hu.map2alm` zeroes hp.UNSEEN
+        alm = hu.map2alm(hp_map, spin=spin_arg, lmax=lmax)  # `hu.map2alm` zeroes hp.UNSEEN
         if rot is not None:
             _rotator(rot).rotate_alm(alm, inplace=True)
-        if lmax is not None:
-            # truncate the Nyquist alm to the output band limit before synthesis
-            alm = hu.truncate_alm(alm, lmax)
         return self._alm2map(alm, spin=spin_arg, lmax=lmax)
 
     @abstractmethod

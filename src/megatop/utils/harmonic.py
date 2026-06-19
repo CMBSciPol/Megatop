@@ -33,6 +33,7 @@ __all__ = [
     "anafast",
     "getlmax",
     "map2alm",
+    "rotate_map_alms",
     "gauss_beam",
     "smooth",
     "synfast",
@@ -296,6 +297,31 @@ def alm2map(
             out_idx += nmaps
         return out if inplace else np.concatenate(maps_out, axis=-2)
     return _alm2map_healpix(alms, spin=spin, out=out, **kw)
+
+
+def rotate_map_alms(m, coord, *, spin=0, lmax=None):
+    """Rotate a HEALPix map between coordinate frames in harmonic space.
+
+    The map is transformed to ``alm``, rotated with ``healpy.Rotator``, and
+    synthesised back onto the *same* HEALPix grid. Rotating in harmonic space
+    avoids the pixel-space interpolation error of a direct map rotation.
+
+    Args:
+        m: HEALPix map ``(..., npix)``; multi-component inputs (e.g. ``(3, npix)``
+            TQU) are handled per `spin`.
+        coord: Frame pair for ``healpy.Rotator``, e.g. ``["G", "C"]``
+            (galactic → celestial/equatorial).
+        spin: Spin weight(s): ``0`` (T), ``2`` (Q/U), or ``[0, 2]`` for TQU.
+        lmax: Band limit for the round-trip SHT. HEALPix default ``3 * nside - 1``.
+
+    Returns:
+        Rotated HEALPix map, same shape and ``nside`` as `m`.
+    """
+    m = np.asarray(m)
+    nside = hp.npix2nside(m.shape[-1])
+    alm = map2alm(m, spin=spin, lmax=lmax)
+    hp.Rotator(coord=coord).rotate_alm(alm, inplace=True)
+    return alm2map(alm, nside=nside, spin=spin, lmax=lmax)
 
 
 def _normalise_cl(cl):

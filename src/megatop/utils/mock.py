@@ -74,9 +74,13 @@ def generate_map_fgs_pysm(
 ):
     """Render PySM foregrounds and project them onto the target geometry.
 
-    PySM renders in HEALPix at the template-native nside, then `landscape`
-    reprojects (band-limit to `lmax`, rotate galactic→equatorial, resample onto
-    the target pixelisation).
+    PySM renders in HEALPix at the template-native nside. The galactic→equatorial
+    rotation is done in harmonic space (`rotate_alm`, exact for a band-limited
+    field), staying HEALPix at the native nside. The map is then resampled onto
+    the target pixelisation in PIXEL space (`reproject_pixel`: HEALPix `ud_grade`,
+    CAR spline interpolation). Keeping the final resampling in pixel space avoids
+    the Gibbs ringing a harmonic round-trip produces around the bright
+    galactic-plane features of the PySM templates.
     """
     pysm_nside = pysm_render_nside(sky_model, landscape.working_nside(lmax))
     logger.debug(
@@ -87,7 +91,8 @@ def generate_map_fgs_pysm(
     for map_set in map_sets:
         m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value
         logger.debug(f"Projecting {map_set.freq_tag}GHz foreground map (gal->equ)")
-        m = landscape.reproject_harmonic(m, spin=(0, 2), rot="gal,equ", lmax=lmax)
+        m = hu.rotate_map_alms(m, ["G", "C"], spin=[0, 2])  # galactic -> equatorial
+        m = landscape.reproject_pixel(m, spin=(0, 2))
         maps_fgs.append(m)
     return landscape.stack(maps_fgs)
 
