@@ -356,6 +356,15 @@ def _normalise_cl(cl):
     return list(cl)
 
 
+@lru_cache(maxsize=8)
+def _alm_lm(lmax):
+    """Cached ``(l, m)`` index arrays for the triangular alm layout (read-only)."""
+    ls, ms = hp.Alm.getlm(lmax)
+    ls.setflags(write=False)
+    ms.setflags(write=False)
+    return ls, ms
+
+
 def _psd_sqrt(cov):
     """Symmetric matrix square root via ``eigh``, batched over multipoles.
 
@@ -405,8 +414,11 @@ def synalm(cls_row, ncomp, lmax, seed):
     at ``m=0`` and scaled by ``1/sqrt(2)`` for ``m>0``.
     """
     szalm = hp.Alm.getsize(lmax)
-    g = np.random.default_rng(seed).standard_normal((2, ncomp, szalm))
-    alm = g[0] + 1j * g[1]
+    rng = np.random.default_rng(seed)
+    # draw straight into the real/imag views to skip a full-size temporary + add
+    alm = np.empty((ncomp, szalm), dtype=np.complex128)
+    alm.real = rng.standard_normal((ncomp, szalm))
+    alm.imag = rng.standard_normal((ncomp, szalm))
 
     # covariance per multipole, filled in row (upper-triangle) order
     cov = np.zeros((lmax + 1, ncomp, ncomp))
@@ -419,7 +431,7 @@ def synalm(cls_row, ncomp, lmax, seed):
         cov[:n, i, j] = cov[:n, j, i] = cl[:n]
 
     root = _psd_sqrt(cov)
-    ls, ms = hp.Alm.getlm(lmax)
+    ls, ms = _alm_lm(lmax)
 
     # out[i] = sum_j root[l, i, j] * alm[j], accumulated with 1-D gathers to
     # avoid materialising the (szalm, ncomp, ncomp) per-index matrix stack
