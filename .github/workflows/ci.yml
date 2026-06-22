@@ -37,9 +37,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install uv and set Python version
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v8.2.0
         with:
-          version: "0.11.3"
+          version: "0.11.23"
           enable-cache: true
           python-version: ${{ matrix.python-version }}
 
@@ -49,7 +49,7 @@ jobs:
           sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
 
       - name: Sync project
-        run: uv sync --dev --managed-python
+        run: uv sync --locked --managed-python
 
       - name: Run tests
         run: uv run pytest -vv
@@ -65,9 +65,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install uv and set Python version
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v8.2.0
         with:
-          version: "0.11.3"
+          version: "0.11.23"
           enable-cache: true
           python-version: "3.12"
 
@@ -76,10 +76,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev ${{ matrix.mpi && 'libopenmpi-dev openmpi-bin' || '' }}
 
-      - name: Create virtual environment and install project
-        run: |
-          uv venv
-          uv pip install ${{ matrix.mpi && '".[mpi]"' || '.' }} --group dev
+      - name: Sync project
+        run: uv sync --locked --managed-python ${{ matrix.mpi && '--extra mpi' || '' }}
 
       - name: Cache pysm3 template data
         uses: actions/cache@v5
@@ -94,9 +92,8 @@ jobs:
       - name: Pre-fetch pysm3 templates
         timeout-minutes: 6
         run: |
-          source .venv/bin/activate
           for i in 1 2 3; do
-            timeout -k 10 90 python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])" && exit 0
+            timeout -k 10 90 uv run python -c "import pysm3; pysm3.Sky(nside=64, preset_strings=['d0', 's0'])" && exit 0
             echo "pysm fetch failed/stalled (attempt $i), retrying..."
             sleep 10
           done
@@ -106,7 +103,7 @@ jobs:
         env:
           # Use the small committed ns0064 hitmap fixture (no NERSC download).
           SO_NOMINAL_HITMAP_PATH: ${{ github.workspace }}/tests/data/norm_nHits_SA_35FOV_ns0064.fits
-        run: source .venv/bin/activate && bash runfiles/run_e2e_check.sh paramfiles/e2e_check.yaml ${{ matrix.mpi && '--np 2' || '' }}
+        run: uv run bash runfiles/run_e2e_check.sh paramfiles/e2e_check.yaml ${{ matrix.mpi && '--np 2' || '' }}
 
   e2e-snakemake:
     name: End-to-end pipeline check (Snakemake)
@@ -116,9 +113,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install uv and set Python version
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v8.2.0
         with:
-          version: "0.11.3"
+          version: "0.11.23"
           enable-cache: true
           python-version: "3.12"
 
@@ -128,7 +125,7 @@ jobs:
           sudo apt-get install -y libgsl-dev libfftw3-dev libcfitsio-dev
 
       - name: Sync project
-        run: uv sync --extra snake --dev --managed-python
+        run: uv sync --locked --extra snake --managed-python
 
       - name: Cache pysm3 template data
         uses: actions/cache@v5
