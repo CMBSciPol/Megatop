@@ -420,7 +420,16 @@ def synalm(cls_row, ncomp, lmax, seed):
 
     root = _psd_sqrt(cov)
     ls, ms = hp.Alm.getlm(lmax)
-    out = np.einsum("kij,jk->ik", root[ls], alm)  # (ncomp, szalm)
+
+    # out[i] = sum_j root[l, i, j] * alm[j], accumulated with 1-D gathers to
+    # avoid materialising the (szalm, ncomp, ncomp) per-index matrix stack
+    out = np.zeros((ncomp, szalm), dtype=np.complex128)
+    for i in range(ncomp):
+        for j in range(ncomp):
+            rij = root[:, i, j]
+            if not rij.any():  # null component / absent cross-term
+                continue
+            out[i] += rij[ls] * alm[j]
 
     m0 = ms == 0
     out[:, m0] = out[:, m0].real  # m=0 modes are real
