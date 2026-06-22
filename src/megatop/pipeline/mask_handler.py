@@ -100,7 +100,10 @@ def mask_handler(manager: DataManager, config: Config):
             binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
         with Timer("apodize-car"):
             apodized_mask = mask.get_analysis_mask_car(
-                common_norm_nhits_map, binary_mask, apod_radius_deg=apod_radius
+                common_norm_nhits_map,
+                binary_mask,
+                apod_radius_deg=apod_radius,
+                apod_type=config.masks_pars.apod_type,
             )
     else:
         with Timer("binary-mask"):

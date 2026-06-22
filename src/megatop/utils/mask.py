@@ -148,15 +148,35 @@ def get_analysis_mask(common_hitmap, binary_mask, apod_radius_deg, apod_type):
     return nmt.mask_apodization((binary_mask * common_hitmap), apod_radius_deg, apotype=apod_type)
 
 
-def get_analysis_mask_car(common_hitmap, binary_mask, apod_radius_deg):
+def _apod_profile_c1(x):
+    r"""NaMaster ``C1`` apodization profile, $f(x) = x - \sin(2\pi x)/(2\pi)$."""
+    x = np.clip(x, 0.0, 1.0)
+    return x - np.sin(2.0 * np.pi * x) / (2.0 * np.pi)
+
+
+# CAR apodization profiles, keyed by NaMaster `apotype`. `enmap.apod_mask`
+# applies the profile to the geodesic edge distance r/width, which equals
+# NaMaster's chordal x to small-angle order.
+# `Smooth` is a Gaussian convolution, not a profile, so it has no CAR analogue.
+_CAR_APOD_PROFILES = {"C1": _apod_profile_c1, "C2": enmap.apod_profile_cos}
+
+
+def get_analysis_mask_car(common_hitmap, binary_mask, apod_radius_deg, apod_type="C2"):
     """Create and apodize a CAR analysis mask.
 
-    Uses ``pixell.enmap.apod_mask`` (a distance-transform cosine taper of
-    ``apod_radius_deg`` degrees) instead of NaMaster's C1/C2 apodization, which
-    is HEALPix-only. The apodized binary mask is then weighted by the hit map to
-    match the HEALPix ``apodize(binary * nhits)`` intent.
+    Uses ``pixell.enmap.apod_mask`` (a distance-transform taper of
+    ``apod_radius_deg`` degrees) instead of NaMaster's apodization, which is
+    HEALPix-only. ``apod_type`` selects the NaMaster-equivalent profile (``C1``
+    or ``C2``); ``Smooth`` is unsupported on CAR. The apodized binary mask is
+    then weighted by the hit map to match the HEALPix ``apodize(binary * nhits)``
+    intent.
     """
-    apodized = enmap.apod_mask(binary_mask, width=apod_radius_deg * pu.degree)
+    try:
+        profile = _CAR_APOD_PROFILES[apod_type]
+    except KeyError:
+        msg = f"Unsupported CAR apod_type {apod_type!r}; choose one of {sorted(_CAR_APOD_PROFILES)}"
+        raise ValueError(msg) from None
+    apodized = enmap.apod_mask(binary_mask, width=apod_radius_deg * pu.degree, profile=profile)
     return apodized * common_hitmap
 
 
