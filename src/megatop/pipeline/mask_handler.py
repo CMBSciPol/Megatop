@@ -18,6 +18,11 @@ PLANCK_MASK_GALPLANE_URL = (
     "MAP.MAP_ID=HFI_Mask_GalPlane-apo0_2048_R2.00.fits"
 )
 
+# Resampling the galactic mask (HEALPix ud_grade or CAR reproject) makes it
+# fractional; re-binarize by keeping target pixels with majority good coverage.
+# TODO: expose as a config knob if a non-majority cut is ever needed.
+GAL_MASK_REBINARIZE_THRESHOLD = 0.5
+
 
 # TODO: check the dtypes of products
 
@@ -69,8 +74,9 @@ def mask_handler(manager: DataManager, config: Config):
             # Rotate from galactic to equatorial coordinates
             r = hp.Rotator(coord=["G", "C"])
             galactic_mask = r.rotate_map_pixel(galactic_mask)
+            # Keep fractional here; binarize once after the geometry is final
+            # (below), so a CAR reproject doesn't quantize then re-quantize.
             galactic_mask = hp.ud_grade(galactic_mask, config.nside)
-            galactic_mask = np.where(galactic_mask > 0.5, 1, 0)
 
     # The (smooth) nhits and galactic products above are HEALPix. For a CAR run,
     # reproject the smooth products onto the target geometry FIRST (no rotation —
@@ -88,9 +94,10 @@ def mask_handler(manager: DataManager, config: Config):
             common_norm_nhits_map = landscape.reproject_pixel(common_norm_nhits_map, rot=None)
             if config.masks_pars.include_galactic:
                 galactic_mask = landscape.reproject_pixel(galactic_mask, rot=None)
-                # re-threshold the (now fractional) reprojected galactic mask to 0/1
+                # binarize the (fractional) reprojected galactic mask to 0/1
                 galactic_mask = enmap.enmap(
-                    np.where(galactic_mask > 0.5, 1.0, 0.0), galactic_mask.wcs
+                    np.where(galactic_mask > GAL_MASK_REBINARIZE_THRESHOLD, 1.0, 0.0),
+                    galactic_mask.wcs,
                 )
             else:
                 # no galactic cut: all-ones on the target geometry (skip a needless SHT)
@@ -106,6 +113,8 @@ def mask_handler(manager: DataManager, config: Config):
                 apod_type=config.masks_pars.apod_type,
             )
     else:
+        # binarize the (fractional) ud_graded galactic mask to 0/1
+        galactic_mask = np.where(galactic_mask > GAL_MASK_REBINARIZE_THRESHOLD, 1.0, 0.0)
         with Timer("binary-mask"):
             logger.info(f"Thresholding binary map with {threshold}")
             binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
