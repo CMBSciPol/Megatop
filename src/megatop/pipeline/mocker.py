@@ -304,9 +304,7 @@ def func_signal(
     # apply beam and pixel window function correction
     with Timer("beam-freq-maps"):
         for i_f, _f in enumerate(config.frequencies):
-            sky[i_f] = mock.beam_winpix_correction(
-                config.nside, sky[i_f], config.beams[i_f], config.lmax
-            )
+            sky[i_f] = mock.beam_winpix_correction(sky[i_f], config.beams[i_f], config.lmax)
 
     # apply filtering
     if obsmat_funcs is not None:

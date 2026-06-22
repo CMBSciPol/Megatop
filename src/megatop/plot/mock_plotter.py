@@ -79,7 +79,7 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
     for i_f, _f in enumerate(config.frequencies):
         fg_freq_maps_beamed[i_f] = mock.beam_winpix_correction(
-            config.nside, fg_freq_maps[i_f], config.beams[i_f], config.lmax
+            fg_freq_maps[i_f], config.beams[i_f], config.lmax
         )
     binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
 

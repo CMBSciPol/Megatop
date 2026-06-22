@@ -277,7 +277,7 @@ def include_hits_noise(noise_maps, common_nhits_map, binary_mask):
     return noise_maps
 
 
-def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float, lmax: int):
+def beam_winpix_correction(freq_map, beam_FWHM: float, lmax: int):
     # here lmax seems to play an important role
     logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
     # geometry comes from the input map: an enmap means CAR, ndarray means HEALPix
@@ -293,6 +293,7 @@ def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float, lmax: int):
         out = hu.alm2map(alms_in, spin=[0, 2], shape=freq_map.shape, wcs=freq_map.wcs, lmax=lmax)
         return enmap.apply_window(out, pow=1)
 
+    nside = hp.npix2nside(freq_map.shape[-1])
     wpix_in = hp.pixwin(
         nside,
         pol=True,

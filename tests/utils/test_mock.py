@@ -149,9 +149,7 @@ def test_hit_map():
 
 def test_beam():
     freq_map = RNG.random((3, hp.nside2npix(NSIDE)))
-    freq_map_beamed = mock.beam_winpix_correction(
-        NSIDE, freq_map=freq_map, beam_FWHM=100, lmax=2 * NSIDE
-    )
+    freq_map_beamed = mock.beam_winpix_correction(freq_map=freq_map, beam_FWHM=100, lmax=2 * NSIDE)
     assert np.all(np.isfinite(freq_map_beamed))
     assert freq_map.shape == freq_map_beamed.shape
 
@@ -188,7 +186,7 @@ def test_spectra_noise_car(tmp_path):
 def test_beam_car(tmp_path):
     cfg, shape = make_car_config(tmp_path)
     freq_map = enmap.enmap(RNG.random((3, *shape[-2:])), cfg.geometry[1])
-    beamed = mock.beam_winpix_correction(cfg.nside, freq_map, beam_FWHM=30, lmax=cfg.lmax)
+    beamed = mock.beam_winpix_correction(freq_map, beam_FWHM=30, lmax=cfg.lmax)
     assert isinstance(beamed, enmap.ndmap)
     assert beamed.shape == freq_map.shape
     assert np.all(np.isfinite(beamed))
