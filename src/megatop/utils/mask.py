@@ -398,6 +398,12 @@ def apply_binary_mask(maps, binary_mask, *, unseen=False):
     ``(ny, nx)`` via trailing boolean indexing over the map's pixel axes.
     Modifies ``maps`` in place and returns it.
     """
+    if unseen and isinstance(maps, enmap.ndmap):
+        msg = (
+            "hp.UNSEEN is not supported on CAR maps; pixell has no UNSEEN convention "
+            "and downstream enmap ops would treat the sentinel as a finite value."
+        )
+        raise ValueError(msg)
     bad = np.asarray(binary_mask) == 0
     maps[..., bad] = hp.UNSEEN if unseen else 0.0
     return maps
