@@ -93,6 +93,14 @@ def test_config_landscape_dispatch(tmp_path):
     assert tuple(p.shape) == tuple(shape)
 
 
+def test_car_landscape_rejects_lmax_above_nyquist(tmp_path):
+    # 0.5 deg pixels give a Nyquist lmax ~ 360; 500 must be rejected when the
+    # CAR landscape is built (the healpix lmax<=2*nside guard does not apply).
+    cfg, _, _ = make_car_config(tmp_path, lmax=500)
+    with pytest.raises(ValueError, match="Nyquist"):
+        _ = cfg.landscape
+
+
 def test_config_landscape_is_cached(tmp_path):
     # cached_property on a pydantic model must return the same instance each time
     cfg = make_healpix_config()

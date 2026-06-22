@@ -600,7 +600,18 @@ class Config(StrictModel):
         from megatop.landscapes import CARLandscape, HealpixLandscape
 
         if self.is_car:
+            from pixell import enmap
+
             shape, wcs = self.geometry
+            # CAR pixel size sets the Nyquist band limit (lmax ~ pi/res)
+            res_rad = np.min(np.abs(enmap.pixshape(shape, wcs)))
+            lmax_nyquist = np.floor(np.pi / res_rad)
+            if self.general_pars.lmax > lmax_nyquist:
+                msg = (
+                    f"lmax={self.general_pars.lmax} exceeds the CAR Nyquist limit "
+                    f"{lmax_nyquist} for pixel size {np.degrees(res_rad):.4g} deg"
+                )
+                raise ValueError(msg)
             return CARLandscape(shape, wcs)
         # raw config nside (not self.nside, which delegates back here → recursion)
         return HealpixLandscape(self.general_pars.pixelisation.healpix.nside)
