@@ -371,8 +371,7 @@ class CustomSATConfig(StrictModel):
 class ExternalNoiseMapconfig(StrictModel):
     default_bands: float | list[float]
     root: Path
-    prefix: str
-    suffix: str
+    filename_template: str
     noise_option: NoiseOption = NoiseOption.NOISE_MAP
     correction: float = 1.0
 

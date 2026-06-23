@@ -192,9 +192,9 @@ def get_noise_experiment(
         fname_list = [
             noise_config_exp.root
             / f"{id_sim:04d}"
-            / f"{noise_config_exp.prefix}{int(fr):03d}{noise_config_exp.suffix}.fits"
+            / noise_config_exp.filename_template.format(id_sim=id_sim, freq=int(fr))
             for fr in noise_config_exp.default_bands
-        ]  # FIXED FILE EXTENSION
+        ]
         external_map_list = [
             noise_config_exp.correction * hp.read_map(fname) for fname in fname_list
         ]
