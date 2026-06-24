@@ -8,6 +8,7 @@ from urllib.request import urlopen
 import healpy as hp
 import numpy as np
 import pymaster as nmt
+from astropy.io import fits
 from pixell import enmap
 
 import megatop.utils.harmonic as hu
@@ -94,8 +95,11 @@ def read_nhits_maps(list_hitmapname: list[Path], nside: int):
                         logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
                         # Fetch once into memory (bounded by timeout), then let healpy
                         # parse the bytes — avoids a second, unbounded URL read.
-                        with urlopen(SO_NOMINAL_HITMAP_URL, timeout=30) as resp:
-                            so_nominal_nhits = hp.read_map(io.BytesIO(resp.read()))
+                        with (
+                            urlopen(SO_NOMINAL_HITMAP_URL, timeout=30) as resp,
+                            fits.open(io.BytesIO(resp.read())) as hdul,
+                        ):
+                            so_nominal_nhits = hp.read_map(hdul)
                     except URLError:
                         logger.error("Nominal hitmap download failed")
                         logger.error("Exiting mask_handler without creating a mask")
