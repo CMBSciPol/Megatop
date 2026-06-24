@@ -265,9 +265,12 @@ def noise_spectra_estimator(
         logger.info("Loading pre-processed noise maps")
         if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
             logger.info("Loading TRUE noise simulations saved during preproc step")
-            noise_freq_maps_preprocessed = np.load(
-                manager.get_path_to_preprocessed_TRUE_noise_maps(id_real)
+            path_true_preproc_noise_maps = manager.get_path_to_preprocessed_TRUE_noise_maps(
+                id_sim_sky
             )
+            logger.info(f"Loading TRUE noise simulations from {path_true_preproc_noise_maps}")
+            noise_freq_maps_preprocessed = np.load(path_true_preproc_noise_maps)
+
         else:
             noise_freq_maps_preprocessed = np.load(
                 manager.get_path_to_preprocessed_noise_maps(id_real)
