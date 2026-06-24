@@ -339,7 +339,11 @@ def func_signal(
     with Timer("beam-freq-maps"):
         for i_f, _f in enumerate(config.frequencies):
             sky[i_f] = mock.beam_winpix_correction(
-                config.nside, sky[i_f], config.beams[i_f], config.lmax
+                config.nside,
+                sky[i_f],
+                config.beams[i_f],
+                3 * config.nside,
+                # config.lmax
             )
 
     # If filter_noise is True, we add the noise to the sky sims before applying filtering.
