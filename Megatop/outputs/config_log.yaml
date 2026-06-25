@@ -29,7 +29,7 @@ data_dirs:
   maps: maps
   noise_maps: noise
   passbands: passbands
-  root: /Users/landais/Desktop/UV/ProtoMegatop2/Megatop/data
+  root: /Users/landais/Desktop/UV/ProtoMegatop2/data
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2.0e-09
@@ -57,7 +57,7 @@ map_sets:
 - TF_path: .
   angles_central_value_degrees: 0.0
   angles_uncertainty_degrees: 0.1
-  beam: 0.0
+  beam: 91.0
   depth_map_path: null
   exp_tag: SO-SAT
   file_prefix: ''
@@ -72,7 +72,7 @@ map_sets:
 - TF_path: .
   angles_central_value_degrees: 0.0
   angles_uncertainty_degrees: null
-  beam: 0.0
+  beam: 63.0
   depth_map_path: null
   exp_tag: SO-SAT
   file_prefix: ''
@@ -87,7 +87,7 @@ map_sets:
 - TF_path: .
   angles_central_value_degrees: 0.0
   angles_uncertainty_degrees: null
-  beam: 0.0
+  beam: 30.0
   depth_map_path: null
   exp_tag: SO-SAT
   file_prefix: ''
@@ -102,7 +102,7 @@ map_sets:
 - TF_path: .
   angles_central_value_degrees: 0.0
   angles_uncertainty_degrees: null
-  beam: 0.0
+  beam: 17.0
   depth_map_path: null
   exp_tag: SO-SAT
   file_prefix: ''
@@ -117,7 +117,7 @@ map_sets:
 - TF_path: .
   angles_central_value_degrees: 0.0
   angles_uncertainty_degrees: null
-  beam: 0.0
+  beam: 11.0
   depth_map_path: null
   exp_tag: SO-SAT
   file_prefix: ''
@@ -132,7 +132,7 @@ map_sets:
 - TF_path: .
   angles_central_value_degrees: 0.0
   angles_uncertainty_degrees: null
-  beam: 0.0
+  beam: 9.0
   depth_map_path: null
   exp_tag: SO-SAT
   file_prefix: ''
@@ -205,7 +205,7 @@ noise_sim_pars:
       v3_one_over_f_mode: OPTIMISTIC
       v3_sensitivity_mode: GOAL
   include_nhits: true
-  n_sim: 10
+  n_sim: 100
 output_dirs:
   binning: binning
   components: components

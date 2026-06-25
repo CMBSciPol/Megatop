@@ -28,7 +28,6 @@ from megatop.utils.compsep import (  # noqa: E402
 from megatop.utils.mpi import get_world  # noqa: E402
 from megatop.utils.utils import MemoryUsage  # noqa: E402
 
-
 def _test_N_alm_format(N_alm):
     inv_N_alm = 1 / N_alm
 
@@ -119,7 +118,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     std_instr = fg.observation_helpers.standardize_instrument(instrument)
 
     with Timer("load-alms"):
-        preproc_alms_fname = manager.get_path_to_preprocessed_alms(sub=id_sim)
+        preproc_alms_fname = manager.get_path_to_preprocessed_alms(id_sim)
         logger.debug(f"Loading input maps from {preproc_alms_fname}")
         data_alms = np.load(preproc_alms_fname)
 
@@ -219,7 +218,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
             "Beam and Transfer functions handling? "
         )  # TODO: Beam and Transfer functions handling?
         with Timer("load-maps"):
-            preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+            preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
             logger.debug(f"Loading input maps from {preproc_maps_fname}")
             freq_maps_preprocessed = np.load(preproc_maps_fname)
         freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
@@ -284,7 +283,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
     with Timer("load-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
 
@@ -396,7 +395,7 @@ def megabuster_comp_sep(
     id_sim: int | None = None,
 ):
     with Timer("load-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
 
@@ -454,11 +453,11 @@ def megabuster_comp_sep(
 
     max_iter = options["maxiter"]  # if method != "TNC" else options["maxfun"]
 
-    if method == "TNC":
-        logger.warning(
-            "Changing method=TNC to method='scipy_tnc' for compatibility with megabuster and furax_cs."
-        )
-        method = "scipy_tnc"
+    #if method == "TNC":
+    #    logger.warning(
+    #        "Changing method=TNC to method='scipy_tnc' for compatibility with megabuster and furax_cs."
+    #    )
+    #    method = "scipy_tnc"
         # dict_parameters_minimization = {"max_fun": max_iter, "tol": tol, 'solver_name': method}
     # else:
     dict_parameters_minimization = {
@@ -478,11 +477,11 @@ def megabuster_comp_sep(
     #solver_name="optax_lbfgs",
 
     # import IPython; IPython.embed()
-    #res = mb.compsep_nude.perform_compsep(
 
     if megabuster_options["use_beam_operator"]:
+        #res = mb.Back_BO.perform_compsep(
         res = mb.beam_compsep.perform_compsep(
-        #res = mb.compsep_nude.perform_compsep(
+        #res = mb.compsep.perform_compsep(
             config,
             manager,
             first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
@@ -519,7 +518,9 @@ def megabuster_comp_sep(
             n_samples = megabuster_options["n_samples"],
         )
     else:
+        print('Ici ?????')
         res = mb.compsep.perform_compsep(
+        #res = mb.compsep.perform_compsep(
             config,
             manager,
             first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
@@ -611,12 +612,12 @@ def megabuster_comp_sep(
 
 
 def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int | None = None):
-    path = manager.get_path_to_components(sub=id_sim)
+    path = manager.get_path_to_components(id_sim)
     path.mkdir(parents=True, exist_ok=True)
-    fname_results = manager.get_path_to_compsep_results(sub=id_sim)
+    fname_results = manager.get_path_to_compsep_results(id_sim)
     if config.parametric_sep_pars.use_harmonic_compsep:
-        fname_compalms = manager.get_path_to_components_alms(sub=id_sim)
-    fname_compmaps = manager.get_path_to_components_maps(sub=id_sim)
+        fname_compalms = manager.get_path_to_components_alms(id_sim)
+    fname_compmaps = manager.get_path_to_components_maps(id_sim)
 
     res_dict = {}
     for attr in dir(res):

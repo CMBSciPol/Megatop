@@ -3,7 +3,7 @@ data_dirs:
   maps: maps
   passbands: passbands
   noise_maps: noise
-  root: /Users/landais/Desktop/UV/ProtoMegatop2/Megatop/data
+  root: /Users/landais/Desktop/UV/ProtoMegatop2/data
 
 map_sets:
 
@@ -16,7 +16,7 @@ map_sets:
   angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : 0.1
   # angle_incertanty_degrees = 0 Corresponds to no prior case and not ideal infinite precision case, as prior = 0 lead to divergence in the Likelihood.
-  
+
 - exp_tag: SO-SAT
   file_prefix: ''
   freq_tag: 39
@@ -24,7 +24,7 @@ map_sets:
   #beam: 63.
   beam: 0.
   angles_central_value_degrees : 0.0
-  angles_uncertainty_degrees : None
+  angles_uncertainty_degrees : 0.1
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -33,7 +33,7 @@ map_sets:
   #beam: 30.
   beam: 0.
   angles_central_value_degrees : 0.0
-  angles_uncertainty_degrees : None
+  angles_uncertainty_degrees : 0.1
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -42,7 +42,7 @@ map_sets:
   #beam: 17.
   beam: 0.
   angles_central_value_degrees : 0.0
-  angles_uncertainty_degrees : None
+  angles_uncertainty_degrees : 0.1
 
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -51,7 +51,7 @@ map_sets:
   #beam: 11.
   beam: 0.
   angles_central_value_degrees : 0.0
-  angles_uncertainty_degrees : None
+  angles_uncertainty_degrees : 0.1
   
 - exp_tag: SO-SAT
   file_prefix: ''
@@ -60,7 +60,7 @@ map_sets:
   #beam: 9.
   beam: 0.
   angles_central_value_degrees : 0.0
-  angles_uncertainty_degrees : None
+  angles_uncertainty_degrees : 0.1
 
 map_sim_pars:
   A_lens: 1
@@ -69,7 +69,7 @@ map_sim_pars:
   filter_sims: false
   n_sim: 1
   r_input: 0.0
-  Birefringence: 0.35
+  Birefringence: 0.0
   single_cmb: false
   TF_n_sim: 2
   TF_power_law_amp: 1.0
@@ -102,7 +102,7 @@ noise_cov_pars:
   save_preprocessed_noise_maps: true
 noise_sim_pars:
   include_nhits: true
-  n_sim: 10
+  n_sim: 100
   experiments: 
     SO-SAT:
       usev3p1: True
@@ -121,7 +121,7 @@ output_dirs:
   preproc: preproc
   spectra: spectra
   mcmc: mcmc
-  root: /Users/landais/Desktop/UV/ProtoMegatop2/Megatop/outputs
+  root: /Users/landais/Desktop/UV/ProtoMegatop2/outputs
 
 parametric_sep_pars:
   alm2map: False
@@ -130,18 +130,18 @@ parametric_sep_pars:
   harmonic_lmin: 30
   include_synchrotron: true
   megabuster_options:
-    max_steps_CG: 5000
+    max_steps_CG: 25
     tol_CG: 1.0e-8
     use_preconditioner_diag: False
     use_preconditioner_pinv: False
     use_obsmat: False
-    use_calibration_matrix:  False
-    use_beam_operator: True
+    use_calibration_matrix: False
+    use_beam_operator: False
     use_hessienne: False
     use_hmc: False
     n_warm: 50
     n_samples: 50
-    max_iter: 200
+    max_iter: 300
   minimize_method: TNC
   minimize_options:
     disp: False
@@ -204,10 +204,10 @@ map2cl_pars:
   purify_e: false
 
 plot_pars:
-  lmax_plot: 1000
+  lmax_plot: 700
   lmin_plot: 30
 pre_proc_pars:
-  DEBUGskippreproc: false
-  common_beam_correction: 0
+  DEBUGskippreproc: False
+  common_beam_correction: 0.0
   correct_for_TF: false
-  sum_TF_column: true
+  sum_TF_column: False

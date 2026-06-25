@@ -2,6 +2,7 @@
 export FI_PROVIDER=tcp
 PARAM_FILE="../paramfiles/default_config.yaml"
 
+echo 'export SO_NOMINAL_HITMAP_PATH=/tmp/so_nominal_hitmap.fits' >> ~/.zshrc
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 
 conda init bash
@@ -51,6 +52,11 @@ echo "Plotting pre-processer outputs"
 #megatop-preproc-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
+echo "|                  NOISE PREPROCESSING                     |"
+echo "------------------------------------------------------------"
+#megatop-noise-preproc-run --config ${PARAM_FILE}
+
+echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"
 echo "------------------------------------------------------------"
 #FI_PROVIDER=tcp mpirun -n 10 python $(which megatop-noisecov-run) --config ${PARAM_FILE}
@@ -64,11 +70,11 @@ echo "------------------------------------------------------------"
 echo "|                    COMPONENT SEPARATION                  |"
 echo "------------------------------------------------------------"
 #FI_PROVIDER=tcp mpirun -n 10 python $(which megatop-compsep-run) --config ${PARAM_FILE}
-megatop-compsep-run --config ${PARAM_FILE}
+#megatop-compsep-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting component separater outputs"
-megatop-compsep-plot --config ${PARAM_FILE}
+#megatop-compsep-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                     SPECTRA ESTIMATION                   |"
@@ -98,7 +104,7 @@ echo "------------------------------------------------------------"
 echo ""
 echo ""
 echo "Plotting r statistics"
-#megatop-cl2r-plot --config ${PARAM_FILE}
+megatop-cl2r-plot --config ${PARAM_FILE}
 echo ""
 echo "Plotting mcmc results statistics"
-#megatop-cl2r_mcmc-plot --config ${PARAM_FILE}
+megatop-cl2r_mcmc-plot --config ${PARAM_FILE}

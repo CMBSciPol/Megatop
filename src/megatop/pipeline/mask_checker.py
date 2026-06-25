@@ -10,9 +10,9 @@ from megatop.utils import logger, mask, mock
 
 
 def spin_derivatives(manager: DataManager):
-    common_hnits_map = hp.read_map(manager.path_to_common_nhits_map)
+    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+    analysis_mask = hp.read_map(manager.path_to_analysis_mask, dtype=np.float64)
 
     # Spin derivatives computation
     first_custom, second_custom = mask.get_spin_derivatives(analysis_mask)
@@ -20,9 +20,8 @@ def spin_derivatives(manager: DataManager):
     second_min_custom, second_max_custom = np.min(second_custom), np.max(second_custom)
 
     # f_sky computation
-    fsky_nhits, fsky_binary, fsky_analysis = mask.get_fsky(
-        common_hnits_map, binary_mask, analysis_mask
-    )
+    fsky_effective = mask.fsky_effective(common_nhits_map)
+    fsky_geom = mask.fsky_geom(binary_mask)
 
     logger.info(
         "Spin derivatives of the analysis have global min and max of:\n"
@@ -32,9 +31,8 @@ def spin_derivatives(manager: DataManager):
 
     logger.info(
         "f_sky computation resulting from the different masks:\n"
-        f"  common nhits map: {fsky_nhits:.3f}\n"
-        f"  binary mask: {fsky_binary:.3f}\n"
-        f"  analysis mask: {fsky_analysis:.3f}\n"
+        f"  common nhits map: {fsky_effective:.3f}\n"
+        f"  binary mask: {fsky_geom:.3f}\n"
     )
 
 
@@ -44,11 +42,11 @@ def generate_mask_sim(manager: DataManager, config: Config, int_n_sim):
     rank = comm.Get_rank()
 
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
-    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+    analysis_mask = hp.read_map(manager.path_to_analysis_mask, dtype=np.float64)
 
     Cl_cmb_model_pureB = Cl_cmb_model.copy()
-    Cl_cmb_model_pureB[0][[1]] = 0.0
-    Cl_cmb_model_pureB[0][[3]] = 0.0
+    Cl_cmb_model_pureB[[1]] = 0.0
+    Cl_cmb_model_pureB[[3]] = 0.0
 
     realization_list = np.arange(int_n_sim) if rank == 0 else None
     print(realization_list)
