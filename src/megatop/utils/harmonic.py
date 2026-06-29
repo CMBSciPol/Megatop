@@ -347,12 +347,13 @@ def _normalise_cl(cl):
     nspec = cl.shape[0]
     if nspec == 4:
         return list(cl)
-    n = int(round((-1 + np.sqrt(1 + 8 * nspec)) / 2))
-    if n * (n + 1) // 2 != nspec:
+    try:
+        _getn_components(nspec)
+    except ValueError as e:
         raise ValueError(
             f"cl has {nspec} spectra, which is not triangular (n*(n+1)/2). "
             "Pass an (n, n, lmax+1) covariance matrix or healpy-ordered flat spectra."
-        )
+        ) from e
     return list(cl)
 
 
