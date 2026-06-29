@@ -36,6 +36,7 @@ __all__ = [
     "rotate_map_alms",
     "gauss_beam",
     "smooth",
+    "synalm",
     "synfast",
     "truncate_alm",
 ]
@@ -346,13 +347,119 @@ def _normalise_cl(cl):
     nspec = cl.shape[0]
     if nspec == 4:
         return list(cl)
-    n = int(round((-1 + np.sqrt(1 + 8 * nspec)) / 2))
-    if n * (n + 1) // 2 != nspec:
+    try:
+        _getn_components(nspec)
+    except ValueError as e:
         raise ValueError(
             f"cl has {nspec} spectra, which is not triangular (n*(n+1)/2). "
             "Pass an (n, n, lmax+1) covariance matrix or healpy-ordered flat spectra."
-        )
+        ) from e
     return list(cl)
+
+
+@lru_cache(maxsize=8)
+def _alm_lm(lmax):
+    """Cached ``(l, m)`` index arrays for the triangular alm layout (read-only)."""
+    ls, ms = hp.Alm.getlm(lmax)
+    ls.setflags(write=False)
+    ms.setflags(write=False)
+    return ls, ms
+
+
+def _psd_sqrt(cov):
+    """Symmetric matrix square root via ``eigh``, batched over multipoles.
+
+    ``cov``: ``(lmax+1, n, n)`` stack of symmetric covariances. Returns ``A``
+    with ``A @ A.T == cov`` per multipole. Near-zero eigenvalues are clipped, so
+    rank-deficient covariances (e.g. ``BB=0``) work.
+
+    Raises ``ValueError`` if a covariance is indefinite (a meaningfully negative
+    eigenvalue, e.g. ``|TE| > sqrt(TT*EE)``), which has no real square root.
+    """
+    rtol = cov.shape[-1] * np.finfo(cov.dtype).eps
+    w, v = np.linalg.eigh(cov)
+    # eigh sorts ascending, so w[..., -1] is the largest eigenvalue per multipole
+    floor = -rtol * np.abs(w[..., -1:])
+    bad = w < floor
+    if bad.any():
+        ell = int(np.argmax(bad.any(axis=-1)))
+        raise ValueError(
+            f"covariance is not positive semi-definite at multipole l={ell} "
+            f"(min eigenvalue {w[bad].min():.3e}); check cross-spectra."
+        )
+    return v * np.sqrt(np.clip(w, 0.0, None))[..., None, :]
+
+
+def _new_to_old_spectra_order(cls):
+    """Reorder cls from diagonal order to row order (healpy ``new`` → old).
+
+    Mirrors ``healpy.sphtfunc.new_to_old_spectra_order``: e.g. for three
+    components TT EE BB TE EB TB → TT TE TB EE EB BB.
+    """
+    n = _getn_components(len(cls))
+    out = []
+    for i in range(n):
+        for j in range(i, n):
+            p = j - i
+            idx_new = p * (2 * n + 1 - p) // 2 + i
+            out.append(cls[idx_new])
+    return out
+
+
+def _getn_components(nspec):
+    """Number of fields ``n`` from a count of ``n(n+1)/2`` spectra."""
+    n = int(round((-1 + np.sqrt(1 + 8 * nspec)) / 2))
+    if n * (n + 1) // 2 != nspec:
+        raise ValueError(f"{nspec} spectra is not triangular (n*(n+1)/2)")
+    return n
+
+
+def synalm(cls_row, ncomp, lmax, seed):
+    """Draw Gaussian ``alm`` from row-ordered spectra. Ports healpy ``_synalm``.
+
+    ``cls_row``: list of length ``ncomp*(ncomp+1)/2`` in row order (TT TE TB EE
+    EB BB for ``ncomp=3``); entries may be ``None`` for absent cross-spectra.
+    Returns ``(ncomp, nalm)`` complex array (or ``(nalm,)`` for ``ncomp=1``).
+
+    Mirrors healpy's flow: draw standard-normal real and imaginary parts, then
+    for each ``l`` apply a matrix square root of the covariance (here via
+    ``eigh`` rather than healpy's Cholesky), real-only with zero imaginary part
+    at ``m=0`` and scaled by ``1/sqrt(2)`` for ``m>0``.
+    """
+    szalm = hp.Alm.getsize(lmax)
+    rng = np.random.default_rng(seed)
+    # draw straight into the real/imag views to skip a full-size temporary + add
+    alm = np.empty((ncomp, szalm), dtype=np.complex128)
+    alm.real = rng.standard_normal((ncomp, szalm))
+    alm.imag = rng.standard_normal((ncomp, szalm))
+
+    # covariance per multipole, filled in row (upper-triangle) order
+    cov = np.zeros((lmax + 1, ncomp, ncomp))
+    pairs = [(i, j) for i in range(ncomp) for j in range(i, ncomp)]
+    for cl, (i, j) in zip(cls_row, pairs):
+        if cl is None:
+            continue
+        cl = np.asarray(cl, dtype=np.float64)
+        n = min(cl.shape[0], lmax + 1)
+        cov[:n, i, j] = cov[:n, j, i] = cl[:n]
+
+    root = _psd_sqrt(cov)
+    ls, ms = _alm_lm(lmax)
+
+    # out[i] = sum_j root[l, i, j] * alm[j], accumulated with 1-D gathers to
+    # avoid materialising the (szalm, ncomp, ncomp) per-index matrix stack
+    out = np.zeros((ncomp, szalm), dtype=np.complex128)
+    for i in range(ncomp):
+        for j in range(ncomp):
+            rij = root[:, i, j]
+            if not rij.any():  # null component / absent cross-term
+                continue
+            out[i] += rij[ls] * alm[j]
+
+    m0 = ms == 0
+    out[:, m0] = out[:, m0].real  # m=0 modes are real
+    out[:, ~m0] /= np.sqrt(2.0)
+    return out[0] if ncomp == 1 else out
 
 
 def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=True, nthreads=None):
@@ -370,11 +477,11 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
         shape: CAR pixel shape. Used with ``wcs``.
         wcs: CAR world coordinate system. Used with ``shape``.
         lmax: Bandlimit. Defaults to library default.
-        seed: PRNG seed.
+        seed: PRNG seed. Passed to ``numpy.random.default_rng``; does not touch
+            the legacy global RNG state.
         nthreads: ducc0 thread count (HEALPix). ``None`` uses ``MEGATOP_SHT_NTHREADS``.
-        new: Ordering for 2-D ``cl``, passed to ``hp.synalm``. Defaults to
-            ``True`` (TT EE BB TE EB TB), unlike healpy's default ``False``.
-            No effect for 1-D or 3-D input.
+        new: Ordering for 2-D ``cl``. Defaults to ``True`` (TT EE BB TE EB TB),
+            unlike healpy's default ``False``. No effect for 1-D or 3-D input.
 
     Returns:
         ``np.ndarray`` for HEALPix, ``pixell.enmap.ndmap`` for CAR.
@@ -389,9 +496,6 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
     if not healpix and (shape is None or wcs is None):
         raise ValueError("Provide nside, or both shape and wcs.")
 
-    if seed is not None:
-        np.random.seed(seed)  # noqa: NPY002
-
     cl = np.asarray(cl)
     if cl.ndim == 3:
         new = True
@@ -404,12 +508,26 @@ def synfast(cl, *, nside=None, shape=None, wcs=None, lmax=None, seed=None, new=T
     )
 
     if scalar:
-        alm = hp.synalm(cl_norm, lmax=lmax, new=new)
+        if lmax is None:
+            lmax = cl_norm.shape[0] - 1
+        alm = synalm([cl_norm], 1, lmax, seed)
         return alm2map(alm, spin=0, **kw)
 
     # Multi-component (T, E, B) → synthesise (T, Q, U)
-    alm_T, alm_E, alm_B = hp.synalm(cl_norm, lmax=lmax, new=new)
-    alms_teb = np.stack([alm_T, alm_E, alm_B])
+    cls_list = list(cl_norm)
+    if len(cls_list) == 4:
+        # healpy shorthand: TT EE BB TE, with EB=TB absent
+        if new:  # diagonal order → padded then converted to row order below
+            cls_list = [cls_list[0], cls_list[1], cls_list[2], cls_list[3], None, None]
+        else:  # already row order: TT TE 0 EE 0 BB
+            cls_list = [cls_list[0], cls_list[1], None, cls_list[2], None, cls_list[3]]
+    if new:
+        cls_list = _new_to_old_spectra_order(cls_list)
+    ncomp = _getn_components(len(cls_list))
+
+    if lmax is None:
+        lmax = max(c.shape[0] for c in cls_list if c is not None) - 1
+    alms_teb = synalm(cls_list, ncomp, lmax, seed)
     return alm2map(alms_teb, spin=[0, 2], **kw)
 
 

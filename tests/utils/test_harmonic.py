@@ -512,17 +512,75 @@ class TestSynfast:
         m2 = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=42)
         assert np.array_equal(m1, m2)
 
-    def test_healpix_t_matches_hp_synfast(self):
-        np.random.seed(99)  # noqa: NPY002
-        expected = hp.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
-        result = harmonic.synfast(_CL_T, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
-        assert_allclose(result, expected, rtol=1e-10)
+    def test_psd_sqrt_reconstructs_covariance(self):
+        """``A @ A.T`` returns the covariance, including a rank-deficient one."""
+        cov = np.array(
+            [
+                [[2.0, 0.5], [0.5, 1.0]],  # full rank
+                [[1.0, 0.0], [0.0, 0.0]],  # singular (B-like null component)
+            ]
+        )
+        root = harmonic._psd_sqrt(cov)
+        assert_allclose(np.einsum("kij,klj->kil", root, root), cov, atol=1e-12)
 
-    def test_healpix_pol_matches_hp_synfast(self):
-        np.random.seed(99)  # noqa: NPY002
-        expected = hp.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, new=True)
-        result = harmonic.synfast(_CL_POL, nside=NSIDE_SF, lmax=LMAX_SF, seed=99)
-        assert_allclose(result, expected, rtol=1e-10)
+    def test_psd_sqrt_rejects_indefinite_covariance(self):
+        """An indefinite covariance (``|TE| > sqrt(TT*EE)``) raises rather than clipping."""
+        cov = np.array([[[1.0, 2.0], [2.0, 1.0]]])  # eigenvalues 3, -1
+        with pytest.raises(ValueError, match="not positive semi-definite"):
+            harmonic._psd_sqrt(cov)
+
+    def test_synalm_m0_modes_are_real(self):
+        """``m=0`` coefficients carry no imaginary part."""
+        lmax = 12
+        cls = _make_cls(lmax)
+        row = harmonic._new_to_old_spectra_order(list(cls))
+        alm = harmonic.synalm(row, 3, lmax, seed=1)
+        _, ms = hp.Alm.getlm(lmax)
+        assert_array_equal(alm[:, ms == 0].imag, 0.0)
+
+    def test_synalm_rank_one_covariance_is_fully_correlated(self):
+        """A rank-1 covariance forces an exact proportionality between components.
+
+        For ``cov = [[a, sqrt(ab)], [sqrt(ab), b]]`` the second component's alm
+        must equal ``sqrt(b/a)`` times the first's — a deterministic, single-draw
+        check that cross-correlations are applied correctly.
+        """
+        lmax = 16
+        a, b = 3.0, 12.0
+        tt = np.full(lmax + 1, a)
+        ee = np.full(lmax + 1, b)
+        te = np.sqrt(tt * ee)  # maximal correlation → singular covariance
+        row = [tt, te, ee]  # row order for two components: TT, TE, EE
+        alm = harmonic.synalm(row, 2, lmax, seed=7)
+        assert_allclose(alm[1], np.sqrt(b / a) * alm[0], atol=1e-12)
+
+    def test_synalm_anticorrelation_flips_sign(self):
+        """Negative cross-spectrum flips the sign of the induced correlation."""
+        lmax = 16
+        a, b = 3.0, 12.0
+        tt = np.full(lmax + 1, a)
+        ee = np.full(lmax + 1, b)
+        te = -np.sqrt(tt * ee)
+        alm = harmonic.synalm([tt, te, ee], 2, lmax, seed=7)
+        assert_allclose(alm[1], -np.sqrt(b / a) * alm[0], atol=1e-12)
+
+    def test_synalm_zero_spectrum_yields_zero_component(self):
+        """A component with zero auto- and cross-spectra is identically zero."""
+        lmax = 16
+        cls = _make_cls(lmax)
+        cls[2] = 0.0  # BB = 0; EB, TB already zero in _make_cls
+        row = harmonic._new_to_old_spectra_order(list(cls))
+        alm = harmonic.synalm(row, 3, lmax, seed=3)
+        assert_array_equal(alm[2], 0.0)
+
+    def test_4spec_shorthand_matches_padded_6spec(self):
+        """``(4, nl)`` shorthand reproduces the equivalent ``(6, nl)`` input with EB=TB=0."""
+        cls4 = _CL_POL[:4]
+        cls6 = _CL_POL.copy()
+        cls6[4:] = 0.0
+        m4 = harmonic.synfast(cls4, nside=NSIDE_SF, lmax=LMAX_SF, seed=11)
+        m6 = harmonic.synfast(cls6, nside=NSIDE_SF, lmax=LMAX_SF, seed=11)
+        assert_array_equal(m4, m6)
 
     def test_healpix_cov_matrix_shape(self):
         cov = _cls6_to_cov(_CL_6_CAR)
