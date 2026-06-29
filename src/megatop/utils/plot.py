@@ -2,8 +2,37 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from megatop.utils import logger
+
+
+def _attach_colorbar(im, ax):
+    """Colorbar sized to exactly match the (CAR) image axes height."""
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="3%", pad=0.05)
+    return im.figure.colorbar(im, cax=cax)
+
+
+def _imshow_car(ax, m, *, title="", cmap=None, vmin=None, vmax=None):
+    """Draw a CAR ``(ny, nx)`` enmap on ``ax`` with a height-matched colorbar.
+
+    Masked pixels carry ``hp.UNSEEN``; blank them out as NaN so the sentinel
+    doesn't blow up the colour scale (``imshow`` has no UNSEEN handling).
+    ``enmap`` rows run south→north, so ``origin="lower"`` keeps north up. RA is
+    shown increasing leftward (astronomical convention): flip x when the wcs has
+    ``cdelt[0] > 0`` (pixel columns run low→high RA).
+    """
+    data = np.where(np.asarray(m) == hp.UNSEEN, np.nan, m)
+    im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
+    wcs = getattr(m, "wcs", None)
+    if wcs is not None and wcs.wcs.cdelt[0] > 0:
+        ax.invert_xaxis()
+    ax.set_title(title)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    _attach_colorbar(im, ax)
+    return im
 
 
 def freq_maps_plotter(
@@ -41,59 +70,63 @@ def freq_maps_plotter(
     if vmax is None:
         vmax = {"I": None, "Q": None, "U": None}
 
-    plt.figure(figsize=(20, 7))
-    k = 0
-
-    if map_set.shape == (1, 3, map_set.shape[-1]) or map_set.shape == (1, 2, map_set.shape[-1]):
-        enum_freq = [0]
-        row = 1
-        column = map_set.shape[1]
-    elif map_set.shape == (len(config.frequencies), 3, map_set.shape[-1]) or map_set.shape == (
-        len(config.frequencies),
-        2,
-        map_set.shape[-1],
-    ):
-        enum_freq = config.frequencies
-        row = map_set.shape[1]
-        column = len(config.frequencies)
-    else:
+    # CAR maps carry pixel axes (ny, nx) → ndim == 4; HEALPix is 1-D → ndim == 3.
+    car = map_set.ndim == 4
+    nfreq, nstokes = map_set.shape[0], map_set.shape[1]
+    if nstokes not in (2, 3) or nfreq not in (1, len(config.frequencies)):
         logger.error(
-            f"In freq_maps_plotter() map_set doesn't have the right shape, must be (nfreq, nstokes, npix) OR (1, nstokes, npix), here: {map_set.shape}"
+            "In freq_maps_plotter() map_set doesn't have the right shape, must be "
+            f"(nfreq, nstokes, <pixels>) OR (1, nstokes, <pixels>), here: {map_set.shape}"
         )
         msg = "Bad map set shape"
         raise TypeError(msg)
 
-    stokes_list = ["I", "Q", "U"] if map_set.shape[1] == 3 else ["Q", "U"]
+    plt.figure(figsize=(20, 7))
+    k = 0
+    enum_freq = [0] if nfreq == 1 else config.frequencies
+    row, column = (1, nstokes) if nfreq == 1 else (nstokes, nfreq)
+    stokes_list = ["I", "Q", "U"] if nstokes == 3 else ["Q", "U"]
 
     for j_stokes, stokes in enumerate(stokes_list):
         for i_f, fr in enumerate(enum_freq):
             title_map = f"{component} {stokes}" if enum_freq == [0] else f"{fr} GHz {stokes}"
-            if stokes == "I":
-                cmap = cm.RdBu
-                cmap.set_under(cmap_set_under)
-                hp.mollview(
-                    map_set[i_f, j_stokes],
-                    cmap=cmap,
-                    title=title_map,
-                    min=vmin[stokes],
-                    max=vmax[stokes],
-                    sub=(row, column, k + 1),
-                )
+            # copy: set_under mutates the colormap, don't poison the global singleton
+            cmap = (cm.RdBu if stokes == "I" else cm.Greys).copy()
+            cmap.set_under(cmap_set_under)
+            m = map_set[i_f, j_stokes]
+            if car:
+                ax = plt.subplot(row, column, k + 1)
+                _imshow_car(ax, m, title=title_map, cmap=cmap, vmin=vmin[stokes], vmax=vmax[stokes])
             else:
-                cmap = cm.Greys
-                cmap.set_under(cmap_set_under)
                 hp.mollview(
-                    map_set[i_f, j_stokes],
+                    m,
                     cmap=cmap,
                     title=title_map,
                     min=vmin[stokes],
                     max=vmax[stokes],
                     sub=(row, column, k + 1),
+                    xsize=1600,
                 )
             k += 1
 
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")
     plt.clf()
+
+
+def single_map_plotter(m, config, plot_path, *, title="", cmap=None, vmin=None, vmax=None):
+    """Save a single sky map, dispatching on ``config`` pixelization.
+
+    HEALPix → ``hp.mollview`` + graticule; CAR → ``imshow`` of the ``(ny, nx)``
+    enmap (``origin="lower"`` keeps north up).
+    """
+    plt.figure(figsize=(16, 9))
+    if config.is_car:
+        _imshow_car(plt.gca(), m, title=title, cmap=cmap, vmin=vmin, vmax=vmax)
+    else:
+        hp.mollview(m, cmap=cmap, cbar=True, title=title, min=vmin, max=vmax, xsize=2000)
+        hp.graticule()
+    plt.savefig(plot_path, bbox_inches="tight", dpi=150)
+    plt.close()
 
 
 def freq_maps_plotter_one_stoke(
@@ -253,8 +286,8 @@ def plotTTEEBB_diff(
         None
     """
 
-    ell = np.arange(0, Cl_data.shape[-1])
-    norm = ell * (ell + 1) / 2 / np.pi
+    lmin = 2
+    ell = np.arange(Cl_data.shape[-1])
 
     if Cl_data.ndim == 2:
         Cl_data = Cl_data[np.newaxis, ...]
@@ -262,8 +295,11 @@ def plotTTEEBB_diff(
         Cl_model = Cl_model[np.newaxis, ...]
     Cl_model = Cl_model[..., ell]
 
-    if not use_D_ell:
-        norm = 1
+    ell = ell[lmin:]
+    Cl_data = Cl_data[..., lmin:]
+    Cl_model = Cl_model[..., lmin:]
+
+    norm = ell * (ell + 1) / 2 / np.pi if use_D_ell else 1
 
     fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(15, 15))
     for f in range(Cl_data.shape[0]):

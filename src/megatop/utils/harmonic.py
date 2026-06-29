@@ -33,9 +33,11 @@ __all__ = [
     "anafast",
     "getlmax",
     "map2alm",
+    "rotate_map_alms",
     "gauss_beam",
     "smooth",
     "synfast",
+    "truncate_alm",
 ]
 
 
@@ -55,6 +57,24 @@ def getlmax(alm, mmax=None) -> int:
         ``lmax`` consistent with ``alm.shape[-1]`` and ``mmax``.
     """
     return hp.Alm.getlmax(alm.shape[-1], mmax=mmax)
+
+
+def truncate_alm(alm, lmax: int):
+    """Band-limit `alm` to `lmax`, re-packing the triangular `(l, m)` layout.
+
+    ``alm2map`` reads the packing for the ``lmax`` it is told, so an ``alm``
+    computed at a higher (e.g. Nyquist) ``lmax`` must be truncated — not merely
+    sliced — before synthesis. Returns `alm` unchanged when `lmax` is already
+    at or above its band limit.
+
+    Args:
+        alm: Alm array `(..., nalm)`; multi-component inputs are truncated row-wise.
+        lmax: Target band limit.
+    """
+    lmax_in = getlmax(np.asarray(alm))
+    if lmax >= lmax_in:
+        return alm
+    return np.asarray(hp.resize_alm(alm, lmax_in, lmax_in, lmax, lmax))
 
 
 @lru_cache(maxsize=8)
@@ -277,6 +297,31 @@ def alm2map(
             out_idx += nmaps
         return out if inplace else np.concatenate(maps_out, axis=-2)
     return _alm2map_healpix(alms, spin=spin, out=out, **kw)
+
+
+def rotate_map_alms(m, coord, *, spin=0, lmax=None):
+    """Rotate a HEALPix map between coordinate frames in harmonic space.
+
+    The map is transformed to ``alm``, rotated with ``healpy.Rotator``, and
+    synthesised back onto the *same* HEALPix grid. Rotating in harmonic space
+    avoids the pixel-space interpolation error of a direct map rotation.
+
+    Args:
+        m: HEALPix map ``(..., npix)``; multi-component inputs (e.g. ``(3, npix)``
+            TQU) are handled per `spin`.
+        coord: Frame pair for ``healpy.Rotator``, e.g. ``["G", "C"]``
+            (galactic → celestial/equatorial).
+        spin: Spin weight(s): ``0`` (T), ``2`` (Q/U), or ``[0, 2]`` for TQU.
+        lmax: Band limit for the round-trip SHT. HEALPix default ``3 * nside - 1``.
+
+    Returns:
+        Rotated HEALPix map, same shape and ``nside`` as `m`.
+    """
+    m = np.asarray(m)
+    nside = hp.npix2nside(m.shape[-1])
+    alm = map2alm(m, spin=spin, lmax=lmax)
+    hp.Rotator(coord=coord).rotate_alm(alm, inplace=True)
+    return alm2map(alm, nside=nside, spin=spin, lmax=lmax)
 
 
 def _normalise_cl(cl):

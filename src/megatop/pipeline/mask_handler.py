@@ -6,6 +6,7 @@ from urllib.request import urlopen
 
 import healpy as hp
 import numpy as np
+from pixell import enmap
 
 from megatop import DataManager
 from megatop.config import Config, ValidPlanckGalKey
@@ -16,6 +17,11 @@ PLANCK_MASK_GALPLANE_URL = (
     "http://pla.esac.esa.int/pla/aio/product-action?"
     "MAP.MAP_ID=HFI_Mask_GalPlane-apo0_2048_R2.00.fits"
 )
+
+# Resampling the galactic mask (HEALPix ud_grade or CAR reproject) makes it
+# fractional; re-binarize by keeping target pixels with majority good coverage.
+# TODO: expose as a config knob if a non-majority cut is ever needed.
+GAL_MASK_REBINARIZE_THRESHOLD = 0.5
 
 
 # TODO: check the dtypes of products
@@ -46,17 +52,6 @@ def mask_handler(manager: DataManager, config: Config):
         common_norm_nhits_map = mask.get_common_nhits_map(
             norm_nhits_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits
         )
-        hp.write_map(
-            manager.path_to_common_nhits_map,
-            common_norm_nhits_map,
-            dtype=np.float32,
-            overwrite=True,
-        )
-
-        for i_m, m in enumerate(config.map_sets):
-            hp.write_map(
-                manager.path_to_nhits_map(m), norm_nhits_maps[i_m], dtype=np.float32, overwrite=True
-            )
 
     # Get the galactic mask
     with Timer("galmask"):
@@ -79,27 +74,69 @@ def mask_handler(manager: DataManager, config: Config):
             # Rotate from galactic to equatorial coordinates
             r = hp.Rotator(coord=["G", "C"])
             galactic_mask = r.rotate_map_pixel(galactic_mask)
+            # Keep fractional here; binarize once after the geometry is final
+            # (below), so a CAR reproject doesn't quantize then re-quantize.
             galactic_mask = hp.ud_grade(galactic_mask, config.nside)
-            galactic_mask = np.where(galactic_mask > 0.5, 1, 0)
 
-        hp.write_map(manager.path_to_galactic_mask, galactic_mask, dtype=np.float32, overwrite=True)
+    # The (smooth) nhits and galactic products above are HEALPix. For a CAR run,
+    # reproject the smooth products onto the target geometry FIRST (no rotation —
+    # already celestial), then threshold and apodize natively in CAR so the sharp
+    # survey edge follows the CAR grid rather than the intermediate HEALPix one.
+    threshold = config.masks_pars.binary_mask_zero_threshold
+    apod_radius = config.masks_pars.apod_radius
+    landscape = config.landscape
+    if config.is_car:
+        with Timer("reproject-to-car"):
+            # Keep per-map enmaps (np.array would strip the WCS), then stack.
+            norm_nhits_maps = landscape.stack(
+                [landscape.reproject_pixel(m, rot=None) for m in norm_nhits_maps]
+            )
+            common_norm_nhits_map = landscape.reproject_pixel(common_norm_nhits_map, rot=None)
+            if config.masks_pars.include_galactic:
+                galactic_mask = landscape.reproject_pixel(galactic_mask, rot=None)
+                # binarize the (fractional) reprojected galactic mask to 0/1
+                galactic_mask = enmap.enmap(
+                    np.where(galactic_mask > GAL_MASK_REBINARIZE_THRESHOLD, 1.0, 0.0),
+                    galactic_mask.wcs,
+                )
+            else:
+                # no galactic cut: all-ones on the target geometry (skip a needless SHT)
+                galactic_mask = landscape.zeros(()) + 1.0
+        with Timer("binary-mask-car"):
+            logger.info(f"Thresholding binary map with {threshold} (CAR-native)")
+            binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
+        with Timer("apodize-car"):
+            apodized_mask = mask.get_analysis_mask_car(
+                common_norm_nhits_map,
+                binary_mask,
+                apod_radius_deg=apod_radius,
+                apod_type=config.masks_pars.apod_type,
+            )
+    else:
+        # binarize the (fractional) ud_graded galactic mask to 0/1
+        galactic_mask = np.where(galactic_mask > GAL_MASK_REBINARIZE_THRESHOLD, 1.0, 0.0)
+        with Timer("binary-mask"):
+            logger.info(f"Thresholding binary map with {threshold}")
+            binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
+        with Timer("apodize-custom"):
+            # Make custom apodized mask from input hitmap, galactic mask and point sources mask
+            apod_type = config.masks_pars.apod_type
+            apodized_mask = mask.get_analysis_mask(
+                common_norm_nhits_map, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
+            )
 
-    # Generate binary survey mask from the hits map and galactic mask
-
-    with Timer("binary-mask"):
-        threshold = config.masks_pars.binary_mask_zero_threshold
-        logger.info(f"Thresholding binary map with {threshold}")
-        binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
-        hp.write_map(manager.path_to_binary_mask, binary_mask, dtype=np.float32, overwrite=True)
-
-    with Timer("apodize-custom"):
-        # Make custom apodized mask from input hitmap, galactic mask and point sources mask
-        apod_radius = config.masks_pars.apod_radius
-        apod_type = config.masks_pars.apod_type
-        apodized_mask = mask.get_analysis_mask(
-            common_norm_nhits_map, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
+    # Write all products (pixel-agnostic I/O)
+    with Timer("write-masks"):
+        landscape.write_map(
+            manager.path_to_common_nhits_map, common_norm_nhits_map, dtype=np.float32
         )
-        hp.write_map(manager.path_to_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True)
+        for i_m, m in enumerate(config.map_sets):
+            landscape.write_map(
+                manager.path_to_nhits_map(m), norm_nhits_maps[i_m], dtype=np.float32
+            )
+        landscape.write_map(manager.path_to_galactic_mask, galactic_mask, dtype=np.float32)
+        landscape.write_map(manager.path_to_binary_mask, binary_mask, dtype=np.float32)
+        landscape.write_map(manager.path_to_analysis_mask, apodized_mask, dtype=np.float32)
 
 
 # Get the point sources mask

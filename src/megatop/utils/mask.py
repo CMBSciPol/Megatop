@@ -10,6 +10,7 @@ import numpy as np
 import pymaster as nmt
 from astropy.io import fits
 from pixell import enmap
+from pixell import utils as pu
 
 import megatop.utils.harmonic as hu
 from megatop.config import SO_NOMINAL
@@ -146,9 +147,41 @@ def get_binary_mask(common_hitmap, gal_mask, zero_threshold):
 
 def get_analysis_mask(common_hitmap, binary_mask, apod_radius_deg, apod_type):
     """
-    Create analysis mask and apodize it.
+    Create analysis mask and apodize it (HEALPix, via NaMaster C1/C2/Smooth).
     """
     return nmt.mask_apodization((binary_mask * common_hitmap), apod_radius_deg, apotype=apod_type)
+
+
+def _apod_profile_c1(x):
+    r"""NaMaster ``C1`` apodization profile, $f(x) = x - \sin(2\pi x)/(2\pi)$."""
+    x = np.clip(x, 0.0, 1.0)
+    return x - np.sin(2.0 * np.pi * x) / (2.0 * np.pi)
+
+
+# CAR apodization profiles, keyed by NaMaster `apotype`. `enmap.apod_mask`
+# applies the profile to the geodesic edge distance r/width, which equals
+# NaMaster's chordal x to small-angle order.
+# `Smooth` is a Gaussian convolution, not a profile, so it has no CAR analogue.
+_CAR_APOD_PROFILES = {"C1": _apod_profile_c1, "C2": enmap.apod_profile_cos}
+
+
+def get_analysis_mask_car(common_hitmap, binary_mask, apod_radius_deg, apod_type="C2"):
+    """Create and apodize a CAR analysis mask.
+
+    Uses ``pixell.enmap.apod_mask`` (a distance-transform taper of
+    ``apod_radius_deg`` degrees) instead of NaMaster's apodization, which is
+    HEALPix-only. ``apod_type`` selects the NaMaster-equivalent profile (``C1``
+    or ``C2``); ``Smooth`` is unsupported on CAR. The apodized binary mask is
+    then weighted by the hit map to match the HEALPix ``apodize(binary * nhits)``
+    intent.
+    """
+    try:
+        profile = _CAR_APOD_PROFILES[apod_type]
+    except KeyError:
+        msg = f"Unsupported CAR apod_type {apod_type!r}; choose one of {sorted(_CAR_APOD_PROFILES)}"
+        raise ValueError(msg) from None
+    apodized = enmap.apod_mask(binary_mask, width=apod_radius_deg * pu.degree, profile=profile)
+    return apodized * common_hitmap
 
 
 def random_src_mask(mask, nsrcs, mask_radius_arcmin):
@@ -272,26 +305,37 @@ def get_apodized_mask_from_nhits(
     return nhits_map * binary_mask
 
 
-def get_spin_derivatives(map):
+def get_spin_derivatives(map, lmax=None):
     """
     First and second spin derivatives of a given spin-0 map.
     Parameters
     ----------
     map : array
-        Input spin-0 map in HEALPix format.
+        Input spin-0 map (HEALPix ``(npix,)`` ndarray or CAR ``(ny, nx)``
+        enmap). The landscape is inferred from the input type.
+    lmax : int, optional
+        Band limit for the SHT round-trip. Required for CAR (no ``nside`` to
+        derive one); defaults to ``3 * nside - 1`` for HEALPix.
 
     Returns
     -------
     tuple of arrays
         First and second spin derivatives of the input map.
     """
-    nside = hp.npix2nside(np.shape(map)[-1])
-    ell = np.arange(3 * nside)
+    if isinstance(map, enmap.ndmap):
+        if lmax is None:
+            raise ValueError("lmax is required for CAR maps")
+        target = {"shape": map.shape, "wcs": map.wcs}
+    else:
+        nside = hp.npix2nside(np.shape(map)[-1])
+        lmax = 3 * nside - 1 if lmax is None else lmax
+        target = {"nside": nside}
+    ell = np.arange(lmax + 1)
     alpha1i = np.sqrt(ell * (ell + 1.0))
     alpha2i = np.sqrt((ell - 1.0) * ell * (ell + 1.0) * (ell + 2.0))
-    alm = hu.map2alm(map, spin=0)
-    first = hu.alm2map(hu.almxfl(alm, alpha1i), spin=0, nside=nside)
-    second = hu.alm2map(hu.almxfl(alm, alpha2i), spin=0, nside=nside)
+    alm = hu.map2alm(map, spin=0, lmax=lmax)
+    first = hu.alm2map(hu.almxfl(alm, alpha1i), spin=0, **target)
+    second = hu.alm2map(hu.almxfl(alm, alpha2i), spin=0, **target)
 
     return first, second
 
@@ -351,10 +395,19 @@ def fsky_dof(field):
 
 
 @function_timer("apply-binary-mask")
-def apply_binary_mask(maps, binary_mask, unseen=False):
-    # TODO the masking is done in place, needed or could be done differently ?
-    if unseen:
-        maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-    else:
-        maps[..., np.where(binary_mask == 0)[0]] = 0.0
+def apply_binary_mask(maps, binary_mask, *, unseen=False):
+    """Zero (or set ``hp.UNSEEN`` in) the pixels where ``binary_mask`` is 0.
+
+    Pixel-agnostic: works for 1-D HEALPix masks ``(npix,)`` and 2-D CAR masks
+    ``(ny, nx)`` via trailing boolean indexing over the map's pixel axes.
+    Modifies ``maps`` in place and returns it.
+    """
+    if unseen and isinstance(maps, enmap.ndmap):
+        msg = (
+            "hp.UNSEEN is not supported on CAR maps; pixell has no UNSEEN convention "
+            "and downstream enmap ops would treat the sentinel as a finite value."
+        )
+        raise ValueError(msg)
+    bad = np.asarray(binary_mask) == 0
+    maps[..., bad] = hp.UNSEEN if unseen else 0.0
     return maps
