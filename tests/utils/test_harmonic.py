@@ -523,6 +523,12 @@ class TestSynfast:
         root = harmonic._psd_sqrt(cov)
         assert_allclose(np.einsum("kij,klj->kil", root, root), cov, atol=1e-12)
 
+    def test_psd_sqrt_rejects_indefinite_covariance(self):
+        """An indefinite covariance (``|TE| > sqrt(TT*EE)``) raises rather than clipping."""
+        cov = np.array([[[1.0, 2.0], [2.0, 1.0]]])  # eigenvalues 3, -1
+        with pytest.raises(ValueError, match="not positive semi-definite"):
+            harmonic._psd_sqrt(cov)
+
     def test_synalm_m0_modes_are_real(self):
         """``m=0`` coefficients carry no imaginary part."""
         lmax = 12

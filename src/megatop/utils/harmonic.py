@@ -370,11 +370,23 @@ def _psd_sqrt(cov):
     """Symmetric matrix square root via ``eigh``, batched over multipoles.
 
     ``cov``: ``(lmax+1, n, n)`` stack of symmetric covariances. Returns ``A``
-    with ``A @ A.T == cov`` per multipole. Eigenvalues are clipped at zero so
-    rank-deficient covariances (e.g. ``BB=0``, ``EB=TB=0``) are handled without
-    raising, unlike ``numpy.linalg.cholesky``.
+    with ``A @ A.T == cov`` per multipole. Near-zero eigenvalues are clipped, so
+    rank-deficient covariances (e.g. ``BB=0``) work.
+
+    Raises ``ValueError`` if a covariance is indefinite (a meaningfully negative
+    eigenvalue, e.g. ``|TE| > sqrt(TT*EE)``), which has no real square root.
     """
+    rtol = cov.shape[-1] * np.finfo(cov.dtype).eps
     w, v = np.linalg.eigh(cov)
+    # eigh sorts ascending, so w[..., -1] is the largest eigenvalue per multipole
+    floor = -rtol * np.abs(w[..., -1:])
+    bad = w < floor
+    if bad.any():
+        ell = int(np.argmax(bad.any(axis=-1)))
+        raise ValueError(
+            f"covariance is not positive semi-definite at multipole l={ell} "
+            f"(min eigenvalue {w[bad].min():.3e}); check cross-spectra."
+        )
     return v * np.sqrt(np.clip(w, 0.0, None))[..., None, :]
 
 
