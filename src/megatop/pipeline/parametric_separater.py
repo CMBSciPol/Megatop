@@ -3,7 +3,6 @@ from functools import partial
 from pathlib import Path
 
 import fgbuster as fg
-import healpy as hp
 import numpy as np
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from fgbuster.mixingmatrix import MixingMatrix
@@ -75,7 +74,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     method = config.parametric_sep_pars.minimize_method
 
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
-    binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
     invN = get_and_format_inv_Nl(manager, config)
     invNlm = None
@@ -153,7 +152,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
             lmax=config.parametric_sep_pars.harmonic_lmax,
         )  # lmax=3 * config.nside
         # remove binary mask to avoid double application when entering namaster:
-        analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+        analysis_mask = config.landscape.read_map(manager.path_to_analysis_mask)
         res.s[..., np.where(binary_mask != 0)] /= analysis_mask[np.where(binary_mask != 0)]
     else:
         logger.info("Harmonic Compsep: Computing component maps using W matrix and input maps")
@@ -221,7 +220,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     tol = config.parametric_sep_pars.minimize_tol
     method = config.parametric_sep_pars.minimize_method
 
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
 
     with Timer("load-maps"):
         preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
@@ -232,6 +231,16 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
     )  # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
+
+    # Component separation is purely per-pixel, so flatten the pixel axes to 1D. This is
+    # a no-op for HEALPix (already 1-D) and lets the W-matrix algebra below keep its
+    # single pixel index `p` for CAR maps, whose pixel axes are 2-D (ny, nx).
+    pix_shape = freq_maps_preprocessed_QU_masked.shape[2:]
+    freq_maps_preprocessed_QU_masked = freq_maps_preprocessed_QU_masked.reshape(
+        *freq_maps_preprocessed_QU_masked.shape[:2], -1
+    )
+    noisecov_QU_masked = noisecov_QU_masked.reshape(*noisecov_QU_masked.shape[:2], -1)
+
     res = fg.separation_recipes.weighted_comp_sep(
         components,
         instrument,
@@ -260,7 +269,10 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     # W_maxL = algebra.W(A_maxL, invN=1 / noisecov_QU_masked)
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
 
-    res.W_maxL = W_maxL
+    res.W_maxL = W_maxL  # kept with a flat pixel axis (consumed per-pixel downstream)
+    # Restore the native pixel geometry on the component maps so map2cl can build the
+    # NaMaster fields (CAR needs the 2-D (ny, nx) layout); no-op for HEALPix.
+    res.s = res.s.reshape(*res.s.shape[:2], *pix_shape)
 
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
