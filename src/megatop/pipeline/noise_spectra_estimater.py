@@ -150,16 +150,13 @@ def noise_spectra_estimator(
         # Applying component-separation operator. W_maxL carries a flat pixel axis, so
         # flatten the noise maps' pixel axes to match (no-op for HEALPix; CAR has 2-D
         # pixel axes), then restore the native geometry for masking + NaMaster.
-        noise_QU = noise_freq_maps_preprocessed[:, 1:]
-        pix_shape = noise_QU.shape[2:]
+        noise_QU = config.landscape.flatten_pix(noise_freq_maps_preprocessed[:, 1:])
         noise_map_post_compsep = np.einsum(
             "ifsp,fsp->isp",
             W_maxL,
-            noise_QU.reshape(*noise_QU.shape[:2], -1),
+            noise_QU,
         )  # slicing noise to remove T #TODO: Any speed improvement ?
-        noise_map_post_compsep = noise_map_post_compsep.reshape(
-            *noise_map_post_compsep.shape[:2], *pix_shape
-        )
+        noise_map_post_compsep = config.landscape.unflatten_pix(noise_map_post_compsep)
         noise_map_post_compsep *= binary_mask
 
         # TODO: update keys wrt relevant components once implemented in compsep step

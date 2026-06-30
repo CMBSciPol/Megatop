@@ -235,11 +235,10 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     # Component separation is purely per-pixel, so flatten the pixel axes to 1D. This is
     # a no-op for HEALPix (already 1-D) and lets the W-matrix algebra below keep its
     # single pixel index `p` for CAR maps, whose pixel axes are 2-D (ny, nx).
-    pix_shape = freq_maps_preprocessed_QU_masked.shape[2:]
-    freq_maps_preprocessed_QU_masked = freq_maps_preprocessed_QU_masked.reshape(
-        *freq_maps_preprocessed_QU_masked.shape[:2], -1
+    freq_maps_preprocessed_QU_masked = config.landscape.flatten_pix(
+        freq_maps_preprocessed_QU_masked
     )
-    noisecov_QU_masked = noisecov_QU_masked.reshape(*noisecov_QU_masked.shape[:2], -1)
+    noisecov_QU_masked = config.landscape.flatten_pix(noisecov_QU_masked)
 
     res = fg.separation_recipes.weighted_comp_sep(
         components,
@@ -272,7 +271,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     res.W_maxL = W_maxL  # kept with a flat pixel axis (consumed per-pixel downstream)
     # Restore the native pixel geometry on the component maps so map2cl can build the
     # NaMaster fields (CAR needs the 2-D (ny, nx) layout); no-op for HEALPix.
-    res.s = res.s.reshape(*res.s.shape[:2], *pix_shape)
+    res.s = config.landscape.unflatten_pix(res.s)
 
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
