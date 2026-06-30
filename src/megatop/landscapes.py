@@ -59,6 +59,8 @@ class AbstractLandscape(ABC, Generic[MapT]):
     """
 
     is_car: bool
+    wcs: WCS | None
+    """World coordinate system ([`WCS`][astropy.wcs.WCS]), or `None` for HEALPix."""
 
     @property
     @abstractmethod
@@ -164,6 +166,7 @@ class HealpixLandscape(AbstractLandscape[np.ndarray]):
     """
 
     is_car = False
+    wcs = None
 
     def __init__(self, nside: int) -> None:
         self.nside = nside

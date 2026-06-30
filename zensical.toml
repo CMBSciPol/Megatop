@@ -43,7 +43,10 @@ extra_javascript = [
 # Enable API reference documentation
 # https://zensical.org/docs/setup/extensions/mkdocstrings/
 [project.plugins.mkdocstrings.handlers.python]
-inventories = ["https://docs.python.org/3/objects.inv"]
+inventories = [
+    "https://docs.python.org/3/objects.inv",
+    "https://docs.astropy.org/en/stable/objects.inv",
+]
 paths = ["src"]
 options.docstring_style = "google"
 options.docstring_section_style = "list"

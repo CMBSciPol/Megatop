@@ -14,7 +14,6 @@ contributions into the final pixel + harmonic noise covariance.
 """
 
 import argparse
-import os
 from pathlib import Path
 
 import numpy as np
@@ -27,8 +26,6 @@ from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
-
-HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def get_reduced_TF(transfer):
@@ -96,9 +93,6 @@ def _harmonic_nl_contrib(
 
     mask_analysis = config.landscape.read_map(manager.path_to_analysis_mask)
 
-    # CAR fields carry the geometry's wcs into NaMaster; HEALPix passes None.
-    wcs = config.geometry[1] if config.is_car else None
-
     if config.parametric_sep_pars.harmonic_delta_ell != 1:
         with Timer("init-namaster-workspace"):
             workspaceff = initialize_nmt_workspace(
@@ -109,7 +103,7 @@ def _harmonic_nl_contrib(
                 purify_b=False,
                 n_iter=10,
                 lmax=config.lmax,
-                wcs=wcs,
+                landscape=config.landscape,
             )
 
         noise_spectra, noise_spectra_unbined = spectra_from_namaster(
@@ -123,7 +117,7 @@ def _harmonic_nl_contrib(
             beam=None,
             return_all_spectra=config.pre_proc_pars.correct_for_TF,
             lmax=config.lmax,
-            wcs=wcs,
+            landscape=config.landscape,
         )
 
         if config.pre_proc_pars.correct_for_TF:

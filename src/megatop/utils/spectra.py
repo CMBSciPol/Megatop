@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 from pixell import enmap
 
 from megatop.config import CAMBCosmoPars
+from megatop.landscapes import AbstractLandscape
 from megatop.utils import logger
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
@@ -93,13 +94,18 @@ def compute_auto_cross_cl_from_maps_dict(
     purify_b: bool,
     purify_e: bool,
     inverse_effective_transfer_function: NDArray | None = None,
-    wcs=None,
+    *,
+    landscape: AbstractLandscape,
 ):
-    # Create the fields. wcs not None selects CAR fields (pymaster builds them on the
-    # CAR geometry); the CAR pixel window is removed in map space beforehand.
+    # A CAR landscape selects CAR fields (pymaster builds them on the CAR geometry from
+    # its wcs); the CAR pixel window is removed in map space beforehand.
     fields = []
     for key in maps_dict:
-        maps = _car_deconvolve_pixwin(maps_dict[key], wcs) if wcs is not None else maps_dict[key]
+        maps = (
+            _car_deconvolve_pixwin(maps_dict[key], landscape.wcs)
+            if landscape.is_car
+            else maps_dict[key]
+        )
         fields.append(
             nmt.NmtField(
                 mask=analysis_mask,
@@ -112,7 +118,7 @@ def compute_auto_cross_cl_from_maps_dict(
                 n_iter_mask=n_iter,
                 lmax=lmax,
                 lmax_mask=lmax,
-                wcs=wcs,
+                wcs=landscape.wcs,
             )
         )
 
@@ -155,57 +161,16 @@ def compute_auto_cross_cl_from_maps_dict(
     return cl_dict
 
 
-def get_common_beam_wpix(
-    common_beam_fwhm_arcmin: float, nside: int, lmax: int, is_car: bool = False
-):
+def get_common_beam_wpix(common_beam_fwhm_arcmin: float, landscape, lmax: int):
     Bl_gauss_common = hp.gauss_beam(np.radians(common_beam_fwhm_arcmin / 60.0), lmax=lmax, pol=True)
-    if is_car:
+    if landscape.is_car:
         # CAR pixel window is anisotropic and handled in map space; the NaMaster
         # beam is the Gaussian common beam only.
         return Bl_gauss_common[:, 1]
     wpix_out = hp.pixwin(
-        nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
+        landscape.working_nside(lmax), pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
     )  # Pixel window function of output maps
     return Bl_gauss_common[:, 1] * wpix_out[1]  # TODO only polarisation one ?
-
-
-def get_effective_beam_noise_preproc(freqs, A, beams, nside: int, lmax: int):
-    wpix_out = hp.pixwin(
-        nside,
-        pol=True,
-        lmax=lmax,
-        datapath=HEALPY_DATA_PATH,
-    )  # Pixel window function of output maps
-    Bl_gauss_common = 1
-
-    beam_correction = []
-    for i_f in range(len(freqs)):
-        Bl_gauss_fwhm = hp.gauss_beam(np.radians(beams[i_f] / 60), lmax=lmax, pol=True)
-        bl_correction = Bl_gauss_common / Bl_gauss_fwhm
-
-        sm_corr_P = bl_correction[:, 1] * wpix_out[1]  # Ignoring T
-        beam_correction.append(sm_corr_P)
-    beam_correction = np.array(beam_correction)
-
-    # Would probably be better to use W but it's last dimension is a map, which makes things ill defined
-    return np.einsum("fc, fl, fk->ckl", A, beam_correction, A)
-
-
-def get_effective_common_beam(beam_fwhm_arcmin: float, frequencies, nside: int, lmax: int, A):
-    wpix_out = hp.pixwin(
-        nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
-    )  # Pixel window function of output maps
-    Bl_gauss_common = hp.gauss_beam(
-        np.radians(beam_fwhm_arcmin / 60),
-        lmax=lmax,
-        pol=True,
-    )
-
-    beam_P = Bl_gauss_common[:, 1] * wpix_out[1]  # Ignoring T
-
-    beam_P_freq_array = np.array([beam_P for i in range(len(frequencies))])  # TODO NOT NICE
-    # Would probably be better to use W but it's last dimension is a map, which makes things ill defined
-    return np.einsum("fc, fl, fk->ckl", A, beam_P_freq_array, A)
 
 
 def initialize_nmt_workspace(
@@ -216,7 +181,8 @@ def initialize_nmt_workspace(
     purify_b: bool,
     n_iter: int,
     lmax: int,
-    wcs=None,
+    *,
+    landscape: AbstractLandscape,
 ):
     fields_init_wsp = nmt.NmtField(
         mask=analysis_mask,
@@ -229,7 +195,7 @@ def initialize_nmt_workspace(
         n_iter_mask=n_iter,
         lmax=lmax,
         lmax_mask=lmax,
-        wcs=wcs,
+        wcs=landscape.wcs,
     )
     return nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
 
@@ -262,7 +228,8 @@ def spectra_from_namaster(
     beam=None,
     return_all_spectra=False,
     lmax=None,
-    wcs=None,
+    *,
+    landscape: AbstractLandscape,
 ):
     """
     Computes the auto and cross-spectra from the frequency noise maps using NaMaster.
@@ -321,8 +288,8 @@ def spectra_from_namaster(
         beam_f = beam[f] if beam is not None else None
 
         maps_f = freq_noise_maps[f, 1:]
-        if wcs is not None:
-            maps_f = _car_deconvolve_pixwin(maps_f, wcs)
+        if landscape.is_car:
+            maps_f = _car_deconvolve_pixwin(maps_f, landscape.wcs)
         fields = nmt.NmtField(
             mask_analysis,
             maps_f,
@@ -332,7 +299,7 @@ def spectra_from_namaster(
             n_iter=10,
             lmax=lmax,
             lmax_mask=lmax,
-            wcs=wcs,
+            wcs=landscape.wcs,
         )
         if reset_workspace:
             workspaceff = nmt.NmtWorkspace.from_fields(fields, fields, nmt_bins)

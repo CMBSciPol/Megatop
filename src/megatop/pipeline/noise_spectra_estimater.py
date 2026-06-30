@@ -21,12 +21,9 @@ def init_workspace(config: Config, manager: DataManager):
     analysis_mask = config.landscape.read_map(manager.path_to_analysis_mask)
     nmt_bins = load_nmt_binning(manager)
 
-    # CAR fields carry the geometry's wcs into NaMaster; HEALPix passes None.
-    wcs = config.geometry[1] if config.is_car else None
-
     # Getting effective beam TODO: add case for input maps (no preproc)
     effective_beam_CMB = get_common_beam_wpix(
-        config.pre_proc_pars.common_beam_correction, config.nside, config.lmax, is_car=config.is_car
+        config.pre_proc_pars.common_beam_correction, config.landscape, config.lmax
     )
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
@@ -41,7 +38,7 @@ def init_workspace(config: Config, manager: DataManager):
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
             lmax=config.lmax,
-            wcs=wcs,
+            landscape=config.landscape,
         )
     return workspace, effective_beam_CMB
 
@@ -73,9 +70,6 @@ def noise_spectra_estimator(
     # Loading masks
     analysis_mask = config.landscape.read_map(manager.path_to_analysis_mask)
     binary_mask = config.landscape.read_map(manager.path_to_binary_mask).astype(bool)
-
-    # CAR fields carry the geometry's wcs into NaMaster; HEALPix passes None.
-    wcs = config.geometry[1] if config.is_car else None
 
     # Loading component separation operator
     W_maxL = np.load(manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True)["W_maxL"]
@@ -109,7 +103,7 @@ def noise_spectra_estimator(
                 lmax=config.lmax,
                 purify_b=config.map2cl_pars.purify_b,
                 purify_e=config.map2cl_pars.purify_e,
-                wcs=wcs,
+                landscape=config.landscape,
             )
             Cl_WmaxL[0, 0, freq] = all_Cls_WmaxL_freq["CMBxCMB"]
             Cl_WmaxL[0, 1, freq] = all_Cls_WmaxL_freq["CMBxDust"]
@@ -187,7 +181,7 @@ def noise_spectra_estimator(
             purify_b=config.map2cl_pars.purify_b,
             purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
-            wcs=wcs,
+            landscape=config.landscape,
         )
         # Summing the noise spectra
         for key in noise_Cls:
