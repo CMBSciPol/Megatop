@@ -29,7 +29,7 @@ def homemade_unbin_cell(binned_cell, nmt_bins):
 def preprocess_map(
     manager: DataManager, config: Config, id_sim: int | None = None, mask_output=True
 ):
-    input_maps = read_input_maps(manager.get_maps_filenames(id_sim))
+    input_maps = read_input_maps(manager.get_maps_filenames(id_sim), config.landscape)
     logger.info(
         f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
     )
@@ -54,12 +54,12 @@ def preprocess_map(
 
     if not use_harmonic:
         if mask_output:
-            binary_mask = hp.read_map(manager.path_to_binary_mask)
+            binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
             freq_maps_convolved = apply_binary_mask(freq_maps_convolved, binary_mask=binary_mask)
         return freq_maps_convolved
 
     logger.info("Using harmonic pipeline for component separation. Pre-processing will output alms")
-    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+    analysis_mask = config.landscape.read_map(manager.path_to_analysis_mask)
 
     freq_alms_convolved = alm_common_beam(
         common_beam=config.pre_proc_pars.common_beam_correction,

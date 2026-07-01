@@ -14,10 +14,8 @@ contributions into the final pixel + harmonic noise covariance.
 """
 
 import argparse
-import os
 from pathlib import Path
 
-import healpy as hp
 import numpy as np
 from scipy.linalg import sqrtm
 
@@ -28,8 +26,6 @@ from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 from megatop.utils.preproc import common_beam_and_nside
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
-
-HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def get_reduced_TF(transfer):
@@ -69,7 +65,7 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
     noise_freq_maps = []
     for noise_filename in manager.get_noise_maps_filenames(id_real):
         logger.debug(f"Importing noise map: {noise_filename}")
-        noise_freq_maps.append(hp.read_map(noise_filename, field=None, dtype=np.float64))
+        noise_freq_maps.append(config.landscape.read_map(noise_filename))
 
     # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
@@ -95,7 +91,7 @@ def _harmonic_nl_contrib(
     ell_min = config.parametric_sep_pars.harmonic_lmin
     ell_max = config.parametric_sep_pars.harmonic_lmax
 
-    mask_analysis = hp.read_map(manager.path_to_analysis_mask, dtype=np.float64)
+    mask_analysis = config.landscape.read_map(manager.path_to_analysis_mask)
 
     if config.parametric_sep_pars.harmonic_delta_ell != 1:
         with Timer("init-namaster-workspace"):
@@ -107,6 +103,7 @@ def _harmonic_nl_contrib(
                 purify_b=False,
                 n_iter=10,
                 lmax=config.lmax,
+                landscape=config.landscape,
             )
 
         noise_spectra, noise_spectra_unbined = spectra_from_namaster(
@@ -120,6 +117,7 @@ def _harmonic_nl_contrib(
             beam=None,
             return_all_spectra=config.pre_proc_pars.correct_for_TF,
             lmax=config.lmax,
+            landscape=config.landscape,
         )
 
         if config.pre_proc_pars.correct_for_TF:

@@ -16,6 +16,7 @@ from megatop.config import (
 )
 
 NSIDE = 32
+RNG = np.random.default_rng(0)
 
 
 def make_car_config(tmp_path, lmax=2 * NSIDE):
@@ -218,6 +219,25 @@ def test_stack_car_preserves_wcs(tmp_path):
     assert isinstance(stacked, enmap.ndmap)
     assert stacked.shape == (2, 3, *shape[-2:])
     assert stacked.wcs is not None
+
+
+# --- flatten / unflatten pixel axes ---
+
+
+def test_flatten_pix_healpix_is_noop():
+    p = land.HealpixLandscape(NSIDE)
+    m = np.arange(2 * hp.nside2npix(NSIDE), dtype=np.float64).reshape(2, hp.nside2npix(NSIDE))
+    assert p.flatten_pix(m).shape == m.shape
+    assert np.array_equal(p.unflatten_pix(p.flatten_pix(m)), m)
+
+
+def test_flatten_unflatten_roundtrip_car(tmp_path):
+    _, shape, wcs = make_car_config(tmp_path)
+    p = land.CARLandscape(shape, wcs)
+    m = np.asarray(p.zeros((3, 2)) + RNG.standard_normal((3, 2, *shape[-2:])))
+    flat = p.flatten_pix(m)
+    assert flat.shape == (3, 2, shape[-2] * shape[-1])
+    assert np.array_equal(p.unflatten_pix(flat), m)
 
 
 # --- working nside ---
