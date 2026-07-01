@@ -8,7 +8,11 @@ from matplotlib import pyplot as plt
 
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
-from megatop.pipeline.cl2r_estimater import Cl_CMB_model, compute_generic_Cl
+from megatop.pipeline.cl2r_estimater import (
+    Cl_CMB_model,
+    check_negative_bins_inside_analysis_range,
+    compute_generic_Cl,
+)
 from megatop.plot.r_stats_plotter import get_params_statistics
 from megatop.utils import logger
 from megatop.utils.binning import load_nmt_binning
@@ -96,7 +100,13 @@ def add_error_bars_to_getdist_plot(gd_plot, stats_params_dict):
             )
 
 
-def plot_all_cornerplots(manager: DataManager, config: Config):
+def plot_all_cornerplots(
+    manager: DataManager,
+    config: Config,
+    check_negative_CMB_bins: bool = False,
+    check_negative_noise_bins: bool = False,
+    title_comment: str = "",
+):
     """Plot corner plot resulting from the MCMC for all sky realizations."""
     # Load true parameters:
     r_sim = config.map_sim_pars.r_input
@@ -110,14 +120,63 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     #     if n_sim_sky == 1
     #     else [plt.cm.plasma(i / (n_sim_sky - 1)) for i in range(n_sim_sky)]
     # )
-
+    positive_sim_id_list = []
     for id_sim in range(n_sim_sky):
         try:
+            if check_negative_CMB_bins:
+                fname_spectra = manager.get_path_to_spectra_cross_components(id_sim)
+                binning_info = np.load(manager.path_to_binning, allow_pickle=True)
+
+                Cl_CMBxCMB_BB_est = np.load(fname_spectra, allow_pickle=True)["CMBxCMB"][3][
+                    binning_info["bin_index_lminlmax"]
+                ]
+
+                nmt_bins = load_nmt_binning(manager)
+                ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
+
+                negative_cmb_bins = check_negative_bins_inside_analysis_range(
+                    Cl_CMBxCMB_BB_est,
+                    bin_centre=nmt_bins.get_effective_ells()[ls_bins_lminlmax_idx],
+                    lmin_analysis=config.cl2r_pars.lmin_cosmo_analysis,
+                    lmax_analysis=config.cl2r_pars.lmax_cosmo_analysis,
+                    spectra_name="CMBxCMB_BB_est",
+                )
+                logger.warning(f"Negative CMB bins: {negative_cmb_bins}")
+            else:
+                negative_cmb_bins = False
+            if check_negative_noise_bins:
+                fname_noise_spectra = manager.get_path_to_noise_spectra_cross_components(id_sim)
+                binning_info = np.load(manager.path_to_binning, allow_pickle=True)
+
+                Nl_CMBxCMB_BB_est = np.load(fname_noise_spectra, allow_pickle=True)[
+                    "Noise_CMBxNoise_CMB"
+                ][3][binning_info["bin_index_lminlmax"]]
+
+                nmt_bins = load_nmt_binning(manager)
+                ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
+
+                negative_noise_bins = check_negative_bins_inside_analysis_range(
+                    Nl_CMBxCMB_BB_est,
+                    bin_centre=nmt_bins.get_effective_ells()[ls_bins_lminlmax_idx],
+                    lmin_analysis=config.cl2r_pars.lmin_cosmo_analysis,
+                    lmax_analysis=config.cl2r_pars.lmax_cosmo_analysis,
+                    spectra_name="Noise_CMBxNoise_CMB_BB_est",
+                )
+                logger.warning(f"Negative noise bins: {negative_noise_bins}")
+            else:
+                negative_noise_bins = False
+
+            if negative_cmb_bins or negative_noise_bins:
+                logger.warning(
+                    f"Skipping MCMC chain loading for id_sim={id_sim} due to negative bins in spectra."
+                )
+                continue
+            else:
+                positive_sim_id_list.append(id_sim)
             fname_chains = manager.get_path_to_mcmc_chains(id_sim)
             mcmc = np.load(fname_chains, allow_pickle=True)
             chains = mcmc["mcmc_chains"]
             param_names = mcmc["param_names"]
-            # param_names = param_names[:1] # REMOVE, only plot r for now
 
             samples = MCSamples(
                 samples=chains,
@@ -149,7 +208,9 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
         markers={"r": r_sim, "A_{lens}": A_lens_sim},
     )
 
-    stats_params_dict = get_params_statistics(manager, config)
+    stats_params_dict = get_params_statistics(
+        manager, config, positive_sim_id_list=positive_sim_id_list
+    )
 
     add_error_bars_to_getdist_plot(gd_plot, stats_params_dict)
 
@@ -157,8 +218,11 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     plot_dir = manager.path_to_mcmc_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
     plot_name = "corner_plot_all_skysims"
+    plot_name += title_comment
     plt.savefig(plot_dir / plot_name, bbox_inches="tight")
     plt.clf()
+    if check_negative_CMB_bins or check_negative_noise_bins:
+        logger.info(f"Number of positive bins simulations: {len(positive_sim_id_list)}")
 
 
 def plot_single_cornerplot(manager: DataManager, config: Config, id_sim: int | None = None):
@@ -424,6 +488,27 @@ def main():
         plot_single_cornerplot(manager, config, id_sim=id_sim)
         plot_spectra_comparison(manager, config, id_sim=id_sim)
         plot_all_cornerplots(manager, config)
+        plot_all_cornerplots(
+            manager,
+            config,
+            check_negative_CMB_bins=True,
+            check_negative_noise_bins=False,
+            title_comment="_only_positive_cmb",
+        )
+        plot_all_cornerplots(
+            manager,
+            config,
+            check_negative_CMB_bins=False,
+            check_negative_noise_bins=True,
+            title_comment="_only_positive_noise",
+        )
+        plot_all_cornerplots(
+            manager,
+            config,
+            check_negative_CMB_bins=True,
+            check_negative_noise_bins=True,
+            title_comment="_only_positive_cmb_and_noise",
+        )
 
 
 if __name__ == "__main__":

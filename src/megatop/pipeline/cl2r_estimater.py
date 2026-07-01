@@ -31,6 +31,9 @@ def check_negative_bins_inside_analysis_range(
             spectra_name
             + " has NEGATIVE BINS inside the range of cosmological analysis. \nTHIS WILL CAUSE ISSUES FOR PARAMETER ESTIMATION"
         )
+        return True
+    else:
+        return False
 
 
 def compute_generic_Cl(lmin, lmax):
@@ -206,13 +209,9 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
 
-    # nhits_map = hp.read_map(manager.path_to_nhits_map)
-    # nhits_map /= np.max(nhits_map)
-    # fsky_obs = np.mean(nhits_map)
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
     fsky_obs = np.mean(analysis_mask)
-    # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
-    # fsky_obs = np.sqrt(mean_fsky)
+
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
     try:
@@ -245,7 +244,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
     delta_l = config.map2cl_pars.delta_ell
 
-    check_negative_bins_inside_analysis_range(
+    _ = check_negative_bins_inside_analysis_range(
         Cl_CMBxCMB_BB_est,
         bin_centre=nmt_bins.get_effective_ells()[ls_bins_lminlmax_idx],
         lmin_analysis=config.cl2r_pars.lmin_cosmo_analysis,
@@ -278,9 +277,6 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         param_names = ["r", "A_{lens}", "A_{dust}", "A_{sync}"]
         theta_init_guess = None
         theta_offsets = None
-
-    # theta_init_guess = [0.005] #REMOVE
-    # theta_offsets = [0.005] #REMOVE
 
     n_dim, n_walkers, n_steps, n_steps_burnin = (
         len(theta_init_guess),
