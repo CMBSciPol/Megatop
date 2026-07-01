@@ -669,6 +669,7 @@ def main():
         )
     elif size < 2:
         for i in range(n_sim_sky):
+            logger.info(f"Starting component separation on map {i + 1} / {n_sim_sky}")
             result = compsep_and_save(
                 config,
                 manager,
