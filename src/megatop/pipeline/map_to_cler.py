@@ -36,27 +36,21 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
     # Generating effective beam
     # TODO: If input maps are used instead of preprocessed ones, the effective beam after compsep must be computed.
     effective_beam_CMB = get_common_beam_wpix(
-        config.pre_proc_pars.common_beam_correction,
-        config.nside,
-        nmt_bins.lmax,
-        # config.lmax
+        config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
     )
     # effective_beam_CMB = np.ones_like(effective_beam_CMB)  # No beam for now
     # TODO: deconvolve the beam by hand, namaster implementation is not well tested / supported, although no clear sign of issues for now...
 
     # Initializing workspace
-    # import IPython; IPython.embed()
     with Timer("init-namaster-workspace"):
-        # logger.warning("DEBUUUUUUUUUUUUUUUUUUG: forcing lmax to nmt_bins.lmax instead of config one")
         workspace_nmt = initialize_nmt_workspace(
             nmt_bins=nmt_bins,
             analysis_mask=analysis_mask,
-            beam=effective_beam_CMB,  # [: config.lmax + 1],
+            beam=effective_beam_CMB,
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
-            # lmax=config.lmax,
-            lmax=nmt_bins.lmax,
+            lmax=config.lmax,
         )
 
     if (
@@ -77,15 +71,13 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             dict_comp_WmaxL_freq = {"CMB": W_maxL[0, freq, :], "Dust": W_maxL[1, freq, :]}
             if config.parametric_sep_pars.include_synchrotron:
                 dict_comp_WmaxL_freq["Synch"] = W_maxL[2, freq, :]
-            # logger.warning("DEBUUUUUUUUUUUUUUUUUUG: forcing lmax to nmt_bins.lmax instead of config one")
             all_Cls_WmaxL_freq = compute_auto_cross_cl_from_maps_dict(
                 maps_dict=dict_comp_WmaxL_freq,
                 analysis_mask=analysis_mask,
                 workspace=workspace_nmt,
                 beam=effective_beam_CMB,
                 n_iter=config.map2cl_pars.n_iter_namaster,
-                # lmax=config.lmax,
-                lmax=nmt_bins.lmax,
+                lmax=config.lmax,
                 purify_b=config.map2cl_pars.purify_b,
                 purify_e=config.map2cl_pars.purify_e,
             )
@@ -126,29 +118,6 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
         else:
             comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1]}
 
-        # if config.map2cl_pars.DEBUG_cut_scales:
-        #     logger.warning("TEST: Applying smooth cut at large scales to component maps")
-
-        #     def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
-        #         ell = np.arange(lmax + 1)
-        #         smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
-        #         smooth_cut[:lmin] = 0.0
-        #         return smooth_cut
-
-        #     cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
-        #     comp_cut_dict = {}
-        #     for key in comp_dict:
-        #         alm_comp = hp.map2alm(
-        #             [comp_dict[key][0] * 0, comp_dict[key][0], comp_dict[key][1]],
-        #             lmax=3 * config.nside,
-        #         )
-        #         for s in range(alm_comp.shape[0]):
-        #             hp.almxfl(alm_comp[s], cut_array, inplace=True)
-        #         comp_cut_dict[key] = hp.alm2map(
-        #             alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
-        #         )[1:]  # removing temperature
-        #     comp_dict = comp_cut_dict
-
         # TODO: when components will be added in .yml for the comp-sep steps the keys of the dictionary should adapt to that
         all_Cls = compute_auto_cross_cl_from_maps_dict(
             maps_dict=comp_dict,
@@ -156,8 +125,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             workspace=workspace_nmt,
             beam=effective_beam_CMB,
             n_iter=config.map2cl_pars.n_iter_namaster,
-            # lmax=config.lmax,
-            lmax=nmt_bins.lmax,
+            lmax=config.lmax,
             purify_b=config.map2cl_pars.purify_b,
             purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,

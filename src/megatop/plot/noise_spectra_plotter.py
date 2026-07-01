@@ -103,10 +103,7 @@ def plot_all_spectra(manager, config):
     bin_index_lminlmax = binning_info["bin_index_lminlmax"]
 
     nmt_bins = load_nmt_binning(manager)
-    logger.warning("DEBUUUUUUUUUUUUUUUUUUG: forcing lmax to nmt_bins.lmax instead of config one")
-    # Cl_cmb_model = get_Cl_CMB_model_from_manager(manager) [:, : config.lmax + 1]
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : nmt_bins.lmax + 1]
-    # nmt_bins = load_nmt_binning(manager)
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : config.lmax + 1]
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, bin_index_lminlmax]
 
@@ -135,7 +132,7 @@ def plot_all_spectra(manager, config):
                 - all_noise_Cls["Noise_CMBxNoise_CMB"][:, bin_index_lminlmax]
             )
             average_noise_CMB += all_noise_Cls["Noise_CMBxNoise_CMB"][:, bin_index_lminlmax]
-            # import IPython; IPython.embed()
+
             ax_EE.plot(
                 bin_centre_lminlmax,
                 cmb_cls[0],
@@ -440,13 +437,7 @@ def plot_noise_spectra(manager, config, id_sim=None):
     )
 
     nmt_bins = load_nmt_binning(manager)
-    logger.warning("DEBUUUUUUUUUUUUUUUUUUG: forcing lmax to nmt_bins.lmax instead of config one")
-    # Cl_cmb_model = get_Cl_CMB_model_from_manager(manager) [:, : config.lmax + 1]
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : nmt_bins.lmax + 1]
-    old_lmax = False
-    if old_lmax:
-        Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : config.lmax + 1]
-    # nmt_bins = load_nmt_binning(manager)
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : config.lmax + 1]
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, binning_info["bin_index_lminlmax"]]
 

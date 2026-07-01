@@ -32,24 +32,21 @@ def init_workspace(config: Config, manager: DataManager):
     effective_beam_CMB = get_common_beam_wpix(
         config.pre_proc_pars.common_beam_correction,
         config.nside,
-        # config.lmax,
-        nmt_bins.lmax,
+        config.lmax,
     )
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
     )
     # Initializing workspace
     with Timer("init-namaster-workspace"):
-        # logger.warning("DEBUUUUUUUUUUUUUUUUUUG: forcing lmax to nmt_bins.lmax instead of config one")
         workspace = initialize_nmt_workspace(
             nmt_bins=nmt_bins,
             analysis_mask=analysis_mask,
-            beam=effective_beam_CMB[: nmt_bins.lmax + 1],
+            beam=effective_beam_CMB,
             purify_e=config.map2cl_pars.purify_e,
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
-            # lmax=config.lmax,
-            lmax=nmt_bins.lmax,
+            lmax=config.lmax,
         )
     return workspace, effective_beam_CMB
 
@@ -212,8 +209,7 @@ def noise_spectra_estimator(
                 workspace=workspace_nmt,
                 beam=effective_beam_CMB,
                 n_iter=config.map2cl_pars.n_iter_namaster,
-                # lmax=config.lmax,
-                lmax=nmt_bins.lmax,
+                lmax=config.lmax,
                 purify_b=config.map2cl_pars.purify_b,
                 purify_e=config.map2cl_pars.purify_e,
             )
@@ -345,46 +341,20 @@ def noise_spectra_estimator(
         }
         if config.parametric_sep_pars.include_synchrotron:
             noise_comp_dict["Noise_Synch"] = noise_map_post_compsep[2]
-        # import IPython; IPython.embed()
-        # test_cut_scales = True
-        # if config.map2cl_pars.DEBUG_cut_scales:
-        #     logger.warning("TEST: Applying smooth cut at large scales to noise maps")
-
-        #     def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
-        #         ell = np.arange(lmax + 1)
-        #         smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
-        #         smooth_cut[:lmin] = 0.0
-        #         return smooth_cut
-
-        #     cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
-        #     noise_comp_cut_dict = {}
-        #     for key in noise_comp_dict:
-        #         alm_comp = hp.map2alm(
-        #             [noise_comp_dict[key][0] * 0, noise_comp_dict[key][0], noise_comp_dict[key][1]],
-        #             lmax=3 * config.nside,
-        #         )
-        #         for s in range(alm_comp.shape[0]):
-        #             hp.almxfl(alm_comp[s], cut_array, inplace=True)
-        #         noise_comp_cut_dict[key] = hp.alm2map(
-        #             alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
-        #         )[1:]  # removing temperature
-        #     noise_comp_dict = noise_comp_cut_dict
 
         # Computing auto and cross spectra
-        # logger.warning("DEBUUUUUUUUUUUUUUUUUUG: forcing lmax to nmt_bins.lmax instead of config one")
         noise_Cls = compute_auto_cross_cl_from_maps_dict(
             maps_dict=noise_comp_dict,
             analysis_mask=analysis_mask,
             workspace=workspace_nmt,
             beam=effective_beam_CMB,
             n_iter=config.map2cl_pars.n_iter_namaster,
-            # lmax=config.lmax,
-            lmax=nmt_bins.lmax,
+            lmax=config.lmax,
             purify_b=config.map2cl_pars.purify_b,
             purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
         )
-        # import IPython; IPython.embed()
+
         # Summing the noise spectra
         for key in noise_Cls:
             if key not in sum_noise_spectra:
