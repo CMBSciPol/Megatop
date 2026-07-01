@@ -79,9 +79,8 @@ def generate_map_fgs_pysm(
                 f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"
             )
             r = hp.Rotator(coord=[input_coord, output_coord])
-            m = r.rotate_map_pixel(m)
-            print("lmax = ", lmax)  # this is just to make the code checker happy
-            # m = r.rotate_map_alms(m, lmax=lmax, datapath=HEALPY_DATA_PATH)
+            # m = r.rotate_map_pixel(m)
+            m = r.rotate_map_alms(m, lmax=lmax, datapath=HEALPY_DATA_PATH)
         maps_fgs.append(m)
     return np.array(maps_fgs)
 
@@ -98,7 +97,6 @@ def get_full_sky_noise_freq_maps(
     experiments_map_set = set([map_set.exp_tag for map_set in map_sets])
     experiments_noiseconfig = [name for name in noise_config.experiments]
     noise_experiment = {}
-    print(lmax)  # to remove just to make happy the checker
     for exp in experiments_map_set:
         try:
             assert exp in experiments_noiseconfig
@@ -110,10 +108,8 @@ def get_full_sky_noise_freq_maps(
             exp,
             noise_config.experiments[exp],
             fsky_nhits=fsky_nhits,
-            # lmax=lmax,
-            lmax=3 * nside - 1,
+            lmax=lmax,
             id_sim=id_sim,
-            nside=nside,
         )
     noise_freq_maps = np.zeros((len(map_sets), 3, hp.nside2npix(nside)))
     for i_map_set, map_set in enumerate(map_sets):
@@ -128,12 +124,10 @@ def get_full_sky_noise_freq_maps(
                 noise_experiment[exp]["map_white_noise_levels"][idx_freq], nside, seed=seed_i
             )
         elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
-            logger.warning("DEBUUUUUUUUUG: SPECTRA 10x NOISE TO CHECK FILTERING NEGATIV BINS")
             noise_freq_maps[i_map_set] = get_noise_map_from_noise_spectra(
-                10 * noise_experiment[exp]["noise_spectra"][idx_freq],
+                noise_experiment[exp]["noise_spectra"][idx_freq],
                 nside,
-                # lmax,
-                3 * nside - 1,
+                lmax,
                 seed=seed_i,
             )
         elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
@@ -155,14 +149,12 @@ def get_noise_experiment(
     fsky_nhits: float,
     lmax: int,
     id_sim: int = 0,
-    nside: int = 128,
 ):
     if type(noise_config_exp) is SOConfig:
         if noise_config_exp.usev3p1:
             logger.info(
                 f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using V3p1 calc"
             )
-            logger.info("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
             nc = V3p1.SOSatV3point1(
                 sensitivity_mode=noise_config_exp.v3_sensitivity_mode,
                 N_tubes=noise_config_exp.Ntubes_years,
@@ -171,8 +163,7 @@ def get_noise_experiment(
             )
             _, _, n_ell, white_noise_levels = nc.get_noise_curves(
                 f_sky=fsky_nhits,
-                # ell_max=lmax + 1,
-                ell_max=3 * nside - 1,
+                ell_max=lmax + 1,
                 delta_ell=1,
                 deconv_beam=False,
             )
@@ -247,7 +238,6 @@ def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int, see
 
 def get_noise_map_from_noise_spectra(n_ell, nside: int, lmax: int, seed=None):
     noise_spectra = np.zeros((3, lmax + 1))
-    noise_spectra = np.zeros((3, 3 * nside - 1))
     logger.warning(
         "Do not trust the temperature noise spectra (ell_knee and alpha_knee are polarisation ones)"
     )
