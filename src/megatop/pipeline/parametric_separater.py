@@ -14,7 +14,8 @@ from megatop.utils.compsep import set_alm_tozero_below_lmin
 from megatop.utils.mpi import get_world
 
 import megabuster as mb
-from megatop.utils.utils import MemoryUsage
+from megatop.utils.utils import MemoryUsage, PSMemoryUsage
+
 
 def get_and_format_inv_Nl(manager: DataManager, config: Config):
     """
@@ -126,6 +127,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     res.W_maxL_ell = W_maxL_ell
 
     logger.info("Computing W matrix in PIXEL space from harmonic compsep outputs")
+    PSMemoryUsage("After computing W matrix in PIXEL space")
     logger.info("Importing pixel based covariance")
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
@@ -173,6 +175,8 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
             freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
         )
+
+        PSMemoryUsage("After applying binary mask to preprocessed maps")
         n_comp = W_maxL.shape[0]
         res.s = np.zeros(
             (
@@ -190,13 +194,13 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
 
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
+    PSMemoryUsage("After computing component maps in pixel space")
     timer.stop("do-compsep")
 
     return res
 
 
 def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None = None):
-    MemoryUsage("Start COMPONENT SEPARATION")
     
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
@@ -240,6 +244,8 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
     )  # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
+
+    PSMemoryUsage("After applying binary mask to preprocessed maps and noise covariance")
     res = fg.separation_recipes.weighted_comp_sep(
         components,
         instrument,
@@ -249,6 +255,8 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         tol=tol,
         method=method,
     )
+
+    PSMemoryUsage("estimation of parameters")
 
     A = MixingMatrix(*components)
     if config.parametric_sep_pars.passband_int:
@@ -273,7 +281,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
     timer.stop("do-compsep")
-    MemoryUsage("END COMPONENT SEPARATION")
+    PSMemoryUsage("END COMPONENT SEPARATION")
 
     return res
 
@@ -400,7 +408,6 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
 
 def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = None):
 
-    MemoryUsage("BEGINNING OF COMPONENT SEPARATION (?) ")
     with Timer("weighted-compsep"):
         if config.parametric_sep_pars.use_harmonic_compsep:
             res = harmonic_comp_sep_interface(manager, config, id_sim=id_sim)
@@ -409,7 +416,7 @@ def compsep_and_save(config: Config, manager: DataManager, id_sim: int | None = 
         else:
             res = weighted_comp_sep(manager, config, id_sim=id_sim)
     save_compsep_results(manager, config, res, id_sim=id_sim)
-    MemoryUsage("END OF COMPONENT SEPARATION ")
+    PSMemoryUsage("END OF COMPSEP ")
     return id_sim
 
 

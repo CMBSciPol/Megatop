@@ -3,6 +3,10 @@ import tracemalloc
 from .logger import logger
 
 
+import os
+import psutil
+
+
 def MemoryUsage(message: str = "") -> None:
     """'
     Prints the memory usage of the current process.
@@ -25,3 +29,11 @@ def MemoryUsage(message: str = "") -> None:
         message + f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB"
     )
     logger.info(message_all)
+
+
+def PSMemoryUsage(message=""):
+    process = psutil.Process(os.getpid())
+
+    rss = process.memory_info().rss / 1024**2  # MB
+
+    logger.info(f"{message} RSS memory: {rss:.1f} MB")

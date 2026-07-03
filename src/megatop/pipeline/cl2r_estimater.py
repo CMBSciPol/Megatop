@@ -15,6 +15,8 @@ from megatop.utils import logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 
+from megatop.utils.utils import MemoryUsage
+
 
 def check_negative_bins_inside_analysis_range(
     test_spectrum, bin_centre, lmin_analysis, lmax_analysis, spectra_name=""
@@ -88,6 +90,7 @@ def Cl_CMB_model(
     Cl_BB_prim_generic,
     Cl_BB_lensing_generic,
     Cl_DustxDust_BB_est,
+    Cl_SynchxSynch_BB_est,
     Nl_CMBxCMB_EE_est,
     Nl_CMBxCMB_BB_est,
     Nl_CMBxCMB_EB_est,
@@ -118,14 +121,16 @@ def Cl_CMB_model(
         r, A_lens, Birefringence, A_sync = theta
         Cl_BB_prim = r * Cl_BB_prim_binned
         Cl_BB_lensing = A_lens * Cl_BB_lensing_binned
-        Cl_BB_CMB = Cl_BB_prim + Cl_BB_lensing
+        Cl_BB_sync = A_sync * Cl_SynchxSynch_BB_est
+        Cl_BB_CMB = Cl_BB_prim + Cl_BB_lensing + Cl_BB_sync
 
     elif dust_marg and sync_marg:
         r, A_lens, Birefringence, A_dust, A_sync = theta
         Cl_BB_prim = r * Cl_BB_prim_binned
         Cl_BB_lensing = A_lens * Cl_BB_lensing_binned
         Cl_BB_dust = A_dust * Cl_DustxDust_BB_est
-        Cl_BB_CMB = Cl_BB_prim + Cl_BB_lensing + Cl_BB_dust
+        Cl_BB_sync = A_sync * Cl_SynchxSynch_BB_est
+        Cl_BB_CMB = Cl_BB_prim + Cl_BB_lensing + Cl_BB_dust + Cl_BB_sync
         
     # Convert Birefringence from degrees to radians and apply mixing
     Beta = (np.pi / 180.0) * Birefringence
@@ -141,6 +146,8 @@ def Cl_CMB_model(
     CL_EB_obs = CL_EB_obs + Nl_CMBxCMB_EB_est
     CL_BE_obs = CL_BE_obs + Nl_CMBxCMB_BE_est
 
+    # MemoryUsage("end of computing model cls ")
+
     C = np.array([[CL_EE_obs, CL_EB_obs], [CL_BE_obs, CL_BB_obs]])
     return C
 
@@ -148,6 +155,7 @@ def prior_bounds(theta, dust_marg, sync_marg, prior_bounds_dict):
     lower_bound_r, upper_bound_r = prior_bounds_dict["r"]
     lower_bound_A_lens, upper_bound_A_lens = prior_bounds_dict["A_{lens}"]
     lower_bound_A_dust, upper_bound_A_dust = prior_bounds_dict["A_{dust}"]
+    lower_bound_A_sync, upper_bound_A_sync = prior_bounds_dict["A_{sync}"]
     lower_bound_Birefringence, upper_bound_Birefringence = prior_bounds_dict["Birefringence"]
 
     if not dust_marg and not sync_marg:
@@ -171,10 +179,23 @@ def prior_bounds(theta, dust_marg, sync_marg, prior_bounds_dict):
     #still not consistent for the other 2 cases
     if not dust_marg and sync_marg:
         r, A_lens, Birefringence, A_sync = theta
-        return None
+        if (
+            (lower_bound_r <= r <= upper_bound_r)
+            and (lower_bound_A_lens <= A_lens <= upper_bound_A_lens)
+            and (lower_bound_A_sync <= A_sync <= upper_bound_A_sync)
+            and (lower_bound_Birefringence <= Birefringence <= upper_bound_Birefringence)
+        ):
+            return 0.0
     if dust_marg and sync_marg:
         r, A_lens, Birefringence, A_dust, A_sync = theta
-        return None
+        if (
+            (lower_bound_r <= r <= upper_bound_r)
+            and (lower_bound_A_lens <= A_lens <= upper_bound_A_lens)
+            and (lower_bound_A_dust <= A_dust <= upper_bound_A_dust)
+            and (lower_bound_A_sync <= A_sync <= upper_bound_A_sync)
+            and (lower_bound_Birefringence <= Birefringence <= upper_bound_Birefringence)
+        ):
+            return 0.0
     return -np.inf
 
 
@@ -191,6 +212,7 @@ def logL_cosmo(
     Cl_CMBxCMB_EB_est,
     Cl_CMBxCMB_BE_est,
     Cl_DustxDust_BB_est,
+    Cl_SynchxSynch_BB_est,
     Nl_CMBxCMB_EE_est,
     Nl_CMBxCMB_BB_est,
     Nl_CMBxCMB_EB_est,
@@ -214,6 +236,7 @@ def logL_cosmo(
         Cl_BB_prim_generic,
         Cl_BB_lensing_generic,
         Cl_DustxDust_BB_est,
+        Cl_SynchxSynch_BB_est,
         Nl_CMBxCMB_EE_est,
         Nl_CMBxCMB_BB_est,
         Nl_CMBxCMB_EB_est,
@@ -249,6 +272,9 @@ def logL_cosmo(
     Tr_list = np.trace(prod, axis1=1, axis2=2) + np.log(np.linalg.det(Cov.transpose(2, 0, 1)))
     log_L = -(1 / 2) * np.sum((2 * bin_centre + 1) * fsky_obs * delta_l * Tr_list)
 
+    # MemoryUsage("end of cosmo likelihood ")
+
+
     if np.isnan(log_L):
         return 0.0
     return log_L
@@ -270,6 +296,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     Cl_CMBxCMB_BB_est = spec_data["CMBxCMB"][3]  # BB is index 3
 
     Cl_DustxDust_BB_est = spec_data["DustxDust"][3]
+    Cl_SynchxSynch_BB_est = spec_data["SynchxSynch"][3]
 
     all_noise_options = [
         config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
@@ -317,15 +344,15 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     if dust_marg and not sync_marg:
         param_names = ["r", "A_{lens}", "Birefringence", "A_{dust}"]
         theta_init_guess = [0.005, 0.5, 0.0, 0.01]
-        theta_offsets = [0.005, 0.1, 0.1, 0.005]
+        theta_offsets = [0.005, 0.5, 0.1, 0.01]
     if not dust_marg and sync_marg:
         param_names = ["r", "A_{lens}", "Birefringence", "A_{sync}"]
-        theta_init_guess = None
-        theta_offsets = None
+        theta_init_guess = [0.005, 0.5, 0.0, 0.01]
+        theta_offsets = [0.005, 0.5, 0.1, 0.01]
     if dust_marg and sync_marg:
         param_names = ["r", "A_{lens}", "Birefringence", "A_{dust}", "A_{sync}"]
-        theta_init_guess = None
-        theta_offsets = None
+        theta_init_guess = [0.005, 0.5, 0.0, 0.01, 0.01]
+        theta_offsets = [0.005, 0.5, 0.1, 0.01, 0.01]
 
     n_dim, n_walkers, n_steps, n_steps_burnin = (
         len(theta_init_guess),
@@ -358,6 +385,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
             Cl_CMBxCMB_EB_est,
             Cl_CMBxCMB_BE_est,
             Cl_DustxDust_BB_est,
+            Cl_SynchxSynch_BB_est,
             Nl_CMBxCMB_EE_est,
             Nl_CMBxCMB_BB_est,
             Nl_CMBxCMB_EB_est,
@@ -370,6 +398,8 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
             config.cl2r_pars.lmax_cosmo_analysis,
         ),
     )
+
+    # MemoryUsage("starting mcmc ")
 
     logger.info(f"Running burn-in for sky sim {id_sim + 1}...")
     with np.errstate(invalid="ignore", divide="ignore"):
@@ -390,6 +420,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     logger.info(f"Mean parameters {param_names}: {np.mean(chains, axis=0)}")
     # 4. save mcmc chains:
     fname_chains = manager.get_path_to_mcmc_chains(id_sim)
+    # MemoryUsage("end of mcmc ")
 
     np.savez(
         fname_chains,

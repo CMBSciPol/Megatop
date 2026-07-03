@@ -1,5 +1,5 @@
 cl2r_pars:
-  dust_marg: false
+  dust_marg: true
   lmax_cosmo_analysis: null
   lmin_cosmo_analysis: null
   load_model_spectra: true
@@ -32,7 +32,7 @@ data_dirs:
   noise_maps_root: null
   passbands: bandpass_formatted
   passbands_root: /lustre/work/SO-MEGATOP/NPIPE
-  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_SO_mask_fixedT/data_root
+  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_SO_G_mask/data_root
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2.0e-09
@@ -57,8 +57,8 @@ fiducial_cmb:
 general_pars:
   lmax: 512
   lmin: 30
-  nside: 256
   mocker_is_skipped: true
+  nside: 256
 map2cl_pars:
   delta_ell: 10
   n_iter_namaster: 3
@@ -159,7 +159,7 @@ map_sets:
   suffix_obsmat_scipy: ''
 map_sim_pars:
   A_lens: 1.0
-  Birefringence: 0
+  Birefringence: 0.0
   TF_n_sim: 1
   TF_power_law_amp: 1.0
   TF_power_law_delta_ell: 1
@@ -196,7 +196,7 @@ masks_pars:
   galactic_mask_path: null
   include_galactic: false
   include_sources: true
-  input_sources_mask: /lustre/work/cgubeno/data/common_binary_mask.fits
+  input_sources_mask: /lustre/work/cgubeno/data/nhits_south_patch_equatorial2galactic.fits
   mock_nsources: 100
   mock_sources_hole_radius: 4.0
   nhits_map_name: nhits_map
@@ -227,7 +227,7 @@ noise_sim_pars:
   seed: 42
 output_dirs:
   binning: binning
-  components: components
+  components: components_500
   covar: covar
   fiducial_cmb: fiducial_cmb_camb
   masks: masks
@@ -237,12 +237,12 @@ output_dirs:
   precomputation: precomputation
   prepoc_diag_precond: diag_precond
   preproc: preproc
-  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_SO_mask_fixedT/output_root
+  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_SO_G_mask/output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:
   alm2map: false
-  dust_temp: 19.5
+  dust_temp: null
   harmonic_delta_ell: 10
   harmonic_lmax: 256
   harmonic_lmin: 30
@@ -258,7 +258,7 @@ parametric_sep_pars:
     eps: 1.0e-12
     ftol: 1.0e-12
     gtol: 1.0e-12
-    maxiter: 100
+    maxiter: 500
   minimize_tol: 1.0e-18
   passband_int: true
   use_harmonic_compsep: false

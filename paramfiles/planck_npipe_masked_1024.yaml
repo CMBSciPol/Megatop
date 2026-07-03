@@ -8,11 +8,11 @@ cl2r_pars:
   n_walkers: 200
   prior_bounds:
     A_{dust}:
-    - 0.0
-    - 1.0
+    - -0.5
+    - 0.5
     A_{lens}:
-    - 0.0
-    - 3.0
+    - -1.0
+    - 4.0
     A_{sync}:
     - 0.0
     - 1.0
@@ -20,7 +20,7 @@ cl2r_pars:
     - -1.0
     - 1.0
     r:
-    - -0.2
+    - -0.5
     - 1.0
   sync_marg: false
 data_dirs:
@@ -32,7 +32,7 @@ data_dirs:
   noise_maps_root: null
   passbands: bandpass_formatted
   passbands_root: /lustre/work/SO-MEGATOP/NPIPE
-  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky70_nobir_1024_beam/data_root
+  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky70_nobir_1024_dmarg/data_root
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2.0e-09
@@ -51,14 +51,14 @@ fiducial_cmb:
     ombh2: 0.022
     omch2: 0.122
     tau: 0.06
-  compute_from_camb: true
-  fiducial_lensed_scalar: null
-  fiducial_unlensed_scalar_tensor_r1: null
+  compute_from_camb: false
+  fiducial_lensed_scalar: /lustre/work/cgubeno/data/CMB_cls.fits
+  fiducial_unlensed_scalar_tensor_r1: /lustre/work/cgubeno/data/Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits
 general_pars:
   lmax: 2048
   lmin: 30
-  nside: 1024
   mocker_is_skipped: true
+  nside: 1024
 map2cl_pars:
   delta_ell: 10
   n_iter_namaster: 3
@@ -231,18 +231,18 @@ output_dirs:
   covar: covar
   fiducial_cmb: fiducial_cmb_camb
   masks: masks
-  mcmc: mcmc
+  mcmc: mcmc_nodmarg
   noise_spectra: noise_spectra
   plots: plots
   precomputation: precomputation
   prepoc_diag_precond: diag_precond
   preproc: preproc
-  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky70_nobir_1024_beam/output_root
+  root: /lustre/work/cgubeno/Megatop/Birefringence/npipe_fsky70_nobir_1024_dmarg/output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:
   alm2map: false
-  dust_temp: 19.5
+  dust_temp: null
   harmonic_delta_ell: 10
   harmonic_lmax: 256
   harmonic_lmin: 30
@@ -271,6 +271,6 @@ pre_proc_pars:
   beam_fwhms: null
   common_beam_correction: 35.0
   correct_for_TF: false
-  npipe_beam_correction: true
+  npipe_beam_correction: false
   npipe_beam_path: /lustre/work/SO-MEGATOP/NPIPE/RIMO/simulated_maps/npipe_aux/beam_window_functions/full_frequency
   sum_TF_column: true

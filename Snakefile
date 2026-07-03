@@ -174,8 +174,8 @@ for _i in range(N_SKY):
         params:
             config=MEGATOP_CONFIG,
             sim=_i,
-        # resources:
-        #     mem_mb=20000
+        resources:
+            mem_mb=46875
         shell:
             "megatop-compsep-run --config {params.config} --sim {params.sim} > {log} 2>&1"
 

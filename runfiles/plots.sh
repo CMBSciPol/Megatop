@@ -19,7 +19,7 @@ ENV_BIN="$HOME/.conda/envs/megatop/bin"
 export PATH="$ENV_BIN:$PATH"
 hash -r
 
-PARAM_FILE="/home/cgubeno/Megatop/paramfiles/planck_npipe_masked_bir.yaml"
+PARAM_FILE="/home/cgubeno/Megatop/paramfiles/planck_npipe_masked_diy.yaml"
 
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 
@@ -51,22 +51,22 @@ echo "Plotting component separater outputs"
 mpirun -n 1 megatop-compsep-plot --config ${PARAM_FILE}
 
 
-echo ""
-echo ""
-echo "Plotting spectra estimater outputs"
-mpirun -n 1 megatop-map2cl-plot --config ${PARAM_FILE}
+# echo ""
+# echo ""
+# echo "Plotting spectra estimater outputs"
+# mpirun -n 1 megatop-map2cl-plot --config ${PARAM_FILE}
 
 
-echo ""
-echo ""
-echo "Plotting noise spectra estimater outputs"
-mpirun -n 1 megatop-noisespectra-plot --config ${PARAM_FILE}
+# echo ""
+# echo ""
+# echo "Plotting noise spectra estimater outputs"
+# mpirun -n 1 megatop-noisespectra-plot --config ${PARAM_FILE}
 
 
-echo ""
-echo ""
-echo "Plotting r statistics"
-mpirun -n 1 megatop-cl2r-plot --config ${PARAM_FILE}
-echo ""
-echo "Plotting mcmc results statistics"
-mpirun -n 1 megatop-cl2r_mcmc-plot --config ${PARAM_FILE}
+# echo ""
+# echo ""
+# echo "Plotting r statistics"
+# mpirun -n 1 megatop-cl2r-plot --config ${PARAM_FILE}
+# echo ""
+# echo "Plotting mcmc results statistics"
+# mpirun -n 1 megatop-cl2r_mcmc-plot --config ${PARAM_FILE}

@@ -16,8 +16,11 @@ cl2r_pars:
     A_{sync}:
     - 0.0
     - 1.0
+    Birefringence:
+    - -1
+    - 1
     r:
-    - -0.2
+    - -0.5
     - 1.0
   sync_marg: false
 data_dirs:
@@ -29,7 +32,7 @@ data_dirs:
   noise_maps_root: null
   passbands: bandpass_formatted
   passbands_root: /lustre/work/SO-MEGATOP/NPIPE
-  root: /lustre/work/cgubeno/Megatop/npipe_d0s0/npipe_d1s1_fsky70_gal/data_root
+  root: /lustre/work/cgubeno/Megatop/npipe_d0s0/npipe_600_d0s0_fsky70_gal/data_root
 fiducial_cmb:
   camb_cosmo_pars:
     As: 2.0e-09
@@ -55,11 +58,13 @@ general_pars:
   lmax: 512
   lmin: 30
   nside: 256
+  mocker_is_skipped: false
 map2cl_pars:
   delta_ell: 10
   n_iter_namaster: 3
   purify_b: true
   purify_e: false
+  uniform_start: null
 map_sets:
 - TF_path: .
   beam: 32.3
@@ -72,6 +77,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 27.0
   depth_map_path: null
@@ -83,6 +90,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 13.3
   depth_map_path: null
@@ -94,6 +103,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 9.7
   depth_map_path: null
@@ -105,6 +116,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 7.2
   depth_map_path: null
@@ -116,6 +129,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 5.0
   depth_map_path: null
@@ -127,6 +142,8 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 - TF_path: .
   beam: 4.8
   depth_map_path: null
@@ -138,10 +155,12 @@ map_sets:
   obsmat_path: .
   passband_filename: ''
   simfoTF_prefix: simforTF_
+  suffix_eigen_decomp: ''
+  suffix_obsmat_scipy: ''
 map_sim_pars:
   A_lens: 1.0
-  TF_n_sim: 1
   Birefringence: 0.0
+  TF_n_sim: 1
   TF_power_law_amp: 1.0
   TF_power_law_delta_ell: 1
   TF_power_law_index: 2.0
@@ -149,6 +168,7 @@ map_sim_pars:
   cmb_sim_no_pysm: true
   filter_sims: false
   generate_sims_for_TF: false
+  id_offset: 0
   input_maps_correction: 1.0
   input_maps_prefix: ''
   input_maps_root: null
@@ -160,8 +180,8 @@ map_sim_pars:
   remove_input_maps_noise: false
   single_cmb: false
   sky_model:
-  - d1
-  - s1
+  - d0
+  - s0
   use_input_maps: false
 masks_pars:
   analysis_mask_name: analysis_mask
@@ -187,7 +207,7 @@ noise_cov_pars:
 noise_sim_pars:
   experiments:
     PLANCK:
-      correction: 1e6
+      correction: 1000000.0
       default_bands:
       - 30.0
       - 44.0
@@ -196,13 +216,15 @@ noise_sim_pars:
       - 143.0
       - 217.0
       - 353.0
+      id_sim_suffix: false
       noise_option: noise_map
       prefix: npipe6v20_
       root: /lustre/work/SO-MEGATOP/NPIPE/nside256_coordsG/npipe6v20_sim
       suffix: _residual
   include_nhits: true
-  n_sim: 100
+  n_sim: 600
   prefer_external_noise_maps: false
+  seed: 42
 output_dirs:
   binning: binning
   components: components
@@ -212,8 +234,10 @@ output_dirs:
   mcmc: mcmc
   noise_spectra: noise_spectra
   plots: plots
+  precomputation: precomputation
+  prepoc_diag_precond: diag_precond
   preproc: preproc
-  root: /lustre/work/cgubeno/Megatop/npipe_d0s0/npipe_d1s1_fsky70_gal/output_root
+  root: /lustre/work/cgubeno/Megatop/npipe_d0s0/npipe_600_d0s0_fsky70_gal/output_root
   spectra: spectra
   transfer_functions: transfer_functions
 parametric_sep_pars:
@@ -223,6 +247,11 @@ parametric_sep_pars:
   harmonic_lmax: 256
   harmonic_lmin: 30
   include_synchrotron: true
+  megabuster_options:
+    max_steps_CG: 200
+    tol_CG: 1.0e-06
+    use_preconditioner_diag: false
+    use_preconditioner_pinv: false
   minimize_method: TNC
   minimize_options:
     disp: false
@@ -233,11 +262,15 @@ parametric_sep_pars:
   minimize_tol: 1.0e-18
   passband_int: false
   use_harmonic_compsep: false
+  use_megabuster: false
 plot_pars:
   lmax_plot: 1000
   lmin_plot: 30
 pre_proc_pars:
   DEBUGskippreproc: false
+  beam_fwhms: null
   common_beam_correction: 35.0
   correct_for_TF: false
+  npipe_beam_correction: false
+  npipe_beam_path: null
   sum_TF_column: true

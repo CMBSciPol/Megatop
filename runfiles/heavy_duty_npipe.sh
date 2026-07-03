@@ -2,7 +2,7 @@
 #PBS -N heavy_npipe
 #PBS -o /home/cgubeno/log/
 #PBS -e /home/cgubeno/log/
-#PBS -l select=2:ncpus=52:mem=375gb
+#PBS -l select=1:ncpus=52:mem=375gb
 #PBS -l walltime=700:00:00
 #PBS -u cgubeno
 #PBS -m ae
@@ -12,7 +12,7 @@
 source ~/.bashrc
 conda activate megatop
 
-PARAM_FILE="/home/cgubeno/Megatop/paramfiles/various_test.yaml"
+PARAM_FILE="/home/cgubeno/Megatop/paramfiles/planck_npipe_masked_ffp10.yaml"
 
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 echo ""
@@ -49,21 +49,21 @@ echo ""
 # echo ""
 # echo ""
 
-echo "------------------------------------------------------------"
-echo "|                       PRE-PROCESSER                      |"
-echo "------------------------------------------------------------"
-mpirun -np 100 megatop-preproc-run --config ${PARAM_FILE}
-echo ""
-echo ""
-echo "Plotting pre-processer outputs"
-mpirun -np 1 megatop-preproc-plot --config ${PARAM_FILE}
+# echo "------------------------------------------------------------"
+# echo "|                       PRE-PROCESSER                      |"
+# echo "------------------------------------------------------------"
+# mpirun -np 100 megatop-preproc-run --config ${PARAM_FILE}
+# echo ""
+# echo ""
+# echo "Plotting pre-processer outputs"
+# mpirun -np 1 megatop-preproc-plot --config ${PARAM_FILE}
 
-echo "------------------------------------------------------------"
-echo "|                  NOISE PREPROCESSING                     |"
-echo "------------------------------------------------------------"
-mpirun -np 100 megatop-noise-preproc-run --config ${PARAM_FILE}
-echo ""
-echo ""
+# echo "------------------------------------------------------------"
+# echo "|                  NOISE PREPROCESSING                     |"
+# echo "------------------------------------------------------------"
+# mpirun -np 100 megatop-noise-preproc-run --config ${PARAM_FILE}
+# echo ""
+# echo ""
 
 # echo "------------------------------------------------------------"
 # echo "|                NOISE-COVARIANCE COMPUTATION              |"
@@ -77,7 +77,7 @@ echo ""
 # echo "------------------------------------------------------------"
 # echo "|                    COMPONENT SEPARATION                  |"
 # echo "------------------------------------------------------------"
-# mpirun -np 50 megatop-compsep-run --config ${PARAM_FILE}
+# mpirun -np 8 megatop-compsep-run --config ${PARAM_FILE}
 # echo ""
 # echo ""
 # echo "Plotting component separater outputs"
@@ -98,17 +98,17 @@ echo ""
 # mpirun -n 16 megatop-noisespectra-run --config ${PARAM_FILE}
 # echo ""
 # echo ""
-# echo "Plotting noise spectra estimater outputs"
-# mpirun -np 1 megatop-noisespectra-plot --config ${PARAM_FILE}
+echo "Plotting noise spectra estimater outputs"
+mpirun -np 1 megatop-noisespectra-plot --config ${PARAM_FILE}
 
-# echo "------------------------------------------------------------"
-# echo "|            COSMOLOGICAL PARAMETERS ESTIMATION            |"
-# echo "------------------------------------------------------------"
-# mpirun -np 50 megatop-cl2r-run --config ${PARAM_FILE}
-# echo ""
-# echo ""
-# echo "Plotting r statistics"
-# mpirun -np 1 megatop-cl2r-plot --config ${PARAM_FILE}
-# echo ""
-# echo "Plotting mcmc results statistics"
-# mpirun -n 1 megatop-cl2r_mcmc-plot --config ${PARAM_FILE}
+echo "------------------------------------------------------------"
+echo "|            COSMOLOGICAL PARAMETERS ESTIMATION            |"
+echo "------------------------------------------------------------"
+mpirun -np 50 megatop-cl2r-run --config ${PARAM_FILE}
+echo ""
+echo ""
+echo "Plotting r statistics"
+mpirun -np 1 megatop-cl2r-plot --config ${PARAM_FILE}
+echo ""
+echo "Plotting mcmc results statistics"
+mpirun -n 1 megatop-cl2r_mcmc-plot --config ${PARAM_FILE}

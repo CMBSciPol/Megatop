@@ -1,4 +1,3 @@
-
 #!/bin/bash
 #PBS -N snake_planck
 #PBS -o /home/cgubeno/log/
@@ -19,13 +18,12 @@ ENV_BIN="$HOME/.conda/envs/megatop/bin"
 export PATH="$ENV_BIN:$PATH"
 hash -r
 
-PARAM_FILE="/home/cgubeno/Megatop/paramfiles/planck_npipe_masked_1024.yaml"
+PARAM_FILE="/home/cgubeno/Megatop/paramfiles/planck_npipe_masked_SO_mask.yaml"
 
 echo "Running pipeline with paramfile: ${PARAM_FILE}"
 echo ""
 
-snakemake --cores 25 --configfile "$PARAM_FILE" 
-
+snakemake --cores 52 --configfile "$PARAM_FILE" 
 
 echo "Plotting Outputs"
 

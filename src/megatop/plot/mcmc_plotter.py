@@ -142,7 +142,7 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     gd_plot.triangle_plot(
         all_samples,
         filled=False,
-        legend_loc=None,
+        legend_loc="upper right",
         legend_labels=[None] * n_sim_sky,
         line_args=[{"lw": 1.0, "color": "darkblue", "alpha": 0.4} for i in range(n_sim_sky)],
         # line_args=[{"lw": 1.0, "color": colors[i]} for i in range(n_sim_sky)],
@@ -222,6 +222,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     #][0]
     Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["DustxDust"][3]
     Cl_DustxDust_EB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["DustxDust"][1]
+    Cl_SynchxSynch_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["SynchxSynch"][3]
 
     all_noise_options = [
         config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
@@ -278,6 +279,8 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     Cl_BB_lensing_est = A_lens_est * Cl_BB_lensing_generic
     if dust_marg:
         Cl_BB_dust_est = A_dust_est * Cl_DustxDust_BB_est
+    if sync_marg:
+        Cl_BB_sync_est = A_sync_est * Cl_SynchxSynch_BB_est
 
     # Compute model spectrum based on estimated parameters
     # Note: Cl_CMB_model now returns a 2x2 covariance matrix, we extract BB component
@@ -289,6 +292,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         Cl_BB_prim_generic,
         Cl_BB_lensing_generic,
         Cl_DustxDust_BB_est,
+        Cl_SynchxSynch_BB_est,
         Nl_CMBxCMB_EE_est,
         Nl_CMBxCMB_BB_est,
         Nl_CMBxCMB_EB_est,
