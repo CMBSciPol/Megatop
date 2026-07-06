@@ -33,9 +33,11 @@ __all__ = [
     "anafast",
     "getlmax",
     "map2alm",
+    "rotate_map_alms",
     "gauss_beam",
     "smooth",
     "synfast",
+    "truncate_alm",
 ]
 
 
@@ -55,6 +57,24 @@ def getlmax(alm, mmax=None) -> int:
         ``lmax`` consistent with ``alm.shape[-1]`` and ``mmax``.
     """
     return hp.Alm.getlmax(alm.shape[-1], mmax=mmax)
+
+
+def truncate_alm(alm, lmax: int):
+    """Band-limit `alm` to `lmax`, re-packing the triangular `(l, m)` layout.
+
+    ``alm2map`` reads the packing for the ``lmax`` it is told, so an ``alm``
+    computed at a higher (e.g. Nyquist) ``lmax`` must be truncated — not merely
+    sliced — before synthesis. Returns `alm` unchanged when `lmax` is already
+    at or above its band limit.
+
+    Args:
+        alm: Alm array `(..., nalm)`; multi-component inputs are truncated row-wise.
+        lmax: Target band limit.
+    """
+    lmax_in = getlmax(np.asarray(alm))
+    if lmax >= lmax_in:
+        return alm
+    return np.asarray(hp.resize_alm(alm, lmax_in, lmax_in, lmax, lmax))
 
 
 @lru_cache(maxsize=8)
@@ -150,7 +170,11 @@ def _map2alm_healpix(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None
     return _map2alm_healpix_iter(maps, **kw)
 
 
-def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
+def _default_niter(car: bool) -> int:
+    return 0 if car else 3
+
+
+def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=None, nthreads=None):
     """Forward SHT, dispatching on pixelization.
 
     Args:
@@ -166,13 +190,28 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
             Batch dimensions are supported: ``(batch, 3, npix)`` → ``(batch, 3, nalm)``.
         lmax: Bandlimit. HEALPix default: ``3 * nside - 1``; CAR: library default.
         mmax: Azimuthal bandlimit (HEALPix only). Defaults to ``lmax``.
-        niter: Refinement steps. HEALPix: Jacobi iterations; CAR: passed to pixell.
+        niter: Jacobi refinement steps. ``None`` (default) resolves per pixelization:
+            ``3`` for HEALPix, ``0`` for CAR. HEALPix lacks exact quadrature, so
+            iteration improves accuracy. CAR grids carry exact quadrature weights, so
+            one pass is already exact on the full sky; on a cut-sky enmap iteration is
+            ill-posed and amplifies the unconstrained band-edge modes (a spurious
+            ``Cl[lmax]`` spike). An explicit value overrides the default for either
+            pixelization (pixell accepts ``niter`` for CAR, but it is rarely useful).
         nthreads: ducc0 thread count (HEALPix). ``None`` uses ``MEGATOP_SHT_NTHREADS``.
 
     Returns:
         Alm array, last axis in triangular ``(l, m)`` layout.
     """
-    if _is_car(maps):
+    car = _is_car(maps)
+    if niter is None:
+        niter = _default_niter(car)
+    if car:
+        # mirror the HEALPix branch: zero hp.UNSEEN sentinels so masked pixels
+        # don't dominate the SHT (copy keeps the enmap wcs for curvedsky)
+        unseen = maps == hp.UNSEEN
+        if np.any(unseen):
+            maps = maps.copy()
+            maps[unseen] = 0.0
         return curvedsky.map2alm(maps, spin=spin, lmax=lmax, niter=niter)
     kw = {"lmax": lmax, "mmax": mmax, "niter": niter, "nthreads": nthreads}
     if isinstance(spin, (list, tuple)):
@@ -258,6 +297,31 @@ def alm2map(
             out_idx += nmaps
         return out if inplace else np.concatenate(maps_out, axis=-2)
     return _alm2map_healpix(alms, spin=spin, out=out, **kw)
+
+
+def rotate_map_alms(m, coord, *, spin=0, lmax=None):
+    """Rotate a HEALPix map between coordinate frames in harmonic space.
+
+    The map is transformed to ``alm``, rotated with ``healpy.Rotator``, and
+    synthesised back onto the *same* HEALPix grid. Rotating in harmonic space
+    avoids the pixel-space interpolation error of a direct map rotation.
+
+    Args:
+        m: HEALPix map ``(..., npix)``; multi-component inputs (e.g. ``(3, npix)``
+            TQU) are handled per `spin`.
+        coord: Frame pair for ``healpy.Rotator``, e.g. ``["G", "C"]``
+            (galactic → celestial/equatorial).
+        spin: Spin weight(s): ``0`` (T), ``2`` (Q/U), or ``[0, 2]`` for TQU.
+        lmax: Band limit for the round-trip SHT. HEALPix default ``3 * nside - 1``.
+
+    Returns:
+        Rotated HEALPix map, same shape and ``nside`` as `m`.
+    """
+    m = np.asarray(m)
+    nside = hp.npix2nside(m.shape[-1])
+    alm = map2alm(m, spin=spin, lmax=lmax)
+    hp.Rotator(coord=coord).rotate_alm(alm, inplace=True)
+    return alm2map(alm, nside=nside, spin=spin, lmax=lmax)
 
 
 def _normalise_cl(cl):
@@ -388,7 +452,7 @@ def smooth(
     shape=None,
     wcs=None,
     out=None,
-    niter=3,
+    niter=None,
     nthreads=None,
 ):
     """Smooth a map with a Gaussian beam.
@@ -410,7 +474,7 @@ def smooth(
         shape: CAR output pixel shape. Defaults to input shape.
         wcs: CAR world coordinate system. Defaults to input WCS.
         out: Pre-allocated output map written in-place and returned.
-        niter: Jacobi iterations for the forward SHT (HEALPix).
+        niter: Forward-SHT refinement steps; see [`map2alm`][..map2alm].
         nthreads: ducc0 thread count (HEALPix).
 
     Returns:
@@ -434,7 +498,7 @@ def smooth(
     return alm2map(alms, spin=spin, nside=nside, shape=shape, wcs=wcs, out=out, nthreads=nthreads)
 
 
-def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthreads=None):
+def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=None, pol=True, nthreads=None):
     """Compute auto or cross power spectrum.
 
     Routes through ``map2alm`` then ``hp.alm2cl``. For TQU input (``pol=True``),
@@ -446,7 +510,7 @@ def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthrea
         maps2: Second map for cross-spectrum.
         lmax: Bandlimit.
         mmax: Azimuthal bandlimit (HEALPix only — pixell does not expose it).
-        niter: Jacobi iterations for the forward SHT.
+        niter: Forward-SHT refinement steps; see [`map2alm`][..map2alm].
         pol: If ``True`` and the map has a Stokes axis of length 3, decompose
             into TEB and return all six spectra. Raises ``ValueError`` if the
             Stokes axis exists but has length ≠ 3.

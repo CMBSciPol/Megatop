@@ -7,6 +7,7 @@ import numpy.typing as npt
 import pymaster as nmt
 
 import megatop.utils.harmonic as hu
+from megatop.utils import mask
 from megatop.utils.compsep import set_alm_tozero_above_lmax, set_alm_tozero_below_lmin
 
 from .logger import logger
@@ -66,7 +67,7 @@ def common_beam_and_nside(
         sm_corr_P = bl_correction[:, 1] * wpix_out[1] / wpix_in[1]
 
         # map-->alm
-        alms_in = hu.map2alm(freq_maps[i_beam], spin=[0, 2], lmax=lmax, niter=10)
+        alms_in = hu.map2alm(freq_maps[i_beam], spin=[0, 2], lmax=lmax)
 
         # change beam and wpix
         hu.almxfl(alms_in[0], sm_corr_T, inplace=True)
@@ -147,8 +148,8 @@ def alm_common_beam(
             for f in range(freq_maps.shape[0])
         ]
     )
-    mean_fsky = np.mean(np.square(analysis_mask))  # the analysis mask must be normalized!
-    data_alms /= np.sqrt(mean_fsky)
+    fsky = mask.fsky_w2(analysis_mask)  # the analysis mask must be normalized!
+    data_alms /= np.sqrt(fsky)
 
     common_beam_ell = hp.gauss_beam(
         np.radians(common_beam / 60.0),

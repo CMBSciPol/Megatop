@@ -21,7 +21,9 @@ fiducial_cmb:
 general_pars:
   lmax: 500
   lmin: 30
-  nside: 256
+  pixelisation:
+    healpix:
+      nside: 256
 
 map2cl_pars:
   delta_ell: 10

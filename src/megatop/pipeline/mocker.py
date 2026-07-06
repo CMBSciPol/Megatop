@@ -30,7 +30,6 @@ def get_noise(
     *,
     extra_seed=None,
 ) -> NDArray:
-    fsky_nhits = common_nhits_map.mean()
     seed = [config.noise_sim_pars.seed, id_sim]
     if extra_seed is not None:
         seed.append(extra_seed)
@@ -38,8 +37,8 @@ def get_noise(
     noise_freq_maps = mock.get_full_sky_noise_freq_maps(
         config.map_sets,
         config.noise_sim_pars,
-        fsky_nhits=fsky_nhits,
-        nside=config.nside,
+        fsky_effective=mask.fsky_effective(common_nhits_map),
+        landscape=config.landscape,
         lmax=config.lmax,
         id_sim=id_sim,
         seed=seed,
@@ -64,9 +63,8 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     logger.debug(f"CMB {seed = }")
 
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
-    cmb_map = mock.generate_map_cmb(
-        Cl_cmb_model, nside=config.nside, lmax=config.lmax, cmb_seed=seed
-    )
+    # synthesise directly on the target geometry; synfast seeds the legacy RNG when seed is set
+    cmb_map = config.landscape.synfast(Cl_cmb_model, lmax=config.lmax, seed=seed)
     logger.debug(f"CMB map has shape {cmb_map.shape}")
     return cmb_map
 
@@ -77,9 +75,9 @@ def get_foregrounds(config: Config) -> NDArray:
     logger.debug(f"Generating pysm sky {config.sky_model}")
     fg_freq_maps = mock.generate_map_fgs_pysm(
         config.map_sets,
-        config.nside,
         config.lmax,
         config.map_sim_pars.sky_model,
+        config.landscape,
     )
     logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
     return fg_freq_maps
@@ -96,6 +94,7 @@ def load_obsmat(manager: DataManager, config: Config):
 @function_timer("save-simu")
 def save_simu(
     manager: DataManager,
+    config: Config,
     simulated_maps: NDArray,
     id_sim: int | None = None,
     is_noise: bool = False,
@@ -110,12 +109,7 @@ def save_simu(
     for i, fname in enumerate(filenames):
         msg = "Saving noise simulation" if is_noise else "Saving simulated sky"
         logger.debug(f"{msg} to {fname}")
-        hp.write_map(
-            fname,
-            simulated_maps[i],
-            dtype=["float64", "float64", "float64"],
-            overwrite=True,
-        )
+        config.landscape.write_map(fname, simulated_maps[i], dtype=np.float64)
 
 
 @function_timer("save-TFsims")
@@ -310,9 +304,7 @@ def func_signal(
     # apply beam and pixel window function correction
     with Timer("beam-freq-maps"):
         for i_f, _f in enumerate(config.frequencies):
-            sky[i_f] = mock.beam_winpix_correction(
-                config.nside, sky[i_f], config.beams[i_f], config.lmax
-            )
+            sky[i_f] = mock.beam_winpix_correction(sky[i_f], config.beams[i_f], config.lmax)
 
     # apply filtering
     if obsmat_funcs is not None:
@@ -328,7 +320,7 @@ def func_signal(
     _ = mask.apply_binary_mask(sky, binary_mask, unseen=False)
 
     # save results
-    save_simu(manager, sky, id_sim=id_sim, is_noise=False)
+    save_simu(manager, config, sky, id_sim=id_sim, is_noise=False)
 
     return id_sim
 
@@ -344,7 +336,7 @@ def func_noise(
     """Generate a noise realization."""
     noise = get_noise(config, binary_mask, common_nhits_map, id_sim=id_sim)
     _ = mask.apply_binary_mask(noise, binary_mask, unseen=False)
-    save_simu(manager, noise, id_sim=id_sim, is_noise=True)
+    save_simu(manager, config, noise, id_sim=id_sim, is_noise=True)
     return id_sim
 
 
@@ -359,8 +351,8 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
         logger.info(f"Generating {n_sim} sky realizations")
 
     # Load necessary data
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
+    common_nhits_map = config.landscape.read_map(manager.path_to_common_nhits_map)
     func = partial(
         func_signal,
         manager=manager,
@@ -389,8 +381,8 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
         logger.info(f"Generating {n_sim} noise realizations")
 
     # Load necessary data
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
+    common_nhits_map = config.landscape.read_map(manager.path_to_common_nhits_map)
     func = partial(func_noise, manager, config, binary_mask, common_nhits_map)
 
     for result in _map(func, range(n_sim), comm):
@@ -409,7 +401,7 @@ def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
         logger.info(f"Generating {n_sim} TF simulations")
 
     # Load necessary data
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
 
     func = partial(
         func_TF_sims,
@@ -441,8 +433,8 @@ def main_signal():
     manager = DataManager(config)
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
+    common_nhits_map = config.landscape.read_map(manager.path_to_common_nhits_map)
     func_signal(args.sim, manager, config, binary_mask, common_nhits_map)
 
 
@@ -460,8 +452,8 @@ def main_noise():
     manager = DataManager(config)
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
+    common_nhits_map = config.landscape.read_map(manager.path_to_common_nhits_map)
     func_noise(manager, config, binary_mask, common_nhits_map, args.sim)
 
 

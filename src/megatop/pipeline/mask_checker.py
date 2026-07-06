@@ -10,7 +10,7 @@ from megatop.utils import logger, mask, mock
 
 
 def spin_derivatives(manager: DataManager):
-    common_hnits_map = hp.read_map(manager.path_to_common_nhits_map)
+    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
     binary_mask = hp.read_map(manager.path_to_binary_mask)
     analysis_mask = hp.read_map(manager.path_to_analysis_mask, dtype=np.float64)
 
@@ -20,9 +20,8 @@ def spin_derivatives(manager: DataManager):
     second_min_custom, second_max_custom = np.min(second_custom), np.max(second_custom)
 
     # f_sky computation
-    fsky_nhits, fsky_binary, fsky_analysis = mask.get_fsky(
-        common_hnits_map, binary_mask, analysis_mask
-    )
+    fsky_effective = mask.fsky_effective(common_nhits_map)
+    fsky_geom = mask.fsky_geom(binary_mask)
 
     logger.info(
         "Spin derivatives of the analysis have global min and max of:\n"
@@ -32,9 +31,8 @@ def spin_derivatives(manager: DataManager):
 
     logger.info(
         "f_sky computation resulting from the different masks:\n"
-        f"  common nhits map: {fsky_nhits:.3f}\n"
-        f"  binary mask: {fsky_binary:.3f}\n"
-        f"  analysis mask: {fsky_analysis:.3f}\n"
+        f"  common nhits map: {fsky_effective:.3f}\n"
+        f"  binary mask: {fsky_geom:.3f}\n"
     )
 
 
@@ -57,8 +55,8 @@ def generate_mask_sim(manager: DataManager, config: Config, int_n_sim):
     cl = []
     cl_pureB = []
     for _id_realisation in realization_list:
-        cmb_map = mock.generate_map_cmb(Cl_cmb_model, config.nside, cmb_seed=None)
-        cmb_map_pureB = mock.generate_map_cmb(Cl_cmb_model_pureB, config.nside, cmb_seed=None)
+        cmb_map = config.landscape.synfast(Cl_cmb_model, lmax=config.lmax)
+        cmb_map_pureB = config.landscape.synfast(Cl_cmb_model_pureB, lmax=config.lmax)
         b = nmt.NmtBin.from_nside_linear(config.nside, config.map2cl_pars.delta_ell)
         ells_bins = b.get_effective_ells()
         f_2 = nmt.NmtField(analysis_mask, cmb_map[1:], purify_b=True, purify_e=False, beam=None)

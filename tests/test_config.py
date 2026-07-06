@@ -10,9 +10,11 @@ from megatop.config import (
     DataDirsConfig,
     FiducialCMBConfig,
     GeneralConfig,
+    HealpixConfig,
     MapSetConfig,
     MapSimConfig,
     OutputDirsConfig,
+    PixelisationConfig,
     V3Noise,
     V3Sensitivity,
 )
@@ -26,7 +28,7 @@ def example_config():
 def test_lmax_validator():
     """Check that config instantiation fails when lmax is too high."""
     with pytest.raises(ValueError, match="less than or equal to"):
-        GeneralConfig(nside=128, lmax=500)
+        GeneralConfig(pixelisation=PixelisationConfig(healpix=HealpixConfig(nside=128)), lmax=500)
 
 
 def test_map_set_name():
