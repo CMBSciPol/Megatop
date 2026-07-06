@@ -208,6 +208,7 @@ class DataManager:
             self.path_to_fiducial_cmb,
             self.path_to_binning.parent,
             self.path_to_covar,
+            self.path_to_covar / "real",
         ]:
             path.mkdir(parents=True, exist_ok=True)
 
@@ -216,6 +217,7 @@ class DataManager:
             # Real-data mode: flat layout, no per-sim subdirectories
             for path in [
                 self.path_to_preproc,
+                self.path_to_preproc_real,
                 self.get_path_to_components(),
                 self.get_path_to_spectra(),
                 self.get_path_to_noise_spectra(),
@@ -227,6 +229,7 @@ class DataManager:
                 for path in [
                     self.get_path_to_maps_sub(i),
                     self.get_path_to_preprocessed_maps(i).parent,
+                    self.get_path_to_preprocessed_real_maps(i).parent,
                     self.get_path_to_components(i),
                     self.get_path_to_spectra(i),
                     self.get_path_to_noise_spectra(i),
@@ -317,6 +320,14 @@ class DataManager:
         else:
             fname = self.path_to_preproc / fname
         return fname.with_suffix(".npy")
+    
+    def get_path_to_preprocessed_real_maps(self, id_sim: int | None = None) -> Path:
+        fname = "freq_real_maps_preprocessed"
+        if id_sim is not None:
+            fname = self.path_to_preproc / "real" / f"{id_sim:04d}" / fname
+        else:
+            fname = self.path_to_preproc / "real" / fname
+        return fname.with_suffix(".npy")
 
     def get_path_to_preprocessed_alms(self, id_sim: int | None = None) -> Path:
         fname = "freq_alms_preprocessed"
@@ -326,6 +337,13 @@ class DataManager:
             fname = self.path_to_preproc / fname
         return fname.with_suffix(".npy")
 
+    def get_path_to_real_preprocessed_noise_maps(self, id_sim: int | None = None) -> Path:
+        fname = "real_noise_maps_preprocessed"
+        if id_sim is not None:
+            fname += f"_{id_sim:04d}"
+        fname = self.path_to_covar / "real" / fname
+        return fname.with_suffix(".npy")
+    
     def get_path_to_preprocessed_noise_maps(self, id_sim: int | None = None) -> Path:
         fname = "noise_maps_preprocessed"
         if id_sim is not None:
@@ -392,6 +410,11 @@ class DataManager:
     def path_to_pixel_noisecov(self) -> Path:
         fname = self.path_to_covar / "pixel_noisecov_preprocessed"
         return fname.with_suffix(".npy")
+    
+    @property
+    def path_to_real_pixel_noisecov(self) -> Path:
+        fname = self.path_to_covar / "real" / "real_pixel_noisecov_preprocessed"
+        return fname.with_suffix(".npy")
 
     @property
     def path_to_nl_noisecov(self) -> Path:
@@ -402,6 +425,10 @@ class DataManager:
     def path_to_nl_noisecov_unbinned(self) -> Path:
         fname = self.path_to_covar / "covar_cl_unbinned"
         return fname.with_suffix(".npy")
+    
+    @property
+    def path_to_preproc_real(self) -> Path:
+        return self.path_to_output / self._config.output_dirs.preproc / "real"
 
     def get_path_to_nl_noisecov_contrib(self, id_sim: int | None = None) -> Path:
         fname = "nl_noisecov_contrib"
@@ -511,7 +538,10 @@ class DataManager:
     def outputs_preproc(self, id_sim: int | None = None) -> list[Path]:
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             return [self.get_path_to_preprocessed_alms(id_sim)]
-        return [self.get_path_to_preprocessed_maps(id_sim)]
+        return [
+            self.get_path_to_preprocessed_maps(id_sim),
+            self.get_path_to_preprocessed_real_maps(id_sim),
+        ]
 
     def inputs_noise_preproc(self, id_sim: int | None = None) -> list[Path]:
         inputs = [
@@ -526,6 +556,8 @@ class DataManager:
 
     def outputs_noise_preproc(self, id_sim: int | None = None) -> list[Path]:
         outputs = [self.get_path_to_preprocessed_noise_maps(id_sim)]
+        if self._config.pre_proc_pars.use_real_beams:
+            outputs.append(self.get_path_to_real_preprocessed_noise_maps(id_sim))
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             outputs += [
                 self.get_path_to_nl_noisecov_contrib(id_sim),
@@ -544,6 +576,8 @@ class DataManager:
 
     def outputs_noisecov(self) -> list[Path]:
         outputs = [self.path_to_pixel_noisecov]
+        if self._config.pre_proc_pars.use_real_beams:
+            outputs.append(self.path_to_real_pixel_noisecov)
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             outputs += [self.path_to_nl_noisecov, self.path_to_nl_noisecov_unbinned]
         return outputs
@@ -555,12 +589,20 @@ class DataManager:
         else:
             preproc_input = self.get_path_to_preprocessed_maps(id_sim)
             noisecov_inputs = [self.path_to_pixel_noisecov]
-        return [
+            if self._config.pre_proc_pars.use_real_beams:
+                noisecov_inputs.append(self.path_to_real_pixel_noisecov)
+
+        inputs = [
             preproc_input,
             self.path_to_binary_mask,
             self.path_to_analysis_mask,
             *noisecov_inputs,
         ]
+
+        if not self._config.parametric_sep_pars.use_harmonic_compsep and self._config.pre_proc_pars.use_real_beams:
+            inputs.append(self.get_path_to_preprocessed_real_maps(id_sim))
+
+        return inputs
 
     def outputs_compsep(self, id_sim: int | None = None) -> list[Path]:
         outputs = [

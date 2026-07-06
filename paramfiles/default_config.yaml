@@ -23,7 +23,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 63.
   beam: 0.
-  angles_central_value_degrees : 0.0
+  angles_central_value_degrees : 1.0
   angles_uncertainty_degrees : 0.1
   
 - exp_tag: SO-SAT
@@ -32,7 +32,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 30.
   beam: 0.
-  angles_central_value_degrees : 0.0
+  angles_central_value_degrees : 2.0
   angles_uncertainty_degrees : 0.1
   
 - exp_tag: SO-SAT
@@ -41,7 +41,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 17.
   beam: 0.
-  angles_central_value_degrees : 0.0
+  angles_central_value_degrees : 3.0
   angles_uncertainty_degrees : 0.1
 
 - exp_tag: SO-SAT
@@ -50,7 +50,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 11.
   beam: 0.
-  angles_central_value_degrees : 0.0
+  angles_central_value_degrees : 4.0
   angles_uncertainty_degrees : 0.1
   
 - exp_tag: SO-SAT
@@ -59,7 +59,7 @@ map_sets:
   nhits_map_path: SO_nominal 
   #beam: 9.
   beam: 0.
-  angles_central_value_degrees : 0.0
+  angles_central_value_degrees : 5.0
   angles_uncertainty_degrees : 0.1
 
 map_sim_pars:
@@ -135,7 +135,7 @@ parametric_sep_pars:
     use_preconditioner_diag: False
     use_preconditioner_pinv: False
     use_obsmat: False
-    use_calibration_matrix: False
+    use_calibration_matrix: True
     use_beam_operator: False
     use_hessienne: False
     use_hmc: False
@@ -204,7 +204,7 @@ map2cl_pars:
   purify_e: false
 
 plot_pars:
-  lmax_plot: 700
+  lmax_plot: 500
   lmin_plot: 30
 pre_proc_pars:
   DEBUGskippreproc: False

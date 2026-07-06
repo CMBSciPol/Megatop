@@ -146,6 +146,13 @@ def get_common_beam_wpix(common_beam_fwhm_arcmin: float, nside: int, lmax: int):
 
     return Bl_gauss_common[:, 1] * wpix_out[1]  # TODO only polarisation one ?
 
+def get_common_wpix(nside: int, lmax: int):
+    wpix_out = hp.pixwin(
+        nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
+    )  # Pixel window function of output maps
+
+    return wpix_out[1]  # TODO only polarisation one ?
+
 
 def get_effective_beam_noise_preproc(freqs, A, beams, nside: int, lmax: int):
     wpix_out = hp.pixwin(

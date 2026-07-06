@@ -54,7 +54,7 @@ def generate_map_cmb(Cl_cmb_model, nside: int, lmax: int, cmb_seed: list[int] | 
     # Fixing seed if required
     # synfast uses the legacy numpy random number generator
     np.random.seed(cmb_seed)  # noqa: NPY002
-    map_CMB = hu.synfast(Cl_cmb_model[0], nside=nside, lmax=lmax, new=True)
+    map_CMB = hu.synfast(Cl_cmb_model, nside=nside, lmax=lmax, new=True)
 
     # Resetting seed
     np.random.seed(None)  # noqa: NPY002

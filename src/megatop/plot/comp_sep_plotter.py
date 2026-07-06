@@ -57,16 +57,23 @@ def plot_compsep_stats(manager: DataManager, config: Config):
         compsep_results = np.load(fname_compsepresults, allow_pickle=True)
         params = compsep_results["x"]
         convergence = compsep_results["success"].astype(bool)
-        if convergence:
-            compsep_results_params.append(params)
-            convergence_count += 1
+        print('convergence', convergence)
+        #if convergence:
+        compsep_results_params.append(params)
+        convergence_count += 1
     compsep_results_params = np.array(compsep_results_params)
     logger.info(
         f"Component sepatation converged successfully for of {100 * convergence_count / config.map_sim_pars.n_sim:.2f}% the maps."
     )
 
     plot_dir = manager.path_to_components_plots
+    #compsep_results_last = np.load(fname_compsepresults, allow_pickle=True)
+
     compsep_results_last = np.load(fname_compsepresults, allow_pickle=True)
+    print(compsep_results_last.files)
+    print(compsep_results_last["x"])
+    print('Between')
+    print(compsep_results_last["params"])
 
     # Plotting histograms of result parameters:
     fig, axes = plt.subplots(1, compsep_results_last["params"].shape[0], figsize=(12, 5))
@@ -78,6 +85,9 @@ def plot_compsep_stats(manager: DataManager, config: Config):
     }
 
     for i, (ax, param_name) in enumerate(zip(axes, compsep_results_last["params"], strict=False)):
+        print(param_name)
+        print(compsep_results_params)
+        print(compsep_results_params.shape)
         data = compsep_results_params[:, i]
 
         ax.hist(data, bins=25, histtype="step", density=False, color="darkblue")

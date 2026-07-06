@@ -76,8 +76,8 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
 
     #Birefringence mixing E & B maps
     Beta = (np.pi/180)*manager._config.map_sim_pars.Birefringence
-    cmb_map[1,:] = np.cos(2*Beta)*cmb_map_brut[1,:] - np.sin(2*Beta)*cmb_map_brut[2,:]
-    cmb_map[2,:] = np.sin(2*Beta)*cmb_map_brut[1,:] + np.cos(2*Beta)*cmb_map_brut[2,:]
+    cmb_map[1] = np.cos(2*Beta)*cmb_map_brut[1] - np.sin(2*Beta)*cmb_map_brut[2]
+    cmb_map[2] = np.sin(2*Beta)*cmb_map_brut[1] + np.cos(2*Beta)*cmb_map_brut[2]
 
     logger.debug(f"CMB map has shape {cmb_map.shape}")
     return cmb_map
@@ -316,7 +316,7 @@ def func_signal(
     )
 
     # broadcast CMB to all frequencies
-    sky = cmb[None, ...] + fg
+    sky = cmb[None, ...] + fg # + noise
 
     # apply beam and pixel window function correction
     with Timer("beam-freq-maps"):
@@ -338,11 +338,11 @@ def func_signal(
     sky = sky_miscalibration
 
     # apply filtering
-    if obsmat_funcs is not None:
-        with Timer("filter-freq-maps"):
-            for i_f, (key, func) in enumerate(obsmat_funcs.items()):
-                logger.debug(f"Filtering {key} channel")
-                sky[i_f] = mock.apply_observation_matrix(func, sky[i_f])
+    #if obsmat_funcs is not None:
+    #    with Timer("filter-freq-maps"):
+    #        for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+    #            logger.debug(f"Filtering {key} channel")
+    #            sky[i_f] = mock.apply_observation_matrix(func, sky[i_f])
 
     # add noise
     sky += noise

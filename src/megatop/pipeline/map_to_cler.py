@@ -12,6 +12,7 @@ from megatop.utils.mpi import get_world
 from megatop.utils.spectra import (
     compute_auto_cross_cl_from_maps_dict,
     get_common_beam_wpix,
+    get_common_wpix,
     initialize_nmt_workspace,
     limit_namaster_output,
 )
@@ -29,10 +30,18 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
 
     # Generating effective beam
     # TODO: If input maps are used instead of preprocessed ones, the effective beam after compsep must be computed.
-    effective_beam_CMB = get_common_beam_wpix(
-        config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
-    )
-    # effective_beam_CMB = np.ones_like(effective_beam_CMB)  # No beam for now
+
+    if config.pre_proc_pars.use_real_beams:
+        effective_beam_CMB = get_common_wpix(config.nside, config.lmax)
+        #effective_beam_CMB = None
+        #effective_beam_CMB = np.ones(config.lmax + 1)  # beam effectif = 1
+        #effective_beam_CMB = get_common_beam_wpix(
+        #    config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
+        #)
+    else:
+        effective_beam_CMB = get_common_beam_wpix(
+            config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
+        )
     # TODO: deconvolve the beam by hand, namaster implementation is not well tested / supported, although no clear sign of issues for now...
 
     # Initializing workspace

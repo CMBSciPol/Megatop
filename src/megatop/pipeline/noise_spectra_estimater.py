@@ -1,9 +1,12 @@
 import argparse
 import tracemalloc
 from pathlib import Path
+import pickle
 
 import healpy as hp
 import numpy as np
+import jax
+import jax.numpy as jnp
 import megabuster as mb  # noqa: E402
 
 from megatop import Config, DataManager
@@ -17,20 +20,20 @@ from megatop.utils.spectra import (
     limit_namaster_output,
 )
 from megatop.utils.utils import MemoryUsage
+from furax.obs.stokes import Stokes
 
 
 def init_workspace(config: Config, manager: DataManager):
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
     nmt_bins = load_nmt_binning(manager)
 
-    # Getting effective beam TODO: add case for input maps (no preproc)
     effective_beam_CMB = get_common_beam_wpix(
         config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
     )
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
     )
-    # Initializing workspace
+
     with Timer("init-namaster-workspace"):
         workspace = initialize_nmt_workspace(
             nmt_bins=nmt_bins,
@@ -59,26 +62,18 @@ def noise_spectra_estimator(
     MemoryUsage(f"rank = {rank} ")
 
     n_sim_noise = config.noise_sim_pars.n_sim
-
-    # The None case of nreal is useful when calling get_innoise_map_filename
-    # so we need to handle it when creating the list of realisations to loop over
     int_n_sim_noise = 1 if n_sim_noise is None else n_sim_noise
     realisation_list = np.arange(int_n_sim_noise)
-
-    # splitting the list of simulation between the ranks of the process:
     rank_realisation_list = np.array_split(realisation_list, size)[rank]
 
-    # Loading masks
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
-    # Loading component separation operator
     if not config.parametric_sep_pars.use_megabuster:
         W_maxL = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
             "W_maxL"
         ]
 
-    # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
 
     if config.parametric_sep_pars.use_megabuster:
@@ -93,8 +88,6 @@ def noise_spectra_estimator(
                 params_names = np.load(
                     manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True
                 )["params_names"]
-                print("parameters_foregrounds_x :", parameters_foregrounds_x)
-                print("params_names :", params_names)
                 parameters_dict = {name: parameters_foregrounds_x[i] for i, name in enumerate(params_names)}
             except FileNotFoundError:
                 logger.error(
@@ -104,10 +97,8 @@ def noise_spectra_estimator(
 
             if config.parametric_sep_pars.megabuster_options.use_obsmat:
                 obsmat_operator_fname = manager.get_path_list_or_None("suffix_obsmat_scipy")
-
                 if np.any(np.array(obsmat_operator_fname) == Path()):
-                    msg_any_obs = "Not all observation matrix files are provided. Provide either all or none, partial set of observation matrices is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
-                    raise ValueError(msg_any_obs)
+                    raise ValueError("Not all observation matrix files are provided.")
                 else:
                     logger.info(f"Loading observation matrix from {obsmat_operator_fname}")
                     npix = binary_mask.size
@@ -125,8 +116,7 @@ def noise_spectra_estimator(
                     )
                 path_eigen_decomp_fname = manager.get_path_list_or_None("suffix_eigen_decomp")
                 if np.any(np.array(path_eigen_decomp_fname) == Path()):
-                    msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
-                    raise ValueError(msg_any_obs)
+                    raise ValueError("Not all eigen decomposition files are provided.")
                 else:
                     logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
                     central_freq_op = mb.tools.get_dense_furax_operator_from_freq_array(
@@ -191,125 +181,68 @@ def noise_spectra_estimator(
 
         Cl_effective_TF = np.einsum(
             "ckfsl, fspl, lpfkc-> ckspl", Cl_WmaxL, transfer_freq[:, -4:, -4:], Cl_WmaxL.T
-        )  # keeping only polarised components
+        )
         normalisation_WCl = np.einsum("ckfsl, lpfkc-> ckspl", Cl_WmaxL, Cl_WmaxL.T)
         normalized_Cl_effective_TF = Cl_effective_TF / normalisation_WCl
         inverse_normalized_Cl_effective_TF = np.zeros_like(normalized_Cl_effective_TF)
         for i in range(normalized_Cl_effective_TF.shape[0]):
             for j in range(normalized_Cl_effective_TF.shape[1]):
                 for ell in range(normalized_Cl_effective_TF.shape[-1]):
-                    # Inverting the transfer function for each ell over the spectra dimension
                     inverse_normalized_Cl_effective_TF[i, j, :, :, ell] = np.linalg.inv(
                         normalized_Cl_effective_TF[i, j, :, :, ell]
                     )
-
-        # effective_transfer_function, inverse_effective_transfer_function = (
-        #     get_effective_transfer_function(transfer_freq, W_maxL, binary_mask))
     else:
-        # inverse_effective_transfer_function = None
         inverse_normalized_Cl_effective_TF = None
 
     sum_noise_spectra = {}
 
+    # Charger l'opérateur une seule fois
+    fname_operator = manager.get_path_to_compsep_results(id_sim_sky).with_suffix('.pkl')
+    with open(fname_operator, "rb") as f:
+        diagonal_central_term = pickle.load(f)
+
+    # Charger toutes les cartes de bruit d'un coup
+    all_noise_Q = []
+    all_noise_U = []
     for id_realisation in rank_realisation_list:
         id_real = None if n_sim_noise is None else id_realisation
-
-        logger.info(f"id_realisation = {id_real}")
-        logger.info(f"in = {rank_realisation_list}")
-
-        logger.info("Loading pre-processed noise maps")
-        noise_freq_maps_preprocessed = np.load(manager.get_path_to_preprocessed_noise_maps(id_real))
-
-        # Applying component-separation operator
-        # Applying component-separation operator
-        if not config.parametric_sep_pars.use_megabuster:
-            noise_map_post_compsep = np.einsum(
-                "ifsp,fsp->isp", W_maxL, noise_freq_maps_preprocessed[:, 1:]
-            )  # slicing noise to remove T
+        if config.pre_proc_pars.use_real_beams:
+            noise_freq_maps = np.load(manager.get_path_to_real_preprocessed_noise_maps(id_real))
         else:
-            if config.map2cl_pars.DEBUG_cut_scales:
-                logger.warning("TEST: Applying smooth cut at large scales to noise component maps")
-                logger.warning(
-                    "TEST: DOING IT AFTER PARAM ESTIMATION (can't do before for noise maps)"
-                )
+            noise_freq_maps = np.load(manager.get_path_to_preprocessed_noise_maps(id_real))
+        noise_QU = noise_freq_maps[:, 1:] * binary_mask
+        all_noise_Q.append(noise_QU[:, 0, :])
+        all_noise_U.append(noise_QU[:, 1, :])
 
-                def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
-                    ell = np.arange(lmax + 1)
-                    smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
-                    smooth_cut[:lmin] = 0.0
-                    return smooth_cut
+    # Stack : shape (n_sim_per_rank, n_freq, n_pix)
+    all_noise_Q = jnp.array(np.stack(all_noise_Q, axis=0))
+    all_noise_U = jnp.array(np.stack(all_noise_U, axis=0))
 
-                cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
-                freq_maps_cut = np.zeros_like(noise_freq_maps_preprocessed)
-                for f in range(noise_freq_maps_preprocessed.shape[0]):
-                    alm_comp = hp.map2alm(
-                        [
-                            noise_freq_maps_preprocessed[f, 0],
-                            noise_freq_maps_preprocessed[f, 1],
-                            noise_freq_maps_preprocessed[f, 2],
-                        ],
-                        lmax=3 * config.nside,
-                    )
-                    for s in range(alm_comp.shape[0]):
-                        hp.almxfl(alm_comp[s], cut_array, inplace=True)
-                    freq_maps_cut[f] = hp.alm2map(
-                        alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
-                    )  # removing temperature
-                noise_freq_maps_preprocessed = freq_maps_cut
+    # Appliquer W en une seule passe sur toutes les réalisations du rank
+    noise_stokes_batch = Stokes.from_stokes(Q=all_noise_Q, U=all_noise_U)
+    
+    # vmap sur la dimension batch — une seule compilation JAX
+    W_vmap = jax.vmap(diagonal_central_term, in_axes=0)
+    noise_maps_post_compsep_batch = W_vmap(noise_stokes_batch)
 
-            megabuster_options = config.parametric_sep_pars.get_megabuster_options_as_dict()
-            #if megabuster_options["use_calibration_matrix"]:
-            angles_prior_dict = {"angle_central_value": config.angle_central_value, "angle_uncertainty": config.angle_uncertainty}
-            angles_names = [f'angle_{i}' for i in range(len(config.angle_uncertainty))]
-
-            params = parameters_foregrounds_x
-            print('parameters_dict :', parameters_dict)
-            print('params_names :', params_names)
-            #params = {k: (0 if k.startswith('angle') else v) for k, v in parameters_dict.items()}
-            print('params :', params)
-                
-            noise_map_post_compsep = mb.compsep.perform_compsep(
-                config,
-                manager,
-                first_guess_params=parameters_dict,
-                fixed_params={"temp_dust": 20.0},
-                sky_map=noise_freq_maps_preprocessed[:, 1:] * binary_mask,
-                frequencies=np.array(config.frequencies),
-                invN_matrix=inverse_noisecov_QU_masked,
-                do_minimization=False,
-                binary_mask=binary_mask,
-                obs_mat_operator=None,
-                obsmat_operator_rhs=obsmat_operator_rhs,
-                use_calibration_matrix = True,
-                angles_prior_dict = angles_prior_dict,
-                angles_names = angles_names,
-                use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
-                use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
-                central_freq_op=central_freq_op,
-                matrix_precond=matrix_precond,
-                dictionary_parameters_CG={
-                    "max_steps_CG": megabuster_options["max_steps_CG"],
-                    "tol_CG": megabuster_options["tol_CG"],
-                },
-                ordering_parameter=angles_names+["beta_dust", "beta_pl"],
-                ordering_component=["cmb", "dust", "synchrotron"],
-                use_hessienne = megabuster_options["use_hessienne"],
-                use_hmc = megabuster_options["use_hmc"],
-                n_warm = megabuster_options["n_warm"],
-                n_samples = megabuster_options["n_samples"],
-            ).s
-            
-        noise_map_post_compsep *= binary_mask
-
-        # TODO: update keys wrt relevant components once implemented in compsep step
+    # Boucler sur les résultats pour calculer les spectres
+    for i, id_realisation in enumerate(rank_realisation_list):
         noise_comp_dict = {
-            "Noise_CMB": noise_map_post_compsep[0],
-            "Noise_Dust": noise_map_post_compsep[1],
+            "Noise_CMB": np.array([
+                np.asarray(noise_maps_post_compsep_batch["cmb"].q[i]),
+                np.asarray(noise_maps_post_compsep_batch["cmb"].u[i]),
+            ]) * binary_mask,
+            "Noise_Dust": np.array([
+                np.asarray(noise_maps_post_compsep_batch["dust"].q[i]),
+                np.asarray(noise_maps_post_compsep_batch["dust"].u[i]),
+            ]) * binary_mask,
         }
         if config.parametric_sep_pars.include_synchrotron:
-            noise_comp_dict["Noise_Synch"] = noise_map_post_compsep[2]
+            noise_comp_dict["Noise_Synch"] = np.array([
+                np.asarray(noise_maps_post_compsep_batch["synchrotron"].q[i]),
+                np.asarray(noise_maps_post_compsep_batch["synchrotron"].u[i]),
+            ]) * binary_mask
 
-        # Computing auto and cross spectra
         noise_Cls = compute_auto_cross_cl_from_maps_dict(
             maps_dict=noise_comp_dict,
             analysis_mask=analysis_mask,
@@ -321,13 +254,12 @@ def noise_spectra_estimator(
             purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
         )
-        # Summing the noise spectra
         for key in noise_Cls:
             if key not in sum_noise_spectra:
                 sum_noise_spectra[key] = np.zeros_like(noise_Cls[key])
             sum_noise_spectra[key] += noise_Cls[key]
 
-    # Perform the reduction
+    # Réduction MPI après la boucle
     if comm is not None:
         sum_noise_spectra_recvbuf = {
             k: MPISUM(val, comm, rank, root) for k, val in sum_noise_spectra.items()
@@ -339,14 +271,10 @@ def noise_spectra_estimator(
         bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
             "bin_index_lminlmax"
         ]
-
-        # Average noise spectra over nsims
         mean_noise_spectra = {}
         for key in sum_noise_spectra:
             mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_n_sim_noise
-
         mean_noise_spectra = limit_namaster_output(mean_noise_spectra, bin_index_lminlmax)
-
     else:
         mean_noise_spectra = None
 
@@ -359,6 +287,7 @@ def noise_spectra_estimator(
 
 
 def main():
+    world, rank, size = get_world()
     parser = argparse.ArgumentParser(description="Noise spectra estimator")
     parser.add_argument("--config", type=Path, required=True, help="config file")
     parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
@@ -367,10 +296,7 @@ def main():
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
 
-    world, rank, size = get_world()
-    workspace_nmt, effective_beam_CMB = init_workspace(
-        config, manager
-    )  # Initialize the workspace once and for all (WARNING WHEN WE'LL NEED EFFECTIVE BEAMS !!!!!)
+    workspace_nmt, effective_beam_CMB = init_workspace(config, manager)
     if rank == 0:
         manager.dump_config()
         manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)

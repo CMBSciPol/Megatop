@@ -282,6 +282,7 @@ class PreProcessingConfig(StrictModel):
     DEBUGskippreproc: bool = False
     correct_for_TF: bool = False
     sum_TF_column: bool = True
+    use_real_beams: bool = False
 
 
 class NoiseCovmatConfig(StrictModel):
