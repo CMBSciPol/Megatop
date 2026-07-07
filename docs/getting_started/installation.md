@@ -16,6 +16,10 @@ pip install git+https://github.com/CMBSciPol/Megatop.git
 
     Check the [NaMaster documentation](https://namaster.readthedocs.io/en/latest/source/installation.html) for more information.
 
+!!! tip
+
+    Spherical harmonic transforms use [ducc](https://mtr.pages.mpcdf.de/ducc/index.html) under the hood. For best performance, it is recommended to compile this package from source by adding `--no-binary ducc0` (see https://gitlab.mpcdf.mpg.de/mtr/ducc#installation for details).
+
 Most of the pipeline steps use [MPI](https://en.wikipedia.org/wiki/Message_Passing_Interface).
 To run those, you will need the `mpi4py` package, an optional dependency.
 
@@ -24,6 +28,18 @@ pip install megatop[mpi] @ git+https://github.com/CMBSciPol/Megatop.git
 ```
 
 Refer to the [mpi4py documentation](https://mpi4py.readthedocs.io/en/stable/install.html) for more information.
+
+To use [Snakemake](https://snakemake.readthedocs.io/) to orchestrate the pipeline (recommended, requires Python >= 3.11):
+
+```bash
+pip install megatop[snake] @ git+https://github.com/CMBSciPol/Megatop.git
+```
+
+Both extras can be combined:
+
+```bash
+pip install "megatop[mpi,snake] @ git+https://github.com/CMBSciPol/Megatop.git"
+```
 
 ## Development
 

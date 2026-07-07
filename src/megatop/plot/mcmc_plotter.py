@@ -112,7 +112,7 @@ def plot_all_cornerplots(manager: DataManager, config: Config):
     # )
 
     for id_sim in range(n_sim_sky):
-        fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+        fname_chains = manager.get_path_to_mcmc_chains(id_sim)
         mcmc = np.load(fname_chains, allow_pickle=True)
         chains = mcmc["mcmc_chains"]
         param_names = mcmc["param_names"]
@@ -163,7 +163,7 @@ def plot_single_cornerplot(manager: DataManager, config: Config, id_sim: int | N
     r_sim = config.map_sim_pars.r_input
     A_lens_sim = config.map_sim_pars.A_lens
 
-    fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+    fname_chains = manager.get_path_to_mcmc_chains(id_sim)
     mcmc = np.load(fname_chains, allow_pickle=True)
     chains = mcmc["mcmc_chains"]
     param_names = mcmc["param_names"]
@@ -201,10 +201,8 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     sky_model = "".join(config.map_sim_pars.sky_model)
 
     # Load spectra data
-    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
-        "CMBxCMB"
-    ][3]
-    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][3]
+    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
         "DustxDust"
     ][3]
 
@@ -216,7 +214,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
         # TODO: test case when only one experiment is noiseless?
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
     else:
-        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))[
             "Noise_CMBxNoise_CMB"
         ][3]
 
@@ -227,9 +225,9 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     ls_bins_lminlmax_centre = binning_info["bin_centre_lminlmax"]
 
     if config.cl2r_pars.load_model_spectra:
-        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: 3 * config.nside]
+        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: config.lmax + 1]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
-            : 3 * config.nside
+            : config.lmax + 1
         ]
     else:
         Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
@@ -237,7 +235,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     # Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(lmin, lmax)
 
     # Load estimated parameters from MCMC chains
-    fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+    fname_chains = manager.get_path_to_mcmc_chains(id_sim)
     mcmc = np.load(fname_chains, allow_pickle=True)
     chains = mcmc["mcmc_chains"]
     param_names = mcmc["param_names"]
@@ -307,7 +305,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     )
 
     ax.plot(
-        np.arange(0, 3 * config.nside),
+        np.arange(0, config.lmax + 1),
         Cl_BB_prim_est,
         label=r"$C_\ell^{prim, \rm est} = r^{\rm est} \cdot C_\ell^{\rm prim}(r=1)$ "
         + r",  $r^{\rm est} = $"
@@ -318,7 +316,7 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     )
 
     ax.plot(
-        np.arange(0, 3 * config.nside),
+        np.arange(0, config.lmax + 1),
         Cl_BB_lensing_est,
         label=r"$C_\ell^{lensing, \rm est} = A_{\rm lens}^{\rm est} \cdot C_\ell^{\rm prim}(r=0)$"
         + r",  $A_{\rm lens}^{\rm est} = $"

@@ -1,8 +1,6 @@
 import argparse
 from pathlib import Path
 
-import healpy as hp
-import matplotlib.pyplot as plt
 from matplotlib import cm
 
 from megatop import Config, DataManager
@@ -10,6 +8,7 @@ from megatop.utils import Timer, logger
 from megatop.utils.mask import (
     get_spin_derivatives,
 )
+from megatop.utils.plot import single_map_plotter
 
 
 def plotter(manager: DataManager, config: Config):
@@ -19,72 +18,65 @@ def plotter(manager: DataManager, config: Config):
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     # Plotting hits map
-    nhits = hp.read_map(manager.path_to_common_nhits_map)
-    plt.figure(figsize=(16, 9))
-    hp.mollview(nhits, cmap=cmap, cbar=True, title="Commin hits map")
-    hp.graticule()
-    plt.savefig(plot_dir / "nhits_map.png")
-    plt.clf()
+    nhits = config.landscape.read_map(manager.path_to_common_nhits_map)
+    single_map_plotter(
+        nhits, config, plot_dir / "nhits_map.png", title="Common hits map", cmap=cmap
+    )
 
     # Plotting binary mask map
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    plt.figure(figsize=(16, 9))
-    hp.mollview(binary_mask, cmap=cmap, cbar=True, title="Binary mask, derived from hits map")
-    hp.graticule()
-    plt.savefig(plot_dir / "binary_mask.png")
-    plt.clf()
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
+    single_map_plotter(
+        binary_mask,
+        config,
+        plot_dir / "binary_mask.png",
+        title="Binary mask, derived from hits map",
+        cmap=cmap,
+    )
 
     # Plotting galactic mask
     if config.masks_pars.include_galactic:
-        galactic_mask = hp.read_map(manager.path_to_galactic_mask)
-        plt.figure(figsize=(16, 9))
-        hp.mollview(
+        galactic_mask = config.landscape.read_map(manager.path_to_galactic_mask)
+        single_map_plotter(
             galactic_mask,
-            cmap=cmap,
-            cbar=True,
-            title=f"Galactic map {config.masks_pars.gal_key}",
-        )
-        hp.graticule()
-        plt.savefig(
+            config,
             plot_dir / f"{config.masks_pars.galactic_mask_name}_{config.masks_pars.gal_key}.png",
+            title=f"Galactic map {config.masks_pars.gal_key}",
+            cmap=cmap,
         )
-        plt.clf()
 
     # Plotting point source mask
     if config.masks_pars.include_sources:
-        point_source_mask = hp.read_map(manager.path_to_sources_mask)
-        plt.figure(figsize=(16, 9))
-        hp.mollview(point_source_mask, cmap=cmap, cbar=True, title="Point source mask")
-        hp.graticule()
-        plt.savefig(plot_dir / "point_source_mask.png")
-        plt.clf()
+        point_source_mask = config.landscape.read_map(manager.path_to_sources_mask)
+        single_map_plotter(
+            point_source_mask,
+            config,
+            plot_dir / "point_source_mask.png",
+            title="Point source mask",
+            cmap=cmap,
+        )
 
     # Plotting final analysis mask
-    final_mask = hp.read_map(manager.path_to_analysis_mask)
-    plt.figure(figsize=(16, 9))
-    hp.mollview(final_mask, cmap=cmap, cbar=True, title="Final analysis mask")
-    hp.graticule()
-    plt.savefig(plot_dir / "analysis_mask.png")
-    plt.clf()
-
-    first, second = get_spin_derivatives(final_mask)
-    # Plot first spin derivative of analysis mask
-    plt.figure(figsize=(16, 9))
-    hp.mollview(
-        first, title="First spin derivative of the final analysis mask", cmap=cmap, cbar=True
+    final_mask = config.landscape.read_map(manager.path_to_analysis_mask)
+    single_map_plotter(
+        final_mask, config, plot_dir / "analysis_mask.png", title="Final analysis mask", cmap=cmap
     )
-    hp.graticule()
-    plt.savefig(plot_dir / "analysis_mask_first.png")
-    plt.clf()
 
-    # Plot second spin derivative of analysis mask
-    plt.figure(figsize=(16, 9))
-    hp.mollview(
-        second, title="Second spin derivative of the final analysis mask", cmap=cmap, cbar=True
+    # CAR needs an explicit band limit; HEALPix keeps its nside-derived default
+    first, second = get_spin_derivatives(final_mask, lmax=config.lmax if config.is_car else None)
+    single_map_plotter(
+        first,
+        config,
+        plot_dir / "analysis_mask_first.png",
+        title="First spin derivative of the final analysis mask",
+        cmap=cmap,
     )
-    hp.graticule()
-    plt.savefig(plot_dir / "analysis_mask_second.png")
-    plt.clf()
+    single_map_plotter(
+        second,
+        config,
+        plot_dir / "analysis_mask_second.png",
+        title="Second spin derivative of the final analysis mask",
+        cmap=cmap,
+    )
 
     # if config.masks_pars.DEBUG_output_apod_binary_mask:
     #     apod_binary_mask = hp.read_map(manager.path_to_apod_binary_mask)
