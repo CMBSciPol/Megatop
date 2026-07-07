@@ -61,22 +61,21 @@ def preprocess_map(
     )
 
     use_harmonic = config.parametric_sep_pars.use_harmonic_compsep
-    beams_match = np.all(
-        np.asarray(config.pre_proc_pars.common_beam_correction) == np.asarray(config.beams)
+    # beams_match = np.all(
+    #     np.asarray(config.pre_proc_pars.common_beam_correction) == np.asarray(config.beams)
+    # )
+    # if beams_match and not use_harmonic:
+    #     logger.info("Common beam correction is the same as the input beam, no need to apply it.")
+    #     freq_maps_convolved = np.array(input_maps, dtype="float64")
+    # else:
+    freq_maps_convolved = common_beam_and_nside(
+        nside=config.nside,
+        common_beam=config.pre_proc_pars.common_beam_correction,
+        frequency_beams=config.beams,
+        freq_maps=input_maps,
+        lmax=config.lmax,
     )
-
-    if beams_match and not use_harmonic:
-        logger.info("Common beam correction is the same as the input beam, no need to apply it.")
-        freq_maps_convolved = np.array(input_maps, dtype="float64")
-    else:
-        freq_maps_convolved = common_beam_and_nside(
-            nside=config.nside,
-            common_beam=config.pre_proc_pars.common_beam_correction,
-            frequency_beams=config.beams,
-            freq_maps=input_maps,
-            lmax=config.lmax,
-        )
-        logger.info(f"Pre-processed maps have shape: {freq_maps_convolved.shape}")
+    logger.info(f"Pre-processed maps have shape: {freq_maps_convolved.shape}")
 
     if not use_harmonic:
         if mask_output:
