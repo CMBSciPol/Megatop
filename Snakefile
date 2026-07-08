@@ -24,6 +24,7 @@ manager = DataManager(mt)
 N_SKY = mt.map_sim_pars.n_sim
 N_NOISE = mt.noise_sim_pars.n_sim
 MAP_SETS = [ms.name for ms in mt.map_sets]
+MAP_SET_CONFIGS = {ms.name: ms for ms in mt.map_sets}
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -119,7 +120,11 @@ for _i in range(N_NOISE):
 
 
 # ── Per-sky-sim rules ─────────────────────────────────────────────────────────
+# map_sets with `external_sky_map` set are read from disk (see ExternalSkyMapConfig);
+# no mock_signal rule is generated for them, so preproc reads the external file directly.
 for _i, _ms in product(range(N_SKY), MAP_SETS):
+    if MAP_SET_CONFIGS[_ms].external_sky_map is not None:
+        continue
 
     rule:
         name: f"mock_signal_{_i:04d}_{_ms}"

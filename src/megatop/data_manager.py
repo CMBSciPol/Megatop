@@ -175,10 +175,23 @@ class DataManager:
         """Get the list of filenames for the maps.
 
         Different realizations (identified by an index) are put in separate subdirectories.
+        Map sets with `external_sky_map` set are read from that location instead, bypassing the
+        mocker.
         """
         dest = self.get_path_to_maps_sub(id_sim) if id_sim is not None else self.path_to_maps
-        names = [dest / map_set.map_filename for map_set in self._config.map_sets]
-        return [name.with_suffix(".fits") for name in names]
+        names = []
+        for map_set in self._config.map_sets:
+            ext = map_set.external_sky_map
+            if ext is not None:
+                names.append(
+                    ext.root
+                    / ext.filename_template.format(
+                        id_sim=id_sim if id_sim is not None else 0, freq=map_set.freq_tag
+                    )
+                )
+            else:
+                names.append((dest / map_set.map_filename).with_suffix(".fits"))
+        return names
 
     def get_obsmat_filenames(self) -> list[Path | None]:
         """Get the list of filenames for the observation matrices."""
