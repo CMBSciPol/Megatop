@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 
 import camb
 import healpy as hp
@@ -6,20 +7,34 @@ import numpy as np
 import pymaster as nmt
 from numpy.typing import NDArray
 
+from megatop.config import CAMBCosmoPars
 from megatop.utils import logger
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
+CAMBSpectraKey = Literal[
+    "total",
+    "unlensed_scalar",
+    "unlensed_total",
+    "lensed_scalar",
+    "tensor",
+    "lens_potential",
+]
 
-def compute_spectra_from_camb(r, cosmo_params_dict, which="total"):
+
+def compute_spectra_from_camb(
+    r: float,
+    cosmo_pars: CAMBCosmoPars,
+    which: CAMBSpectraKey = "total",
+):
     """
     Compute CMB TT, EE, BB, TE spectra from CAMB.
     Parameters
     ----------
     r : float
         Tensor-to-scalar ratio.
-    cosmo_params_dict : dict
-        Dictionary of cosmological parameters passed to camb.set_params().
+    cosmo_pars : CAMBCosmoPars
+        Cosmological parameters passed to camb.set_params().
     which : str
         One of the spectra keys returned by results.get_cmb_power_spectra().
     Returns
@@ -28,14 +43,13 @@ def compute_spectra_from_camb(r, cosmo_params_dict, which="total"):
         Each with shape (LMAX+1,)
     """
 
-    cosmo_params = camb.set_params(**cosmo_params_dict)
-
+    cosmo_params = camb.set_params(**cosmo_pars.as_camb_kwargs())
     cosmo_params.set_for_lmax(2000, lens_potential_accuracy=1)
     cosmo_params.WantTensors = True
 
     infl_params = camb.initialpower.InitialPowerLaw()
     infl_params.set_params(
-        ns=cosmo_params_dict["ns"],
+        ns=cosmo_pars.ns,
         r=r,
         parameterization="tensor_param_indeptilt",
         nt=0,

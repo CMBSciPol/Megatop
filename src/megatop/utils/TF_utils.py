@@ -1,6 +1,8 @@
 import healpy as hp
 import numpy as np
 
+import megatop.utils.harmonic as hu
+
 
 def power_law_cl(ell, amp, delta_ell, power_law_index):
     """ """
@@ -34,7 +36,7 @@ def get_map_from_alms(alms, nside):
         Returns the corresponding map.
     """
 
-    return hp.alm2map(alms, nside=nside)
+    return hu.alm2map(alms, spin=[0, 2], nside=nside)
 
 
 def get_alm_ordering(fields="TEB", components=None):

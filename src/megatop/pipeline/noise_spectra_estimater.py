@@ -30,9 +30,7 @@ def init_workspace(config: Config, manager: DataManager):
 
     # Getting effective beam TODO: add case for input maps (no preproc)
     effective_beam_CMB = get_common_beam_wpix(
-        config.pre_proc_pars.common_beam_correction,
-        config.nside,
-        config.lmax,
+        config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
     )
     logger.warning(
         "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
@@ -84,25 +82,12 @@ def noise_spectra_estimator(
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
-    if not config.parametric_sep_pars.use_megabuster:
-        W_maxL = np.load(manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True)[
-            "W_maxL"
-        ]
+    W_maxL = np.load(manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True)["W_maxL"]
 
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
 
-    # Getting effective beam TODO: add case for input maps (no preproc)
-    # effective_beam_CMB = get_common_beam_wpix(
-    # config.pre_proc_pars.common_beam_correction, config.nside
-    # )
-    # effective_beam_CMB = np.ones_like(effective_beam_CMB)  # No beam for now
-
-    # logger.warning(
-    #     "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
-    # )
     MemoryUsage(f"rank = {rank} ")
-    # import IPython; IPython.embed()
 
     if config.parametric_sep_pars.use_megabuster:
         with Timer("init-megabuster"):
@@ -250,8 +235,6 @@ def noise_spectra_estimator(
     for id_realisation in rank_realisation_list:
         MemoryUsage(f"rank = {rank} ")
 
-        # noise_freq_maps = []
-
         id_real = None if n_sim_noise is None else id_realisation
 
         logger.info(f"id_realisation = {id_real}")
@@ -354,7 +337,6 @@ def noise_spectra_estimator(
             purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
         )
-
         # Summing the noise spectra
         for key in noise_Cls:
             if key not in sum_noise_spectra:

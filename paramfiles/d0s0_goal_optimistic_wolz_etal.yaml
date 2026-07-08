@@ -6,7 +6,7 @@ data_dirs:
   maps: maps
   passbands: passbands
   noise_maps: noise
-  root: /cephfs/soukdata/user_data/jost/runs/wolz_etal_aftermerge/d0s0_goal_optimistic/data_root
+  root: path/to/data
 
 fiducial_cmb:
   compute_from_camb: True
@@ -21,7 +21,9 @@ fiducial_cmb:
 general_pars:
   lmax: 500
   lmin: 30
-  nside: 256
+  pixelisation:
+    healpix:
+      nside: 256
 
 map2cl_pars:
   delta_ell: 10
@@ -71,7 +73,7 @@ map_sim_pars:
   cmb_seed: 1234
   cmb_sim_no_pysm: true
   filter_sims: false
-  n_sim: 500  #Set to > 200 fro good statistics (500 in original paper)
+  n_sim: 1  #Set to > 200 fro good statistics (500 in original paper)
   r_input: 0.0
   single_cmb: false
   sky_model:
@@ -99,7 +101,7 @@ masks_pars:
 noise_sim_pars:
   include_nhits: True
   seed: 5678
-  n_sim: 500  #Set to > 200 for convergence of the noise covariance (500 recommended)
+  n_sim: 1.  #Set to > 200 for convergence of the noise covariance (500 recommended)
 
   experiments:
     SO-SAT:
@@ -119,7 +121,7 @@ output_dirs:
   preproc: preproc
   spectra: spectra
   mcmc: mcmc
-  root: /cephfs/soukdata/user_data/jost/runs/wolz_etal_aftermerge/d0s0_goal_optimistic/output_root
+  root: path/to/outputs
 
 parametric_sep_pars:
   include_synchrotron: true

@@ -21,6 +21,7 @@ import healpy as hp
 import numpy as np
 from scipy.linalg import sqrtm
 
+import megatop.utils.harmonic as hu
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
@@ -68,14 +69,8 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
     noise_freq_maps = []
     for noise_filename in manager.get_noise_maps_filenames(id_real):
         logger.debug(f"Importing noise map: {noise_filename}")
-        noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
+        noise_freq_maps.append(hp.read_map(noise_filename, field=None, dtype=np.float64))
 
-    # beams_match = np.all(
-    #     np.asarray(config.pre_proc_pars.common_beam_correction) == np.asarray(config.beams)
-    # )
-    # if beams_match:
-    #     logger.info("Common beam correction is the same as the input beam, no need to apply it.")
-    #     return np.array(noise_freq_maps)
     # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
     # preventing aliasing from modes above lmax into the analysis bins.
@@ -99,12 +94,6 @@ def _preprocess_TRUE_noise_maps(
     # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
     # preventing aliasing from modes above lmax into the analysis bins.
-    beams_match = np.all(
-        np.asarray(config.pre_proc_pars.common_beam_correction) == np.asarray(config.beams)
-    )
-    if beams_match:
-        logger.info("Common beam correction is the same as the input beam, no need to apply it.")
-        return np.array(TRUE_noise_freq_maps)
     return common_beam_and_nside(
         nside=config.nside,
         common_beam=config.pre_proc_pars.common_beam_correction,
@@ -126,7 +115,7 @@ def _harmonic_nl_contrib(
     ell_min = config.parametric_sep_pars.harmonic_lmin
     ell_max = config.parametric_sep_pars.harmonic_lmax
 
-    mask_analysis = hp.read_map(manager.path_to_analysis_mask)
+    mask_analysis = hp.read_map(manager.path_to_analysis_mask, dtype=np.float64)
 
     if config.parametric_sep_pars.harmonic_delta_ell != 1:
         with Timer("init-namaster-workspace"):
@@ -196,7 +185,7 @@ def _harmonic_nl_contrib(
         )
         noise_spectra = np.array(
             [
-                hp.anafast(noise_freq_maps_preprocessed[i], datapath=HEALPY_DATA_PATH)[:3]
+                hu.anafast(noise_freq_maps_preprocessed[i])[:3]
                 for i in range(len(config.frequencies))
             ]
         )

@@ -27,6 +27,17 @@ def car_tqu_geometry(car_geometry):
     return (3, *shape[-2:]), wcs
 
 
+@pytest.fixture(params=["healpix", "car"])
+def unseen_map(request, car_geometry):
+    """A spin-0 map per pixelization, plus an axis-0 slice to blank."""
+    if request.param == "healpix":
+        base = RNG.standard_normal(hp.nside2npix(NSIDE))
+    else:
+        shape, wcs = car_geometry
+        base = enmap.enmap(RNG.standard_normal(shape), wcs)
+    return base, slice(0, base.shape[0] // 2)
+
+
 def _random_alm(ncomp=1):
     shape = (ncomp, NALM) if ncomp > 1 else (NALM,)
     return RNG.standard_normal(shape) + 1j * RNG.standard_normal(shape)
@@ -79,6 +90,15 @@ class TestMap2Alm:
         assert_allclose(alms[0], harmonic.map2alm(map_T, spin=0, lmax=LMAX))
         assert_allclose(alms[1:], harmonic.map2alm(map_QU, spin=2, lmax=LMAX))
 
+    def test_healpix_list_spin_batch(self):
+        nbatch = 5
+        npix = hp.nside2npix(NSIDE)
+        maps_tqu = RNG.standard_normal((nbatch, 3, npix))
+        alms = harmonic.map2alm(maps_tqu, spin=[0, 2], lmax=LMAX)
+        assert alms.shape == (nbatch, 3, NALM)
+        for i in range(nbatch):
+            assert_allclose(alms[i], harmonic.map2alm(maps_tqu[i], spin=[0, 2], lmax=LMAX))
+
     def test_healpix_mmax_explicit_lmax_matches_default(self):
         m = RNG.standard_normal(hp.nside2npix(NSIDE))
         alm_default = harmonic.map2alm(m, spin=0, lmax=LMAX)
@@ -117,6 +137,27 @@ class TestMap2Alm:
         assert alms.shape == (3, NALM)
         assert_allclose(alms[0], harmonic.map2alm(tqu[0], spin=0, lmax=LMAX))
         assert_allclose(alms[1:], harmonic.map2alm(tqu[1:], spin=2, lmax=LMAX))
+
+    def test_default_niter(self):
+        # niter is a HEALPix-only knob: CAR quadrature is exact in one pass.
+        assert harmonic._default_niter(car=False) == 3
+        assert harmonic._default_niter(car=True) == 0
+
+    def test_strips_unseen_sentinel(self, unseen_map):
+        """hp.UNSEEN must be zeroed, not transformed, in either pixelisation."""
+        base, blank = unseen_map
+        masked = base.copy()
+        masked[blank] = hp.UNSEEN
+        zeroed = base.copy()
+        zeroed[blank] = 0.0
+
+        alm_masked = harmonic.map2alm(masked, spin=0, lmax=LMAX)
+        alm_zeroed = harmonic.map2alm(zeroed, spin=0, lmax=LMAX)
+
+        assert_allclose(alm_masked, alm_zeroed)
+        assert np.any(masked == hp.UNSEEN)  # input not mutated (.copy contract)
+        assert np.all(np.isfinite(alm_masked))
+        assert np.abs(alm_masked).max() < 1e6  # no sentinel leakage
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +209,18 @@ class TestAlm2Map:
         assert m.shape == (3, hp.nside2npix(NSIDE))
         assert_allclose(m[0], harmonic.alm2map(alm_T, spin=0, nside=NSIDE, lmax=LMAX))
         assert_allclose(m[1:], harmonic.alm2map(alm_QU, spin=2, nside=NSIDE, lmax=LMAX))
+
+    def test_healpix_list_spin_batch(self):
+        nbatch = 5
+        alms_teb = RNG.standard_normal((nbatch, 3, NALM)) + 1j * RNG.standard_normal(
+            (nbatch, 3, NALM)
+        )
+        m = harmonic.alm2map(alms_teb, spin=[0, 2], nside=NSIDE, lmax=LMAX)
+        assert m.shape == (nbatch, 3, hp.nside2npix(NSIDE))
+        for i in range(nbatch):
+            assert_allclose(
+                m[i], harmonic.alm2map(alms_teb[i], spin=[0, 2], nside=NSIDE, lmax=LMAX)
+            )
 
     def test_car_list_spin(self, car_geometry):
         shape, wcs = car_geometry
@@ -599,3 +652,101 @@ class TestGetlmax:
 
     def test_mmax_none_matches_default(self):
         assert harmonic.getlmax(np.zeros(NALM, dtype=complex), mmax=None) == LMAX
+
+
+# ---------------------------------------------------------------------------
+# gauss_beam
+# ---------------------------------------------------------------------------
+
+
+class TestGaussBeam:
+    def test_pol_false_shape(self):
+        bl = harmonic.gauss_beam(30.0, LMAX)
+        assert bl.shape == (LMAX + 1,)
+
+    def test_pol_true_shape(self):
+        bl = harmonic.gauss_beam(30.0, LMAX, pol=True)
+        assert bl.shape == (LMAX + 1, 4)
+
+    def test_matches_healpy(self):
+        fwhm_arcmin = 30.0
+        assert_array_equal(
+            harmonic.gauss_beam(fwhm_arcmin, LMAX),
+            hp.gauss_beam(np.radians(fwhm_arcmin / 60), lmax=LMAX),
+        )
+
+    def test_pol_matches_healpy(self):
+        fwhm_arcmin = 30.0
+        assert_array_equal(
+            harmonic.gauss_beam(fwhm_arcmin, LMAX, pol=True),
+            hp.gauss_beam(np.radians(fwhm_arcmin / 60), lmax=LMAX, pol=True),
+        )
+
+    def test_zero_fwhm_is_unity(self):
+        bl = harmonic.gauss_beam(0.0, LMAX)
+        assert_array_equal(bl, np.ones(LMAX + 1))
+
+
+# ---------------------------------------------------------------------------
+# smooth
+# ---------------------------------------------------------------------------
+
+_FWHM = 300.0  # arcmin — large enough to produce measurable T/P beam difference at LMAX=16
+_NPIX = hp.nside2npix(NSIDE)
+
+
+class TestSmooth:
+    def test_healpix_spin0_shape(self):
+        m = RNG.standard_normal(_NPIX)
+        assert harmonic.smooth(m, _FWHM).shape == m.shape
+
+    def test_healpix_tqu_shape(self):
+        tqu = RNG.standard_normal((3, _NPIX))
+        assert harmonic.smooth(tqu, _FWHM, pol=True).shape == tqu.shape
+
+    def test_healpix_infers_nside(self):
+        m = RNG.standard_normal(_NPIX)
+        ms = harmonic.smooth(m, _FWHM)  # no nside kwarg
+        assert ms.shape == (_NPIX,)
+
+    def test_healpix_spin0_matches_manual(self):
+        m = RNG.standard_normal(_NPIX)
+        ms = harmonic.smooth(m, _FWHM, lmax=LMAX)
+        alm = harmonic.map2alm(m, spin=0, lmax=LMAX)
+        bl = harmonic.gauss_beam(_FWHM, LMAX)
+        expected = harmonic.alm2map(harmonic.almxfl(alm, bl), spin=0, nside=NSIDE, lmax=LMAX)
+        assert_array_equal(ms, expected)
+
+    def test_healpix_tqu_t_p_beams_applied_correctly(self):
+        # smooth(pol=True) applies T beam to T and P beam to E/B;
+        # applying only the T beam to all components gives a different result
+        tqu = RNG.standard_normal((3, _NPIX))
+        ms = harmonic.smooth(tqu, _FWHM, pol=True, lmax=LMAX)
+        alms = harmonic.map2alm(tqu, spin=[0, 2], lmax=LMAX)
+        bl_T = harmonic.gauss_beam(_FWHM, LMAX)
+        maps_T_only = harmonic.alm2map(
+            harmonic.almxfl(alms, bl_T), spin=[0, 2], nside=NSIDE, lmax=LMAX
+        )
+        assert not np.allclose(ms[1], maps_T_only[1])  # Q maps differ
+
+    def test_healpix_zero_fwhm_roundtrip(self):
+        m = RNG.standard_normal(_NPIX)
+        ms = harmonic.smooth(m, 0.0, lmax=LMAX)
+        expected = harmonic.alm2map(
+            harmonic.map2alm(m, spin=0, lmax=LMAX), spin=0, nside=NSIDE, lmax=LMAX
+        )
+        assert_allclose(ms, expected)
+
+    def test_car_preserves_geometry(self, car_geometry):
+        shape, wcs = car_geometry
+        m = enmap.enmap(RNG.standard_normal(shape), wcs)
+        ms = harmonic.smooth(m, _FWHM, lmax=LMAX)
+        assert isinstance(ms, enmap.ndmap)
+        assert ms.shape == m.shape
+
+    def test_car_tqu_shape(self, car_geometry):
+        shape, wcs = car_geometry
+        tqu = enmap.enmap(RNG.standard_normal((3, *shape[-2:])), wcs)
+        ms = harmonic.smooth(tqu, _FWHM, pol=True, lmax=LMAX)
+        assert isinstance(ms, enmap.ndmap)
+        assert ms.shape == tqu.shape

@@ -10,7 +10,7 @@ from camb import initialpower
 
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
-from megatop.utils import logger
+from megatop.utils import logger, mask
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 
@@ -151,7 +151,7 @@ def logL_cosmo(
     theta,
     dust_marg,
     sync_marg,
-    fsky_obs,
+    fsky,
     Cl_BB_prim_generic,
     Cl_BB_lensing_generic,
     Cl_CMBxCMB_BB_est,
@@ -194,7 +194,7 @@ def logL_cosmo(
 
     log_L = -(1 / 2) * np.sum(
         (2 * bin_centre + 1)
-        * fsky_obs
+        * fsky
         * delta_l
         * ((Cl_CMBxCMB_BB_est / Cl_CMBxCMB_BB_model) + np.log(Cl_CMBxCMB_BB_model))
     )
@@ -210,7 +210,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     sync_marg = config.cl2r_pars.sync_marg
 
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    fsky_obs = np.mean(analysis_mask)
+    fsky = mask.fsky_dof(analysis_mask)
 
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
@@ -238,8 +238,6 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         return None
 
     nmt_bins = load_nmt_binning(manager)
-
-    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
     ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
     delta_l = config.map2cl_pars.delta_ell
@@ -300,7 +298,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         args=(
             dust_marg,
             sync_marg,
-            fsky_obs,
+            fsky,
             Cl_BB_prim_generic,
             Cl_BB_lensing_generic,
             Cl_CMBxCMB_BB_est,

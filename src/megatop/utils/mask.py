@@ -1,3 +1,4 @@
+import io
 import os
 import sys
 from pathlib import Path
@@ -7,6 +8,12 @@ from urllib.request import urlopen
 import healpy as hp
 import numpy as np
 import pymaster as nmt
+from astropy.io import fits
+from pixell import enmap
+from pixell import utils as pu
+
+import megatop.utils.harmonic as hu
+from megatop.config import SO_NOMINAL
 
 from .logger import logger
 from .timer import function_timer
@@ -14,6 +21,10 @@ from .timer import function_timer
 SO_NOMINAL_HITMAP_URL = (
     "https://portal.nersc.gov/cfs/sobs/users/so_bb/norm_nHits_SA_35FOV_ns512.fits"
 )
+
+# Override the SO nominal hitmap source with a local file (e.g. a small fixture
+# for CI/tests). When set, no network access is performed.
+SO_NOMINAL_HITMAP_PATH = os.getenv("SO_NOMINAL_HITMAP_PATH", None)
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
@@ -53,56 +64,54 @@ def smooth_mask(mask, fwhm_arcmin):
     """
     Smooth mask(s) with a (gaussian) beam.
     """
-    if mask.ndim > 1:
-        mask_smoothed = []
-        for m in mask:
-            mask_smoothed.append(
-                hp.smoothing(m, fwhm=np.radians(fwhm_arcmin / 60.0), datapath=HEALPY_DATA_PATH)
-            )
-        mask_smoothed = np.array(mask_smoothed)
-    else:
-        mask_smoothed = hp.smoothing(
-            mask, fwhm=np.radians(fwhm_arcmin / 60.0), datapath=HEALPY_DATA_PATH
-        )
+    mask_smoothed = hu.smooth(mask, fwhm_arcmin)
     mask_smoothed[mask_smoothed < 0] = 0
     return mask_smoothed
 
 
 def read_depth_maps(list_depthmapname: list[Path], nside: int):
     """
-    Read depth maps and ud_grade.
+    Read depth maps and ud_grade. Maps are assumed equatorial (celestial).
     """
     depth_maps = []
     for depthmapname in list_depthmapname:
         depth_maps.append(hp.ud_grade(hp.read_map(depthmapname, field=0), nside_out=nside))
-    return np.array(depth_maps)
+    return np.array(depth_maps, dtype=np.float64)
 
 
 def read_nhits_maps(list_hitmapname: list[Path], nside: int):
     """
-    Read hit maps and ud_grade.
+    Read hit maps and ud_grade. Maps are assumed equatorial (celestial).
     """
     nhits_maps = []
-    SO_NOMINAL_NHITS = None
+    so_nominal_nhits = None
     for hitmapname in list_hitmapname:
-        if hitmapname == "SO_nominal":
-            if SO_NOMINAL_NHITS is None:
-                try:
-                    logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
-                    with urlopen(SO_NOMINAL_HITMAP_URL, timeout=10) as _:
-                        # healpy can read directly from the URL
-                        SO_NOMINAL_NHITS = hp.read_map(SO_NOMINAL_HITMAP_URL)
-                        SO_NOMINAL_NHITS = hp.ud_grade(SO_NOMINAL_NHITS, nside, power=-2)
-                except URLError:
-                    logger.error("Nominal hitmap download failed")
-                    logger.error("Exiting mask_handler without creating a mask")
-                    sys.exit()
-            nhits_maps.append(SO_NOMINAL_NHITS)
+        if hitmapname == SO_NOMINAL:
+            if so_nominal_nhits is None:
+                if SO_NOMINAL_HITMAP_PATH is not None:
+                    logger.info(f"Reading nominal hit map from {SO_NOMINAL_HITMAP_PATH}")
+                    so_nominal_nhits = hp.read_map(SO_NOMINAL_HITMAP_PATH)
+                else:
+                    try:
+                        logger.info(f"Downloading nominal hit map from {SO_NOMINAL_HITMAP_URL}")
+                        # Fetch once into memory (bounded by timeout), then let healpy
+                        # parse the bytes — avoids a second, unbounded URL read.
+                        with (
+                            urlopen(SO_NOMINAL_HITMAP_URL, timeout=30) as resp,
+                            fits.open(io.BytesIO(resp.read())) as hdul,
+                        ):
+                            so_nominal_nhits = hp.read_map(hdul)
+                    except URLError:
+                        logger.error("Nominal hitmap download failed")
+                        logger.error("Exiting mask_handler without creating a mask")
+                        sys.exit()
+                so_nominal_nhits = hp.ud_grade(so_nominal_nhits, nside, power=-2)
+            nhits_maps.append(so_nominal_nhits)
         else:
             nhits_maps.append(
                 hp.ud_grade(hp.read_map(hitmapname, field=0), nside_out=nside, power=-2)
             )
-    return np.array(nhits_maps)
+    return np.array(nhits_maps, dtype=np.float64)
 
 
 def norm_smooth_nhits_maps(nhits_maps, fwhm_arcmin_nhits):
@@ -138,9 +147,41 @@ def get_binary_mask(common_hitmap, gal_mask, zero_threshold):
 
 def get_analysis_mask(common_hitmap, binary_mask, apod_radius_deg, apod_type):
     """
-    Create analysis mask and apodize it.
+    Create analysis mask and apodize it (HEALPix, via NaMaster C1/C2/Smooth).
     """
     return nmt.mask_apodization((binary_mask * common_hitmap), apod_radius_deg, apotype=apod_type)
+
+
+def _apod_profile_c1(x):
+    r"""NaMaster ``C1`` apodization profile, $f(x) = x - \sin(2\pi x)/(2\pi)$."""
+    x = np.clip(x, 0.0, 1.0)
+    return x - np.sin(2.0 * np.pi * x) / (2.0 * np.pi)
+
+
+# CAR apodization profiles, keyed by NaMaster `apotype`. `enmap.apod_mask`
+# applies the profile to the geodesic edge distance r/width, which equals
+# NaMaster's chordal x to small-angle order.
+# `Smooth` is a Gaussian convolution, not a profile, so it has no CAR analogue.
+_CAR_APOD_PROFILES = {"C1": _apod_profile_c1, "C2": enmap.apod_profile_cos}
+
+
+def get_analysis_mask_car(common_hitmap, binary_mask, apod_radius_deg, apod_type="C2"):
+    """Create and apodize a CAR analysis mask.
+
+    Uses ``pixell.enmap.apod_mask`` (a distance-transform taper of
+    ``apod_radius_deg`` degrees) instead of NaMaster's apodization, which is
+    HEALPix-only. ``apod_type`` selects the NaMaster-equivalent profile (``C1``
+    or ``C2``); ``Smooth`` is unsupported on CAR. The apodized binary mask is
+    then weighted by the hit map to match the HEALPix ``apodize(binary * nhits)``
+    intent.
+    """
+    try:
+        profile = _CAR_APOD_PROFILES[apod_type]
+    except KeyError:
+        msg = f"Unsupported CAR apod_type {apod_type!r}; choose one of {sorted(_CAR_APOD_PROFILES)}"
+        raise ValueError(msg) from None
+    apodized = enmap.apod_mask(binary_mask, width=apod_radius_deg * pu.degree, profile=profile)
+    return apodized * common_hitmap
 
 
 def random_src_mask(mask, nsrcs, mask_radius_arcmin):
@@ -187,11 +228,7 @@ def get_binary_mask_from_nhits(nhits_map, nside, zero_threshold=1e-3):
     -------
     binary_mask: array
     """
-    nhits_smoothed = hp.smoothing(
-        hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64),
-        fwhm=np.pi / 180,
-        datapath=HEALPY_DATA_PATH,
-    )
+    nhits_smoothed = hu.smooth(hp.ud_grade(nhits_map, nside, power=-2, dtype=np.float64), 60.0)
     nhits_smoothed[nhits_smoothed < 0] = 0
     nhits_smoothed /= np.amax(nhits_smoothed)
     binary_mask = np.zeros_like(nhits_smoothed)
@@ -268,41 +305,109 @@ def get_apodized_mask_from_nhits(
     return nhits_map * binary_mask
 
 
-def get_spin_derivatives(map):
+def get_spin_derivatives(map, lmax=None):
     """
     First and second spin derivatives of a given spin-0 map.
     Parameters
     ----------
     map : array
-        Input spin-0 map in HEALPix format.
+        Input spin-0 map (HEALPix ``(npix,)`` ndarray or CAR ``(ny, nx)``
+        enmap). The landscape is inferred from the input type.
+    lmax : int, optional
+        Band limit for the SHT round-trip. Required for CAR (no ``nside`` to
+        derive one); defaults to ``3 * nside - 1`` for HEALPix.
 
     Returns
     -------
     tuple of arrays
         First and second spin derivatives of the input map.
     """
-    nside = hp.npix2nside(np.shape(map)[-1])
-    ell = np.arange(3 * nside)
+    if isinstance(map, enmap.ndmap):
+        if lmax is None:
+            raise ValueError("lmax is required for CAR maps")
+        target = {"shape": map.shape, "wcs": map.wcs}
+    else:
+        nside = hp.npix2nside(np.shape(map)[-1])
+        lmax = 3 * nside - 1 if lmax is None else lmax
+        target = {"nside": nside}
+    ell = np.arange(lmax + 1)
     alpha1i = np.sqrt(ell * (ell + 1.0))
     alpha2i = np.sqrt((ell - 1.0) * ell * (ell + 1.0) * (ell + 2.0))
-    first = hp.alm2map(hp.almxfl(hp.map2alm(map, datapath=HEALPY_DATA_PATH), alpha1i), nside=nside)
-    second = hp.alm2map(hp.almxfl(hp.map2alm(map, datapath=HEALPY_DATA_PATH), alpha2i), nside=nside)
+    alm = hu.map2alm(map, spin=0, lmax=lmax)
+    first = hu.alm2map(hu.almxfl(alm, alpha1i), spin=0, **target)
+    second = hu.alm2map(hu.almxfl(alm, alpha2i), spin=0, **target)
 
     return first, second
 
 
-def get_fsky(nhits_map, binary_mask, analysis_mask):
-    fsky_nhits = np.mean(nhits_map)
-    fsky_binary = np.mean(binary_mask)
-    fsky_analysis = np.mean(analysis_mask)
-    return fsky_nhits, fsky_binary, fsky_analysis
+def wmoment(field, p):
+    r"""Solid-angle-weighted moment of a weight/mask map: $\int W^p\,d\Omega / 4\pi$.
+
+    HEALPix pixels are equal-area, so this reduces to `mean(field**p)`. CAR pixels
+    vary in area as $\cos(\mathrm{dec})$, so the moment must be area-weighted via
+    `enmap.pixsizemap`; a plain `mean` is wrong there.
+
+    Common uses (with $W$ the normalized weight, `mask` binary):
+
+    - `wmoment(W, 2)` — pseudo-$C_\ell$ amplitude / debias normalization
+    - `wmoment(mask, 1)` — geometric (binary) sky fraction
+    - `wmoment(W, 2)**2 / wmoment(W, 4)` — variance / effective-DOF fsky
+      (Hivon et al. 2002, $w_2^2/w_4$)
+    """
+    if isinstance(field, enmap.ndmap):
+        area = enmap.pixsizemap(field.shape, field.wcs)
+        return float(np.sum(area * field**p) / (4 * np.pi))
+    return float(np.mean(field**p))
+
+
+def fsky_effective(nhits):
+    r"""Effective sky fraction $\langle \mathrm{nhits}\rangle$.
+
+    Equivalent uniform-depth survey area: the V3p1 noise-amplitude input (the
+    area the integration time is spread over). Smaller than geometric, because
+    shallow edges discount the area.
+    """
+    return wmoment(nhits, 1)
+
+
+def fsky_geom(binary_mask):
+    r"""Geometric sky fraction $\langle \mathrm{mask}\rangle$.
+
+    Solid-angle survey fraction; the debias factor for a pseudo-$C_\ell$ measured
+    by `anafast` on a binary-masked map.
+    """
+    return wmoment(binary_mask, 1)
+
+
+def fsky_w2(field):
+    r"""Amplitude / debias normalization $\langle W^2\rangle$ (MCM row-sum)."""
+    return wmoment(field, 2)
+
+
+def fsky_dof(field):
+    r"""Effective-DOF sky fraction for variance / error bars.
+
+    Hivon et al. 2002 mode-count factor $f_{\rm sky}\,w_2^2/w_4 = \langle W^2\rangle^2 / \langle W^4\rangle$.
+    Reduces to the geometric fraction for a binary mask; smaller for an apodized
+    one (apodization loses modes).
+    """
+    return wmoment(field, 2) ** 2 / wmoment(field, 4)
 
 
 @function_timer("apply-binary-mask")
-def apply_binary_mask(maps, binary_mask, unseen=False):
-    # TODO the masking is done in place, needed or could be done differently ?
-    if unseen:
-        maps[..., np.where(binary_mask == 0)[0]] = hp.UNSEEN
-    else:
-        maps[..., np.where(binary_mask == 0)[0]] = 0.0
+def apply_binary_mask(maps, binary_mask, *, unseen=False):
+    """Zero (or set ``hp.UNSEEN`` in) the pixels where ``binary_mask`` is 0.
+
+    Pixel-agnostic: works for 1-D HEALPix masks ``(npix,)`` and 2-D CAR masks
+    ``(ny, nx)`` via trailing boolean indexing over the map's pixel axes.
+    Modifies ``maps`` in place and returns it.
+    """
+    if unseen and isinstance(maps, enmap.ndmap):
+        msg = (
+            "hp.UNSEEN is not supported on CAR maps; pixell has no UNSEEN convention "
+            "and downstream enmap ops would treat the sentinel as a finite value."
+        )
+        raise ValueError(msg)
+    bad = np.asarray(binary_mask) == 0
+    maps[..., bad] = hp.UNSEEN if unseen else 0.0
     return maps

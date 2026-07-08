@@ -17,6 +17,7 @@ from fgbuster.mixingmatrix import MixingMatrix  # noqa: E402
 from fgbuster.separation_recipes import _format_alms  # noqa: E402
 from furax_cs import SOLVER_NAMES  # noqa: E402
 
+import megatop.utils.harmonic as hu  # noqa: E402
 from megatop import Config, DataManager  # noqa: E402
 from megatop.utils import Timer, logger, mask, passband  # noqa: E402
 from megatop.utils.compsep import (  # noqa: E402
@@ -198,16 +199,12 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         logger.info(
             "Harmonic Compsep: Computing component map from output alms, this might induce some edge effect..."
         )
-        res.s = np.array(
-            [
-                hp.alm2map_spin(
-                    res.s_alm[i],
-                    nside=config.nside,
-                    spin=2,
-                    lmax=config.parametric_sep_pars.harmonic_lmax,
-                )  # lmax=3 * config.nside
-                for i in range(res.s_alm.shape[0])
-            ]
+        # TODO: WARNING TEST before use of hu. this was looping over res.s_alm[i]
+        res.s = hu.alm2map(
+            res.s_alm,
+            spin=2,
+            nside=config.nside,
+            lmax=config.parametric_sep_pars.harmonic_lmax,
         )
         # remove binary mask to avoid double application when entering namaster:
         analysis_mask = hp.read_map(manager.path_to_analysis_mask)

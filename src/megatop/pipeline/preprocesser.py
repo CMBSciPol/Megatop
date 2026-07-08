@@ -61,13 +61,7 @@ def preprocess_map(
     )
 
     use_harmonic = config.parametric_sep_pars.use_harmonic_compsep
-    # beams_match = np.all(
-    #     np.asarray(config.pre_proc_pars.common_beam_correction) == np.asarray(config.beams)
-    # )
-    # if beams_match and not use_harmonic:
-    #     logger.info("Common beam correction is the same as the input beam, no need to apply it.")
-    #     freq_maps_convolved = np.array(input_maps, dtype="float64")
-    # else:
+
     freq_maps_convolved = common_beam_and_nside(
         nside=config.nside,
         common_beam=config.pre_proc_pars.common_beam_correction,

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from megatop import Config, DataManager
-from megatop.utils import logger
+from megatop.utils import logger, mask
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mock import get_Cl_CMB_model_from_manager
 from megatop.utils.plot import plot_all_Cls, plot_all_Cls_diff
@@ -265,7 +265,7 @@ def plot_all_spectra(manager, config):
     std_debiased_diff_BB = np.std(array_debiased_diff_model[:, 1, :], axis=0)
 
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    fsky = np.mean(analysis_mask)
+    fsky = mask.fsky_dof(analysis_mask)  # effective DOF for error bars (Hivon w2^2/w4)
 
     warning_labelEE = (
         "WARNING: negative bins in N_ell EE, use abs for error bars"

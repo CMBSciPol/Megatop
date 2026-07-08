@@ -33,7 +33,11 @@ __all__ = [
     "anafast",
     "getlmax",
     "map2alm",
+    "rotate_map_alms",
+    "gauss_beam",
+    "smooth",
     "synfast",
+    "truncate_alm",
 ]
 
 
@@ -53,6 +57,24 @@ def getlmax(alm, mmax=None) -> int:
         ``lmax`` consistent with ``alm.shape[-1]`` and ``mmax``.
     """
     return hp.Alm.getlmax(alm.shape[-1], mmax=mmax)
+
+
+def truncate_alm(alm, lmax: int):
+    """Band-limit `alm` to `lmax`, re-packing the triangular `(l, m)` layout.
+
+    ``alm2map`` reads the packing for the ``lmax`` it is told, so an ``alm``
+    computed at a higher (e.g. Nyquist) ``lmax`` must be truncated — not merely
+    sliced — before synthesis. Returns `alm` unchanged when `lmax` is already
+    at or above its band limit.
+
+    Args:
+        alm: Alm array `(..., nalm)`; multi-component inputs are truncated row-wise.
+        lmax: Target band limit.
+    """
+    lmax_in = getlmax(np.asarray(alm))
+    if lmax >= lmax_in:
+        return alm
+    return np.asarray(hp.resize_alm(alm, lmax_in, lmax_in, lmax, lmax))
 
 
 @lru_cache(maxsize=8)
@@ -125,6 +147,7 @@ def _ducc_adjoint_synthesis(maps, *, spin, lmax=None, mmax=None, nthreads=None):
 
 def _map2alm_healpix_iter(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None):
     """Jacobi iteration over ``_ducc_adjoint_synthesis``. Uses ducc0 shapes."""
+    maps = np.where(maps == hp.UNSEEN, 0.0, maps)
     nside = hp.npix2nside(maps.shape[-1])
     kw = {"spin": spin, "lmax": lmax, "mmax": mmax, "nthreads": nthreads}
     alm = _ducc_adjoint_synthesis(maps, **kw)
@@ -147,7 +170,11 @@ def _map2alm_healpix(maps, *, spin, lmax=None, mmax=None, niter=3, nthreads=None
     return _map2alm_healpix_iter(maps, **kw)
 
 
-def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
+def _default_niter(car: bool) -> int:
+    return 0 if car else 3
+
+
+def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=None, nthreads=None):
     """Forward SHT, dispatching on pixelization.
 
     Args:
@@ -156,34 +183,47 @@ def map2alm(maps, *, spin=0, lmax=None, mmax=None, niter=3, nthreads=None):
         spin: Spin weight: ``0`` (T), ``2`` (Q/U), or a list like ``[0, 2]``
             for mixed-spin fields. HEALPix splits the map axis by spin group;
             CAR passes to pixell.
+
+            Unlike healpy's ``pol=True``, TQU → TEB requires ``spin=[0, 2]``
+            explicitly. With ``spin=[0, 2]`` and a ``(3, npix)`` input the
+            output is ``(3, nalm)`` with rows ``[alm_T, alm_E, alm_B]``.
+            Batch dimensions are supported: ``(batch, 3, npix)`` → ``(batch, 3, nalm)``.
         lmax: Bandlimit. HEALPix default: ``3 * nside - 1``; CAR: library default.
         mmax: Azimuthal bandlimit (HEALPix only). Defaults to ``lmax``.
-        niter: Refinement steps. HEALPix: Jacobi iterations; CAR: passed to pixell.
+        niter: Jacobi refinement steps. ``None`` (default) resolves per pixelization:
+            ``3`` for HEALPix, ``0`` for CAR. HEALPix lacks exact quadrature, so
+            iteration improves accuracy. CAR grids carry exact quadrature weights, so
+            one pass is already exact on the full sky; on a cut-sky enmap iteration is
+            ill-posed and amplifies the unconstrained band-edge modes (a spurious
+            ``Cl[lmax]`` spike). An explicit value overrides the default for either
+            pixelization (pixell accepts ``niter`` for CAR, but it is rarely useful).
         nthreads: ducc0 thread count (HEALPix). ``None`` uses ``MEGATOP_SHT_NTHREADS``.
 
     Returns:
         Alm array, last axis in triangular ``(l, m)`` layout.
     """
-    if _is_car(maps):
+    car = _is_car(maps)
+    if niter is None:
+        niter = _default_niter(car)
+    if car:
+        # mirror the HEALPix branch: zero hp.UNSEEN sentinels so masked pixels
+        # don't dominate the SHT (copy keeps the enmap wcs for curvedsky)
+        unseen = maps == hp.UNSEEN
+        if np.any(unseen):
+            maps = maps.copy()
+            maps[unseen] = 0.0
         return curvedsky.map2alm(maps, spin=spin, lmax=lmax, niter=niter)
+    kw = {"lmax": lmax, "mmax": mmax, "niter": niter, "nthreads": nthreads}
     if isinstance(spin, (list, tuple)):
         alms_out = []
         idx = 0
         for s in spin:
             nmaps = 1 if s == 0 else 2
-            alms_out.append(
-                _map2alm_healpix(
-                    maps[idx : idx + nmaps],
-                    spin=s,
-                    lmax=lmax,
-                    mmax=mmax,
-                    niter=niter,
-                    nthreads=nthreads,
-                )
-            )
+            # _map2alm_healpix_iter uses ducc0 ([ntrans,] nmaps, npix) convention directly
+            alms_out.append(_map2alm_healpix_iter(maps[..., idx : idx + nmaps, :], spin=s, **kw))
             idx += nmaps
-        return np.concatenate(alms_out, axis=0)
-    return _map2alm_healpix(maps, spin=spin, lmax=lmax, mmax=mmax, niter=niter, nthreads=nthreads)
+        return np.concatenate(alms_out, axis=-2)
+    return _map2alm_healpix(maps, spin=spin, **kw)
 
 
 def alm2map(
@@ -209,6 +249,10 @@ def alm2map(
         spin: Spin weight: ``0`` (T), ``2`` (Q/U), or a list like ``[0, 2]``
             for mixed-spin fields. HEALPix splits the alm axis by spin group;
             CAR passes to pixell.
+
+            TEB → TQU requires ``spin=[0, 2]``. With a ``(3, nalm)`` input the
+            output is ``(3, npix)`` with rows ``[T, Q, U]``.
+            Batch dimensions are supported: ``(batch, 3, nalm)`` → ``(batch, 3, npix)``.
         nside: HEALPix resolution. Mutually exclusive with CAR options.
         shape: CAR pixel shape. Used with ``wcs``.
         wcs: CAR world coordinate system. Used with ``shape``.
@@ -244,15 +288,40 @@ def alm2map(
         out_idx = idx = 0
         for s in spin:
             nmaps = 1 if s == 0 else 2
-            alm_seg = alms[idx : idx + nmaps]
-            out_seg = out[out_idx : out_idx + nmaps] if inplace else None
-            result = _alm2map_healpix(alm_seg, spin=s, out=out_seg, **kw)
+            # _ducc_synthesis uses ([ntrans,] nmaps, nalm) convention directly
+            out_seg = out[..., out_idx : out_idx + nmaps, :] if inplace else None
+            result = _ducc_synthesis(alms[..., idx : idx + nmaps, :], spin=s, out=out_seg, **kw)
             if not inplace:
                 maps_out.append(result)
             idx += nmaps
             out_idx += nmaps
-        return out if inplace else np.concatenate(maps_out, axis=0)
+        return out if inplace else np.concatenate(maps_out, axis=-2)
     return _alm2map_healpix(alms, spin=spin, out=out, **kw)
+
+
+def rotate_map_alms(m, coord, *, spin=0, lmax=None):
+    """Rotate a HEALPix map between coordinate frames in harmonic space.
+
+    The map is transformed to ``alm``, rotated with ``healpy.Rotator``, and
+    synthesised back onto the *same* HEALPix grid. Rotating in harmonic space
+    avoids the pixel-space interpolation error of a direct map rotation.
+
+    Args:
+        m: HEALPix map ``(..., npix)``; multi-component inputs (e.g. ``(3, npix)``
+            TQU) are handled per `spin`.
+        coord: Frame pair for ``healpy.Rotator``, e.g. ``["G", "C"]``
+            (galactic → celestial/equatorial).
+        spin: Spin weight(s): ``0`` (T), ``2`` (Q/U), or ``[0, 2]`` for TQU.
+        lmax: Band limit for the round-trip SHT. HEALPix default ``3 * nside - 1``.
+
+    Returns:
+        Rotated HEALPix map, same shape and ``nside`` as `m`.
+    """
+    m = np.asarray(m)
+    nside = hp.npix2nside(m.shape[-1])
+    alm = map2alm(m, spin=spin, lmax=lmax)
+    hp.Rotator(coord=coord).rotate_alm(alm, inplace=True)
+    return alm2map(alm, nside=nside, spin=spin, lmax=lmax)
 
 
 def _normalise_cl(cl):
@@ -364,7 +433,72 @@ def almxfl(alms, fl, *, mmax=None, inplace=False):
     return out
 
 
-def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthreads=None):
+def gauss_beam(fwhm_arcmin, lmax, *, pol=False):
+    """Wrapper around ``healpy.gauss_beam`` with FWHM in arcminutes.
+
+    See healpy documentation for full details. The only difference is that
+    ``fwhm_arcmin`` is in arcminutes whereas healpy's ``fwhm`` is in radians.
+    """
+    return hp.gauss_beam(np.radians(fwhm_arcmin / 60), lmax=lmax, pol=pol)
+
+
+def smooth(
+    maps,
+    fwhm_arcmin,
+    *,
+    pol=False,
+    lmax=None,
+    nside=None,
+    shape=None,
+    wcs=None,
+    out=None,
+    niter=None,
+    nthreads=None,
+):
+    """Smooth a map with a Gaussian beam.
+
+    When no output geometry is given the input geometry is reused:
+    HEALPix nside is inferred from the input pixel count; CAR shape and
+    WCS are copied from the input enmap.
+
+    Args:
+        maps: Input map — HEALPix ``(..., npix)`` ndarray or CAR
+            ``pixell.enmap.ndmap`` ``(..., ny, nx)``.
+        fwhm_arcmin: FWHM of the Gaussian beam in arcminutes.
+        pol: If ``True``, treat ``maps`` as TQU and apply separate T and P
+            beams (spin ``[0, 2]``). If ``False`` (default), apply a single
+            spin-0 beam to all components.
+        lmax: Bandlimit. Inferred from the alm output of ``map2alm`` if
+            ``None``.
+        nside: HEALPix output resolution. Defaults to input nside.
+        shape: CAR output pixel shape. Defaults to input shape.
+        wcs: CAR world coordinate system. Defaults to input WCS.
+        out: Pre-allocated output map written in-place and returned.
+        niter: Forward-SHT refinement steps; see [`map2alm`][..map2alm].
+        nthreads: ducc0 thread count (HEALPix).
+
+    Returns:
+        Smoothed map, same type and geometry as input unless overridden.
+    """
+    spin = [0, 2] if pol else 0
+    alms = map2alm(maps, spin=spin, lmax=lmax, niter=niter, nthreads=nthreads)
+    lmax_alm = getlmax(alms)
+    if pol:
+        bl = gauss_beam(fwhm_arcmin, lmax_alm, pol=True)  # (lmax+1, 4)
+        almxfl(alms[0], bl[:, 0], inplace=True)
+        almxfl(alms[1:], bl[:, 1], inplace=True)
+    else:
+        almxfl(alms, gauss_beam(fwhm_arcmin, lmax_alm), inplace=True)
+    if _is_car(maps):
+        if out is None and shape is None:
+            shape = maps.shape
+            wcs = maps.wcs
+    elif out is None and nside is None and shape is None:
+        nside = hp.npix2nside(np.asarray(maps).shape[-1])
+    return alm2map(alms, spin=spin, nside=nside, shape=shape, wcs=wcs, out=out, nthreads=nthreads)
+
+
+def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=None, pol=True, nthreads=None):
     """Compute auto or cross power spectrum.
 
     Routes through ``map2alm`` then ``hp.alm2cl``. For TQU input (``pol=True``),
@@ -376,7 +510,7 @@ def anafast(maps, maps2=None, *, lmax=None, mmax=None, niter=3, pol=True, nthrea
         maps2: Second map for cross-spectrum.
         lmax: Bandlimit.
         mmax: Azimuthal bandlimit (HEALPix only — pixell does not expose it).
-        niter: Jacobi iterations for the forward SHT.
+        niter: Forward-SHT refinement steps; see [`map2alm`][..map2alm].
         pol: If ``True`` and the map has a Stokes axis of length 3, decompose
             into TEB and return all six spectra. Raises ``ValueError`` if the
             Stokes axis exists but has length ≠ 3.

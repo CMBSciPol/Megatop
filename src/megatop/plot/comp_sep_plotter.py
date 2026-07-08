@@ -80,7 +80,6 @@ def plot_compsep_stats(manager: DataManager, config: Config):
     )
     # param_res_list = np.array(param_res_list)
 
-    # Plotting the statistics of the component separation results
     plot_dir = manager.path_to_components_plots
     compsep_results_last = np.load(
         manager.get_path_to_compsep_results(id_sim=last_valid_id), allow_pickle=True
