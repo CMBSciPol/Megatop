@@ -183,12 +183,10 @@ class DataManager:
         for map_set in self._config.map_sets:
             ext = map_set.external_sky_map
             if ext is not None:
-                names.append(
-                    ext.root
-                    / ext.filename_template.format(
-                        id_sim=id_sim if id_sim is not None else 0, freq=map_set.freq_tag
-                    )
-                )
+                fmt_kwargs = {"freq": map_set.freq_tag}
+                if id_sim is not None:
+                    fmt_kwargs["id_sim"] = id_sim
+                names.append(ext.root / ext.filename_template.format(**fmt_kwargs))
             else:
                 names.append((dest / map_set.map_filename).with_suffix(".fits"))
         return names

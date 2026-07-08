@@ -214,6 +214,75 @@ for _i in range(N_SKY):
             "megatop-cl2r-run --config {params.config} --sim {params.sim} > {log} 2>&1"
 
 
+# ── Real-data rules (N_SKY == 0) ──────────────────────────────────────────────
+if N_SKY == 0:
+
+    rule:
+        name: "preproc_real"
+        input:
+            S(manager.inputs_preproc(None))
+        output:
+            S(manager.outputs_preproc(None))
+        log:
+            str(LOGS / "preproc_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-preproc-run --config {params.config} > {log} 2>&1"
+
+    rule:
+        name: "compsep_real"
+        input:
+            S(manager.inputs_compsep(None))
+        output:
+            S(manager.outputs_compsep(None))
+        log:
+            str(LOGS / "compsep_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-compsep-run --config {params.config} > {log} 2>&1"
+
+    rule:
+        name: "map2cl_real"
+        input:
+            S(manager.inputs_map2cl(None))
+        output:
+            S(manager.outputs_map2cl(None))
+        log:
+            str(LOGS / "map2cl_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-map2cl-run --config {params.config} > {log} 2>&1"
+
+    rule:
+        name: "noisespectra_real"
+        input:
+            S(manager.inputs_noisespectra(None))
+        output:
+            S(manager.outputs_noisespectra(None))
+        log:
+            str(LOGS / "noisespectra_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-noisespectra-run --config {params.config} > {log} 2>&1"
+
+    rule:
+        name: "cl2r_real"
+        input:
+            S(manager.inputs_cl2r(None))
+        output:
+            S(manager.outputs_cl2r(None))
+        log:
+            str(LOGS / "cl2r_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-cl2r-run --config {params.config} > {log} 2>&1"
+
+
 # ── Plot rules ────────────────────────────────────────────────────────────────
 # All plotters take only --config; per-sim plotters internally use sim 0 (or
 # None for real data).  Outputs are touch-sentinels because some filenames are
