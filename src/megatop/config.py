@@ -172,9 +172,8 @@ class FiducialCMBConfig(StrictModel):
 
 class ExternalSkyMapConfig(StrictModel):
     root: Path
-    filename_template: str
-    """Formatted with ``id_sim`` (int) and ``freq`` (this map_set's ``freq_tag``), e.g.
-    ``"{id_sim:04d}/planck_{freq}.fits"``."""
+    filename_template: str = "{id_sim:04d}/{exp_tag}_{freq_tag}.fits"
+    """May contain placeholders for `id_sim` and the map_set's `freq_tag` and `exp_tag`."""
 
 
 class MapSetConfig(StrictModel):

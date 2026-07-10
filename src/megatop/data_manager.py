@@ -183,10 +183,19 @@ class DataManager:
         for map_set in self._config.map_sets:
             ext = map_set.external_sky_map
             if ext is not None:
-                fmt_kwargs = {"freq": map_set.freq_tag}
+                fmt_kwargs = {"freq_tag": map_set.freq_tag, "exp_tag": map_set.exp_tag}
                 if id_sim is not None:
                     fmt_kwargs["id_sim"] = id_sim
-                names.append(ext.root / ext.filename_template.format(**fmt_kwargs))
+                try:
+                    resolved = ext.filename_template.format(**fmt_kwargs)
+                except KeyError as e:
+                    msg = (
+                        f"external_sky_map.filename_template for map set '{map_set.name}' "
+                        f"references {e}, which is not available here (id_sim="
+                        f"{id_sim!r}). Drop `{{id_sim}}` from the template for real-data runs."
+                    )
+                    raise ValueError(msg) from e
+                names.append(ext.root / resolved)
             else:
                 names.append((dest / map_set.map_filename).with_suffix(".fits"))
         return names
