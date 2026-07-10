@@ -12,7 +12,7 @@ from megatop.landscapes import AbstractLandscape
 
 from ..config import (
     CustomSATConfig,
-    ExternalNoiseMapconfig,
+    ExternalNoiseMapConfig,
     NoiseOption,
     SOConfig,
     ValidExperimentConfig,
@@ -164,7 +164,7 @@ def get_noise_experiment(
     lmax: int,
     id_sim: int = 0,
 ):
-    if type(noise_config_exp) is SOConfig:
+    if isinstance(noise_config_exp, SOConfig):
         if noise_config_exp.usev3p1:
             logger.info(
                 f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using V3p1 calc"
@@ -195,7 +195,7 @@ def get_noise_experiment(
                 remove_kluge=False,
             )
 
-    elif type(noise_config_exp) is CustomSATConfig:
+    elif isinstance(noise_config_exp, CustomSATConfig):
         logger.info(
             f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using v3p1 calc with customSAT"
         )
@@ -211,7 +211,7 @@ def get_noise_experiment(
             f_sky=fsky_effective, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
         )
 
-    elif type(noise_config_exp) is ExternalNoiseMapconfig:
+    elif isinstance(noise_config_exp, ExternalNoiseMapConfig):
         logger.info(f"Reading noise map from {noise_config_exp.root} for {exp}.")
         fname_list = [
             noise_config_exp.root
