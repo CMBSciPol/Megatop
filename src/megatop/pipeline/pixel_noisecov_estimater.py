@@ -9,7 +9,6 @@ handled by Snakemake fanning out one ``noise_preproc`` job per realisation.
 import argparse
 from pathlib import Path
 
-import healpy as hp
 import numpy as np
 
 from megatop import Config, DataManager
@@ -31,7 +30,7 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
     n_sim = config.noise_sim_pars.n_sim
     int_n_sim = 1 if n_sim is None else n_sim
 
-    pixel_acc = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
+    pixel_acc = config.landscape.zeros((len(config.frequencies), 3))
     nl_acc = None
     nl_unbinned_acc = None
     use_harmonic = config.parametric_sep_pars.use_harmonic_compsep

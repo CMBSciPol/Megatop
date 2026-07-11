@@ -2,7 +2,6 @@ import argparse
 from functools import partial
 from pathlib import Path
 
-import healpy as hp
 import numpy as np
 
 from megatop import Config, DataManager
@@ -24,13 +23,13 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
     nmt_bins = load_nmt_binning(manager)
 
     # Loading analysis mask
-    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
+    analysis_mask = config.landscape.read_map(manager.path_to_analysis_mask)
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Generating effective beam
     # TODO: If input maps are used instead of preprocessed ones, the effective beam after compsep must be computed.
     effective_beam_CMB = get_common_beam_wpix(
-        config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
+        config.pre_proc_pars.common_beam_correction, config.landscape, config.lmax
     )
     # effective_beam_CMB = np.ones_like(effective_beam_CMB)  # No beam for now
     # TODO: deconvolve the beam by hand, namaster implementation is not well tested / supported, although no clear sign of issues for now...
@@ -45,6 +44,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
             lmax=config.lmax,
+            landscape=config.landscape,
         )
 
     if (
@@ -74,6 +74,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
                 lmax=config.lmax,
                 purify_b=config.map2cl_pars.purify_b,
                 purify_e=config.map2cl_pars.purify_e,
+                landscape=config.landscape,
             )
             Cl_WmaxL[0, 0, freq] = all_Cls_WmaxL_freq["CMBxCMB"]
             Cl_WmaxL[0, 1, freq] = all_Cls_WmaxL_freq["CMBxDust"]
@@ -122,6 +123,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             purify_b=config.map2cl_pars.purify_b,
             purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
+            landscape=config.landscape,
         )
 
     # Limiting the output to the desired l range

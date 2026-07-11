@@ -207,7 +207,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     # Gaussian likelihood mode count: the effective DOF fsky (Hivon w2^2/w4),
     # not the plain mask mean. Equal for a binary mask, smaller when apodized.
-    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+    analysis_mask = config.landscape.read_map(manager.path_to_analysis_mask)
     fsky = mask.fsky_dof(analysis_mask)
 
     Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][3]

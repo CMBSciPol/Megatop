@@ -59,6 +59,8 @@ class AbstractLandscape(ABC, Generic[MapT]):
     """
 
     is_car: bool
+    wcs: WCS | None
+    """World coordinate system ([`WCS`][astropy.wcs.WCS]), or `None` for HEALPix."""
 
     @property
     @abstractmethod
@@ -141,6 +143,25 @@ class AbstractLandscape(ABC, Generic[MapT]):
             _rotator(rot).rotate_alm(alm, inplace=True)
         return self._alm2map(alm, spin=spin_arg, lmax=lmax)
 
+    def flatten_pix(self, m: npt.ArrayLike) -> np.ndarray:
+        """Collapse the trailing pixel axes of `m` to a single 1-D axis.
+
+        A no-op for HEALPix (already 1-D); for CAR it ravels the `(ny, nx)` pixel axes
+        to `(npix,)`. Inverse of [`unflatten_pix`][..AbstractLandscape.unflatten_pix].
+        Lets per-pixel algebra (e.g. component separation) use a single pixel index `p`
+        regardless of geometry. Returns a bare `ndarray` (any CAR `wcs` is dropped).
+        """
+        m = np.asarray(m)
+        return m.reshape(*m.shape[: -len(self.pixel_shape)], -1)
+
+    def unflatten_pix(self, m: npt.ArrayLike) -> np.ndarray:
+        """Restore the native pixel axes from a single trailing axis.
+
+        Inverse of [`flatten_pix`][..AbstractLandscape.flatten_pix]; a no-op for HEALPix.
+        """
+        m = np.asarray(m)
+        return m.reshape(*m.shape[:-1], *self.pixel_shape)
+
     @abstractmethod
     def stack(self, maps: Sequence[MapT]) -> MapT:
         """Stack a list of maps along a new leading axis, preserving geometry."""
@@ -164,6 +185,7 @@ class HealpixLandscape(AbstractLandscape[np.ndarray]):
     """
 
     is_car = False
+    wcs = None
 
     def __init__(self, nside: int) -> None:
         self.nside = nside

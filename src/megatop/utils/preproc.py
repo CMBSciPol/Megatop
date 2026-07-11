@@ -5,8 +5,10 @@ import healpy as hp
 import numpy as np
 import numpy.typing as npt
 import pymaster as nmt
+from pixell import enmap
 
 import megatop.utils.harmonic as hu
+from megatop.landscapes import AbstractLandscape
 from megatop.utils import mask
 from megatop.utils.compsep import set_alm_tozero_above_lmax, set_alm_tozero_below_lmin
 
@@ -28,6 +30,20 @@ def common_beam_and_nside(
     DEBUGlm_range: tuple[int, int] | None = None,
 ):
     # TODO: remove DEBUGtruncatealms and DEBUGlm_range after testing
+    if isinstance(freq_maps[0], enmap.ndmap):
+        # CAR: input and output share the same geometry, so the pixel window is
+        # unchanged (no hp.pixwin equivalent); apply only the Gaussian common-beam
+        # ratio in harmonic space and re-synthesise on the input CAR grid.
+        return _common_beam_car(
+            common_beam,
+            frequency_beams,
+            freq_maps,
+            lmax,
+            output_alms=output_alms,
+            DEBUGtruncatealms=DEBUGtruncatealms,
+            DEBUGlm_range=DEBUGlm_range,
+        )
+
     nside_input_maps = [hp.npix2nside(m.shape[-1]) for m in freq_maps]
     if any(n < nside for n in nside_input_maps):
         raise ValueError("Some input maps have smaller nside than target. Check your yaml.")
@@ -101,7 +117,51 @@ def common_beam_and_nside(
     return np.array(freq_maps_out)
 
 
-def read_input_maps(list_mapnames: list[Path]) -> list[npt.ArrayLike]:
+def _common_beam_car(
+    common_beam: float,
+    frequency_beams: list[float],
+    freq_maps: list[npt.ArrayLike],
+    lmax: int,
+    *,
+    output_alms: bool = False,
+    DEBUGtruncatealms: bool = False,
+    DEBUGlm_range: tuple[int, int] | None = None,
+):
+    """CAR common-beam correction (no pixel window — see [`common_beam_and_nside`][..])."""
+    logger.info(f"Common beam correction -> {common_beam} arcmin (CAR, same geometry)")
+    Bl_gauss_common = hu.gauss_beam(common_beam, lmax, pol=True)
+
+    freq_maps_out = []
+    freq_alms_out = []
+    for i_beam, beam in enumerate(frequency_beams):
+        logger.info(f"Input beam FWHM {beam} arcmin -> {common_beam} arcmin")
+        Bl_gauss_fwhm = hu.gauss_beam(beam, lmax, pol=True)
+        bl_correction = Bl_gauss_common / Bl_gauss_fwhm
+
+        m = freq_maps[i_beam]
+        alms_in = hu.map2alm(m, spin=[0, 2], lmax=lmax)
+        hu.almxfl(alms_in[0], bl_correction[:, 0], inplace=True)
+        hu.almxfl(alms_in[1:], bl_correction[:, 1], inplace=True)
+
+        if DEBUGtruncatealms and DEBUGlm_range is not None:
+            logger.warning("DEBUG TRUNCATE ALMS IS ON")
+            lmin_dbg, lmax_dbg = DEBUGlm_range
+            for k in range(3):
+                alms_in[k] = set_alm_tozero_above_lmax(alms_in[k], lmax_dbg)
+                alms_in[k] = set_alm_tozero_below_lmin(alms_in[k], lmin_dbg)
+
+        if output_alms:
+            freq_alms_out.append(alms_in)
+
+        out_map = hu.alm2map(alms_in, spin=[0, 2], shape=m.shape, wcs=m.wcs, lmax=lmax)
+        freq_maps_out.append(out_map)
+
+    if output_alms:
+        return np.array(freq_maps_out), np.array(freq_alms_out)
+    return np.array(freq_maps_out)
+
+
+def read_input_maps(list_mapnames: list[Path], landscape: AbstractLandscape) -> list[npt.ArrayLike]:
     """
     This function reads the frequency maps from the files and returns them as an array.
 
@@ -109,6 +169,8 @@ def read_input_maps(list_mapnames: list[Path]) -> list[npt.ArrayLike]:
     ----------
     list_mapnames: list
         list of paths to maps
+    landscape: AbstractLandscape
+        Pixelisation of the run; dispatches the read to healpy (HEALPix) or pixell (CAR).
 
     Returns
     -------
@@ -121,7 +183,7 @@ def read_input_maps(list_mapnames: list[Path]) -> list[npt.ArrayLike]:
     freq_maps_input = []
     for mapname in list_mapnames:
         logger.debug(f"Reading map from {mapname}")
-        freq_maps_input.append(hp.read_map(mapname, field=None, dtype=np.float64))
+        freq_maps_input.append(landscape.read_map(mapname))
     return freq_maps_input
 
 
