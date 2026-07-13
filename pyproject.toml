@@ -38,6 +38,7 @@ dependencies = [
     "pyyaml>=6.0",
     "scipy<1.18",  # TODO: drop cap when https://github.com/cmbant/CAMB/issues/202 is fixed
     "tqdm>=4",
+    "jax",
 ]
 
 [project.optional-dependencies]
