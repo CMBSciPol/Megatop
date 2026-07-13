@@ -132,11 +132,8 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
         )
 
     # Limiting the output to the desired l range
-    bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
-    logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    logger.warning("CLS are not limited to the lmin lmax analysis range")
-    logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    bin_index_lminlmax = np.arange(len(all_Cls["CMBxCMB"][0]))
+    # bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
+    bin_index_lminlmax = np.arange(len(all_Cls["CMBxCMB"][0]))  # keeping all bins
     return limit_namaster_output(all_Cls, bin_index_lminlmax)
 
 

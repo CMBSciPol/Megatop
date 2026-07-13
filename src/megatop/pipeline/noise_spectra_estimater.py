@@ -82,7 +82,10 @@ def noise_spectra_estimator(
     binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
 
     # Loading component separation operator
-    W_maxL = np.load(manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True)["W_maxL"]
+    if not config.parametric_sep_pars.use_megabuster:
+        W_maxL = np.load(manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True)[
+            "W_maxL"
+        ]
 
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
@@ -355,20 +358,16 @@ def noise_spectra_estimator(
         sum_noise_spectra_recvbuf = sum_noise_spectra
 
     if rank == root:
-        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
-            "bin_index_lminlmax"
-        ]
-
         # Average noise spectra over nsims
         mean_noise_spectra = {}
         for key in sum_noise_spectra:
             mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_n_sim_noise
 
+        # bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
+        #     "bin_index_lminlmax"
+        # ]
         # mean_noise_spectra = limit_namaster_output(mean_noise_spectra, bin_index_lminlmax)
-        logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        logger.warning("CLS are not limited to the lmin lmax analysis range")
-        logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        bin_index_lminlmax = np.arange(len(mean_noise_spectra[key][0]))
+        bin_index_lminlmax = np.arange(len(mean_noise_spectra[key][0]))  # keeping all bins
         mean_noise_spectra = limit_namaster_output(mean_noise_spectra, bin_index_lminlmax)
 
     else:
