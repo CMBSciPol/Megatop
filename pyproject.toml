@@ -21,7 +21,7 @@ description = "A map-based CMB polarization data analysis pipeline"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "camb>=1.6.6",
     "ducc0>=0.41.0",
@@ -39,6 +39,7 @@ dependencies = [
     "scipy<1.18",  # TODO: drop cap when https://github.com/cmbant/CAMB/issues/202 is fixed
     "tqdm>=4",
     "jax",
+    "megabuster @ git+https://github.com/CMBSciPol/Megabuster.git",
 ]
 
 [project.optional-dependencies]
