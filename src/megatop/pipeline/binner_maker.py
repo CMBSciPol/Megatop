@@ -89,7 +89,7 @@ def fiducial_cmb_spectra_computer(manager: DataManager, config: Config):
 
 
 def binning_maker(manager: DataManager, config: Config):
-    if config.map2cl_pars.custom_binning_path != Path():
+    if config.map2cl_pars.custom_binning_path is not None:
         logger.info(
             f"Custom bin path has been provided, loading from {config.map2cl_pars.custom_binning_path}"
         )
