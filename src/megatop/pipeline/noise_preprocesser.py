@@ -65,10 +65,18 @@ def get_reduced_TF(transfer):
     return np.real(inv_tf_reduced)
 
 
-def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | None) -> np.ndarray:
+def _preprocess_noise_maps(
+    config: Config, manager: DataManager, id_real: int | None, TRUE_noise_maps: bool = False
+) -> np.ndarray:
     noise_freq_maps = []
-    for noise_filename in manager.get_noise_maps_filenames(id_real):
-        logger.debug(f"Importing noise map: {noise_filename}")
+    noise_maps_filenames_list = (
+        manager.get_TRUE_noise_maps_filenames(id_real)
+        if TRUE_noise_maps
+        else manager.get_noise_maps_filenames(id_real)
+    )
+    for noise_filename in noise_maps_filenames_list:
+        msg = "Importing TRUE noise map" if TRUE_noise_maps else "Importing noise map"
+        logger.debug(f"{msg}: {noise_filename}")
         noise_freq_maps.append(hp.read_map(noise_filename, field=None, dtype=np.float64))
 
     # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
@@ -78,27 +86,7 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
         nside=config.nside,
         common_beam=config.pre_proc_pars.common_beam_correction,
         frequency_beams=config.beams,
-        freq_maps=np.array(noise_freq_maps, dtype=object),
-        lmax=config.lmax,
-    )
-
-
-def _preprocess_TRUE_noise_maps(
-    config: Config, manager: DataManager, id_real: int | None
-) -> np.ndarray:
-    TRUE_noise_freq_maps = []
-    for noise_filename in manager.get_TRUE_noise_maps_filenames(id_real):
-        logger.debug(f"Importing TRUE noise map: {noise_filename}")
-        TRUE_noise_freq_maps.append(hp.read_map(noise_filename, field=None).tolist())
-
-    # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
-    # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
-    # preventing aliasing from modes above lmax into the analysis bins.
-    return common_beam_and_nside(
-        nside=config.nside,
-        common_beam=config.pre_proc_pars.common_beam_correction,
-        frequency_beams=config.beams,
-        freq_maps=np.array(TRUE_noise_freq_maps, dtype=object),
+        freq_maps=noise_freq_maps,
         lmax=config.lmax,
     )
 
@@ -217,7 +205,9 @@ def noise_preprocess_realisation(config: Config, manager: DataManager, id_sim: i
         config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations
         and id_sim <= config.map_sim_pars.n_sim - 1
     ):
-        preprocessed_TRUE_noise_maps = _preprocess_TRUE_noise_maps(config, manager, id_sim)
+        preprocessed_TRUE_noise_maps = _preprocess_noise_maps(
+            config, manager, id_sim, TRUE_noise_maps=True
+        )
         out_TRUE_maps = manager.get_path_to_preprocessed_TRUE_noise_maps(id_sim)
         logger.info(f"Saving pre-processed TRUE noise maps to {out_TRUE_maps}")
         np.save(out_TRUE_maps, preprocessed_TRUE_noise_maps)
