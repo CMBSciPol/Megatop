@@ -20,7 +20,13 @@ from megatop.utils.spectra import (
 
 def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
     with Timer("load-component-maps"):
-        comp_maps = np.load(manager.get_path_to_components_maps(id_sim))
+        try:
+            comp_path = manager.get_path_to_components_maps(id_sim)
+            logger.info(f"comp_path = {comp_path}")
+            comp_maps = np.load(comp_path)
+        except FileNotFoundError:
+            logger.error(f"Component map not found at {comp_path}")
+            return None
 
     nmt_bins = load_nmt_binning(manager)
 
@@ -138,6 +144,8 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
                 comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1], "Synch": comp_maps[2]}
             else:
                 comp_dict = {"CMB": comp_maps[0], "Dust": comp_maps[1]}
+
+            # TODO: when components will be added in .yml for the comp-sep steps the keys of the dictionary should adapt to that
             all_Cls = compute_auto_cross_cl_from_maps_dict(
                 maps_dict=comp_dict,
                 analysis_mask=analysis_mask,
@@ -151,7 +159,8 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             )
 
     # Limiting the output to the desired l range
-    bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
+    # bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
+    bin_index_lminlmax = np.arange(len(all_Cls["CMBxCMB"][0]))  # keeping all bins
     return limit_namaster_output(all_Cls, bin_index_lminlmax)
 
 
@@ -168,7 +177,8 @@ def map2cl_and_save(config: Config, manager: DataManager, id_sim: int | None = N
             config,
             id_sim=id_sim,
         )
-    save_spectra(manager, all_Cls=all_Cls, id_sim=id_sim)
+    if all_Cls is not None:
+        save_spectra(manager, all_Cls=all_Cls, id_sim=id_sim)
     return id_sim
 
 

@@ -25,7 +25,7 @@ from .logger import logger
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
-def get_Cl_CMB_model_from_manager(manager: DataManager):
+def get_Cl_CMB_model_from_manager(manager: DataManager, DEBUG_noEmodes: bool = False):
     # TODO make this a method of DataManager
     logger.debug(f"Lensing B-mode path: {manager.path_to_lensed_scalar}")
     logger.debug(f"Primordial B-mode (r=1): {manager.path_to_unlensed_scalar_tensor_r1}")
@@ -41,6 +41,9 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     Cl_TT = Cl_lens[0]
     Cl_EE = Cl_lens[1]
     Cl_TE = Cl_lens[3]
+    if DEBUG_noEmodes:
+        Cl_EE *= 0
+        Cl_TE *= 0
 
     Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
 

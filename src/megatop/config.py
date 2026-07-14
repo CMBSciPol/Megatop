@@ -128,6 +128,8 @@ class OutputDirsConfig(StrictModel):
     binning: str = "binning"
     transfer_functions: str = "transfer_functions"
     preproc: str = "preproc"
+    prepoc_diag_precond: str = "diag_precond"  # Modification megabuster
+    precomputation: str = "precomputation"  # Modification megabuster
     covar: str = "covar"
     plots: str = "plots"
     components: str = "components"
@@ -182,6 +184,8 @@ class MapSetConfig(StrictModel):
     noise_prefix: str = "noise_"
     simfoTF_prefix: str = "simforTF_"
     obsmat_path: Path | None = None
+    suffix_obsmat_scipy: str = ""  # Modification megabuster
+    suffix_eigen_decomp: str = ""  # Modification megabuster
     TF_path: Path | None = None
     passband_filename: str = ""
     nhits_map_path: SONominalKey | Path | None = None
@@ -320,6 +324,17 @@ class _MinimizeOptions(StrictModel):
     ftol: float = 1e-12
 
 
+class _MEGABUSTEROptions(StrictModel):  # Modification megabuster
+    max_steps_CG: int = 200
+    tol_CG: float = 1e-6
+    use_preconditioner_diag: bool = False
+    use_preconditioner_pinv: bool = True
+    solver_name: str = "scipy_tnc"  # should be one of SOLVER_NAMES from furax_cs
+    minimizer_options: dict[str, Any] = Field(
+        default_factory=lambda: {"cooldown": 5, "min_steps": 5}
+    )
+
+
 class CompSepConfig(StrictModel):
     use_harmonic_compsep: bool = False
     harmonic_lmax: int = 2 * 128  # TODO: use config.nside
@@ -332,6 +347,12 @@ class CompSepConfig(StrictModel):
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Field(default_factory=_MinimizeOptions)
     passband_int: bool = False
+    use_megabuster: bool = False  # Modification megabuster
+    megabuster_options: _MEGABUSTEROptions = Field(
+        default_factory=_MEGABUSTEROptions
+    )  # Modification megabuster
+
+    DEBUG_use_TRUE_pixel_noisecov: bool = False
 
     def get_minimize_options_as_dict(self) -> dict[str, Any]:
         """Return the minimize options as a dictionary.
@@ -339,9 +360,13 @@ class CompSepConfig(StrictModel):
         If the minimize method is 'TNC', rename 'maxiter' to 'maxfun'.
         """
         options = self.minimize_options.model_dump()
-        if self.minimize_method == "TNC":
+        if self.minimize_method == "TNC" and not self.use_megabuster:
             options["maxfun"] = options.pop("maxiter")
         return options
+
+    def get_megabuster_options_as_dict(self) -> dict[str, Any]:
+        """Return the megabuster options as a dictionary."""
+        return self.megabuster_options.model_dump()
 
 
 class Map2ClConfig(StrictModel):
@@ -356,6 +381,10 @@ class Map2ClConfig(StrictModel):
     n_iter_namaster: int = 3
     """Number of iterations for NaMaster map2alm."""
     use_harmonic_output_alm: bool = False
+    DEBUG_cut_scales: bool = False
+    custom_binning_path: Path | None = None
+    """Path to custon binning scheme sotred in an .npz file. Directory must contain three entries as lists of same size stored under: bin_low, bin_high.
+    If None, the create_binning() function will be used instead and create evenly spaced bins from delta_ell"""
 
     @model_validator(mode="after")
     def purify_e_and_b_are_mutually_exclusive(self):
@@ -385,6 +414,13 @@ class MapSimConfig(StrictModel):
     """If True, CMB seed is kept constant for all realizations."""
     filter_sims: bool = False
     """If True, the Observation Matrices provided in map_sets will be applied on the CMB + Foreground maps generated in the mocker."""
+    filter_noise: bool = False
+    """If True, the Observation Matrices provided in map_sets will be ALSO be applied to the noise, the data model would then be d = O (As + n).
+        The pure noise sims used for the covariance estimation will also be filtered, the TRUE noise sims will be filtered if DEBUG_save_TRUEnoise_simulations.
+        BOTH pure noise and true noise filtering can be turned off independently for debuging purposes with DEBUGDont_Filter_purenoise_sims."""
+    DEBUGDont_Filter_purenoise_sims: bool = False
+    """Debuging param.
+       If True, the noise simulations and TRUE noise sims will NOT be filtered if filter_noise is true. So only noise IN the full sky sims (As+n) is filtered."""
     generate_sims_for_TF: bool = False
     """If True, power law simulations will be generated and filtered for the Transfer Function pipeline step"""
     TF_power_law_amp: float = 1.0
@@ -396,6 +432,12 @@ class MapSimConfig(StrictModel):
     """Number of simulation generated for the TF computation."""
     passband_int: bool = False
     """If True, sky maps will be integrated over the passbands provided in the map_sets. Passbands will also be included in the SED computation in the component separation."""
+    DEBUG_noEmodes: bool = False
+    """Debuging param: sets EE and TE CMB power spectra to 0 in the mocker, in particular in the mock.get_Cl_CMB_model_from_manager() function"""
+    DEBUG_CMB_only: bool = False
+    """Debuging param: sets the foregrounds and the noise to 0 in the mocker"""
+    DEBUG_FG_only: bool = False
+    """Debuging param: sets the CMB and the noise to 0 in the mocker"""
 
     @field_validator("sky_model")
     @classmethod
@@ -444,6 +486,7 @@ class NoiseSimConfig(StrictModel):
     experiments: dict[str, ValidExperimentConfig] = Field(
         default_factory=lambda: {"SO": SOConfig()}
     )
+    DEBUG_save_TRUEnoise_simulations: bool = False
 
 
 def default_prior_bounds() -> dict[str, list[float]]:
@@ -517,6 +560,18 @@ class Config(StrictModel):
                 if map_set.obsmat_path is None:
                     msg = f"Map set '{map_set.name}' requires obsmat_path because filter_sims=True."
                     raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def all_obsmats_are_different(self):
+        # Check that obsmat_path are all different
+        obsmat_paths = [map_set.obsmat_path for map_set in self.map_sets]
+        if (
+            len(obsmat_paths) != len(set(obsmat_paths))
+            and not np.all(np.array(obsmat_paths) == Path())
+        ) and self.parametric_sep_pars.use_megabuster:
+            msg = "All obsmat_path in map_sets must be different when using megabuster as compsep."
+            raise ValueError(msg)
         return self
 
     @classmethod

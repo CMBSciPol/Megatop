@@ -79,6 +79,10 @@ class DataManager:
     def path_to_binning(self) -> Path:
         return self.path_to_output / self._config.output_dirs.binning / Path("binning.npz")
 
+    @property
+    def path_to_precomputation(self) -> Path:
+        return self.path_to_output / self._config.output_dirs.precomputation
+
     # Paths to the plot directories (in output)
     # -----------------------------------------
 
@@ -267,6 +271,61 @@ class DataManager:
                     name_list.append(name.with_suffix(".npz"))
         return name_list
 
+    def get_path_list_or_None(self, attribute: str) -> list[Path] | None:
+        """Get the list of paths for a given attribute of the map sets, or None if any of them is not set.
+
+        Parameters
+        ----------
+        attribute : str
+            The attribute of the map sets to get the paths for. Must be one of 'suffix_obsmat_scipy', 'suffix_eigen_decomp'.
+
+        Returns
+        -------
+        list[Path] | None
+            The list of paths for the given attribute, or None if any of them is not set.
+        """
+        valid_attributes = [
+            "suffix_obsmat_scipy",
+            "suffix_eigen_decomp",
+        ]
+        if attribute not in valid_attributes:
+            msg = f"Invalid attribute '{attribute}'. Must be one of {valid_attributes}."
+            raise ValueError(msg)
+        names = [
+            self.path_to_precomputation
+            / Path(str(map_set.obsmat_path.name).replace(".npz", "") + getattr(map_set, attribute))
+            if getattr(map_set, attribute) != ""
+            else None
+            for map_set in self._config.map_sets
+        ]
+        if None in names:
+            logger.warning(f"Not all {attribute} were set, returning None for {attribute} paths.")
+            return None
+        return names
+
+    def get_path_to_matrix_precond_diag(self) -> Path:
+        """Get the path to the diagonal preconditioner."""
+        return (self.path_to_output / self._config.output_dirs.prepoc_diag_precond).with_suffix(
+            ".npy"
+        )
+
+    def get_path_to_matrix_precond_list(self) -> Path:
+        """Get the path to the list of frequency preconditioners."""
+        return self.get_path_list_or_None("suffix_eigen_decomp")
+
+    def get_path_to_matrix_precond(self) -> Path | list[Path] | None:
+        """Get the path to the preconditioner matrix.
+
+        If `use_preconditioner_diag` is True, returns the path to the diagonal preconditioner.
+        If `use_preconditioner_pinv` is True, returns the list of paths to the frequency preconditioners.
+        If neither is True, returns None.
+        """
+        if self._config.compsep_pars.use_preconditioner_diag:
+            return self.get_path_to_matrix_precond_diag()
+        if self._config.compsep_pars.use_preconditioner_pinv:
+            return self.get_path_to_matrix_precond_list()
+        return None
+
     def get_noise_maps_filenames(self, id_sim: int | None = None) -> list[Path]:
         """Get the list of filenames for the noise maps.
 
@@ -278,6 +337,21 @@ class DataManager:
             else self.path_to_noise_maps
         )
         names = [dest / map_set.noise_map_filename for map_set in self._config.map_sets]
+        return [name.with_suffix(".fits") for name in names]
+
+    def get_TRUE_noise_maps_filenames(self, sub: int | None = None) -> list[Path]:
+        """Get the list of filenames for the TRUE noise maps.
+
+        Different realizations (identified by an index) are put in separate subdirectories.
+        """
+        dest = self.get_path_to_noise_maps_sub(sub) if sub is not None else self.path_to_noise_maps
+        names = [
+            dest
+            / Path(map_set.noise_map_filename).with_stem(
+                f"TRUE_{Path(map_set.noise_map_filename).stem}"
+            )
+            for map_set in self._config.map_sets
+        ]
         return [name.with_suffix(".fits") for name in names]
 
     def get_maps_sim_for_TF_filenames(self, id_sim: int | None = None):
@@ -335,6 +409,13 @@ class DataManager:
         fname = "noise_maps_preprocessed"
         if id_sim is not None:
             fname += f"_{id_sim:04d}"
+        fname = self.path_to_covar / fname
+        return fname.with_suffix(".npy")
+
+    def get_path_to_preprocessed_TRUE_noise_maps(self, sub: int | None = None) -> Path:
+        fname = "TRUE_noise_maps_preprocessed"
+        if sub is not None:
+            fname += f"_{sub:04d}"
         fname = self.path_to_covar / fname
         return fname.with_suffix(".npy")
 
@@ -405,6 +486,10 @@ class DataManager:
         fname = self.path_to_covar / "pixel_noisecov_preprocessed"
         return fname.with_suffix(".npy")
 
+    def path_to_TRUE_pixel_noisecov(self, id_sim: int) -> Path:
+        fname = f"TRUE_pixel_noisecov_preprocessed_{id_sim:04d}"
+        return (self.path_to_covar / fname).with_suffix(".npy")
+
     @property
     def path_to_nl_noisecov(self) -> Path:
         fname = self.path_to_covar / "nl_nu_covariance"
@@ -413,6 +498,11 @@ class DataManager:
     @property
     def path_to_nl_noisecov_unbinned(self) -> Path:
         fname = self.path_to_covar / "covar_cl_unbinned"
+        return fname.with_suffix(".npy")
+
+    @property
+    def path_to_noisecov_alm(self) -> Path:
+        fname = self.path_to_covar / "covar_alm"
         return fname.with_suffix(".npy")
 
     def get_path_to_nl_noisecov_contrib(self, id_sim: int | None = None) -> Path:
@@ -426,11 +516,6 @@ class DataManager:
         if id_sim is not None:
             fname += f"_{id_sim:04d}"
         return (self.path_to_covar / fname).with_suffix(".npy")
-
-    @property
-    def path_to_noisecov_alm(self) -> Path:
-        fname = self.path_to_covar / "covar_alm"
-        return fname.with_suffix(".npy")
 
     @property
     def path_to_effectiv_bins_harmonic_compsep(self) -> Path:
@@ -499,9 +584,23 @@ class DataManager:
 
     def outputs_mock_signal(self, id_sim: int, map_set: str | None = None) -> list[Path]:
         files = self.get_maps_filenames(id_sim)
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            files_true_noise = self.get_TRUE_noise_maps_filenames(id_sim)
+
         if map_set is not None:
-            return [f for ms, f in zip(self._config.map_sets, files) if ms.name == map_set]
-        return files
+            outputs = [f for ms, f in zip(self._config.map_sets, files) if ms.name == map_set]
+            if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+                outputs += [
+                    f
+                    for ms, f in zip(self._config.map_sets, files_true_noise)
+                    if ms.name == map_set
+                ]
+            return outputs
+
+        outputs = files
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            outputs += files_true_noise
+        return outputs
 
     def inputs_mock_noise(self, id_sim: int) -> list[Path]:
         return [
@@ -535,6 +634,8 @@ class DataManager:
             *self.get_noise_maps_filenames(id_sim),
             self.path_to_analysis_mask,
         ]
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            inputs += self.get_TRUE_noise_maps_filenames(id_sim)
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             inputs += [self.path_to_binning, self.path_to_lensed_scalar]
             if self._config.pre_proc_pars.correct_for_TF:
@@ -543,6 +644,8 @@ class DataManager:
 
     def outputs_noise_preproc(self, id_sim: int | None = None) -> list[Path]:
         outputs = [self.get_path_to_preprocessed_noise_maps(id_sim)]
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            outputs.append(self.get_path_to_preprocessed_TRUE_noise_maps(id_sim))
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             outputs += [
                 self.get_path_to_nl_noisecov_contrib(id_sim),
@@ -563,6 +666,9 @@ class DataManager:
         outputs = [self.path_to_pixel_noisecov]
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             outputs += [self.path_to_nl_noisecov, self.path_to_nl_noisecov_unbinned]
+        if self._config.parametric_sep_pars.DEBUG_use_TRUE_pixel_noisecov:
+            for i in range(self._config.map_sim_pars.n_sim):
+                outputs.append(self.path_to_TRUE_pixel_noisecov(i))
         return outputs
 
     def inputs_compsep(self, id_sim: int | None = None) -> list[Path]:
@@ -571,7 +677,10 @@ class DataManager:
             noisecov_inputs = [self.path_to_nl_noisecov, self.path_to_nl_noisecov_unbinned]
         else:
             preproc_input = self.get_path_to_preprocessed_maps(id_sim)
-            noisecov_inputs = [self.path_to_pixel_noisecov]
+            if self._config.parametric_sep_pars.DEBUG_use_TRUE_pixel_noisecov:
+                noisecov_inputs = [self.get_path_to_preprocessed_TRUE_noise_maps(id_sim)]
+            else:
+                noisecov_inputs = [self.path_to_pixel_noisecov]
         return [
             preproc_input,
             self.path_to_binary_mask,
@@ -605,7 +714,10 @@ class DataManager:
 
     def inputs_noisespectra(self, id_sim: int | None = None) -> list[Path]:
         n_sim_noise = self._config.noise_sim_pars.n_sim
-        noise_inputs = [self.get_path_to_preprocessed_noise_maps(i) for i in range(n_sim_noise)]
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            noise_inputs = [self.get_path_to_preprocessed_TRUE_noise_maps(id_sim)]
+        else:
+            noise_inputs = [self.get_path_to_preprocessed_noise_maps(i) for i in range(n_sim_noise)]
         return [
             self.get_path_to_compsep_results(id_sim),
             self.path_to_analysis_mask,

@@ -16,99 +16,122 @@ def plot_map2cl(manager, id_sim=None):
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     bin_centre_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_centre_lminlmax"]
-
-    path_all_Cls = manager.get_path_to_spectra_cross_components(id_sim)
-    all_Cls = np.load(path_all_Cls, allow_pickle=True)
+    bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
+    try:
+        path_all_Cls = manager.get_path_to_spectra_cross_components(id_sim)
+        all_Cls_ = np.load(path_all_Cls, allow_pickle=True)
+    except FileNotFoundError:
+        logger.warning(f"Spectra file not found for id_sim={id_sim} at Path:{path_all_Cls}")
+        # TODO: try another id_sim if the file is not found for this one, instead of skipping plotting entirely?
+        return
+    all_Cls_binranged = {}
+    for k in all_Cls_:
+        all_Cls_binranged[k] = all_Cls_[k][:, bin_index_lminlmax]
     plot_all_Cls(
-        all_Cls,
+        all_Cls_binranged,
         bin_centre_lminlmax,
         plot_dir,
-        "component_spectra",
+        f"component_spectra_sim{id_sim:04d}",
         use_D_ell=False,
         y_axis_label=r"$C_{\ell}$",
     )
 
 
-def plot_all_spectra_nodebiasing(manager, config):
+def plot_all_cmb_spectra(manager, config):
     plot_dir = manager.path_to_spectra_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Saving plots to %s", plot_dir)
-
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
-    bin_index_lminlmax = binning_info["bin_index_lminlmax"]
+    bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
 
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
     nmt_bins = load_nmt_binning(manager)
+
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : config.lmax + 1]
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, bin_index_lminlmax]
 
     fig_EE, ax_EE = plt.subplots()
     fig_BB, ax_BB = plt.subplots()
 
+    average_CMB = np.zeros([4, len(bin_centre_lminlmax)])
+    num_loaded_id = 0
     for id_sim in range(config.map_sim_pars.n_sim):
-        fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
-        all_Cls = np.load(fname_all_Cls, allow_pickle=True)
+        try:
+            fname_Cls = manager.get_path_to_spectra_cross_components(id_sim)
+            all_Cls = np.load(fname_Cls, allow_pickle=True)
+            all_Cls_CMB = all_Cls["CMBxCMB"][:, bin_index_lminlmax]
 
-        cmb_cls = all_Cls["CMBxCMB"]
+            average_CMB += all_Cls["CMBxCMB"][:, bin_index_lminlmax]
 
-        ax_EE.plot(
-            bin_centre_lminlmax,
-            cmb_cls[0],
-            label="Estimated CMB EE (noisy)" if id_sim == 0 else None,
-            linestyle="-",
-            color="darkblue",
-            alpha=0.2,  # if not negative_bins_in_EE else 1.0,
-        )
-        ax_BB.plot(
-            bin_centre_lminlmax,
-            cmb_cls[-1],
-            label="Estimated CMB BB (noisy)" if id_sim == 0 else None,
-            linestyle="-",
-            color="darkblue",
-            alpha=0.2,  # if not negative_bins_in_BB else 1.0,
-        )
+            ax_EE.plot(
+                bin_centre_lminlmax,
+                all_Cls_CMB[0],
+                label="Estimated Noisy CMB EE" if id_sim == 0 else None,
+                linestyle="-",
+                color="darkblue",
+                alpha=0.2,
+            )
+            ax_BB.plot(
+                bin_centre_lminlmax,
+                all_Cls_CMB[-1],
+                label="Estimated Noisy CMB BB" if id_sim == 0 else None,
+                linestyle="-",
+                color="darkblue",
+                alpha=0.2,
+            )
+            num_loaded_id += 1
 
-        negative_bins = cmb_cls[-1] < 0
-        ax_BB.plot(
-            bin_centre_lminlmax[negative_bins],
-            np.abs(cmb_cls[-1][negative_bins]),
-            label="ABS(Estimated CMB BB (noisy))" if id_sim == 0 else None,
-            linestyle="--",
-            color="green",
-            alpha=0.2,
-        )
+        except FileNotFoundError:
+            logger.warning(f"Spectra file not found for id_sim={id_sim} at Path:{fname_Cls}")
+
+    # WARNING: here we average the noise Nl (already averaged over noise sims) over the different sky sims
+    # average_CMB /= config.map_sim_pars.n_sim
+    average_CMB /= num_loaded_id  # config.map_sim_pars.n_sim
+
+    ax_EE.plot(
+        bin_centre_lminlmax,
+        average_CMB[0],
+        label="Mean Noisy CMB EE",
+        color="brown",
+        linestyle="-",
+    )
 
     ax_EE.plot(
         bin_centre_lminlmax,
         bined_Cl_cmb_model[1],
-        label="CMB EE model",
-        color="black",
-        linestyle="--",
-    )
-    ax_BB.plot(
-        bin_centre_lminlmax,
-        bined_Cl_cmb_model[2],
-        label="CMB BB model",
+        label="CMB EE model (no noise)",
         color="black",
         linestyle="--",
     )
 
+    ax_BB.plot(
+        bin_centre_lminlmax,
+        average_CMB[-1],
+        label="Mean Noisy CMB BB",
+        color="brown",
+        linestyle="-",
+    )
+    ax_BB.plot(
+        bin_centre_lminlmax,
+        bined_Cl_cmb_model[2],
+        label="CMB BB model (no noise)",
+        color="black",
+        linestyle="--",
+    )
     ax_EE.set_xlabel(r"$\ell$")
     ax_EE.set_ylabel(r"$C_{\ell}^{EE}$")
     ax_EE.legend()
     ax_EE.loglog()
-    ax_EE.set_title("CMB EE spectra")
-    fig_EE.savefig(plot_dir / "allskysims_CMB_EE_spectra.png")
+    ax_EE.set_title("Noisy CMB EE spectra")
+    fig_EE.savefig(plot_dir / "allskysims_noisy_CMB_EE_spectra.png")
 
     ax_BB.set_xlabel(r"$\ell$")
     ax_BB.set_ylabel(r"$C_{\ell}^{BB}$")
     ax_BB.legend()
     ax_BB.loglog()
-    ax_BB.set_title("CMB BB spectra")
-    fig_BB.savefig(plot_dir / "allskysims_CMB_BB_spectra.png")
-
+    ax_BB.set_title("Noisy CMB BB spectra")
+    fig_BB.savefig(plot_dir / "allskysims_noisy_CMB_BB_spectra.png")
     # closing figures
     plt.close(fig_EE)
     plt.close(fig_BB)
@@ -320,7 +343,7 @@ def main():
         id_sim = 0
 
     plot_map2cl(manager, id_sim=id_sim)
-    plot_all_spectra_nodebiasing(manager, config)
+    plot_all_cmb_spectra(manager, config)
 
     if (
         config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep

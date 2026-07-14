@@ -15,8 +15,14 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
     plot_dir = manager.path_to_components_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    fname_compmaps = manager.get_path_to_components_maps(id_sim)
-    comp_maps = np.load(fname_compmaps)
+    try:
+        fname_compmaps = manager.get_path_to_components_maps(id_sim)
+        comp_maps = np.load(fname_compmaps)
+    except FileNotFoundError:
+        logger.warning(
+            f"Component separation maps for simulation {id_sim} not found, skipping plotting."
+        )
+        return
 
     binary_mask = hp.read_map(manager.path_to_binary_mask)
     comp_maps = apply_binary_mask(comp_maps, binary_mask, unseen=True)
@@ -25,14 +31,14 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
         config,
         np.array([comp_maps[0]]),
         plot_dir,
-        "CMB_post_compsep_maps",
+        f"CMB_post_compsep_maps_{id_sim}",
         component="CMB post-compsep",
     )
     freq_maps_plotter(
         config,
         np.array([comp_maps[1]]),
         plot_dir,
-        "dust_post_compsep_maps",
+        f"dust_post_compsep_maps_{id_sim}",
         component="Dust post-compsep",
     )
     if config.parametric_sep_pars.include_synchrotron:
@@ -40,7 +46,7 @@ def plot_compsep(manager: DataManager, config: Config, id_sim: int | None = None
             config,
             np.array([comp_maps[2]]),
             plot_dir,
-            "synch_post_compsep_maps",
+            f"synch_post_compsep_maps_{id_sim}",
             component="Synch post-compsep",
         )
 
@@ -53,20 +59,31 @@ def plot_compsep_stats(manager: DataManager, config: Config):
     compsep_results_params = []
     convergence_count = 0
     for sky_sims_id in range(config.map_sim_pars.n_sim):
-        fname_compsepresults = manager.get_path_to_compsep_results(id_sim=sky_sims_id)
-        compsep_results = np.load(fname_compsepresults, allow_pickle=True)
-        params = compsep_results["x"]
-        convergence = compsep_results["success"].astype(bool)
-        if convergence:
-            compsep_results_params.append(params)
-            convergence_count += 1
+        try:
+            fname_compsepresults = manager.get_path_to_compsep_results(id_sim=sky_sims_id)
+            compsep_results = np.load(fname_compsepresults, allow_pickle=True)
+            params = compsep_results["x"]
+            convergence = compsep_results["success"].astype(bool)
+            if convergence:
+                compsep_results_params.append(params)
+                convergence_count += 1
+                last_valid_id = sky_sims_id
+        except FileNotFoundError:
+            logger.warning(
+                f"Component separation results for simulation {sky_sims_id} not found, skipping."
+            )
+            continue
     compsep_results_params = np.array(compsep_results_params)
+
     logger.info(
-        f"Component sepatation converged successfully for of {100 * convergence_count / config.map_sim_pars.n_sim:.2f}% the maps."
+        f"Component separation convergence rate: {convergence_count}/{config.map_sim_pars.n_sim} ({100 * convergence_count / config.map_sim_pars.n_sim:.1f}%))"
     )
+    # param_res_list = np.array(param_res_list)
 
     plot_dir = manager.path_to_components_plots
-    compsep_results_last = np.load(fname_compsepresults, allow_pickle=True)
+    compsep_results_last = np.load(
+        manager.get_path_to_compsep_results(id_sim=last_valid_id), allow_pickle=True
+    )
 
     # Plotting histograms of result parameters:
     fig, axes = plt.subplots(1, compsep_results_last["params"].shape[0], figsize=(12, 5))
