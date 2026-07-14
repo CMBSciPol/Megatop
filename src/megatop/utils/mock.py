@@ -1,7 +1,14 @@
+import os
+import zlib
+
 import healpy as hp
 import numpy as np
 import scipy as sp
+from pixell import enmap
 from pysm3 import Sky, units
+
+import megatop.utils.harmonic as hu
+from megatop.landscapes import AbstractLandscape
 
 from ..config import (
     CustomSATConfig,
@@ -14,6 +21,8 @@ from ..data_manager import DataManager
 from . import V3calc as V3
 from . import V3p1calc as V3p1
 from .logger import logger
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def get_Cl_CMB_model_from_manager(manager: DataManager):
@@ -36,43 +45,66 @@ def get_Cl_CMB_model_from_manager(manager: DataManager):
     Cl_BB = Cl_BB_prim[:l_max_lens] + Cl_BB_lens
 
     # setting TB and EB correlations to 0
-    return np.array([[Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0]])
+    return np.array([Cl_TT, Cl_EE, Cl_BB, Cl_TE, Cl_EE * 0, Cl_EE * 0])
 
 
-def generate_map_cmb(Cl_cmb_model, nside: int, cmb_seed: list[int] | int | None = None):
-    # TODO write tests
-    lmax = 3 * nside
-
-    # Fixing seed if required
-    # hp.synfast uses the legacy numpy random number generator
-    np.random.seed(cmb_seed)  # noqa: NPY002
-    map_CMB = hp.synfast(Cl_cmb_model[0], nside=nside, lmax=lmax, new=True, pixwin=False)
-
-    # Resetting seed
-    np.random.seed(None)  # noqa: NPY002
-
-    return np.array(map_CMB)
+# Template native nside per PySM model: we want to avoid PySM `ud_grade`ing from native resolution.
+# - PySM2 d0-d8 / s0-s3: nside-512 template
+# - PySM3 d9, d10, d12, s4, s5, s7: nside-2048 is the minimum available
+# - PySM3 d11, s6: small scales synthesized at the requested nside
+_PYSM_LOW_RES = {"d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "s0", "s1", "s2", "s3"}
+_PYSM_HIGH_RES = {"d9", "d10", "d12", "s4", "s5", "s7"}
 
 
-def generate_map_fgs_pysm(map_sets, nside, sky_model, input_coord="G", output_coord="E"):
-    # TODO write tests and check coords
-    logger.debug(f"Generating FG maps for {[m.freq_tag for m in map_sets]} GHz")
-    sky = Sky(nside=nside, preset_strings=sky_model, output_unit=units.uK_CMB)
+def pysm_render_nside(sky_model: list[str], working_nside: int) -> int:
+    floor = working_nside
+    for model in sky_model:
+        if model in _PYSM_LOW_RES:
+            floor = max(floor, 512)
+        elif model in _PYSM_HIGH_RES:
+            floor = max(floor, 2048)
+    return floor
+
+
+def generate_map_fgs_pysm(
+    map_sets,
+    lmax: int,
+    sky_model: list[str],
+    landscape: AbstractLandscape,
+):
+    """Render PySM foregrounds and project them onto the target geometry.
+
+    PySM renders in HEALPix at the template-native nside. The galactic→equatorial
+    rotation is done in harmonic space (`rotate_alm`, exact for a band-limited
+    field), staying HEALPix at the native nside. The map is then resampled onto
+    the target pixelisation in PIXEL space (`reproject_pixel`: HEALPix `ud_grade`,
+    CAR spline interpolation). Keeping the final resampling in pixel space avoids
+    the Gibbs ringing a harmonic round-trip produces around the bright
+    galactic-plane features of the PySM templates.
+    """
+    pysm_nside = pysm_render_nside(sky_model, landscape.working_nside(lmax))
+    logger.debug(
+        f"Generating FG maps for {[m.freq_tag for m in map_sets]} GHz at nside {pysm_nside}"
+    )
+    sky = Sky(nside=pysm_nside, preset_strings=sky_model, output_unit=units.uK_CMB)
     maps_fgs = []
     for map_set in map_sets:
         m = sky.get_emission(map_set.frequency * units.GHz, weights=map_set.weight).value
-        if input_coord != output_coord:
-            logger.debug(
-                f"Rotating {map_set.freq_tag}GHz foreground map from {input_coord} to {output_coord}"
-            )
-            r = hp.Rotator(coord=[input_coord, output_coord])
-            m = r.rotate_map_pixel(m)
+        logger.debug(f"Projecting {map_set.freq_tag}GHz foreground map (gal->equ)")
+        m = hu.rotate_map_alms(m, ["G", "C"], spin=[0, 2])  # galactic -> equatorial
+        m = landscape.reproject_pixel(m, spin=(0, 2))
         maps_fgs.append(m)
-    return np.array(maps_fgs)
+    return landscape.stack(maps_fgs)
 
 
 def get_full_sky_noise_freq_maps(
-    map_sets, noise_config: dict, fsky_binary: float, nside: int, id_sim: int = 0
+    map_sets,
+    noise_config: dict,
+    fsky_effective: float,
+    landscape,
+    lmax: int,
+    id_sim: int = 0,
+    seed=None,
 ):
     experiments_map_set = set([map_set.exp_tag for map_set in map_sets])
     experiments_noiseconfig = [name for name in noise_config.experiments]
@@ -87,32 +119,37 @@ def get_full_sky_noise_freq_maps(
         noise_experiment[exp] = get_noise_experiment(
             exp,
             noise_config.experiments[exp],
-            fsky_binary=fsky_binary,
-            nside=nside,
+            fsky_effective=fsky_effective,
+            lmax=lmax,
             id_sim=id_sim,
         )
-    noise_freq_maps = np.zeros((len(map_sets), 3, hp.nside2npix(nside)))
+    noise_freq_maps = landscape.zeros((len(map_sets), 3))
     for i_map_set, map_set in enumerate(map_sets):
         exp = map_set.exp_tag
         noise_config_exp = noise_config.experiments[exp]
         idx_freq = noise_config_exp.default_bands.index(map_set.freq_tag)
         logger.debug(f"Map {exp}_{map_set.freq_tag} has index {idx_freq}.")
+        seed_i = list(seed) + [zlib.crc32(map_set.name.encode())] if seed is not None else None
+        logger.debug(f"Noise {seed_i = } for {map_set.name}")
         if noise_config_exp.noise_option == NoiseOption.WHITE:
             noise_freq_maps[i_map_set] = get_noise_map_from_white_noise(
                 noise_experiment[exp]["map_white_noise_levels"][idx_freq],
-                nside,
-                [id_sim, i_map_set],
+                landscape,
+                seed=seed_i,
             )
         elif noise_config_exp.noise_option == NoiseOption.ONE_OVER_F:
             noise_freq_maps[i_map_set] = get_noise_map_from_noise_spectra(
-                noise_experiment[exp]["noise_spectra"][idx_freq], nside
+                noise_experiment[exp]["noise_spectra"][idx_freq],
+                lmax,
+                landscape,
+                seed=seed_i,
             )
         elif noise_config_exp.noise_option == NoiseOption.NOISELESS:
             noise_freq_maps[i_map_set, :, :] = 1e-10
         elif noise_config_exp.noise_option == NoiseOption.NOISE_MAP:
-            noise_freq_maps[i_map_set] = hp.ud_grade(
-                noise_experiment[exp]["noise_map"][idx_freq], nside_out=nside
-            )
+            external = noise_experiment[exp]["noise_map"][idx_freq]
+            # external maps are HEALPix; resample/reproject onto the target geometry
+            noise_freq_maps[i_map_set] = landscape.reproject_pixel(external, rot=None)
         else:
             msg = f"Noise option {noise_config_exp.noise_option} for {exp} is not implemented"
             logger.error(msg)
@@ -123,8 +160,8 @@ def get_full_sky_noise_freq_maps(
 def get_noise_experiment(
     exp: str,
     noise_config_exp: ValidExperimentConfig,
-    fsky_binary: float,
-    nside: int,
+    fsky_effective: float,
+    lmax: int,
     id_sim: int = 0,
 ):
     if type(noise_config_exp) is SOConfig:
@@ -139,7 +176,7 @@ def get_noise_experiment(
                 survey_years=1.0,  # The scaling wiht time is done through Ntubes_years
             )
             _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-                f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
+                f_sky=fsky_effective, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
             )
         else:
             logger.info(
@@ -151,8 +188,8 @@ def get_noise_experiment(
                 sensitivity_mode=sensitivity_mode,
                 one_over_f_mode=one_over_f_mode,
                 SAC_yrs_LF=noise_config_exp.SAC_yrs_LF,
-                f_sky=fsky_binary,
-                ell_max=3 * nside - 1,
+                f_sky=fsky_effective,
+                ell_max=lmax + 1,
                 delta_ell=1,
                 beam_corrected=False,
                 remove_kluge=False,
@@ -171,7 +208,7 @@ def get_noise_experiment(
             survey_years=1.0,
         )
         _, _, n_ell, white_noise_levels = nc.get_noise_curves(
-            f_sky=fsky_binary, ell_max=3 * nside - 1, delta_ell=1, deconv_beam=False
+            f_sky=fsky_effective, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
         )
 
     elif type(noise_config_exp) is ExternalNoiseMapconfig:
@@ -179,9 +216,9 @@ def get_noise_experiment(
         fname_list = [
             noise_config_exp.root
             / f"{id_sim:04d}"
-            / f"{noise_config_exp.prefix}{int(fr):03d}{noise_config_exp.suffix}.fits"
+            / noise_config_exp.filename_template.format(id_sim=id_sim, freq=int(fr))
             for fr in noise_config_exp.default_bands
-        ]  # FIXED FILE EXTENSION
+        ]
         external_map_list = [
             noise_config_exp.correction * hp.read_map(fname) for fname in fname_list
         ]
@@ -195,52 +232,39 @@ def get_noise_experiment(
     return {"noise_spectra": n_ell, "map_white_noise_levels": white_noise_levels}
 
 
-def get_noise_map_from_white_noise(map_white_noise_level: float, nside: int, seed: list):
-    logger.debug(f"Map white noise level (Q,U) {map_white_noise_level} muK-arcmin")
-    npix = hp.nside2npix(nside)
-    nlev_map = np.array(
-        [
-            map_white_noise_level / np.sqrt(2),
-            map_white_noise_level,
-            map_white_noise_level,
-        ]
-    )[:, np.newaxis] * np.ones((3, npix))
-    nlev_map /= hp.nside2resol(nside, arcmin=True)
-    # rng = np.random.default_rng()
-    logger.warning(
-        "WARNING: DEBUG FIXING SEED OF WHITE NOISE TO ID_SIM!!!! THIS WILL GENERETATE ALSO THE EXACT SAME NOISE SIMS"
-    )
-    rng = np.random.default_rng(seed=seed)
-    return rng.normal(np.zeros_like(nlev_map), nlev_map, (3, npix))
+def get_noise_map_from_white_noise(depth_qu: float, landscape, seed=None):
+    logger.debug(f"Map white noise level (Q,U) {depth_qu} muK-arcmin")
+    # per-Stokes noise level (T = P/sqrt(2)) in muK-arcmin
+    stokes_level = np.array([depth_qu / np.sqrt(2), depth_qu, depth_qu])
+    # sigma per pixel = level / sqrt(pixel area); pixel area is a scalar for HEALPix
+    # and a (ny, nx) enmap for CAR (varies with declination)
+    sqrt_area = np.sqrt(landscape.pixel_area_arcmin2())
+    # For CAR sqrt_area is an enmap so the result carries the wcs.
+    rng = np.random.default_rng(seed)
+    noise = rng.standard_normal((3, *landscape.pixel_shape)) / sqrt_area
+    # Double transpose broadcasts stokes_level over the leading Stokes axis.
+    return (noise.T * stokes_level).T
 
 
-def get_noise_map_from_noise_spectra(n_ell, nside: int):
-    noise_maps = np.zeros((3, hp.nside2npix(nside)))
-    noise_spectra = np.zeros((3, 3 * nside - 1))
+def get_noise_map_from_noise_spectra(n_ell, lmax: int, landscape, seed=None):
+    noise_spectra = np.zeros((3, lmax + 1))
     logger.warning(
         "Do not trust the temperature noise spectra (ell_knee and alpha_knee are polarisation ones)"
     )
     noise_spectra[0, 2:] = n_ell / 2
     noise_spectra[1, 2:] = n_ell
     noise_spectra[2, 2:] = n_ell
-    noise_maps = hp.synfast(
-        (
-            noise_spectra[0],
-            noise_spectra[1],
-            noise_spectra[2],
-            np.zeros_like(noise_spectra[2]),
-        ),
-        new=True,
-        pixwin=False,
-        nside=nside,
+    cl = np.array(
+        [noise_spectra[0], noise_spectra[1], noise_spectra[2], np.zeros_like(noise_spectra[2])]
     )
-    return noise_maps
+    return landscape.synfast(cl, lmax=lmax, seed=seed)
 
 
-def include_hits_noise(noise_maps, nhits_maps, binary_mask):
+def include_hits_noise(noise_maps, common_nhits_map, binary_mask):
     logger.debug("Rescaling the noise maps by the hits count")
-    mask_indices = np.where(binary_mask == 1)[0]
-    if np.any(nhits_maps[..., mask_indices] == 0):
+    # boolean mask works for both HEALPix (npix,) and CAR (ny, nx) pixel axes
+    good = np.asarray(binary_mask) == 1
+    if np.any(np.asarray(common_nhits_map)[good] == 0):
         logger.error("Division by 0 in noise map nhit rescaling.")
         logger.error("The binary mask does not cover all areas where nhits = 0.")
         logger.error(
@@ -248,39 +272,43 @@ def include_hits_noise(noise_maps, nhits_maps, binary_mask):
         )
         logger.error("Exiting...")
     with np.errstate(divide="raise", invalid="raise"):
-        noise_maps[..., mask_indices] /= np.sqrt(nhits_maps[..., np.newaxis, mask_indices])
+        noise_maps[..., good] /= np.sqrt(np.asarray(common_nhits_map)[good])
 
     return noise_maps
 
 
-def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float):
-    lmax_convolution = 3 * nside  # here lmax seems to play an important role
+def beam_winpix_correction(freq_map, beam_FWHM: float, lmax: int):
+    # here lmax seems to play an important role
     logger.info(f"Convolving channel with {beam_FWHM} arcmin beam.")
-    alms_T, alms_Q, alms_U = hp.map2alm(freq_map, lmax=lmax_convolution, pol=True)
-    Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam_FWHM / 60), lmax=lmax_convolution, pol=True)
+    # geometry comes from the input map: an enmap means CAR, ndarray means HEALPix
+    car = isinstance(freq_map, enmap.ndmap)
+    alms_in = hu.map2alm(freq_map, spin=[0, 2], lmax=lmax)
+    Bl_gauss_fwhm = hu.gauss_beam(beam_FWHM, lmax, pol=True)
+
+    if car:
+        # apply the (Gaussian) beam in harmonic space, then the CAR pixel window
+        # in map space via enmap.apply_window
+        hu.almxfl(alms_in[0], Bl_gauss_fwhm[:, 0], inplace=True)
+        hu.almxfl(alms_in[1:], Bl_gauss_fwhm[:, 1], inplace=True)
+        out = hu.alm2map(alms_in, spin=[0, 2], shape=freq_map.shape, wcs=freq_map.wcs, lmax=lmax)
+        return enmap.apply_window(out, pow=1)
+
+    nside = hp.npix2nside(freq_map.shape[-1])
     wpix_in = hp.pixwin(
-        nside, pol=True, lmax=lmax_convolution
+        nside,
+        pol=True,
+        lmax=lmax,
+        datapath=HEALPY_DATA_PATH,
     )  # Pixel window function of input maps
 
     sm_corr_T = Bl_gauss_fwhm[:, 0] * wpix_in[0]
     sm_corr_P = Bl_gauss_fwhm[:, 1] * wpix_in[1]
 
     # change beam and wpix
-    alm_out_T = hp.almxfl(alms_T, sm_corr_T)
-    alm_out_E = hp.almxfl(alms_Q, sm_corr_P)
-    alm_out_B = hp.almxfl(alms_U, sm_corr_P)
+    hu.almxfl(alms_in[0], sm_corr_T, inplace=True)
+    hu.almxfl(alms_in[1:], sm_corr_P, inplace=True)
 
-    # alm-->mapf
-    alms_out_T, alms_out_Q, alms_out_U = hp.alm2map(
-        [alm_out_T, alm_out_E, alm_out_B],
-        nside,
-        lmax=lmax_convolution,
-        pixwin=False,
-        fwhm=0.0,
-        pol=True,
-    )
-    freq_map_beamed = [alms_out_T, alms_out_Q, alms_out_U]
-    return np.array(freq_map_beamed)
+    return hu.alm2map(alms_in, spin=[0, 2], nside=nside, lmax=lmax)
 
 
 def load_observation_matrix(nside: int, map_sets, obsmat_filenames) -> dict:

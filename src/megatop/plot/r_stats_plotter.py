@@ -16,7 +16,7 @@ def get_params_statistics(manager, config):
     mean_per_sim = []
     std_per_sim = []
     for id_sim in range(n_sim_sky):
-        fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+        fname_chains = manager.get_path_to_mcmc_chains(id_sim)
         mcmc = np.load(fname_chains, allow_pickle=True)
         chains = mcmc["mcmc_chains"]
 

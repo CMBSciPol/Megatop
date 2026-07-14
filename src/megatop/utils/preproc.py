@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import healpy as hp
@@ -5,10 +6,13 @@ import numpy as np
 import numpy.typing as npt
 import pymaster as nmt
 
-from megatop.utils.compsep import set_alm_tozero_above_lmax, set_alm_tozero_below_lmin, truncate_alm
+import megatop.utils.harmonic as hu
+from megatop.utils.compsep import set_alm_tozero_above_lmax, set_alm_tozero_below_lmin
 
 from .logger import logger
 from .timer import function_timer
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 @function_timer("common-beam-and-nside")
@@ -17,33 +21,28 @@ def common_beam_and_nside(
     common_beam: float,
     frequency_beams: list[float],
     freq_maps: list[npt.ArrayLike],
+    lmax: int,
     output_alms: bool = False,
-    lmax_convolution: int | None = None,
     DEBUGtruncatealms: bool = False,
     DEBUGlm_range: tuple[int, int] | None = None,
 ):
     # TODO: remove DEBUGtruncatealms and DEBUGlm_range after testing
-    nside_input_maps = [hp.npix2nside(freq_maps[i].shape[-1]) for i in range(len(frequency_beams))]
-    idx_nside_small = np.argwhere(np.array(nside_input_maps) < nside)
-    if idx_nside_small.size > 0:
-        logger.error("Some input maps have too small nsides")
-        logger.error("Check your yaml !")
-        logger.error("Exiting")
-        msg = "Some of input maps have too small nside."
-        raise ValueError(msg)  # TODO better error handling ?
+    nside_input_maps = [hp.npix2nside(m.shape[-1]) for m in freq_maps]
+    if any(n < nside for n in nside_input_maps):
+        raise ValueError("Some input maps have smaller nside than target. Check your yaml.")
 
     freq_maps_out = []
     freq_alms_out = []
     logger.info(f"Common beam correction -> {common_beam} arcmin and NSIDE -> {nside}")
-    if lmax_convolution is None:
-        lmax_convolution = 3 * nside
 
     wpix_out = hp.pixwin(
-        nside, pol=True, lmax=lmax_convolution
+        nside,
+        pol=True,
+        lmax=lmax,
     )  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(
         np.radians(common_beam / 60.0),
-        lmax=lmax_convolution,
+        lmax=lmax,
         pol=True,
     )
 
@@ -51,12 +50,15 @@ def common_beam_and_nside(
         # Input window function. WARNING: Must be done in the loop, as input map don't necessarily have the same nside (e.g. MSS2)
         logger.info(f"Input beam FWHM {beam} arcmin -> {common_beam} arcmin")
         wpix_in = hp.pixwin(
-            hp.get_nside(freq_maps[i_beam][0]), pol=True, lmax=lmax_convolution
+            nside_input_maps[i_beam],
+            pol=True,
+            lmax=lmax,
+            datapath=HEALPY_DATA_PATH,
         )  # Pixel window function of input maps
         wpix_in[1][0:2] = 1.0  # in order not to divide by 0
 
         # beam corrections
-        Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam / 60), lmax=lmax_convolution, pol=True)
+        Bl_gauss_fwhm = hp.gauss_beam(np.radians(beam / 60), lmax=lmax, pol=True)
 
         bl_correction = Bl_gauss_common / Bl_gauss_fwhm
 
@@ -64,19 +66,11 @@ def common_beam_and_nside(
         sm_corr_P = bl_correction[:, 1] * wpix_out[1] / wpix_in[1]
 
         # map-->alm
-        map_in_T = np.array(freq_maps[i_beam][0])
-        map_in_Q = np.array(freq_maps[i_beam][1])
-        map_in_U = np.array(freq_maps[i_beam][2])
-
-        alm_in_T, alm_in_E, alm_in_B = hp.map2alm(
-            [map_in_T, map_in_Q, map_in_U], lmax=lmax_convolution, pol=True, iter=10
-        )
-        # here lmax seems to play an important role
+        alms_in = hu.map2alm(freq_maps[i_beam], spin=[0, 2], lmax=lmax)
 
         # change beam and wpix
-        alm_out_T = hp.almxfl(alm_in_T, sm_corr_T)
-        alm_out_E = hp.almxfl(alm_in_E, sm_corr_P)
-        alm_out_B = hp.almxfl(alm_in_B, sm_corr_P)
+        hu.almxfl(alms_in[0], sm_corr_T, inplace=True)
+        hu.almxfl(alms_in[1:], sm_corr_P, inplace=True)
 
         if DEBUGtruncatealms:
             logger.warning("WARNING WARNING WARNING WARNING WARNING WARNING")
@@ -85,29 +79,19 @@ def common_beam_and_nside(
             if DEBUGlm_range is not None:
                 lmin, lmax = DEBUGlm_range
 
-                alm_out_T = set_alm_tozero_above_lmax(alm_out_T, lmax)
-                alm_out_E = set_alm_tozero_above_lmax(alm_out_E, lmax)
-                alm_out_B = set_alm_tozero_above_lmax(alm_out_B, lmax)
+                alms_in[0] = set_alm_tozero_above_lmax(alms_in[0], lmax)
+                alms_in[1] = set_alm_tozero_above_lmax(alms_in[1], lmax)
+                alms_in[2] = set_alm_tozero_above_lmax(alms_in[2], lmax)
 
-                alm_out_T = set_alm_tozero_below_lmin(alm_out_T, lmin)
-                alm_out_E = set_alm_tozero_below_lmin(alm_out_E, lmin)
-                alm_in_B = set_alm_tozero_below_lmin(alm_out_B, lmin)
+                alms_in[0] = set_alm_tozero_below_lmin(alms_in[0], lmin)
+                alms_in[1] = set_alm_tozero_below_lmin(alms_in[1], lmin)
+                alms_in[2] = set_alm_tozero_below_lmin(alms_in[2], lmin)
 
         if output_alms:
-            freq_alms_out.append([alm_out_T, alm_out_E, alm_out_B])
+            freq_alms_out.append(alms_in)
 
-        # alm-->mapf
-        map_out_T, map_out_Q, map_out_U = hp.alm2map(
-            [alm_out_T, alm_out_E, alm_out_B],
-            nside,
-            lmax=lmax_convolution,
-            pixwin=False,
-            fwhm=0.0,
-            pol=True,
-        )
-
-        # a priori all the options are set to there default, even lmax which is computed wrt input alms
-        out_map = np.array([map_out_T, map_out_Q, map_out_U])
+        # alm-->map
+        out_map = hu.alm2map(alms_in, spin=[0, 2], nside=nside, lmax=lmax)
 
         freq_maps_out.append(out_map)
     if output_alms:
@@ -136,7 +120,7 @@ def read_input_maps(list_mapnames: list[Path]) -> list[npt.ArrayLike]:
     freq_maps_input = []
     for mapname in list_mapnames:
         logger.debug(f"Reading map from {mapname}")
-        freq_maps_input.append(hp.read_map(mapname, field=None))
+        freq_maps_input.append(hp.read_map(mapname, field=None, dtype=np.float64))
     return freq_maps_input
 
 
@@ -178,12 +162,12 @@ def alm_common_beam(
             )[1:]  # keep only E and B
 
         # The smooth mask (mask_analysis) is applied in the NmtField constructor
-        data_alms.append(truncate_alm(alms_QU, lmax_new=harmonic_analysis_lmax - 1))
+        data_alms.append(hu.truncate_alm(alms_QU, lmax=harmonic_analysis_lmax - 1))
     data_alms = np.array(data_alms)  # / mean_fsky_correction
 
     common_beam_ell = hp.gauss_beam(
         np.radians(common_beam / 60.0),
-        lmax=3 * nside,
+        lmax=harmonic_analysis_lmax,
         pol=True,
     )[
         # :-1, 1
@@ -205,6 +189,5 @@ def alm_common_beam(
     # )
 
     for f in range(data_alms.shape[0]):
-        data_alms[f, 0] = hp.almxfl(data_alms[f, 0], 1 / beam4namaster[f])
-        data_alms[f, 1] = hp.almxfl(data_alms[f, 1], 1 / beam4namaster[f])
+        hu.almxfl(data_alms[f, :2], 1 / beam4namaster[f], inplace=True)
     return data_alms

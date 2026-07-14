@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from megatop import Config, DataManager
-from megatop.utils import Timer, logger
+from megatop.utils import logger, mask
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mock import get_Cl_CMB_model_from_manager
 from megatop.utils.plot import plot_all_Cls, plot_all_Cls_diff
@@ -24,7 +24,7 @@ def plot_all_noise_spectra(manager, config):
 
     average_noise_CMB = np.zeros([4, len(bin_centre_lminlmax)])
     for id_sim in range(config.map_sim_pars.n_sim):
-        fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+        fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(id_sim)
         all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)
         all_noise_Cls_CMB = all_noise_Cls["Noise_CMBxNoise_CMB"]
 
@@ -94,7 +94,7 @@ def plot_all_spectra(manager, config):
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
     bin_index_lminlmax = binning_info["bin_index_lminlmax"]
 
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : config.lmax + 1]
     nmt_bins = load_nmt_binning(manager)
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, bin_index_lminlmax]
@@ -114,10 +114,10 @@ def plot_all_spectra(manager, config):
     array_debiased_diff_model = np.zeros([config.map_sim_pars.n_sim, 2, len(bin_centre_lminlmax)])
     array_debiased_diff_model = np.zeros([config.map_sim_pars.n_sim, 2, len(bin_centre_lminlmax)])
     for id_sim in range(config.map_sim_pars.n_sim):
-        fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+        fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(id_sim)
         all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)
 
-        fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+        fname_all_Cls = manager.get_path_to_spectra_cross_components(id_sim)
         all_Cls = np.load(fname_all_Cls, allow_pickle=True)
 
         cmb_cls = all_Cls["CMBxCMB"]
@@ -291,8 +291,7 @@ def plot_all_spectra(manager, config):
     std_debiased_diff_BB = np.std(array_debiased_diff_model[:, 1, :], axis=0)
 
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    analysis_mask = analysis_mask / np.max(analysis_mask)
-    fsky = np.mean(analysis_mask)
+    fsky = mask.fsky_dof(analysis_mask)  # effective DOF for error bars (Hivon w2^2/w4)
 
     cosmic_var_plus_noise_EE = (bined_Cl_cmb_model[1] + average_noise_CMB[0]) * (
         2 / ((2 * bin_centre_lminlmax + 1) * config.map2cl_pars.delta_ell) / fsky
@@ -367,20 +366,31 @@ def plot_all_spectra(manager, config):
     ax_BB_debiased.set_title("CMB BB spectra")
     fig_BB_debiased.savefig(plot_dir / "allskysims_CMB_BB_debiased_spectra.png")
 
-    ax_EE_debiased_diff.set_xlabel(r"$\ell$")
-    ax_EE_debiased_diff.set_ylabel(r"$C_{\ell}^{EE}$")
-    ax_EE_debiased_diff.legend()
-    ax_EE_debiased_diff.axhline(0, color="black", linestyle="--", linewidth=1)
-    ax_EE_debiased_diff.set_title("CMB EE spectra difference to model")
-    ax_EE_debiased_diff.set_xscale("log")
-    fig_EE_debiased_diff.savefig(plot_dir / "allskysims_CMB_EE_debiased_spectra_diff_to_model.png")
+    lmax_cosmo = config.cl2r_pars.lmax_cosmo_analysis or config.lmax
+    cosmo_mask = bin_centre_lminlmax <= lmax_cosmo
+    ylim_EE = 3.0 * np.nanmax(np.abs(cosmic_var_plus_noise_EE[cosmo_mask]))
+    ylim_BB = 3.0 * np.nanmax(np.abs(cosmic_var_plus_noise_BB[cosmo_mask]))
 
-    ax_BB_debiased_diff.set_xlabel(r"$\ell$")
-    ax_BB_debiased_diff.set_ylabel(r"$C_{\ell}^{BB}$")
-    ax_BB_debiased_diff.legend()
-    ax_BB_debiased_diff.axhline(0, color="black", linestyle="--", linewidth=1)
-    ax_BB_debiased_diff.set_title("CMB BB spectra difference to model")
-    ax_BB_debiased_diff.set_xscale("log")
+    for ax, ylim, pol in [
+        (ax_EE_debiased_diff, ylim_EE, "EE"),
+        (ax_BB_debiased_diff, ylim_BB, "BB"),
+    ]:
+        ax.set_xlabel(r"$\ell$")
+        ax.set_ylabel(rf"$C_{{\ell}}^{{{pol}}}$")
+        ax.axhline(0, color="black", linestyle="--", linewidth=1)
+        ax.axvline(
+            lmax_cosmo,
+            color="gray",
+            linestyle=":",
+            linewidth=1,
+            label=rf"$\ell_{{max}}^{{cosmo}}={lmax_cosmo}$",
+        )
+        ax.legend(fontsize=7)
+        ax.set_title(rf"CMB {pol} spectra difference to model")
+        ax.set_xscale("log")
+        ax.set_ylim(-ylim, ylim)
+
+    fig_EE_debiased_diff.savefig(plot_dir / "allskysims_CMB_EE_debiased_spectra_diff_to_model.png")
     fig_BB_debiased_diff.savefig(plot_dir / "allskysims_CMB_BB_debiased_spectra_diff_to_model.png")
 
     ax_EE_debiased.set_xlabel(r"$\ell$")
@@ -417,8 +427,8 @@ def plot_all_spectra(manager, config):
     plt.close(fig_BB)
     plt.close(fig_EE_debiased)
     plt.close(fig_BB_debiased)
-    plt.close(fig_EE_debiased)
-    plt.close(fig_BB_debiased)
+    plt.close(fig_EE_debiased_diff)
+    plt.close(fig_BB_debiased_diff)
 
 
 def plot_noise_spectra(manager, config, id_sim=None):
@@ -427,8 +437,7 @@ def plot_noise_spectra(manager, config, id_sim=None):
 
     binning_info = np.load(manager.path_to_binning, allow_pickle=True)
     bin_centre_lminlmax = binning_info["bin_centre_lminlmax"]
-
-    fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(sub=id_sim)
+    fname_noise_Cls = manager.get_path_to_noise_spectra_cross_components(id_sim)
     all_noise_Cls = np.load(fname_noise_Cls, allow_pickle=True)
 
     plot_all_Cls(
@@ -440,7 +449,7 @@ def plot_noise_spectra(manager, config, id_sim=None):
         y_axis_label=r"$C_{\ell}$",
     )
 
-    fname_all_Cls = manager.get_path_to_spectra_cross_components(sub=id_sim)
+    fname_all_Cls = manager.get_path_to_spectra_cross_components(id_sim)
     all_Cls = np.load(fname_all_Cls, allow_pickle=True)
 
     debiased_cls = {}
@@ -456,7 +465,7 @@ def plot_noise_spectra(manager, config, id_sim=None):
         y_axis_label=r"$C_{\ell}$",
     )
 
-    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[0, :, : 3 * config.nside]
+    Cl_cmb_model = get_Cl_CMB_model_from_manager(manager)[:, : config.lmax + 1]
     nmt_bins = load_nmt_binning(manager)
 
     bined_Cl_cmb_model = nmt_bins.bin_cell(Cl_cmb_model)[:, binning_info["bin_index_lminlmax"]]
@@ -510,8 +519,6 @@ def main():
     manager.dump_config()
 
     logger.info("Plotting Noise spectra outputs...")
-    timer = Timer()
-    timer.start("Noise_spectra_plotter")
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:
@@ -526,8 +533,6 @@ def main():
         logger.info("Plotting all spectra:")
         plot_all_spectra(manager, config)
         plot_all_noise_spectra(manager, config)
-
-    timer.stop("Noise_spectra_plotter")
 
 
 if __name__ == "__main__":

@@ -1,13 +1,17 @@
 import argparse
+import os
 from pathlib import Path
 
 import healpy as hp
 import numpy as np
 
+import megatop.utils.harmonic as hu
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 
 def plot_preprocessed_maps(manager, config, id_sim=None, maps=True, cls=True):
@@ -17,7 +21,7 @@ def plot_preprocessed_maps(manager, config, id_sim=None, maps=True, cls=True):
     logger.info("Plotting pre-processing outputs")
 
     with Timer("load-freq-maps"):
-        preproc_maps_fname = manager.get_path_to_preprocessed_maps(sub=id_sim)
+        preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
         binary_mask = hp.read_map(manager.path_to_binary_mask)
@@ -30,10 +34,10 @@ def plot_preprocessed_maps(manager, config, id_sim=None, maps=True, cls=True):
         freq_maps_plotter(config, freq_maps_preprocessed, plot_dir, "pre_processed_maps")
 
     if cls:  # plotting the spectra
-        lmax = 3 * config.nside
+        lmax = config.plot_pars.lmax_plot
         spectra_array = []
         for i in range(len(config.frequencies)):
-            spectra_array.append(hp.anafast(freq_maps_preprocessed[i], lmax=lmax))
+            spectra_array.append(hu.anafast(freq_maps_preprocessed[i], lmax=lmax))
         spectra_array = np.array(spectra_array)
 
         plotTTEEBB(

@@ -1,14 +1,15 @@
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.3
+  rev: v0.15.18
   hooks:
-    - id: ruff
+    - id: ruff-check
     - id: ruff-format
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v6.0.0
   hooks:
   - id: check-added-large-files
+    exclude: ^uv\.lock$
   - id: check-case-conflict
   - id: check-merge-conflict
   - id: check-symlinks
@@ -18,3 +19,8 @@ repos:
   - id: name-tests-test
     args: ["--pytest-test-first"]
   - id: trailing-whitespace
+
+- repo: https://github.com/astral-sh/uv-pre-commit
+  rev: 0.11.23
+  hooks:
+  - id: uv-lock

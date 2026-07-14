@@ -1,0 +1,3 @@
+# `megatop.landscapes`
+
+::: megatop.landscapes

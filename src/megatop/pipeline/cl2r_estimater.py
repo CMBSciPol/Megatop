@@ -7,11 +7,10 @@ import emcee
 import healpy as hp
 import numpy as np
 from camb import initialpower
-from mpi4py.futures import MPICommExecutor
 
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
-from megatop.utils import logger
+from megatop.utils import logger, mask
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 
@@ -149,7 +148,7 @@ def logL_cosmo(
     theta,
     dust_marg,
     sync_marg,
-    fsky_obs,
+    fsky,
     Cl_BB_prim_generic,
     Cl_BB_lensing_generic,
     Cl_CMBxCMB_BB_est,
@@ -191,7 +190,7 @@ def logL_cosmo(
 
     log_L = -(1 / 2) * np.sum(
         (2 * bin_centre + 1)
-        * fsky_obs
+        * fsky
         * delta_l
         * ((Cl_CMBxCMB_BB_est / Cl_CMBxCMB_BB_model) + np.log(Cl_CMBxCMB_BB_model))
     )
@@ -206,19 +205,13 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
 
-    # nhits_map = hp.read_map(manager.path_to_nhits_map)
-    # nhits_map /= np.max(nhits_map)
-    # fsky_obs = np.mean(nhits_map)
+    # Gaussian likelihood mode count: the effective DOF fsky (Hivon w2^2/w4),
+    # not the plain mask mean. Equal for a binary mask, smaller when apodized.
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    analysis_mask = analysis_mask / np.max(analysis_mask)
-    fsky_obs = np.mean(analysis_mask)
-    # mean_fsky = np.mean(analysis_mask**2)  # the analysis mask must be normalized!
-    # fsky_obs = np.sqrt(mean_fsky)
+    fsky = mask.fsky_dof(analysis_mask)
 
-    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
-        "CMBxCMB"
-    ][3]
-    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(sub=id_sim))[
+    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][3]
+    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
         "DustxDust"
     ][3]
 
@@ -230,7 +223,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         # TODO: test case when only one experiment is noiseless?
         Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
     else:
-        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(sub=id_sim))[
+        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))[
             "Noise_CMBxNoise_CMB"
         ][3]
 
@@ -250,12 +243,12 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     )
 
     if config.cl2r_pars.load_model_spectra:
-        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: 3 * config.nside]
+        Cl_BB_lensing_generic = hp.read_cl(manager.path_to_lensed_scalar)[2][: config.lmax + 1]
         Cl_BB_prim_generic = hp.read_cl(manager.path_to_unlensed_scalar_tensor_r1)[2][
-            : 3 * config.nside
+            : config.lmax + 1
         ]
     else:
-        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, 3 * config.nside - 1)
+        Cl_BB_prim_generic, Cl_BB_lensing_generic = compute_generic_Cl(0, config.lmax)
 
     # 2. init mcmc parameters:
     if not dust_marg and not sync_marg:
@@ -297,7 +290,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
         args=(
             dust_marg,
             sync_marg,
-            fsky_obs,
+            fsky,
             Cl_BB_prim_generic,
             Cl_BB_lensing_generic,
             Cl_CMBxCMB_BB_est,
@@ -330,9 +323,7 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
     logger.info(f"Mean parameters {param_names}: {np.mean(chains, axis=0)}")
     # 4. save mcmc chains:
-    path = manager.get_path_to_mcmc(sub=id_sim)
-    path.mkdir(parents=True, exist_ok=True)
-    fname_chains = manager.get_path_to_mcmc_chains(sub=id_sim)
+    fname_chains = manager.get_path_to_mcmc_chains(id_sim)
 
     np.savez(
         fname_chains,
@@ -345,8 +336,9 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cl to r estmation")
+    parser = argparse.ArgumentParser(description="Cl to r estimation")
     parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, default=None, help="process only this simulation index")
 
     args = parser.parse_args()
     config = Config.load_yaml(args.config)
@@ -355,11 +347,22 @@ def main():
     world, rank, size = get_world()
     if rank == 0:
         manager.dump_config()
+        manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
+
+    if args.sim is not None:
+        run_mcmc_and_save(manager, config, id_sim=args.sim)
+        return
 
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:
         run_mcmc_and_save(manager=manager, config=config)
+    elif size < 2:
+        for i in range(n_sim_sky):
+            result = run_mcmc_and_save(manager, config, id_sim=i)
+            logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
     else:
+        from mpi4py.futures import MPICommExecutor
+
         with MPICommExecutor() as executor:
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} workers")
