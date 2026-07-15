@@ -1441,7 +1441,6 @@ dependencies = [
     { name = "pysm3" },
     { name = "pyyaml" },
     { name = "scipy" },
-    { name = "soopercool" },
     { name = "tqdm" },
 ]
 
@@ -1484,7 +1483,6 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "scipy", specifier = "<1.18" },
     { name = "snakemake", marker = "python_full_version >= '3.11' and extra == 'snake'", specifier = ">=9.20.0" },
-    { name = "soopercool", git = "https://github.com/simonsobs/SOOPERCOOL.git" },
     { name = "tqdm", specifier = ">=4" },
 ]
 provides-extras = ["mpi", "snake"]
@@ -2651,20 +2649,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sacc"
-version = "2.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "astropy" },
-    { name = "numpy" },
-    { name = "scipy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b6/82/5b603d960279b8eb7fac677ba3550c0903a8390f1bff2eee6fbfa59765da/sacc-2.4.tar.gz", hash = "sha256:a98fb4e59b3c742ddb492a15a10e1f8a4279ba36d56c0d3c35e1cd13cca1167b", size = 424905, upload-time = "2026-07-02T11:29:27.458Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/9f/56288a8aabafa24679d32d01e7db732e8e89e4074cc91aedc0bb7b7c8e46/sacc-2.4-py3-none-any.whl", hash = "sha256:da6b648998738c7c307cbdff644429633726844f8c048642725be5efc1859fa3", size = 50931, upload-time = "2026-07-02T11:29:26.286Z" },
-]
-
-[[package]]
 name = "scienceplots"
 version = "2.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2897,21 +2881,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/93/6e/f3c5b2d621fd6a6b78d8cfc01fef6b926fe2c277f5ed77c5e4deeacb94eb/snakemake_interface_storage_plugins-4.4.1.tar.gz", hash = "sha256:b2b5bf05318af36955ebf2ce76c921c0fb06904ca98fb30e1657d88b7b7b6945", size = 14924, upload-time = "2026-03-16T11:16:01.075Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b6/49/1f72d8c05d8588f06a61f1af3deb125a4ff8169d2a41f1b839d62c824d1c/snakemake_interface_storage_plugins-4.4.1-py3-none-any.whl", hash = "sha256:6e075f448543cc3d0cb1ee5e6e5a83af9761e7085f3ce0922011685d098f231e", size = 18256, upload-time = "2026-03-16T11:15:59.582Z" },
-]
-
-[[package]]
-name = "soopercool"
-version = "0.0.0"
-source = { git = "https://github.com/simonsobs/SOOPERCOOL.git#bf5c9c1b6cd018febc5eb5f8c8c93322222c7b64" }
-dependencies = [
-    { name = "camb" },
-    { name = "healpy" },
-    { name = "numpy" },
-    { name = "pixell" },
-    { name = "pymaster" },
-    { name = "sacc" },
-    { name = "scipy" },
-    { name = "wget" },
 ]
 
 [[package]]
@@ -3172,12 +3141,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/db/d9/c495884c6e548fce18a8f40568ff120bc3a4b7b99813081c8ac0c936fa64/watchdog-6.0.0-py3-none-win_amd64.whl", hash = "sha256:cbafb470cf848d93b5d013e2ecb245d4aa1c8fd0504e863ccefa32445359d680", size = 79070, upload-time = "2024-11-01T14:07:10.686Z" },
     { url = "https://files.pythonhosted.org/packages/33/e8/e40370e6d74ddba47f002a32919d91310d6074130fe4e17dabcafc15cbf1/watchdog-6.0.0-py3-none-win_ia64.whl", hash = "sha256:a1914259fa9e1454315171103c6a30961236f508b9b623eae470268bbcc6a22f", size = 79067, upload-time = "2024-11-01T14:07:11.845Z" },
 ]
-
-[[package]]
-name = "wget"
-version = "3.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/47/6a/62e288da7bcda82b935ff0c6cfe542970f04e29c756b0e147251b2fb251f/wget-3.2.zip", hash = "sha256:35e630eca2aa50ce998b9b1a127bb26b30dfee573702782aa982f875e3f16061", size = 10857, upload-time = "2015-10-22T15:26:37.51Z" }
 
 [[package]]
 name = "wrapt"
