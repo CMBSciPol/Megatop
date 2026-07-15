@@ -41,6 +41,7 @@ dependencies = [
     "jax",
     "megabuster @ git+https://github.com/CMBSciPol/Megabuster.git",
     "psutil",
+    "soopercool @ git+https://github.com/simonsobs/SOOPERCOOL.git",
 ]
 
 [project.optional-dependencies]
