@@ -30,6 +30,15 @@ def preprocess_map(
     manager: DataManager, config: Config, id_sim: int | None = None, mask_output=True
 ):
     input_maps = read_input_maps(manager.get_maps_filenames(id_sim))
+
+    for i, map_set in enumerate(config.map_sets):
+        if map_set.external_sky_map is not None and map_set.external_sky_map.correction != 1.0:
+            logger.info(
+                f"Applying correction factor {map_set.external_sky_map.correction} "
+                f"to external sky map for {map_set.name}"
+            )
+            input_maps[i] = map_set.external_sky_map.correction * input_maps[i]
+
     logger.info(
         f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
     )

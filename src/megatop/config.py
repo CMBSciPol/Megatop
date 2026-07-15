@@ -174,6 +174,9 @@ class ExternalSkyMapConfig(StrictModel):
     root: Path
     filename_template: str = "{id_sim:04d}/{exp_tag}_{freq_tag}.fits"
     """May contain placeholders for `id_sim` and the map_set's `freq_tag` and `exp_tag`."""
+    correction: float = 1.0
+    """Multiplicative correction factor applied when reading the map (e.g. for unit conversion).
+        Defaults to 1.0 (no correction)."""
 
 
 class MapSetConfig(StrictModel):
