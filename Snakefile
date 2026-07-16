@@ -24,6 +24,7 @@ manager = DataManager(mt)
 N_SKY = mt.map_sim_pars.n_sim
 N_NOISE = mt.noise_sim_pars.n_sim
 MAP_SETS = [ms.name for ms in mt.map_sets]
+MAP_SET_CONFIGS = {ms.name: ms for ms in mt.map_sets}
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -119,7 +120,11 @@ for _i in range(N_NOISE):
 
 
 # ── Per-sky-sim rules ─────────────────────────────────────────────────────────
+# map_sets with `external_sky_map` set are read from disk (see ExternalSkyMapConfig);
+# no mock_signal rule is generated for them, so preproc reads the external file directly.
 for _i, _ms in product(range(N_SKY), MAP_SETS):
+    if MAP_SET_CONFIGS[_ms].external_sky_map is not None:
+        continue
 
     rule:
         name: f"mock_signal_{_i:04d}_{_ms}"
@@ -207,6 +212,75 @@ for _i in range(N_SKY):
             sim=_i,
         shell:
             "megatop-cl2r-run --config {params.config} --sim {params.sim} > {log} 2>&1"
+
+
+# ── Real-data rules (N_SKY == 0) ──────────────────────────────────────────────
+if N_SKY == 0:
+
+    rule:
+        name: "preproc_real"
+        input:
+            S(manager.inputs_preproc(None))
+        output:
+            S(manager.outputs_preproc(None))
+        log:
+            str(LOGS / "preproc_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-preproc-run --config {params.config} > {log} 2>&1"
+
+    rule:
+        name: "compsep_real"
+        input:
+            S(manager.inputs_compsep(None))
+        output:
+            S(manager.outputs_compsep(None))
+        log:
+            str(LOGS / "compsep_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-compsep-run --config {params.config} > {log} 2>&1"
+
+    rule:
+        name: "map2cl_real"
+        input:
+            S(manager.inputs_map2cl(None))
+        output:
+            S(manager.outputs_map2cl(None))
+        log:
+            str(LOGS / "map2cl_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-map2cl-run --config {params.config} > {log} 2>&1"
+
+    rule:
+        name: "noisespectra_real"
+        input:
+            S(manager.inputs_noisespectra(None))
+        output:
+            S(manager.outputs_noisespectra(None))
+        log:
+            str(LOGS / "noisespectra_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-noisespectra-run --config {params.config} > {log} 2>&1"
+
+    rule:
+        name: "cl2r_real"
+        input:
+            S(manager.inputs_cl2r(None))
+        output:
+            S(manager.outputs_cl2r(None))
+        log:
+            str(LOGS / "cl2r_real.log")
+        params:
+            config=MEGATOP_CONFIG
+        shell:
+            "megatop-cl2r-run --config {params.config} > {log} 2>&1"
 
 
 # ── Plot rules ────────────────────────────────────────────────────────────────
