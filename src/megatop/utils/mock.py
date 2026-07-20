@@ -215,7 +215,6 @@ def get_noise_experiment(
         logger.info(f"Reading noise map from {noise_config_exp.root} for {exp}.")
         fname_list = [
             noise_config_exp.root
-            / f"{id_sim:04d}"
             / noise_config_exp.filename_template.format(id_sim=id_sim, freq=int(fr))
             for fr in noise_config_exp.default_bands
         ]
