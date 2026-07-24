@@ -34,6 +34,9 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
     pixel_acc = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
     nl_acc = None
     nl_unbinned_acc = None
+    nl_acc_with_cross = None
+    nl_unbinned_acc_with_cross = None
+
     use_harmonic = config.parametric_sep_pars.use_harmonic_compsep
 
     for id_sim in _iter_realisations(n_sim):
@@ -44,10 +47,26 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
         del maps
 
         if use_harmonic:
+            # import IPython; IPython.embed()  # noqa
             nl = np.load(manager.get_path_to_nl_noisecov_contrib(id_sim))
             nl_un = np.load(manager.get_path_to_nl_noisecov_contrib_unbinned(id_sim))
             nl_acc = nl.copy() if nl_acc is None else nl_acc + nl
             nl_unbinned_acc = nl_un.copy() if nl_unbinned_acc is None else nl_unbinned_acc + nl_un
+
+            nl_with_cross = np.load(manager.get_path_to_nl_noisecov_contrib_with_cross(id_sim))
+            nl_un_with_cross = np.load(
+                manager.get_path_to_nl_noisecov_contrib_unbinned_with_cross(id_sim)
+            )
+            nl_acc_with_cross = (
+                nl_with_cross.copy()
+                if nl_acc_with_cross is None
+                else nl_acc_with_cross + nl_with_cross
+            )
+            nl_unbinned_acc_with_cross = (
+                nl_un_with_cross.copy()
+                if nl_unbinned_acc_with_cross is None
+                else nl_unbinned_acc_with_cross + nl_un_with_cross
+            )
 
     pixel_mean = pixel_acc / int_n_sim
     np.save(manager.path_to_pixel_noisecov, pixel_mean)
@@ -70,6 +89,11 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
     if use_harmonic:
         np.save(manager.path_to_nl_noisecov, nl_acc / int_n_sim)
         np.save(manager.path_to_nl_noisecov_unbinned, nl_unbinned_acc / int_n_sim)
+
+        np.save(manager.path_to_nl_noisecov_with_cross, nl_acc_with_cross / int_n_sim)
+        np.save(
+            manager.path_to_nl_noisecov_unbinned_with_cross, nl_unbinned_acc_with_cross / int_n_sim
+        )
         logger.info(f"Saved harmonic nl covariance to {manager.path_to_nl_noisecov}")
 
     logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
