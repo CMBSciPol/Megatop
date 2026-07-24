@@ -130,12 +130,15 @@ def alm_common_beam(
     common_beam: float,
     frequency_beams: list[float],
     freq_maps: list[npt.ArrayLike],
+    lmax: int,
     analysis_mask: npt.ArrayLike | None = None,
     harmonic_analysis_lmax: int | None = None,
     purify_e: bool = False,
     purify_b: bool = False,
     use_namaster_alms: bool = True,
 ):
+    logger(f"nside to be removed:{nside}")
+    logger.warning("TODDDDOOOOOOO: remove lmaxharmonic, and harmonize with config.lmax")
     if analysis_mask is not None and not use_namaster_alms:
         logger.warning(
             "analysis_mask is provided but use_namaster_alms is False. Are you sure you want to apply the analysis mask?"
@@ -156,7 +159,7 @@ def alm_common_beam(
         else:
             alms_QU = hp.map2alm(
                 freq_maps[f] * analysis_mask,
-                lmax=3 * nside,
+                lmax=lmax,
                 pol=True,
                 iter=10,
             )[1:]  # keep only E and B
@@ -167,7 +170,7 @@ def alm_common_beam(
 
     common_beam_ell = hp.gauss_beam(
         np.radians(common_beam / 60.0),
-        lmax=harmonic_analysis_lmax,
+        lmax=lmax,
         pol=True,
     )[
         # :-1, 1
@@ -176,13 +179,13 @@ def alm_common_beam(
 
     beam4namaster = np.array(
         [
-            hp.gauss_beam(np.radians(beam / 60), lmax=3 * nside, pol=True)[:, 1] / common_beam_ell
+            hp.gauss_beam(np.radians(beam / 60), lmax=lmax, pol=True)[:, 1] / common_beam_ell
             # hp.gauss_beam(np.radians(beam / 60), lmax=3 * nside, pol=True)[:-1, 1] / common_beam_ell
             for beam in frequency_beams
         ]
     )
     # beam4namaster = beam4namaster[..., : harmonic_analysis_lmax - 1]
-    beam4namaster = beam4namaster[..., :harmonic_analysis_lmax]
+    beam4namaster = beam4namaster[..., :lmax]  # useless??
 
     # assert beam4namaster.shape[-1] == hp.Alm.getlmax(data_alms.shape[-1]), (
     #     f"beam4namaster shape {beam4namaster.shape} does not match data_alms shape {data_alms.shape}"
