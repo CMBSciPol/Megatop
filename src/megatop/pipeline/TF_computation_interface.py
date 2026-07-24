@@ -37,7 +37,7 @@ def create_and_run_soopercool_yaml(manager: DataManager, config: Config):
             "car_template": None,
             "nside": config.nside,
             "lmin": 2,
-            "lmax": 2 * config.nside + 1,
+            "lmax": config.lmax,  # 2 * config.nside + 1,
             "binning_file": str(manager.path_to_binning),
             "pure_B": config.map2cl_pars.purify_b,
             "beam_floor": None,
@@ -71,6 +71,8 @@ def create_and_run_soopercool_yaml(manager: DataManager, config: Config):
                         "freq_tag": map_set.freq_tag,
                         "exp_tag": map_set.exp_tag,
                         "filtering_tag": f"{map_set.name}",
+                        "kspace_tag": None,
+                        "hits_tag": None,
                     }
                 },
                 "transfer_settings": {
@@ -97,6 +99,9 @@ def create_and_run_soopercool_yaml(manager: DataManager, config: Config):
         full_soopercool_config_path = dir_soopercool_config / fname_soopercool_config
         full_soopercool_config_path_list.append(full_soopercool_config_path)
         with Path.open(full_soopercool_config_path, "w") as f:
+            logger.info(
+                f"Writing soopercool config for {map_set.name} to {full_soopercool_config_path}"
+            )
             yaml.dump(soopercool_config, f)
 
     soopercool_path = Path(soopercool.__path__[0]).parent
