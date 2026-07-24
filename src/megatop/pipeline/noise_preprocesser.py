@@ -26,7 +26,7 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
-from megatop.utils.preproc import common_beam_and_nside
+from megatop.utils.preproc import alm_common_beam, common_beam_and_nside, read_input_maps
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
@@ -209,6 +209,51 @@ def _preprocess_noise_maps(
     )
 
 
+def _harmonic_alm_preproc_contrib(
+    config: Config, manager: DataManager, id_real: int | None
+) -> np.ndarray:
+    input_maps = read_input_maps(manager.get_maps_filenames(id_real))
+    logger.info(
+        f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
+    )
+    freq_beams = config.beams
+    common_beam = config.pre_proc_pars.common_beam_correction
+
+    if config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms:
+        analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+        mask_alm_computation = analysis_mask
+    else:
+        binary_mask = hp.read_map(manager.path_to_binary_mask)
+        mask_alm_computation = binary_mask
+
+    freq_alms_convolved = alm_common_beam(
+        nside=config.nside,
+        common_beam=common_beam,
+        frequency_beams=freq_beams,
+        freq_maps=np.array(input_maps),
+        lmax=config.lmax,
+        analysis_mask=mask_alm_computation,
+        harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
+        purify_e=config.map2cl_pars.purify_e,
+        purify_b=config.map2cl_pars.purify_b,
+        use_namaster_alms=config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms,
+    )
+
+    for f, tf_path in enumerate(manager.get_TF_filenames()):
+        logger.warning("TESTING NEW METHOD FOR REDUCED TF REDUCTION")
+        path_preprocessed_reduced_TF = manager.get_path_to_preprocessed_reduced_TF()
+        logger.info(f"Loading preproc transfer function from {path_preprocessed_reduced_TF}")
+        reduced_TF_from_preproc = np.load(
+            path_preprocessed_reduced_TF,
+            allow_pickle=True,
+        )
+        inv_sqrt_tf_lm = reduced_TF_from_preproc["inv_sqrt_tf_lm_freq"][f]
+
+        freq_alms_convolved[f] = np.einsum("ijl,jl->il", inv_sqrt_tf_lm, freq_alms_convolved[f])
+
+    return
+
+
 def _harmonic_nl_contrib(
     config: Config,
     manager: DataManager,
@@ -229,8 +274,8 @@ def _harmonic_nl_contrib(
                 nmt_bins=nmt_bins,
                 analysis_mask=mask_analysis,
                 beam=None,
-                purify_e=False,
-                purify_b=False,
+                purify_e=config.map2cl_pars.purify_e,
+                purify_b=config.map2cl_pars.purify_b,
                 n_iter=10,
                 lmax=config.lmax,
             )
@@ -241,18 +286,28 @@ def _harmonic_nl_contrib(
             workspaceff,
             nmt_bins,
             compute_cross_freq=False,
-            purify_e=False,
-            purify_b=False,
+            purify_e=config.map2cl_pars.purify_e,
+            purify_b=config.map2cl_pars.purify_b,
             beam=None,
             return_all_spectra=config.pre_proc_pars.correct_for_TF,
             lmax=config.lmax,
         )
+        noise_spectra_with_cross = noise_spectra.copy()
+        noise_spectra_unbined_with_cross = noise_spectra_unbined.copy()
 
         if config.pre_proc_pars.correct_for_TF:
             logger.warning("Including transfer function in the pre-processed noise spectra.")
             output_noise_spectra = np.zeros([len(config.frequencies), 3, nmt_bins.get_n_bands()])
             output_noise_spectra_unbined = np.zeros(
                 [len(config.frequencies), 3, noise_spectra_unbined.shape[-1]]
+            )
+
+            # With Cross include EB and BE cross spectra
+            output_noise_spectra_with_cross = np.zeros(
+                [len(config.frequencies), 5, nmt_bins.get_n_bands()]
+            )
+            output_noise_spectra_unbined_with_cross = np.zeros(
+                [len(config.frequencies), 5, noise_spectra_unbined.shape[-1]]
             )
 
             for f, tf_path in enumerate(manager.get_TF_filenames()):
@@ -268,11 +323,26 @@ def _harmonic_nl_contrib(
                     output_noise_spectra_unbined[f, 2] = noise_spectra_unbined[f, 3]
                     continue
 
-                logger.info(f"Loading transfer function from {tf_path}")
-                transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
-
-                inv_tf = get_reduced_TF(transfer)
-
+                use_new_reduced_TF = True
+                if not use_new_reduced_TF:
+                    logger.info(f"Loading transfer function from {tf_path}")
+                    transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
+                    inv_tf = get_reduced_TF(transfer)
+                else:
+                    logger.warning("TESTING NEW METHOD FOR REDUCED TF REDUCTION")
+                    path_preprocessed_reduced_TF = manager.get_path_to_preprocessed_reduced_TF()
+                    logger.info(
+                        f"Loading preproc transfer function from {path_preprocessed_reduced_TF}"
+                    )
+                    reduced_TF_from_preproc = np.load(
+                        path_preprocessed_reduced_TF,
+                        allow_pickle=True,
+                    )
+                    inv_tf = np.abs(
+                        rebuilt_from_reduced_conj(
+                            reduced_TF_from_preproc["inv_sqrt_tf_bin_freq"][f]
+                        ).T
+                    )
                 noise_spectra_TF_corrected = np.einsum("lij,jl->il", inv_tf, noise_spectra[f])
                 noise_spectra_TF_corrected_unbined = nmt_bins.unbin_cell(noise_spectra_TF_corrected)
                 output_noise_spectra[f, 0] = noise_spectra_TF_corrected[0] * 0
@@ -283,8 +353,33 @@ def _harmonic_nl_contrib(
                 output_noise_spectra_unbined[f, 1] = noise_spectra_TF_corrected_unbined[0]
                 output_noise_spectra_unbined[f, 2] = noise_spectra_TF_corrected_unbined[3]
 
+                output_noise_spectra_with_cross[f, 0] = noise_spectra_TF_corrected[0] * 0
+                output_noise_spectra_with_cross[f, 1] = noise_spectra_TF_corrected[0]
+                output_noise_spectra_with_cross[f, 2] = noise_spectra_TF_corrected[1]
+                output_noise_spectra_with_cross[f, 3] = noise_spectra_TF_corrected[2]
+                output_noise_spectra_with_cross[f, 4] = noise_spectra_TF_corrected[3]
+
+                output_noise_spectra_unbined_with_cross[f, 0] = (
+                    noise_spectra_TF_corrected_unbined[0] * 0
+                )
+                output_noise_spectra_unbined_with_cross[f, 1] = noise_spectra_TF_corrected_unbined[
+                    0
+                ]
+                output_noise_spectra_unbined_with_cross[f, 2] = noise_spectra_TF_corrected_unbined[
+                    1
+                ]
+                output_noise_spectra_unbined_with_cross[f, 3] = noise_spectra_TF_corrected_unbined[
+                    2
+                ]
+                output_noise_spectra_unbined_with_cross[f, 4] = noise_spectra_TF_corrected_unbined[
+                    3
+                ]
+
             noise_spectra = output_noise_spectra
             noise_spectra_unbined = output_noise_spectra_unbined
+            noise_spectra_with_cross = output_noise_spectra_with_cross
+            noise_spectra_unbined_with_cross = output_noise_spectra_unbined_with_cross
+
     else:
         logger.warning(
             "Using harmonic delta ell = 1; healpy.anafast is used (not recommended for noise spectra)."
@@ -299,7 +394,9 @@ def _harmonic_nl_contrib(
 
     nl_binned = noise_spectra[..., bin_index_lminlmax]
     nl_unbinned = noise_spectra_unbined[..., ell_min : ell_max + 1]
-    return nl_binned, nl_unbinned
+    nl_binned_with_cross = noise_spectra_with_cross[..., bin_index_lminlmax]
+    nl_unbinned_with_cross = noise_spectra_unbined_with_cross[..., ell_min : ell_max + 1]
+    return nl_binned, nl_unbinned, nl_binned_with_cross, nl_unbinned_with_cross
 
 
 def noise_preprocess_realisation(config: Config, manager: DataManager, id_sim: int | None) -> None:
@@ -331,13 +428,25 @@ def noise_preprocess_realisation(config: Config, manager: DataManager, id_sim: i
         np.save(out_TRUE_maps, preprocessed_TRUE_noise_maps)
 
     if config.parametric_sep_pars.use_harmonic_compsep:
-        nl_binned, nl_unbinned = _harmonic_nl_contrib(config, manager, preprocessed)
+        nl_binned, nl_unbinned, nl_binned_with_cross, nl_unbinned_with_cross = _harmonic_nl_contrib(
+            config, manager, preprocessed
+        )
+
         out_nl = manager.get_path_to_nl_noisecov_contrib(id_sim)
         out_nl_unbinned = manager.get_path_to_nl_noisecov_contrib_unbinned(id_sim)
+
+        out_nl_with_cross = manager.get_path_to_nl_noisecov_contrib_with_cross(id_sim)
+        out_nl_unbinned_with_cross = manager.get_path_to_nl_noisecov_contrib_unbinned_with_cross(
+            id_sim
+        )
         logger.info(f"Saving nl contribution to {out_nl}")
         np.save(out_nl, nl_binned)
         logger.info(f"Saving unbinned nl contribution to {out_nl_unbinned}")
         np.save(out_nl_unbinned, nl_unbinned)
+        logger.info(f"Saving nl with cross contribution to {out_nl_with_cross}")
+        np.save(out_nl_with_cross, nl_binned_with_cross)
+        logger.info(f"Saving unbinned nl with cross contribution to {out_nl_unbinned_with_cross}")
+        np.save(out_nl_unbinned_with_cross, nl_unbinned_with_cross)
 
 
 def main():
