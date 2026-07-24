@@ -69,8 +69,8 @@ def get_and_format_inv_Nl(manager: DataManager, config: Config):
     )
     inv_Cl_from_maps = np.zeros_like(Cl_from_maps)
 
-    inv_Cl_from_maps[:, 1:, config.parametric_sep_pars.harmonic_lmin + 1 :] = (
-        1 / Cl_from_maps[:, 1:, config.parametric_sep_pars.harmonic_lmin + 1 :]
+    inv_Cl_from_maps[:, 1:, config.parametric_sep_pars.harmonic_lmin :] = (
+        1 / Cl_from_maps[:, 1:, config.parametric_sep_pars.harmonic_lmin :]
     )
 
     inv_Cl_from_maps_diag = np.zeros(
@@ -101,7 +101,8 @@ def get_and_format_inv_Nl_with_cross(manager: DataManager, config: Config):
     # Cl_from_maps is a 3D array with shape (n_freq, n_spectra, n_ell)
 
     Cl_from_maps = np.load(
-        manager.path_to_nl_noisecov_unbinned.with_name("covar_cl_unbinned_with_cross.npy")
+        # manager.path_to_nl_noisecov_unbinned.with_name("covar_cl_unbinned_with_cross.npy")
+        manager.path_to_nl_noisecov_unbinned_with_cross
     )
     # add 0 for first bins in the last dimension (ell)
     Cl_from_maps = np.pad(
@@ -155,10 +156,19 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
-    # invN = get_and_format_inv_Nl(manager, config)
-    invN_with_cross, invN_with_cross_diagQU_diagfreq = get_and_format_inv_Nl_with_cross(
-        manager, config
-    )
+    invN = get_and_format_inv_Nl(manager, config)
+    use_cross_test = True
+    # import IPython; IPython.embed()
+    if use_cross_test and config.pre_proc_pars.correct_for_TF:
+        invN_with_cross, invN_with_cross_diagQU_diagfreq = get_and_format_inv_Nl_with_cross(
+            manager, config
+        )
+        invN_compsep = invN_with_cross_diagQU_diagfreq
+    else:
+        invN_compsep = invN
+
+    if use_cross_test and not config.pre_proc_pars.correct_for_TF:
+        logger.warning("TODO: invN_with_cross implementation in noTF correction case?")
     invNlm = None
 
     instrument["fwhm"] = [None] * 6  # we don't correct for the beam inside the harmonic compsep
@@ -180,8 +190,8 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         data_alms_lmin,
         config.nside,
         config.parametric_sep_pars.harmonic_lmax,
-        # invN=invN,
-        invN=invN_with_cross_diagQU_diagfreq,
+        invN=invN_compsep,
+        # invN=invN_with_cross_diagQU_diagfreq,
         invNlm=invNlm,
         mask=None,
         data_is_alm=True,
@@ -189,7 +199,7 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         tol=tol,
         method=method,
     )
-    # res.s_alm = res.s
+    res.s_alm = res.s
     res.s_alm_old = res.s
     res.invAtNA_alm = res.invAtNA
 
@@ -239,8 +249,8 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         config.parametric_sep_pars.harmonic_lmax, np.arange(data_alms_lmin.shape[-1])
     )[0]
     ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
-    # invNlm = np.array([invN[ell_, 1:, :, :] for ell_ in ell_em])
-    invNlm = np.array([invN_with_cross_diagQU_diagfreq[ell_, 1:, :, :] for ell_ in ell_em])
+    invNlm = np.array([invN[ell_, 1:, :, :] for ell_ in ell_em])
+    # invNlm = np.array([invN_with_cross_diagQU_diagfreq[ell_, 1:, :, :] for ell_ in ell_em])
 
     AtNA_ = np.einsum("cf,lmfn,nk->lmck", A_maxL.T, invNlm, A_maxL)
     check_invAtNA = np.zeros_like(AtNA_)
@@ -254,50 +264,55 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     W_maxL_lm = _r_to_c_alms(W_maxL_lm_real)
     res.W_maxL_lm_NOcrossQU = W_maxL_lm
 
-    """COMPUTING W in lm space WITH cross-spectra"""
-    ell_em = hp.Alm.getlm(
-        config.parametric_sep_pars.harmonic_lmax, np.arange(data_alms_lmin.shape[-1])
-    )[0]
-    ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
-    invNlm_cross = np.array([invN_with_cross[..., ell_] for ell_ in ell_em])
+    use_cross_test_after = False
+    if use_cross_test_after:
+        """COMPUTING W in lm space WITH cross-spectra"""
+        ell_em = hp.Alm.getlm(
+            config.parametric_sep_pars.harmonic_lmax, np.arange(data_alms_lmin.shape[-1])
+        )[0]
+        ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
+        # import IPython; IPython.embed()
+        # invNlm_cross = np.array([invN_with_cross[..., ell_] for ell_ in ell_em])
+        invNlm_cross = np.array([invN_with_cross[ell_] for ell_ in ell_em])
 
-    AtNA_cross_ = np.einsum("cf,lfeb,fk->lebck", A_maxL.T, invNlm_cross, A_maxL)
+        # AtNA_cross_ = np.einsum("cf,lfeb,fk->lebck", A_maxL.T, invNlm_cross, A_maxL)
+        AtNA_cross_ = np.einsum("cf,lsfb,fk->lsck", A_maxL.T, invNlm_cross, A_maxL)
 
-    check_invAtNA_cross_swapaxes_then_reshape = AtNA_cross_.swapaxes(-2, -3).reshape(
-        [
-            AtNA_cross_.shape[0],
-            AtNA_cross_.shape[-3] * AtNA_cross_.shape[-1],
-            AtNA_cross_.shape[-3] * AtNA_cross_.shape[-1],
-        ]
-    )  # we want to invert both QU and components indices
-    inv_check_invAtNA_cross_swapaxes_then_reshape = np.zeros_like(
-        check_invAtNA_cross_swapaxes_then_reshape
-    )
-    inv_check_invAtNA_cross_swapaxes_then_reshape[
-        np.where(check_invAtNA_cross_swapaxes_then_reshape != np.zeros((6, 6)))[0]
-    ] = np.linalg.inv(
-        check_invAtNA_cross_swapaxes_then_reshape[
+        check_invAtNA_cross_swapaxes_then_reshape = AtNA_cross_.swapaxes(-2, -3).reshape(
+            [
+                AtNA_cross_.shape[0],
+                AtNA_cross_.shape[-3] * AtNA_cross_.shape[-1],
+                AtNA_cross_.shape[-3] * AtNA_cross_.shape[-1],
+            ]
+        )  # we want to invert both QU and components indices
+        inv_check_invAtNA_cross_swapaxes_then_reshape = np.zeros_like(
+            check_invAtNA_cross_swapaxes_then_reshape
+        )
+        inv_check_invAtNA_cross_swapaxes_then_reshape[
             np.where(check_invAtNA_cross_swapaxes_then_reshape != np.zeros((6, 6)))[0]
-        ]
-    )
-    inv_check_invAtNA_cross_swapaxes_then_reshape = (
-        inv_check_invAtNA_cross_swapaxes_then_reshape.reshape(
-            [AtNA_cross_.shape[i] for i in [0, 1, 3, 2, 4]]
-        ).swapaxes(-2, -3)
-    )
-    check_invAtNA_cross = inv_check_invAtNA_cross_swapaxes_then_reshape.copy()
+        ] = np.linalg.inv(
+            check_invAtNA_cross_swapaxes_then_reshape[
+                np.where(check_invAtNA_cross_swapaxes_then_reshape != np.zeros((6, 6)))[0]
+            ]
+        )
+        inv_check_invAtNA_cross_swapaxes_then_reshape = (
+            inv_check_invAtNA_cross_swapaxes_then_reshape.reshape(
+                [AtNA_cross_.shape[i] for i in [0, 1, 3, 2, 4]]
+            ).swapaxes(-2, -3)
+        )
+        check_invAtNA_cross = inv_check_invAtNA_cross_swapaxes_then_reshape.copy()
 
-    W_maxL_lm_real_cross = np.einsum(
-        "lebck,kf,lfbt->letcf", check_invAtNA_cross, A_maxL.T, invNlm_cross
-    )
+        W_maxL_lm_real_cross = np.einsum(
+            "lebck,kf,lfbt->letcf", check_invAtNA_cross, A_maxL.T, invNlm_cross
+        )
 
-    W_maxL_lm_cross = _r_to_c_alms(W_maxL_lm_real_cross.copy().T)
+        W_maxL_lm_cross = _r_to_c_alms(W_maxL_lm_real_cross.copy().T)
 
-    res.W_maxL_lm = W_maxL_lm_cross
-    res.W_maxL_lm_real = W_maxL_lm_real_cross
+        res.W_maxL_lm = W_maxL_lm_cross
+        res.W_maxL_lm_real = W_maxL_lm_real_cross
 
     compute_alm_from_W_crossQU = True
-    if compute_alm_from_W_crossQU:
+    if compute_alm_from_W_crossQU and use_cross_test_after:
         alm_postcompsep_real_cross = np.einsum(
             "lebcf, lbf -> lec", W_maxL_lm_real_cross, _format_alms(data_alms_lmin_save.copy())
         )
