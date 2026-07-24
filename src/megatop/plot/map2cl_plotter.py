@@ -141,7 +141,7 @@ def plot_harmonic_byproducts(manager, id_sim=None):
     nmt_bins = load_nmt_binning(manager)
     ells = nmt_bins.get_effective_ells()
 
-    path = manager.get_path_to_spectra(sub=id_sim)
+    path = manager.get_path_to_spectra(id_sim)
     fname_Cl_WmaxL = path / Path("Cl_WmaxL.npy")
     fname_Cl_effective_TF = path / Path("Cl_effective_TF_normalized.npy")
     # fname_Cl_effective_TF_inv = path / Path("Cl_effective_TF_inv_normalized.npy")
@@ -155,10 +155,13 @@ def plot_harmonic_byproducts(manager, id_sim=None):
             for f in range(Cl_WmaxL.shape[2]):
                 ax_W[0, 0].plot(ells, Cl_WmaxL[i, j, f, 0, :], color=f"C{f}")
                 ax_W[0, 0].plot(ells, -Cl_WmaxL[i, j, f, 0, :], color=f"C{f}", linestyle="--")
+
                 ax_W[0, 1].plot(ells, Cl_WmaxL[i, j, f, 1, :], label=f"Freq #{f}", color=f"C{f}")
-                # ax_W[0,1].plot(ells, -Cl_WmaxL[i,j,f,1,:], color=f"C{f}", linestyle='--')
+                ax_W[0, 1].plot(ells, -Cl_WmaxL[i, j, f, 1, :], color=f"C{f}", linestyle="--")
+
                 ax_W[1, 0].plot(ells, Cl_WmaxL[i, j, f, 2, :], color=f"C{f}")
-                # ax_W[1,0].plot(ells, -Cl_WmaxL[i,j,f,2,:], color=f"C{f}", linestyle='--')
+                ax_W[1, 0].plot(ells, -Cl_WmaxL[i, j, f, 2, :], color=f"C{f}", linestyle="--")
+
                 ax_W[1, 1].plot(ells, Cl_WmaxL[i, j, f, 3, :], color=f"C{f}")
                 ax_W[1, 1].plot(ells, -Cl_WmaxL[i, j, f, 3, :], color=f"C{f}", linestyle="--")
             ax_W[0, 0].set_title(
@@ -188,6 +191,7 @@ def plot_harmonic_byproducts(manager, id_sim=None):
     transfer_freq = np.array(transfer_freq)
     transfer_freq_pol = transfer_freq[:, -4:, -4:]  # keeping only polarised components
 
+    use_log_scale = False
     for i in range(normalized_Cl_effective_TF.shape[0]):
         for j in range(i, normalized_Cl_effective_TF.shape[1]):
             fig_TF, ax_TF = plt.subplots(4, 4, figsize=(8, 6))
@@ -201,15 +205,41 @@ def plot_harmonic_byproducts(manager, id_sim=None):
                             alpha=0.3,
                             label=f"Freq #{f}" if (k == 0 and L == 1) else None,
                         )
+                        if use_log_scale:
+                            ax_TF[k, L].plot(
+                                ells,
+                                -transfer_freq_pol[f, k, L, :],
+                                color=f"C{f}",
+                                alpha=0.3,
+                                linestyle="--",
+                            )
                     ax_TF[k, L].plot(
                         ells,
                         normalized_Cl_effective_TF[i, j, k, L, :],
                         label="Eff. TF",
                         color="black",
                     )
+                    if use_log_scale:
+                        ax_TF[k, L].plot(
+                            ells,
+                            -normalized_Cl_effective_TF[i, j, k, L, :],
+                            color="black",
+                            linestyle="--",
+                        )
                     # if (k==0 and l==0) or (k==3 and l==3):
-                    ax_TF[k, L].set_yscale("log")
-                    ax_TF[k, L].axhline(1, color="k", linestyle="--", alpha=0.5)
+
+                    if use_log_scale:
+                        ax_TF[k, L].set_yscale("log")
+                    else:
+                        if k == L:
+                            ax_TF[k, L].set_ylim(0, 1.1)
+                        else:
+                            ax_TF[k, L].set_ylim(-1e-2, +1e-2)
+                    if k == L:
+                        ax_TF[k, L].axhline(1, color="k", linestyle="--", alpha=0.5)
+                    else:
+                        ax_TF[k, L].axhline(0, color="k", linestyle="--", alpha=0.5)
+
                     if k == 0 and L == 0:
                         ax_TF[k, L].set_title(
                             f"Eff. TF {spectra_list[k]}-->{spectra_list[L]}\n{components_list[i]}x{components_list[j]}"
