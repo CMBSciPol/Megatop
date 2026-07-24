@@ -99,6 +99,10 @@ class DataManager:
         return self.path_to_plots / Path("mocks/")
 
     @property
+    def path_to_transfer_functions_plots(self) -> Path:
+        return self.path_to_plots / self._config.output_dirs.transfer_functions
+
+    @property
     def path_to_preproc_plots(self) -> Path:
         return self.path_to_plots / self._config.output_dirs.preproc
 
@@ -258,7 +262,7 @@ class DataManager:
             logger.info("Internal TF used, generating TF path on the fly")
             name_list = []
             for map_set in self._config.map_sets:
-                file_name = f"transfer_function_{map_set.name}_x_{map_set.name}"
+                file_name = f"transfer_function_{map_set.name}_None_x_{map_set.name}_None"
                 name = self.path_to_TF_output_dir / file_name
                 name_list.append(name.with_suffix(".npz"))
         else:
@@ -501,6 +505,16 @@ class DataManager:
         return fname.with_suffix(".npy")
 
     @property
+    def path_to_nl_noisecov_with_cross(self) -> Path:
+        fname = self.path_to_covar / "nl_nu_covariance_with_cross"
+        return fname.with_suffix(".npy")
+
+    @property
+    def path_to_nl_noisecov_unbinned_with_cross(self) -> Path:
+        fname = self.path_to_covar / "covar_cl_unbinned_with_cross"
+        return fname.with_suffix(".npy")
+
+    @property
     def path_to_noisecov_alm(self) -> Path:
         fname = self.path_to_covar / "covar_alm"
         return fname.with_suffix(".npy")
@@ -513,6 +527,20 @@ class DataManager:
 
     def get_path_to_nl_noisecov_contrib_unbinned(self, id_sim: int | None = None) -> Path:
         fname = "nl_noisecov_contrib_unbinned"
+        if id_sim is not None:
+            fname += f"_{id_sim:04d}"
+        return (self.path_to_covar / fname).with_suffix(".npy")
+
+    def get_path_to_nl_noisecov_contrib_with_cross(self, id_sim: int | None = None) -> Path:
+        fname = "nl_noisecov_contrib_with_cross"
+        if id_sim is not None:
+            fname += f"_{id_sim:04d}"
+        return (self.path_to_covar / fname).with_suffix(".npy")
+
+    def get_path_to_nl_noisecov_contrib_unbinned_with_cross(
+        self, id_sim: int | None = None
+    ) -> Path:
+        fname = "nl_noisecov_contrib_unbinned_with_cross"
         if id_sim is not None:
             fname += f"_{id_sim:04d}"
         return (self.path_to_covar / fname).with_suffix(".npy")
