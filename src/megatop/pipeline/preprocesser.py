@@ -53,13 +53,14 @@ def get_reduced_tf(transfer, nmt_bins_native, sum_TF_column=False):
 
 
 def get_reduced_tf_new(transfer, nmt_bins_native):
+    # put in TF step and save there as well
     inv_transfer = np.linalg.inv(transfer[-4:, -4:].T).T
 
     corner_TF = np.zeros((2, 2, inv_transfer.shape[2]))
-    corner_TF[0, 0, :] = inv_transfer[-4, -4, :]
-    corner_TF[1, 1, :] = inv_transfer[-1, -1, :]
-    corner_TF[0, 1, :] = inv_transfer[-4, -1, :]
-    corner_TF[1, 0, :] = inv_transfer[-1, -4, :]
+    corner_TF[0, 0, :] = inv_transfer[-4, -4, :]  # E-->E
+    corner_TF[1, 1, :] = inv_transfer[-1, -1, :]  # B-->B
+    corner_TF[0, 1, :] = inv_transfer[-4, -1, :]  # B-->E
+    corner_TF[1, 0, :] = inv_transfer[-1, -4, :]  # E-->B
 
     reduced_inv_tf_binned = np.sqrt(corner_TF + 0j)  # element wise sqrt
 
@@ -99,9 +100,6 @@ def preprocess_map(
     logger.info("Using harmonic pipeline for component separation. Pre-processing will output alms")
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
-    logger.warning("Normalizing analysis mask to 1, TODO: remove after merge")
-    # TODO: remove after merge
-    # analysis_mask /= np.max(analysis_mask)  # normalize the mask to 1
     binary_mask = hp.read_map(manager.path_to_binary_mask)
 
     if config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms:
@@ -111,15 +109,15 @@ def preprocess_map(
 
     freq_beams = config.beams
     common_beam = config.pre_proc_pars.common_beam_correction
-    if config.pre_proc_pars.DEBUGskippreproc:
-        freq_beams = np.array([0.0] * len(config.frequencies))
-        common_beam = 0.0
+    logger.warning("REMOOOOOOOOOOOOOOVE this is just a quick fix to test analysis mask!")
+    config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms = False
 
     freq_alms_convolved = alm_common_beam(
         nside=config.nside,
         common_beam=common_beam,
         frequency_beams=freq_beams,
         freq_maps=np.array(input_maps),
+        lmax=config.lmax,
         analysis_mask=mask_alm_computation,
         harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
         purify_e=config.map2cl_pars.purify_e,
@@ -230,11 +228,15 @@ def preprocess_map(
                 )  # BB->BB
             """
             # import IPython; IPython.embed()
-            # inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf(
-            #     transfer, nmt_bins_native, config.pre_proc_pars.sum_TF_column
-            # )
-            logger.warning("TESTING NEW METHOD FOR REDUCED TF REDUCTION")
-            inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf_new(transfer, nmt_bins_native)
+            use_new_reduced_TF = True
+            if not use_new_reduced_TF:
+                inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf(
+                    transfer, nmt_bins_native, config.pre_proc_pars.sum_TF_column
+                )
+            else:
+                logger.warning("TESTING NEW METHOD FOR TF REDUCTION")
+                inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf_new(transfer, nmt_bins_native)
+
             inv_sqrt_tf = inv_sqrt_tf[..., : config.parametric_sep_pars.harmonic_lmax]
 
             inv_sqrt_tf_bin_freq[f] = inv_sqrt_tf_bin
