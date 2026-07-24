@@ -107,7 +107,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
                         normalized_Cl_effective_TF[i, j, :, :, ell]
                     )
 
-        path = manager.get_path_to_spectra(sub=id_sim)
+        path = manager.get_path_to_spectra(id_sim)
         path.mkdir(parents=True, exist_ok=True)
         fname_Cl_WmaxL = path / Path("Cl_WmaxL.npy")
         fname_Cl_effective_TF = path / Path("Cl_effective_TF_normalized.npy")
