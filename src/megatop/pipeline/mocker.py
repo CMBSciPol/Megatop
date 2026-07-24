@@ -567,6 +567,8 @@ def main():
     process_noise(sconf, manager, scomm)
 
     if config.map_sim_pars.generate_sims_for_TF:
+        #     TODO: there is some potential conflict if filter=False, or correct_for_TF = False
+        #     Maybe an assertion is enough ?
         process_TF_sims(sconf, manager, scomm)
 
 
