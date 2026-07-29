@@ -233,7 +233,7 @@ def _harmonic_alm_preproc_contrib(
         freq_maps=np.array(input_maps),
         lmax=config.lmax,
         analysis_mask=mask_alm_computation,
-        harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
+        # harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
         purify_e=config.map2cl_pars.purify_e,
         purify_b=config.map2cl_pars.purify_b,
         use_namaster_alms=config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms,
@@ -263,8 +263,10 @@ def _harmonic_nl_contrib(
     nmt_bins = load_nmt_binning(manager)
     bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)["bin_index_lminlmax"]
 
-    ell_min = config.parametric_sep_pars.harmonic_lmin
-    ell_max = config.parametric_sep_pars.harmonic_lmax
+    # ell_min = config.parametric_sep_pars.harmonic_lmin
+    # ell_max = config.parametric_sep_pars.harmonic_lmax
+    ell_min = config.lmin
+    ell_max = config.lmax
 
     mask_analysis = hp.read_map(manager.path_to_analysis_mask, dtype=np.float64)
 

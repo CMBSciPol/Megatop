@@ -132,12 +132,12 @@ def alm_common_beam(
     freq_maps: list[npt.ArrayLike],
     lmax: int,
     analysis_mask: npt.ArrayLike | None = None,
-    harmonic_analysis_lmax: int | None = None,
+    # harmonic_analysis_lmax: int | None = None,
     purify_e: bool = False,
     purify_b: bool = False,
     use_namaster_alms: bool = True,
 ):
-    logger(f"nside to be removed:{nside}")
+    logger.info(f"nside to be removed:{nside}")
     logger.warning("TODDDDOOOOOOO: remove lmaxharmonic, and harmonize with config.lmax")
     if analysis_mask is not None and not use_namaster_alms:
         logger.warning(
@@ -165,7 +165,8 @@ def alm_common_beam(
             )[1:]  # keep only E and B
 
         # The smooth mask (mask_analysis) is applied in the NmtField constructor
-        data_alms.append(hu.truncate_alm(alms_QU, lmax=harmonic_analysis_lmax - 1))
+        # data_alms.append(hu.truncate_alm(alms_QU, lmax=harmonic_analysis_lmax - 1))
+        data_alms.append(alms_QU)
     data_alms = np.array(data_alms)  # / mean_fsky_correction
 
     common_beam_ell = hp.gauss_beam(

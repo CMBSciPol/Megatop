@@ -19,7 +19,7 @@ def homemade_unbin_cell(binned_cell, nmt_bins):
     Necessary to unbin cell that are complex numbers
     """
     output_shape = np.array(binned_cell.shape)
-    output_shape[-1] = nmt_bins.lmax + 1
+    output_shape[-1] = nmt_bins.lmax + 1  # +1 is to account for ell=0
     unbinned_cell = np.zeros(output_shape, dtype=np.complex128)
     for bin in range(binned_cell.shape[-1]):
         unbinned_cell[..., nmt_bins.get_ell_list(bin)] = binned_cell[..., bin]
@@ -101,16 +101,10 @@ def preprocess_map(
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
     binary_mask = hp.read_map(manager.path_to_binary_mask)
-
-    if config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms:
-        mask_alm_computation = analysis_mask
-    else:
-        mask_alm_computation = binary_mask
+    mask_alm_computation = analysis_mask
 
     freq_beams = config.beams
     common_beam = config.pre_proc_pars.common_beam_correction
-    logger.warning("REMOOOOOOOOOOOOOOVE this is just a quick fix to test analysis mask!")
-    config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms = False
 
     freq_alms_convolved = alm_common_beam(
         nside=config.nside,
@@ -119,7 +113,7 @@ def preprocess_map(
         freq_maps=np.array(input_maps),
         lmax=config.lmax,
         analysis_mask=mask_alm_computation,
-        harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
+        # harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
         purify_e=config.map2cl_pars.purify_e,
         purify_b=config.map2cl_pars.purify_b,
         use_namaster_alms=config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms,
@@ -136,7 +130,8 @@ def preprocess_map(
             dtype=np.complex128,
         )
         inv_sqrt_tf_freq = np.zeros(
-            (len(manager.get_TF_filenames()), 2, 2, config.parametric_sep_pars.harmonic_lmax),
+            # (len(manager.get_TF_filenames()), 2, 2, config.parametric_sep_pars.harmonic_lmax),
+            (len(manager.get_TF_filenames()), 2, 2, config.lmax + 1),  # +1 is to account for ell=0
             dtype=np.complex128,
         )
         inv_sqrt_tf_lm_freq = np.zeros(
@@ -151,6 +146,7 @@ def preprocess_map(
                 continue
             logger.info(f"Loading transfer function from {tf_path}")
             # Loading TF:
+
             transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
 
             """
@@ -236,13 +232,14 @@ def preprocess_map(
             else:
                 logger.warning("TESTING NEW METHOD FOR TF REDUCTION")
                 inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf_new(transfer, nmt_bins_native)
-
-            inv_sqrt_tf = inv_sqrt_tf[..., : config.parametric_sep_pars.harmonic_lmax]
+            # import IPython; IPython.embed()
+            # inv_sqrt_tf = inv_sqrt_tf[..., : config.lmax]
 
             inv_sqrt_tf_bin_freq[f] = inv_sqrt_tf_bin
             inv_sqrt_tf_freq[f] = inv_sqrt_tf
 
             inv_sqrt_tf_lm = np.zeros((2, 2, lm_size), dtype=np.complex128)
+
             for index in range(lm_size):
                 inv_sqrt_tf_lm[..., index] = inv_sqrt_tf[
                     ..., hp.Alm.getlm(lmax=hp.Alm.getlmax(lm_size), i=index)[0]

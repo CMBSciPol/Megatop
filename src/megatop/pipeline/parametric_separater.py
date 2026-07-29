@@ -189,7 +189,8 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         std_instr,
         data_alms_lmin,
         config.nside,
-        config.parametric_sep_pars.harmonic_lmax,
+        config.lmax,
+        # config.parametric_sep_pars.harmonic_lmax,
         invN=invN_compsep,
         # invN=invN_with_cross_diagQU_diagfreq,
         invNlm=invNlm,
@@ -246,7 +247,9 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
 
     """COMPUTING W in lm space ignoring cross-spectra"""
     ell_em = hp.Alm.getlm(
-        config.parametric_sep_pars.harmonic_lmax, np.arange(data_alms_lmin.shape[-1])
+        # config.parametric_sep_pars.harmonic_lmax, np.arange(data_alms_lmin.shape[-1])
+        config.lmax,
+        np.arange(data_alms_lmin.shape[-1]),
     )[0]
     ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
     invNlm = np.array([invN[ell_, 1:, :, :] for ell_ in ell_em])
@@ -268,7 +271,9 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     if use_cross_test_after:
         """COMPUTING W in lm space WITH cross-spectra"""
         ell_em = hp.Alm.getlm(
-            config.parametric_sep_pars.harmonic_lmax, np.arange(data_alms_lmin.shape[-1])
+            config.lmax,
+            np.arange(data_alms_lmin.shape[-1]),
+            # config.parametric_sep_pars.harmonic_lmax, np.arange(data_alms_lmin.shape[-1])
         )[0]
         ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
         # import IPython; IPython.embed()
@@ -329,7 +334,8 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
             res.s_alm,
             spin=2,
             nside=config.nside,
-            lmax=config.parametric_sep_pars.harmonic_lmax,
+            lmax=config.lmax,
+            # lmax=config.parametric_sep_pars.harmonic_lmax,
         )
     else:
         logger.info("Harmonic Compsep: Computing component maps using W matrix and input maps")
