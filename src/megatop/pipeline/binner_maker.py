@@ -96,6 +96,9 @@ def binning_maker(manager: DataManager, config: Config):
         custom_bins = np.load(config.map2cl_pars.custom_binning_path, allow_pickle=True)
         bin_low = custom_bins["bin_low"]
         bin_high = custom_bins["bin_high"]
+        assert bin_high[-1] == config.lmax, (
+            f"config.lmax={config.lmax} and highest ell in custom binning={bin_high[-1]} are inconsistent"
+        )
         if "bin_centre" in custom_bins:
             bin_centre = custom_bins["bin_centre"]
         elif "bin_center" in custom_bins:

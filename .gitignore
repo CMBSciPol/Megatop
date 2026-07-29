@@ -174,3 +174,5 @@ cython_debug/
 *.npz
 *.npy
 /.snakemake
+.snakemake/
+src/megatop/pipeline/save_noise_lm_preproc.py
