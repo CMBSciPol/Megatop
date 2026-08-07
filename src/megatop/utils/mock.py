@@ -220,7 +220,7 @@ def get_noise_experiment(
             for fr in noise_config_exp.default_bands
         ]
         external_map_list = [
-            noise_config_exp.correction * hp.read_map(fname) for fname in fname_list
+            noise_config_exp.correction * hp.read_map(fname, field=None) for fname in fname_list
         ]
         return {"noise_map": external_map_list}
 
