@@ -9,21 +9,29 @@ from megatop import Config, DataManager
 from megatop.utils import logger
 
 
-def get_params_statistics(manager, config):
+def get_params_statistics(manager, config, positive_sim_id_list=None):
     """Extracts r statistics from MCMC chains for a given manager and configuration."""
     n_sim_sky = config.map_sim_pars.n_sim
 
     mean_per_sim = []
     std_per_sim = []
     for id_sim in range(n_sim_sky):
-        fname_chains = manager.get_path_to_mcmc_chains(id_sim)
-        mcmc = np.load(fname_chains, allow_pickle=True)
-        chains = mcmc["mcmc_chains"]
+        if positive_sim_id_list is not None and id_sim not in positive_sim_id_list:
+            logger.warning(
+                f"Skipping MCMC chain loading for id_sim={id_sim} as it has negative bins in spectra."
+            )
+            continue
+        try:
+            fname_chains = manager.get_path_to_mcmc_chains(id_sim)
+            mcmc = np.load(fname_chains, allow_pickle=True)
+            chains = mcmc["mcmc_chains"]
 
-        mean_chain = np.mean(chains, axis=0)
-        std_chain = np.std(chains, axis=0)
-        mean_per_sim.append(mean_chain)
-        std_per_sim.append(std_chain)
+            mean_chain = np.mean(chains, axis=0)
+            std_chain = np.std(chains, axis=0)
+            mean_per_sim.append(mean_chain)
+            std_per_sim.append(std_chain)
+        except FileNotFoundError:
+            logger.warning(f"MCMC chain file not found for id_sim={id_sim} at Path:{fname_chains}")
 
     mean_per_sim = np.array(mean_per_sim)
     std_per_sim = np.array(std_per_sim)

@@ -31,6 +31,9 @@ def check_negative_bins_inside_analysis_range(
             spectra_name
             + " has NEGATIVE BINS inside the range of cosmological analysis. \nTHIS WILL CAUSE ISSUES FOR PARAMETER ESTIMATION"
         )
+        return True
+    else:
+        return False
 
 
 def compute_generic_Cl(lmin, lmax):
@@ -161,6 +164,7 @@ def logL_cosmo(
     lmin_analysis=None,
     lmax_analysis=None,
 ):
+    # theta = np.append(theta,1) #REMOVE
     prior_check = prior_bounds(theta, dust_marg, sync_marg, prior_bounds_dict)
     if prior_check != 0.0:
         return prior_check
@@ -205,36 +209,40 @@ def run_mcmc_and_save(manager: DataManager, config: Config, id_sim: int | None =
     dust_marg = config.cl2r_pars.dust_marg
     sync_marg = config.cl2r_pars.sync_marg
 
-    # Gaussian likelihood mode count: the effective DOF fsky (Hivon w2^2/w4),
-    # not the plain mask mean. Equal for a binary mask, smaller when apodized.
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
     fsky = mask.fsky_dof(analysis_mask)
 
-    Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))["CMBxCMB"][3]
-    Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
-        "DustxDust"
-    ][3]
+    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
-    all_noise_options = [
-        config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
-        for map_set in config.map_sets
-    ]
-    if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
-        # TODO: test case when only one experiment is noiseless?
-        Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
-    else:
-        Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))[
-            "Noise_CMBxNoise_CMB"
-        ][3]
+    try:
+        Cl_CMBxCMB_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
+            "CMBxCMB"
+        ][3][binning_info["bin_index_lminlmax"]]
+        Cl_DustxDust_BB_est = np.load(manager.get_path_to_spectra_cross_components(id_sim))[
+            "DustxDust"
+        ][3][binning_info["bin_index_lminlmax"]]
+
+        all_noise_options = [
+            config.noise_sim_pars.experiments[map_set.exp_tag].noise_option
+            for map_set in config.map_sets
+        ]
+        if np.all(np.array(all_noise_options) == NoiseOption.NOISELESS):
+            # TODO: test case when only one experiment is noiseless?
+            Nl_CMBxCMB_BB_est = np.zeros_like(Cl_CMBxCMB_BB_est)
+        else:
+            Nl_CMBxCMB_BB_est = np.load(manager.get_path_to_noise_spectra_cross_components(id_sim))[
+                "Noise_CMBxNoise_CMB"
+            ][3][binning_info["bin_index_lminlmax"]]
+    except FileNotFoundError:
+        logger.error(f"CMB or Noise spectra not found for id_sim={id_sim}")
+        return None
 
     nmt_bins = load_nmt_binning(manager)
-
-    binning_info = np.load(manager.path_to_binning, allow_pickle=True)
 
     ls_bins_lminlmax_idx = binning_info["bin_index_lminlmax"]
     delta_l = config.map2cl_pars.delta_ell
 
-    check_negative_bins_inside_analysis_range(
+    _ = check_negative_bins_inside_analysis_range(
         Cl_CMBxCMB_BB_est,
         bin_centre=nmt_bins.get_effective_ells()[ls_bins_lminlmax_idx],
         lmin_analysis=config.cl2r_pars.lmin_cosmo_analysis,
@@ -359,7 +367,8 @@ def main():
     elif size < 2:
         for i in range(n_sim_sky):
             result = run_mcmc_and_save(manager, config, id_sim=i)
-            logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
+            if result is not None:
+                logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
     else:
         from mpi4py.futures import MPICommExecutor
 
@@ -368,7 +377,8 @@ def main():
                 logger.info(f"Distributing work to {executor.num_workers} workers")
                 func = partial(run_mcmc_and_save, manager, config)
                 for result in executor.map(func, range(n_sim_sky), unordered=True):
-                    logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
+                    if result is not None:
+                        logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
 
 
 if __name__ == "__main__":

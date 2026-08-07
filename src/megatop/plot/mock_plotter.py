@@ -9,11 +9,12 @@ import numpy as np
 import megatop.utils.harmonic as hu
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
-from megatop.pipeline.mocker import get_noise
 from megatop.utils import Timer, logger, mask, mock, passband
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.mock import get_noise_experiment
 from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
+
+HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
@@ -172,7 +173,15 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
-    noise_freq_maps = get_noise(config, binary_mask, common_nhits_map)
+    # noise_freq_maps = get_noise(config, binary_mask, common_nhits_map)
+
+    noise_freq_maps = np.array(
+        [
+            hp.read_map(manager.get_noise_maps_filenames(id_sim=0)[i_f], field=None)
+            for i_f, _f in enumerate(config.frequencies)
+        ]
+    )
+    noise_freq_maps = apply_binary_mask(noise_freq_maps, binary_mask, unseen=True)
 
     if maps:
         display_maps = apply_binary_mask(noise_freq_maps.copy(), binary_mask, unseen=True)
@@ -205,6 +214,9 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
         experiments_map_set = set([map_set.exp_tag for map_set in config.map_sets])
         experiments_noiseconfig = [name for name in noise_config.experiments]
         noise_experiment = {}
+
+        # Fixing id_sim to 0 for seed (seed is changing from freq to freq)
+        # id_sim = 0
         for exp in experiments_map_set:
             try:
                 assert exp in experiments_noiseconfig
@@ -305,6 +317,13 @@ def main():
         config = Config.load_yaml(args.config)
     manager = DataManager(config)
     manager.dump_config()
+
+    # construct passbands if necessary
+    config.map_sets = passband.passband_constructor(
+        config, manager, passband_int=config.map_sim_pars.passband_int
+    )
+    if config.map_sim_pars.passband_int:
+        logger.info("Using passband-integration for the mocker step.")
 
     logger.info("Plotting mocker outputs...")
 

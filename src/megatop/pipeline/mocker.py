@@ -62,7 +62,9 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
         seed.append(id_sim)
     logger.debug(f"CMB {seed = }")
 
-    Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
+    Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(
+        manager, DEBUG_noEmodes=config.map_sim_pars.DEBUG_noEmodes
+    )
     # synthesise directly on the target geometry; synfast seeds the legacy RNG when seed is set
     cmb_map = config.landscape.synfast(Cl_cmb_model, lmax=config.lmax, seed=seed)
     logger.debug(f"CMB map has shape {cmb_map.shape}")
@@ -108,6 +110,24 @@ def save_simu(
     # save the maps
     for i, fname in enumerate(filenames):
         msg = "Saving noise simulation" if is_noise else "Saving simulated sky"
+        logger.debug(f"{msg} to {fname}")
+        config.landscape.write_map(fname, simulated_maps[i], dtype=np.float64)
+
+
+@function_timer("DEBUGsave-truenoisesimu")
+def DEBUG_save_TRUEnoise_simulation(
+    manager: DataManager,
+    config: Config,
+    simulated_maps: NDArray,
+    id_sim: int | None = None,
+) -> None:
+    """Save a sky realization."""
+    # get appropriate filenames based on type
+    filenames = manager.get_TRUE_noise_maps_filenames(sub=id_sim)
+
+    # save the maps
+    for i, fname in enumerate(filenames):
+        msg = "DEBUG: Saving TRUE noise simulation"
         logger.debug(f"{msg} to {fname}")
         config.landscape.write_map(fname, simulated_maps[i], dtype=np.float64)
 
@@ -299,13 +319,25 @@ def func_signal(
     )
 
     # broadcast CMB to all frequencies
-    sky = cmb[None, ...] + fg
+    if config.map_sim_pars.DEBUG_CMB_only:
+        sky = cmb[None, ...] + 0 * fg
+    elif config.map_sim_pars.DEBUG_FG_only:
+        sky = 0 * cmb[None, ...] + fg
+    else:
+        sky = cmb[None, ...] + fg
 
     # apply beam and pixel window function correction
     with Timer("beam-freq-maps"):
         for i_f, _f in enumerate(config.frequencies):
             sky[i_f] = mock.beam_winpix_correction(sky[i_f], config.beams[i_f], config.lmax)
 
+    # If filter_noise is True, we add the noise to the sky sims before applying filtering.
+    if (
+        config.map_sim_pars.filter_noise
+        and not config.map_sim_pars.DEBUG_CMB_only
+        and not config.map_sim_pars.DEBUG_FG_only
+    ):
+        sky += noise
     # apply filtering
     if obsmat_funcs is not None:
         with Timer("filter-freq-maps"):
@@ -313,14 +345,31 @@ def func_signal(
                 logger.debug(f"Filtering {key} channel")
                 sky[i_f] = mock.apply_observation_matrix(func, sky[i_f])
 
-    # add noise
-    sky += noise
+    # add noise if it was not included before filtering
+    if (
+        not config.map_sim_pars.filter_noise
+        and not config.map_sim_pars.DEBUG_CMB_only
+        and not config.map_sim_pars.DEBUG_FG_only
+    ):
+        sky += noise
 
     # mask unobserved pixels
     _ = mask.apply_binary_mask(sky, binary_mask, unseen=False)
 
     # save results
     save_simu(manager, config, sky, id_sim=id_sim, is_noise=False)
+
+    if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+        if (
+            obsmat_funcs is not None
+            and config.map_sim_pars.filter_noise
+            and not config.map_sim_pars.DEBUGDont_Filter_purenoise_sims
+        ):
+            with Timer("filter-freq-maps"):
+                for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+                    logger.debug(f"Filtering NOISE {key} channel")
+                    noise[i_f] = mock.apply_observation_matrix(func, noise[i_f])
+        DEBUG_save_TRUEnoise_simulation(manager, config, noise, id_sim=id_sim)
 
     return id_sim
 
@@ -332,9 +381,17 @@ def func_noise(
     binary_mask: NDArray,
     common_nhits_map: NDArray,
     id_sim: int,
+    *,
+    obsmat_funcs: dict | None = None,
 ) -> int:
     """Generate a noise realization."""
+    # Offseting id_sim by n_sim to avoid having the same noise seed as in func_signal
     noise = get_noise(config, binary_mask, common_nhits_map, id_sim=id_sim)
+    if config.map_sim_pars.filter_noise and not config.map_sim_pars.DEBUGDont_Filter_purenoise_sims:
+        with Timer("filter-freq-maps"):
+            for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+                logger.debug(f"Filtering NOISE {key} channel")
+                noise[i_f] = mock.apply_observation_matrix(func, noise[i_f])
     _ = mask.apply_binary_mask(noise, binary_mask, unseen=False)
     save_simu(manager, config, noise, id_sim=id_sim, is_noise=True)
     return id_sim
@@ -385,7 +442,15 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
     common_nhits_map = config.landscape.read_map(manager.path_to_common_nhits_map)
     func = partial(func_noise, manager, config, binary_mask, common_nhits_map)
 
-    for result in _map(func, range(n_sim), comm):
+    if filtering := (
+        config.map_sim_pars.filter_noise and not config.map_sim_pars.DEBUGDont_Filter_purenoise_sims
+    ):
+        # Load the obsmat(s) for our map set(s)
+        logger.info("Loading observation matrices for noise filtering")
+        obsmat_funcs = load_obsmat(manager, config)
+        func = partial(func, obsmat_funcs=obsmat_funcs)
+
+    for result in _map(func, range(n_sim), comm, force_seq=filtering):
         logger.info(f"Finished noise realization {result + 1} / {n_sim}")
 
 
