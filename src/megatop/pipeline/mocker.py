@@ -1,3 +1,5 @@
+"""Generate simulated frequency maps (CMB + PySM foregrounds + instrument noise)."""
+
 from __future__ import annotations
 
 import argparse

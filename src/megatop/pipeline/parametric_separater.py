@@ -1,3 +1,5 @@
+"""Parametric component separation (fgbuster) in pixel or harmonic domain."""
+
 import argparse
 from functools import partial
 from pathlib import Path

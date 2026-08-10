@@ -1,3 +1,5 @@
+"""Estimate binned pseudo-C_ell of component-separated maps with NaMaster."""
+
 import argparse
 from functools import partial
 from pathlib import Path

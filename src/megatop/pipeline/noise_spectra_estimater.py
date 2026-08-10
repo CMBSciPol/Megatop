@@ -1,3 +1,5 @@
+"""Propagate noise realisations through compsep + namaster to obtain the mean N_ell on the CMB channel."""
+
 import argparse
 import tracemalloc
 from pathlib import Path

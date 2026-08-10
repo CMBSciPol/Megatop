@@ -1,3 +1,5 @@
+"""Diagnostics for the analysis mask: f_sky, spin derivatives, purified-B leakage tests."""
+
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np

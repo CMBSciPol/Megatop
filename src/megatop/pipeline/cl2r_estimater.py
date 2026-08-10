@@ -1,3 +1,5 @@
+"""Cosmological likelihood and emcee sampler for r, A_lens, and foreground residual amplitudes."""
+
 import argparse
 from functools import partial
 from pathlib import Path

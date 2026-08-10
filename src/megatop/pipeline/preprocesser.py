@@ -1,3 +1,5 @@
+"""Reconvolve frequency maps to a common beam and Nside for component separation."""
+
 import argparse
 from functools import partial
 from pathlib import Path
