@@ -25,6 +25,176 @@ from megatop.utils.spectra import (  # noqa: E402
 from megatop.utils.utils import MemoryUsage  # noqa: E402
 
 
+def debug_cutscales(noise_freq_maps_preprocessed, nside):
+    # TODO: TEST
+    logger.warning("TEST: Applying smooth cut at large scales to noise component maps")
+    logger.warning("TEST: DOING IT AFTER PARAM ESTIMATION (can't do before for noise maps)")
+
+    def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
+        ell = np.arange(lmax + 1)
+        smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
+        smooth_cut[:lmin] = 0.0
+        return smooth_cut
+
+    cut_array = get_smooth_scale_cut(30, 1, lmax=3 * nside)
+    freq_maps_cut = np.zeros_like(noise_freq_maps_preprocessed)
+    for f in range(noise_freq_maps_preprocessed.shape[0]):
+        alm_comp = hp.map2alm(
+            [
+                noise_freq_maps_preprocessed[f, 0],
+                noise_freq_maps_preprocessed[f, 1],
+                noise_freq_maps_preprocessed[f, 2],
+            ],
+            lmax=3 * nside,
+        )
+        for s in range(alm_comp.shape[0]):
+            hp.almxfl(alm_comp[s], cut_array, inplace=True)
+        freq_maps_cut[f] = hp.alm2map(
+            alm_comp, nside=nside, lmax=3 * nside, pol=True
+        )  # removing temperature
+
+    return freq_maps_cut
+
+
+def initialize_megabuster(manager, binary_mask, id_sim_sky):
+    with Timer("init-megabuster"):
+        logger.warning(
+            "Using Megabuster for component separation, make sure to have the correct parameters set in the config file"
+        )
+
+        try:
+            parameters_foregrounds_x = np.load(
+                manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True
+            )["x"]
+        except FileNotFoundError:
+            logger.error(
+                f"Results from comp sep not found for {manager.get_path_to_compsep_results(id_sim_sky)}"
+            )
+            return id_sim_sky
+
+        obsmat_operator_fname = manager.get_path_list_or_None("suffix_obsmat_scipy")
+
+        if np.all(np.array(obsmat_operator_fname) == Path()):
+            # TODO: how to handle this case?
+            logger.warning("No observation matrix file provided. Using identity matrix instead.")
+            obsmat_operator_rhs = None
+        elif np.any(np.array(obsmat_operator_fname) == Path()):
+            msg_any_obs = "Not all observation matrix files are provided. Provide either all or none, partial set of observation matrices is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
+            raise ValueError(msg_any_obs)
+        else:
+            logger.info(f"Loading observation matrix from {obsmat_operator_fname}")
+            npix = binary_mask.size
+            indices_mask = np.arange(npix)[hp.reorder(binary_mask, r2n=True) != 0]
+            mask_stacked_nest = np.hstack((indices_mask + npix, indices_mask + 2 * npix))
+            obsmat_operator_rhs = mb.io.build_obsmat_operator_from_flattened_matrices(
+                mb.io.load_all_obsmat(
+                    obsmat_operator_fname,
+                    size_obsmat=3 * npix,
+                    kind="precomputations_scipy",
+                    mask_stacked=mask_stacked_nest,
+                ),
+                nstokes=2,
+                return_transpose=True,
+            )
+
+        path_eigen_decomp_fname = manager.get_path_list_or_None("suffix_eigen_decomp")
+        if np.all(np.array(path_eigen_decomp_fname) == Path()):
+            # TODO: how to handle this case?
+            logger.warning(
+                "No observation matrix file provided for CG. Using identity matrix instead."
+            )
+            central_freq_op = None
+            matrix_precond = None
+        elif np.any(np.array(path_eigen_decomp_fname) == Path()):
+            msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
+            raise ValueError(msg_any_obs)
+        else:
+            logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
+            central_freq_op = mb.tools.get_dense_furax_operator_from_freq_array(
+                mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
+            )
+            matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
+
+        with Timer("load-covmat"):
+            noisecov_fname = manager.path_to_pixel_noisecov
+            logger.debug(f"Loading covmat from {noisecov_fname}")
+            noisecov = np.load(noisecov_fname)
+
+        noisecov_QU_masked = apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
+        inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
+        inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
+            1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
+        )
+
+        # get the 'options' through the appropriate method which returns a dict
+
+        parameters_foregrounds = {
+            "beta_dust": np.array(parameters_foregrounds_x[0]),
+            "beta_pl": np.array(parameters_foregrounds_x[1]),
+        }
+    return (
+        parameters_foregrounds,
+        obsmat_operator_rhs,
+        central_freq_op,
+        matrix_precond,
+        inverse_noisecov_QU_masked,
+    )
+
+
+def get_effective_transfer_function(
+    config, manager, W_maxL, nmt_bins, effective_beam_CMB, analysis_mask, workspace_nmt
+):
+    logger.info("Computing effective Transfer Function after component separation")
+    transfer_freq = []
+    for tf_path in manager.get_TF_filenames():
+        transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
+        transfer_freq.append(transfer)
+    transfer_freq = np.array(transfer_freq)
+
+    Cl_WmaxL = np.zeros(
+        (W_maxL.shape[0], W_maxL.shape[0], W_maxL.shape[1], 4, nmt_bins.get_n_bands())
+    )
+    for freq in range(W_maxL.shape[1]):
+        dict_comp_WmaxL_freq = {"CMB": W_maxL[0, freq, :], "Dust": W_maxL[1, freq, :]}
+        if config.parametric_sep_pars.include_synchrotron:
+            dict_comp_WmaxL_freq["Synch"] = W_maxL[2, freq, :]
+        all_Cls_WmaxL_freq = compute_auto_cross_cl_from_maps_dict(
+            maps_dict=dict_comp_WmaxL_freq,
+            analysis_mask=analysis_mask,
+            workspace=workspace_nmt,
+            beam=effective_beam_CMB,
+            n_iter=config.map2cl_pars.n_iter_namaster,
+            lmax=config.lmax,
+            purify_b=config.map2cl_pars.purify_b,
+            purify_e=config.map2cl_pars.purify_e,
+        )
+        Cl_WmaxL[0, 0, freq] = all_Cls_WmaxL_freq["CMBxCMB"]
+        Cl_WmaxL[0, 1, freq] = all_Cls_WmaxL_freq["CMBxDust"]
+        Cl_WmaxL[1, 0, freq] = all_Cls_WmaxL_freq["CMBxDust"]
+        Cl_WmaxL[1, 1, freq] = all_Cls_WmaxL_freq["DustxDust"]
+        if config.parametric_sep_pars.include_synchrotron:
+            Cl_WmaxL[0, 2, freq] = all_Cls_WmaxL_freq["CMBxSynch"]
+            Cl_WmaxL[2, 0, freq] = all_Cls_WmaxL_freq["CMBxSynch"]
+            Cl_WmaxL[1, 2, freq] = all_Cls_WmaxL_freq["DustxSynch"]
+            Cl_WmaxL[2, 1, freq] = all_Cls_WmaxL_freq["DustxSynch"]
+            Cl_WmaxL[2, 2, freq] = all_Cls_WmaxL_freq["SynchxSynch"]
+
+    Cl_effective_TF = np.einsum(
+        "ckfsl, fspl, lpfkc-> ckspl", Cl_WmaxL, transfer_freq[:, -4:, -4:], Cl_WmaxL.T
+    )  # keeping only polarised components
+    normalisation_WCl = np.einsum("ckfsl, lpfkc-> ckspl", Cl_WmaxL, Cl_WmaxL.T)
+    normalized_Cl_effective_TF = Cl_effective_TF / normalisation_WCl
+    inverse_normalized_Cl_effective_TF = np.zeros_like(normalized_Cl_effective_TF)
+    for i in range(normalized_Cl_effective_TF.shape[0]):
+        for j in range(normalized_Cl_effective_TF.shape[1]):
+            for ell in range(normalized_Cl_effective_TF.shape[-1]):
+                # Inverting the transfer function for each ell over the spectra dimension
+                inverse_normalized_Cl_effective_TF[i, j, :, :, ell] = np.linalg.inv(
+                    normalized_Cl_effective_TF[i, j, :, :, ell]
+                )
+    return normalized_Cl_effective_TF, inverse_normalized_Cl_effective_TF
+
+
 def init_workspace(config: Config, manager: DataManager):
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
     nmt_bins = load_nmt_binning(manager)
@@ -57,6 +227,10 @@ def noise_spectra_estimator(
     effective_beam_CMB,
     id_sim_sky: int | None = None,
 ):
+    # ========================== Sky simulation/observation initializations =========================
+    # We first start by initializing the parameters that are sky simulation/observation dependent before looping over noise realisations.
+    # For instance the weighing matrix after compsep that will depend on data.
+
     tracemalloc.start()
 
     comm, rank, size = get_world()
@@ -76,7 +250,7 @@ def noise_spectra_estimator(
     realisation_list = np.arange(int_n_sim_noise)
 
     # splitting the list of simulation between the ranks of the process:
-    rank_realisation_list = np.array_split(realisation_list, size)[rank]
+    rank_noise_realisation_list = np.array_split(realisation_list, size)[rank]
 
     # Loading masks
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
@@ -87,6 +261,17 @@ def noise_spectra_estimator(
         W_maxL = np.load(manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True)[
             "W_maxL"
         ]
+    else:
+        # TODO: TEST
+        (
+            parameters_foregrounds,
+            obsmat_operator_rhs,
+            central_freq_op,
+            matrix_precond,
+            inverse_noisecov_QU_masked,
+        ) = initialize_megabuster(manager, binary_mask, id_sim_sky)
+
+    MemoryUsage(f"rank = {rank} ")
 
     use_alm = (
         config.map2cl_pars.use_harmonic_output_alm
@@ -97,161 +282,35 @@ def noise_spectra_estimator(
         W_maxL_lm = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
             "W_maxL_lm"
         ]
+
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
 
     MemoryUsage(f"rank = {rank} ")
 
-    if config.parametric_sep_pars.use_megabuster:
-        with Timer("init-megabuster"):
-            logger.warning(
-                "Using Megabuster for component separation, make sure to have the correct parameters set in the config file"
-            )
-
-            try:
-                parameters_foregrounds_x = np.load(
-                    manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True
-                )["x"]
-            except FileNotFoundError:
-                logger.error(
-                    f"Results from comp sep not found for {manager.get_path_to_compsep_results(id_sim_sky)}"
-                )
-                return id_sim_sky
-
-            obsmat_operator_fname = manager.get_path_list_or_None("suffix_obsmat_scipy")
-
-            if np.all(np.array(obsmat_operator_fname) == Path()):
-                # TODO: how to handle this case?
-                logger.warning(
-                    "No observation matrix file provided. Using identity matrix instead."
-                )
-                obsmat_operator_rhs = None
-            elif np.any(np.array(obsmat_operator_fname) == Path()):
-                msg_any_obs = "Not all observation matrix files are provided. Provide either all or none, partial set of observation matrices is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
-                raise ValueError(msg_any_obs)
-            else:
-                logger.info(f"Loading observation matrix from {obsmat_operator_fname}")
-                npix = binary_mask.size
-                indices_mask = np.arange(npix)[hp.reorder(binary_mask, r2n=True) != 0]
-                mask_stacked_nest = np.hstack((indices_mask + npix, indices_mask + 2 * npix))
-                obsmat_operator_rhs = mb.io.build_obsmat_operator_from_flattened_matrices(
-                    mb.io.load_all_obsmat(
-                        obsmat_operator_fname,
-                        size_obsmat=3 * npix,
-                        kind="precomputations_scipy",
-                        mask_stacked=mask_stacked_nest,
-                    ),
-                    nstokes=2,
-                    return_transpose=True,
-                )
-
-            path_eigen_decomp_fname = manager.get_path_list_or_None("suffix_eigen_decomp")
-            if np.all(np.array(path_eigen_decomp_fname) == Path()):
-                # TODO: how to handle this case?
-                logger.warning(
-                    "No observation matrix file provided for CG. Using identity matrix instead."
-                )
-                central_freq_op = None
-                matrix_precond = None
-            elif np.any(np.array(path_eigen_decomp_fname) == Path()):
-                msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
-                raise ValueError(msg_any_obs)
-            else:
-                logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
-                central_freq_op = mb.tools.get_dense_furax_operator_from_freq_array(
-                    mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
-                )
-                matrix_precond = mb.io.load_matrix_precond(
-                    path_eigen_decomp_fname, power_diagonal=-1
-                )
-
-            with Timer("load-covmat"):
-                noisecov_fname = manager.path_to_pixel_noisecov
-                logger.debug(f"Loading covmat from {noisecov_fname}")
-                noisecov = np.load(noisecov_fname)
-
-            noisecov_QU_masked = apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
-            inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
-            inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
-                1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
-            )
-
-            # get the 'options' through the appropriate method which returns a dict
-
-            parameters_foregrounds = {
-                "beta_dust": np.array(parameters_foregrounds_x[0]),
-                "beta_pl": np.array(parameters_foregrounds_x[1]),
-            }
-    MemoryUsage(f"rank = {rank} ")
-
     if (
         config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
     ) and not config.parametric_sep_pars.alm2map:
-        logger.info("Computing effective Transfer Function after component separation")
-        transfer_freq = []
-        for tf_path in manager.get_TF_filenames():
-            transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
-            transfer_freq.append(transfer)
-        transfer_freq = np.array(transfer_freq)
-
-        Cl_WmaxL = np.zeros(
-            (W_maxL.shape[0], W_maxL.shape[0], W_maxL.shape[1], 4, nmt_bins.get_n_bands())
+        _, inverse_normalized_Cl_effective_TF = get_effective_transfer_function(
+            config, manager, W_maxL, nmt_bins, effective_beam_CMB, analysis_mask, workspace_nmt
         )
-        for freq in range(W_maxL.shape[1]):
-            dict_comp_WmaxL_freq = {"CMB": W_maxL[0, freq, :], "Dust": W_maxL[1, freq, :]}
-            if config.parametric_sep_pars.include_synchrotron:
-                dict_comp_WmaxL_freq["Synch"] = W_maxL[2, freq, :]
-            all_Cls_WmaxL_freq = compute_auto_cross_cl_from_maps_dict(
-                maps_dict=dict_comp_WmaxL_freq,
-                analysis_mask=analysis_mask,
-                workspace=workspace_nmt,
-                beam=effective_beam_CMB,
-                n_iter=config.map2cl_pars.n_iter_namaster,
-                lmax=config.lmax,
-                purify_b=config.map2cl_pars.purify_b,
-                purify_e=config.map2cl_pars.purify_e,
-            )
-            Cl_WmaxL[0, 0, freq] = all_Cls_WmaxL_freq["CMBxCMB"]
-            Cl_WmaxL[0, 1, freq] = all_Cls_WmaxL_freq["CMBxDust"]
-            Cl_WmaxL[1, 0, freq] = all_Cls_WmaxL_freq["CMBxDust"]
-            Cl_WmaxL[1, 1, freq] = all_Cls_WmaxL_freq["DustxDust"]
-            if config.parametric_sep_pars.include_synchrotron:
-                Cl_WmaxL[0, 2, freq] = all_Cls_WmaxL_freq["CMBxSynch"]
-                Cl_WmaxL[2, 0, freq] = all_Cls_WmaxL_freq["CMBxSynch"]
-                Cl_WmaxL[1, 2, freq] = all_Cls_WmaxL_freq["DustxSynch"]
-                Cl_WmaxL[2, 1, freq] = all_Cls_WmaxL_freq["DustxSynch"]
-                Cl_WmaxL[2, 2, freq] = all_Cls_WmaxL_freq["SynchxSynch"]
 
-        Cl_effective_TF = np.einsum(
-            "ckfsl, fspl, lpfkc-> ckspl", Cl_WmaxL, transfer_freq[:, -4:, -4:], Cl_WmaxL.T
-        )  # keeping only polarised components
-        normalisation_WCl = np.einsum("ckfsl, lpfkc-> ckspl", Cl_WmaxL, Cl_WmaxL.T)
-        normalized_Cl_effective_TF = Cl_effective_TF / normalisation_WCl
-        inverse_normalized_Cl_effective_TF = np.zeros_like(normalized_Cl_effective_TF)
-        for i in range(normalized_Cl_effective_TF.shape[0]):
-            for j in range(normalized_Cl_effective_TF.shape[1]):
-                for ell in range(normalized_Cl_effective_TF.shape[-1]):
-                    # Inverting the transfer function for each ell over the spectra dimension
-                    inverse_normalized_Cl_effective_TF[i, j, :, :, ell] = np.linalg.inv(
-                        normalized_Cl_effective_TF[i, j, :, :, ell]
-                    )
-
-        # effective_transfer_function, inverse_effective_transfer_function = (
-        #     get_effective_transfer_function(transfer_freq, W_maxL, binary_mask))
     else:
-        # inverse_effective_transfer_function = None
         inverse_normalized_Cl_effective_TF = None
 
     sum_noise_spectra = {}
     MemoryUsage(f"rank = {rank} ")
 
-    for id_realisation in rank_realisation_list:
+    # ========================= Loop over noise realisations =========================
+    # Now that the sky simulation/observation dependent parameters are initialized, we can loop over the noise realisations to compute the noise spectra after component separation.
+
+    for id_realisation in rank_noise_realisation_list:
         MemoryUsage(f"rank = {rank} ")
 
         id_real = None if n_sim_noise is None else id_realisation
 
         logger.info(f"id_realisation = {id_real}")
-        logger.info(f"in = {rank_realisation_list}")
+        logger.info(f"in = {rank_noise_realisation_list}")
 
         # if config.noise_cov_pars.save_preprocessed_noise_maps:
         logger.info("Loading pre-processed noise maps")
@@ -267,9 +326,7 @@ def noise_spectra_estimator(
             noise_freq_maps_preprocessed = np.load(
                 manager.get_path_to_preprocessed_noise_maps(id_real)
             )
-
-        # use_alms = config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms
-
+        noise_freq_maps_preprocessed_ = noise_freq_maps_preprocessed.copy()  # I have to do this otherwise the ruff check isn't happy at the debug_cutscales step, it says noise_freq_maps_preprocessed is undefined...
         # Applying component-separation operator
         if not use_alm:
             logger.info(
@@ -284,36 +341,9 @@ def noise_spectra_estimator(
                 )  # slicing noise to remove T #TODO: Any speed improvement ?
             else:
                 if config.map2cl_pars.DEBUG_cut_scales:
-                    logger.warning(
-                        "TEST: Applying smooth cut at large scales to noise component maps"
+                    noise_freq_alms_preprocessed = debug_cutscales(
+                        noise_freq_maps_preprocessed_, config.nside
                     )
-                    logger.warning(
-                        "TEST: DOING IT AFTER PARAM ESTIMATION (can't do before for noise maps)"
-                    )
-
-                    def get_smooth_scale_cut(cut_scale, smoothing_scale, lmax, lmin=0):
-                        ell = np.arange(lmax + 1)
-                        smooth_cut = 0.5 * (1 + np.tanh((ell - cut_scale) / smoothing_scale))
-                        smooth_cut[:lmin] = 0.0
-                        return smooth_cut
-
-                    cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
-                    freq_maps_cut = np.zeros_like(noise_freq_maps_preprocessed)
-                    for f in range(noise_freq_maps_preprocessed.shape[0]):
-                        alm_comp = hp.map2alm(
-                            [
-                                noise_freq_maps_preprocessed[f, 0],
-                                noise_freq_maps_preprocessed[f, 1],
-                                noise_freq_maps_preprocessed[f, 2],
-                            ],
-                            lmax=3 * config.nside,
-                        )
-                        for s in range(alm_comp.shape[0]):
-                            hp.almxfl(alm_comp[s], cut_array, inplace=True)
-                        freq_maps_cut[f] = hp.alm2map(
-                            alm_comp, nside=config.nside, lmax=3 * config.nside, pol=True
-                        )  # removing temperature
-                    noise_freq_maps_preprocessed = freq_maps_cut
 
                 megabuster_options = config.parametric_sep_pars.get_megabuster_options_as_dict()
                 noise_map_post_compsep = mb.compsep.perform_compsep(
@@ -337,6 +367,7 @@ def noise_spectra_estimator(
                     ordering_parameter=["beta_dust", "beta_pl"],
                     ordering_component=["cmb", "dust", "synchrotron"],
                 ).s
+
             noise_map_post_compsep *= binary_mask
 
             # TODO: update keys wrt relevant components once implemented in compsep step
@@ -360,6 +391,7 @@ def noise_spectra_estimator(
                 inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
             )
         else:
+            logger.warning("THIS WHOLE OPTION IS NOT WELL TESTED AND NOT UP TO DATE!!!")
             logger.info(
                 "Using preprocessed noise alms to compute noise spectra after component separation"
             )
@@ -450,10 +482,6 @@ def noise_spectra_estimator(
         for key in sum_noise_spectra:
             mean_noise_spectra[key] = sum_noise_spectra_recvbuf[key] / int_n_sim_noise
 
-        # bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
-        #     "bin_index_lminlmax"
-        # ]
-        # mean_noise_spectra = limit_namaster_output(mean_noise_spectra, bin_index_lminlmax)
         bin_index_lminlmax = np.arange(len(mean_noise_spectra[key][0]))  # keeping all bins
         mean_noise_spectra = limit_namaster_output(mean_noise_spectra, bin_index_lminlmax)
 
