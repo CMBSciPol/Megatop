@@ -126,19 +126,15 @@ def read_input_maps(list_mapnames: list[Path]) -> list[npt.ArrayLike]:
 
 @function_timer("alm_common_beam")
 def alm_common_beam(
-    nside: int,
     common_beam: float,
     frequency_beams: list[float],
     freq_maps: list[npt.ArrayLike],
     lmax: int,
     analysis_mask: npt.ArrayLike | None = None,
-    # harmonic_analysis_lmax: int | None = None,
     purify_e: bool = False,
     purify_b: bool = False,
     use_namaster_alms: bool = True,
 ):
-    logger.info(f"nside to be removed:{nside}")
-    logger.warning("TODDDDOOOOOOO: remove lmaxharmonic, and harmonize with config.lmax")
     if analysis_mask is not None and not use_namaster_alms:
         logger.warning(
             "analysis_mask is provided but use_namaster_alms is False. Are you sure you want to apply the analysis mask?"

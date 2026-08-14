@@ -150,7 +150,6 @@ def preprocess_map(
     analysis_mask = hp.read_map(manager.path_to_analysis_mask)
 
     freq_alms_convolved = alm_common_beam(
-        nside=config.nside,
         common_beam=config.pre_proc_pars.common_beam_correction,
         frequency_beams=config.beams,
         freq_maps=np.array(input_maps),
