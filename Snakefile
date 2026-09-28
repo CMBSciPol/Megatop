@@ -24,6 +24,7 @@ manager = DataManager(mt)
 N_SKY = mt.map_sim_pars.n_sim
 N_NOISE = mt.noise_sim_pars.n_sim
 MAP_SETS = [ms.name for ms in mt.map_sets]
+N_TFsims = mt.map_sim_pars.TF_n_sim if mt.map_sim_pars.generate_sims_for_TF else 0
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -81,6 +82,35 @@ rule noisecov:
         config=MEGATOP_CONFIG
     shell:
         "megatop-noisecov-run --config {params.config} > {log} 2>&1"
+
+rule TF_estimater:
+    input:
+        S(manager.inputs_TF_estimater())
+    output:
+        S(manager.outputs_TF_estimater())
+    log:
+        str(LOGS / "TF_estimater.log")
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-TFcomputing-run --config {params.config} > {log} 2>&1"
+
+
+# ── Per-TF-sim rules ───────────────────────────────────────────────────────
+for _i in range(N_TFsims):
+    rule:
+        name: f"mock_TFsims_{_i:04d}"
+        input:
+            S(manager.inputs_mock_TFsims(_i))
+        output:
+            S(manager.outputs_mock_TFsims(_i))
+        log:
+            str(LOGS / f"mock_TFsims_{_i:04d}.log")
+        params:
+            config=MEGATOP_CONFIG,
+            sim=_i,
+        shell:
+            "megatop-mock-TFsims-run --config {params.config} --sim {params.sim} > {log} 2>&1"
 
 
 # ── Per-noise-sim rules ───────────────────────────────────────────────────────
