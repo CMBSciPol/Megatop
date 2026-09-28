@@ -5,12 +5,22 @@ import copy
 import subprocess
 from pathlib import Path
 
+import healpy as hp
+import numpy as np
+import pymaster as nmt
 import soopercool
 import yaml
 
 from megatop import Config, DataManager
 from megatop.utils import logger
+from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
+from megatop.utils.TF_utils import (
+    estimate_T_ell_em,
+    get_reduced_TF,
+    get_tf_alm_correction_fora_all_channels,
+    rebuilt_from_reduced_conj,
+)
 
 
 def deep_merge(base, override):
@@ -103,7 +113,6 @@ def create_and_run_soopercool_yaml(manager: DataManager, config: Config):
                 f"Writing soopercool config for {map_set.name} to {full_soopercool_config_path}"
             )
             yaml.dump(soopercool_config, f)
-
     soopercool_path = Path(soopercool.__path__[0]).parent
     logger.info("Computing Pseudo-Cell for each map sets")
     for path_soop_config in full_soopercool_config_path_list:
@@ -130,6 +139,190 @@ def create_and_run_soopercool_yaml(manager: DataManager, config: Config):
         )
 
 
+def compute_and_save_reduced_transfer_functions(manager: DataManager, config: Config):
+    nmt_bins = load_nmt_binning(manager)
+
+    inv_sqrt_tf_bin_freq, inv_sqrt_tf_freq, inv_sqrt_tf_lm_freq = (
+        get_tf_alm_correction_fora_all_channels(manager, config, nmt_bins, use_new_reduced_TF=True)
+    )
+    neg_corner_inv_sqrt_tf_lm_freq = inv_sqrt_tf_lm_freq.copy()
+    neg_corner_inv_sqrt_tf_lm_freq[:, 0, 1] = -inv_sqrt_tf_lm_freq[:, 0, 1].copy()
+    neg_corner_inv_sqrt_tf_lm_freq[:, 1, 0] = -inv_sqrt_tf_lm_freq[:, 1, 0].copy()
+
+    inv_sqrt_tf_bin_freq_OLD, inv_sqrt_tf_freq_OLD, inv_sqrt_tf_lm_freq_OLD = (
+        get_tf_alm_correction_fora_all_channels(manager, config, nmt_bins, use_new_reduced_TF=False)
+    )
+    inv_T_ellem_freq_from_alm = estimate_transfer_alm_level(manager, config)
+
+    # print("TESTTTTTTINNNNNNNNNNGGGGGGG")
+    # inv_sqrt_tf_bin_freq, inv_sqrt_tf_freq, inv_sqrt_tf_lm_freq = get_effectiv_inv_tf_least_square(manager, config, nmt_bins)
+    # inv_sqrt_tf_lm_freq = np.load('/shared_home/jost/code/notebooks/test_sims_filtering/save_inv_T_ellem_freq.npy')
+    # freq_alms_convolved = np.einsum("flij,fjl->fil", inv_sqrt_tf_lm_freq, freq_alms_convolved)
+
+    # Saving the reduced transfer functions for later use
+    # TODO: save TF in a seperate function like the other outputs
+    fname_TF = manager.get_path_to_preprocessed_reduced_TF()
+    fname_TF.parent.mkdir(parents=True, exist_ok=True)
+    print(inv_sqrt_tf_lm_freq.shape)
+    np.savez(
+        fname_TF,
+        inv_sqrt_tf_bin_freq=inv_sqrt_tf_bin_freq,
+        inv_sqrt_tf_freq=inv_sqrt_tf_freq,
+        inv_sqrt_tf_lm_freq=inv_sqrt_tf_lm_freq,
+        OLD_inv_sqrt_tf_bin_freq=inv_sqrt_tf_bin_freq_OLD,
+        OLD_inv_sqrt_tf_freq=inv_sqrt_tf_freq_OLD,
+        OLD_inv_sqrt_tf_lm_freq=inv_sqrt_tf_lm_freq_OLD,
+        inv_T_ellem_freq_from_alm=inv_T_ellem_freq_from_alm,
+        neg_corner_inv_sqrt_tf_lm_freq=neg_corner_inv_sqrt_tf_lm_freq,
+    )
+    logger.info(
+        f"Saved reduced transfer functions to {manager.get_path_to_preprocessed_reduced_TF()}"
+    )
+
+
+def reconstruct_transfer_function_from_reduced(manager: DataManager, config: Config):
+    path_preprocessed_reduced_TF = manager.get_path_to_preprocessed_reduced_TF()
+    logger.info(f"Loading preproc transfer function from {path_preprocessed_reduced_TF}")
+    reduced_TF_from_preproc = np.load(
+        path_preprocessed_reduced_TF,
+        allow_pickle=True,
+    )
+    inv_tf_old_reduce_freq = []
+    inv_tf_new_reduce_freq = []
+    standard_inv_freq = []
+    for f, tf_path in enumerate(manager.get_TF_filenames()):
+        assert tf_path is not None, (
+            f"Transfer function for frequency {config.frequencies[f]} not provided."
+        )
+        logger.info(f"Loading transfer function from {tf_path}")
+        transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
+        inv_tf_old_reduce = get_reduced_TF(transfer)
+
+        inv_tf_new_reduce = np.abs(
+            rebuilt_from_reduced_conj(reduced_TF_from_preproc["inv_sqrt_tf_bin_freq"][f]).T
+        )
+
+        standard_inv = np.linalg.inv(transfer.transpose(2, 0, 1))[..., -4:, -4:]
+
+        inv_tf_old_reduce_freq.append(inv_tf_old_reduce)
+        inv_tf_new_reduce_freq.append(inv_tf_new_reduce)
+        standard_inv_freq.append(standard_inv)
+    standard_inv_freq = np.array(standard_inv_freq)
+    inv_tf_old_reduce_freq = np.array(inv_tf_old_reduce_freq)
+    inv_tf_new_reduce_freq = np.array(inv_tf_new_reduce_freq)
+    logger.info(
+        f"Saved reconstructed transfer functions from reduced TF to {manager.get_path_to_reconstructed_inv_TF()}"
+    )
+    np.savez(
+        manager.get_path_to_reconstructed_inv_TF(),
+        inv_tf_old_reduce_freq=inv_tf_old_reduce_freq,
+        inv_tf_new_reduce_freq=inv_tf_new_reduce_freq,
+        standard_inv_freq=standard_inv_freq,
+    )
+
+
+def estimate_transfer_alm_level(manager: DataManager, config: Config):
+    inv_T_ellem_freq = []
+    purify_E_global = False
+    purify_B_global = True
+    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+
+    for map_set in config.map_sets:
+        logger.info(f"Estimating transfer function at alm level for {map_set.name}")
+
+        alm_E_filtered_list = []
+        alm_B_filtered_list = []
+        alm_E_unfiltered_list = []
+        alm_B_unfiltered_list = []
+        for i in range(config.map_sim_pars.TF_n_sim):
+            tf_sim_path = manager.get_path_to_TF_sims_sub(id_sim=i)
+
+            fname_unfiltered_pure_E = Path(map_set.simforTF_map_filename[1] + "_unfiltered.fits")
+            fname_filtered_pure_E = Path(map_set.simforTF_map_filename[1] + "_filtered.fits")
+
+            fname_unfiltered_pure_B = Path(map_set.simforTF_map_filename[2] + "_unfiltered.fits")
+            fname_filtered_pure_B = Path(map_set.simforTF_map_filename[2] + "_filtered.fits")
+
+            map_E_unfiltered = hp.read_map(tf_sim_path / fname_unfiltered_pure_E, field=None)
+            map_E_filtered = hp.read_map(tf_sim_path / fname_filtered_pure_E, field=None)
+
+            map_B_unfiltered = hp.read_map(tf_sim_path / fname_unfiltered_pure_B, field=None)
+            map_B_filtered = hp.read_map(tf_sim_path / fname_filtered_pure_B, field=None)
+
+            fields_E_unfiltered = nmt.NmtField(
+                analysis_mask,
+                map_E_unfiltered[1:],
+                beam=None,
+                purify_e=purify_E_global,
+                purify_b=purify_B_global,
+                n_iter=10,
+                lmax=config.lmax,
+                lmax_mask=config.lmax,
+            )
+            alm_E_unfiltered_list.append(fields_E_unfiltered.alm)
+
+            fields_B_unfiltered = nmt.NmtField(
+                analysis_mask,
+                map_B_unfiltered[1:],
+                beam=None,
+                purify_e=purify_E_global,
+                purify_b=purify_B_global,
+                n_iter=10,
+                lmax=config.lmax,
+                lmax_mask=config.lmax,
+            )
+            alm_B_unfiltered_list.append(fields_B_unfiltered.alm)
+
+            fields_E_filtered = nmt.NmtField(
+                analysis_mask,
+                map_E_filtered[1:],
+                beam=None,
+                purify_e=purify_E_global,
+                purify_b=purify_B_global,
+                n_iter=10,
+                lmax=config.lmax,
+                lmax_mask=config.lmax,
+            )
+            alm_E_filtered_list.append(fields_E_filtered.alm)
+
+            fields_B_filtered = nmt.NmtField(
+                analysis_mask,
+                map_B_filtered[1:],
+                beam=None,
+                purify_e=purify_E_global,
+                purify_b=purify_B_global,
+                n_iter=10,
+                lmax=config.lmax,
+                lmax_mask=config.lmax,
+            )
+            alm_B_filtered_list.append(fields_B_filtered.alm)
+
+        alm_E_unfiltered_list = np.array(alm_E_unfiltered_list)
+        alm_B_unfiltered_list = np.array(alm_B_unfiltered_list)
+
+        alm_E_filtered_list = np.array(alm_E_filtered_list)
+        alm_B_filtered_list = np.array(alm_B_filtered_list)
+
+        inv_T_ellem_freq.append(
+            estimate_T_ell_em(
+                alm_E_filtered_list[:, 0],
+                alm_B_filtered_list[:, 1],
+                alm_E_unfiltered_list[:],
+                alm_B_unfiltered_list[:],
+            )
+        )
+    inv_T_ellem_freq = np.array(inv_T_ellem_freq)
+
+    inv_T_ellem_freq_shuffle1 = inv_T_ellem_freq.swapaxes(1, 2)
+    # inv_T_ellem_freq_shuffle2 = inv_T_ellem_freq_shuffle1.swapaxes(2, 3)
+    return inv_T_ellem_freq_shuffle1.swapaxes(2, 3)
+
+    # logger.info(
+    #     f"Saved estimated inv TF_lm to {manager.get_path_to_estimated_inv_TFlm()}"
+    # )
+    # np.save(manager.get_path_to_estimated_inv_TFlm(), inv_T_ellem_freq_shuffle2)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Cl to r estmation")
     parser.add_argument("--config", type=Path, required=True, help="config file")
@@ -145,22 +338,14 @@ def main():
 
     if config.map_sim_pars.generate_sims_for_TF and config.pre_proc_pars.correct_for_TF:
         create_and_run_soopercool_yaml(manager=manager, config=config)
+
+        compute_and_save_reduced_transfer_functions(manager=manager, config=config)
+        reconstruct_transfer_function_from_reduced(manager=manager, config=config)
+
     else:
         logger.info(
             "Skipping transfer function computation, as generate_sims_for_TF or correct_for_TF is not set to True."
         )
-
-    # TODO: parallelize
-    # n_sim_sky = config.map_sim_pars.n_sim
-    # if n_sim_sky == 0:
-    #     create_and_run_soopercool_yaml(manager=manager, config=config)
-    # else:
-    #     with MPICommExecutor() as executor:
-    #         if executor is not None:
-    #             logger.info(f"Distributing work to {executor.num_workers} workers")
-    #             func = partial(create_and_run_soopercool_yaml, manager, config)
-    #             for result in executor.map(func, range(n_sim_sky), unordered=True):
-    #                 logger.info(f"Finished mcmc run on map {result + 1} / {n_sim_sky}")
 
 
 if __name__ == "__main__":
