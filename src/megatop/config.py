@@ -314,6 +314,9 @@ class PreProcessingConfig(StrictModel):
     correct_for_TF: bool = False
     sum_TF_column: bool = True
     DEBUGHARMONICuse_namaster_alms: bool = False
+    DEBUGHARMONIC_preproc_noise_TF_correction_alm: bool = False
+    DEBUGHARMONIC_noisepreproc_invTF_to_use: str = "inv_tf_new_reduce_freq"
+    DEBUGHARMONIC_preproc_invTFLM_to_use: str = "inv_tf_old_reduce_freq"
 
 
 class _MinimizeOptions(StrictModel):
@@ -438,6 +441,7 @@ class MapSimConfig(StrictModel):
     """Debuging param: sets the foregrounds and the noise to 0 in the mocker"""
     DEBUG_FG_only: bool = False
     """Debuging param: sets the CMB and the noise to 0 in the mocker"""
+    DEBUG_filter_alms: bool = False
 
     @field_validator("sky_model")
     @classmethod
