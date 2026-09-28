@@ -200,7 +200,9 @@ class DataManager:
         """Directory where internally-generated transfer functions are saved."""
         return self.path_to_transfer_functions_parents / "transfer_functions_output"
 
-    def create_output_dirs(self, n_sim_sky: int, n_sim_noise: int) -> None:
+    def create_output_dirs(
+        self, n_sim_sky: int, n_sim_noise: int, n_sim_TF: int | None = None
+    ) -> None:
         """Create all output and data directories for a pipeline run.
 
         Call once at the start of each pipeline step's ``main()``.
@@ -247,9 +249,9 @@ class DataManager:
             self.get_path_to_noise_maps_sub(i).mkdir(parents=True, exist_ok=True)
 
         # Transfer function simulation directories (internal TF pipeline only)
-        if self._config.map_sim_pars.generate_sims_for_TF:
+        if n_sim_TF is not None:
             self.path_to_TF_output_dir.mkdir(parents=True, exist_ok=True)
-            for i in range(self._config.map_sim_pars.TF_n_sim):
+            for i in range(n_sim_TF):
                 self.get_path_to_TF_sims_sub(i).mkdir(parents=True, exist_ok=True)
 
     def get_TF_filenames(self) -> list[Path | None]:
@@ -358,6 +360,20 @@ class DataManager:
         ]
         return [name.with_suffix(".fits") for name in names]
 
+    def get_pure_alms_sim_for_TF_filenames(self, id_sim: int | None = None):
+        """Get the filename for the input pure T,E,B alms simulations (before going to maps and masking) used for TF estimation.
+        Note that those are NOT frequency-dependent, only id_sim dependent.
+
+        Different realizations (identified by an index) are put in separate subdirectories.
+        """
+        dest = (
+            self.get_path_to_TF_sims_sub(id_sim)
+            if id_sim is not None
+            else self.path_to_TF_sims_maps
+        )
+
+        return dest / Path("simfotTF_pure_input_alms.fits")
+
     def get_maps_sim_for_TF_filenames(self, id_sim: int | None = None):
         """Get the list of filenames for the maps used for TF estimation.
 
@@ -368,9 +384,7 @@ class DataManager:
             if id_sim is not None
             else self.path_to_TF_sims_maps
         )
-        # map_set.simforTF_map_filename is giving a list of filenames for T, E, B
-        # so we need to expand it
-        # TODO: clean
+
         names_freq_TEB_unfiltered = []
         names_freq_TEB_filtered = []
         for map_set in self._config.map_sets:
@@ -383,10 +397,8 @@ class DataManager:
                 names_TEB_filtered.append(name_filtered.with_suffix(".fits"))
             names_freq_TEB_unfiltered.append(names_TEB_unfiltered)
             names_freq_TEB_filtered.append(names_TEB_filtered)
-        # and we need to add the suffix
+
         return names_freq_TEB_unfiltered, names_freq_TEB_filtered
-        # names = [dest / map_set.simforTF_map_filename for map_set in self._config.map_sets]
-        # return [name.with_suffix(".fits") for name in names]
 
     def get_path_to_preprocessed_maps(self, id_sim: int | None = None) -> Path:
         fname = "freq_maps_preprocessed"
@@ -406,8 +418,18 @@ class DataManager:
 
     def get_path_to_preprocessed_reduced_TF(self) -> Path:
         fname = "freq_TF_preprocessed_reduced"
-        fname = self.path_to_preproc / fname
+        fname = self.path_to_TF_output_dir / fname
         return fname.with_suffix(".npz")
+
+    def get_path_to_reconstructed_inv_TF(self) -> Path:
+        fname = "freq_TF_preprocessed_reduced_reconstructed_inv"
+        fname = self.path_to_TF_output_dir / fname
+        return fname.with_suffix(".npz")
+
+    # def get_path_to_estimated_inv_TFlm(self) -> Path:
+    #     fname = "freq_invTFlm"
+    #     fname = self.path_to_TF_output_dir / fname
+    #     return fname.with_suffix(".npy")
 
     def get_path_to_preprocessed_noise_maps(self, id_sim: int | None = None) -> Path:
         fname = "noise_maps_preprocessed"
@@ -504,15 +526,15 @@ class DataManager:
         fname = self.path_to_covar / "covar_cl_unbinned"
         return fname.with_suffix(".npy")
 
-    @property
-    def path_to_nl_noisecov_with_cross(self) -> Path:
-        fname = self.path_to_covar / "nl_nu_covariance_with_cross"
-        return fname.with_suffix(".npy")
+    # @property
+    # def path_to_nl_noisecov_with_cross(self) -> Path:
+    #     fname = self.path_to_covar / "nl_nu_covariance_with_cross"
+    #     return fname.with_suffix(".npy")
 
-    @property
-    def path_to_nl_noisecov_unbinned_with_cross(self) -> Path:
-        fname = self.path_to_covar / "covar_cl_unbinned_with_cross"
-        return fname.with_suffix(".npy")
+    # @property
+    # def path_to_nl_noisecov_unbinned_with_cross(self) -> Path:
+    #     fname = self.path_to_covar / "covar_cl_unbinned_with_cross"
+    #     return fname.with_suffix(".npy")
 
     @property
     def path_to_noisecov_alm(self) -> Path:
@@ -531,19 +553,19 @@ class DataManager:
             fname += f"_{id_sim:04d}"
         return (self.path_to_covar / fname).with_suffix(".npy")
 
-    def get_path_to_nl_noisecov_contrib_with_cross(self, id_sim: int | None = None) -> Path:
-        fname = "nl_noisecov_contrib_with_cross"
-        if id_sim is not None:
-            fname += f"_{id_sim:04d}"
-        return (self.path_to_covar / fname).with_suffix(".npy")
+    # def get_path_to_nl_noisecov_contrib_with_cross(self, id_sim: int | None = None) -> Path:
+    #     fname = "nl_noisecov_contrib_with_cross"
+    #     if id_sim is not None:
+    #         fname += f"_{id_sim:04d}"
+    #     return (self.path_to_covar / fname).with_suffix(".npy")
 
-    def get_path_to_nl_noisecov_contrib_unbinned_with_cross(
-        self, id_sim: int | None = None
-    ) -> Path:
-        fname = "nl_noisecov_contrib_unbinned_with_cross"
-        if id_sim is not None:
-            fname += f"_{id_sim:04d}"
-        return (self.path_to_covar / fname).with_suffix(".npy")
+    # def get_path_to_nl_noisecov_contrib_unbinned_with_cross(
+    #     self, id_sim: int | None = None
+    # ) -> Path:
+    #     fname = "nl_noisecov_contrib_unbinned_with_cross"
+    #     if id_sim is not None:
+    #         fname += f"_{id_sim:04d}"
+    #     return (self.path_to_covar / fname).with_suffix(".npy")
 
     @property
     def path_to_effectiv_bins_harmonic_compsep(self) -> Path:
@@ -642,6 +664,106 @@ class DataManager:
             return [f for ms, f in zip(self._config.map_sets, files) if ms.name == map_set]
         return files
 
+    def inputs_mock_TFsims(self, id_sim: int) -> list[Path]:
+        return [
+            self.path_to_binary_mask,
+            *[self.path_to_nhits_map(m) for m in self._config.map_sets],
+        ]
+
+    def outputs_mock_TFsims(self, id_sim: int) -> list[Path]:
+        if self._config.map_sim_pars.generate_sims_for_TF:
+            file_unfiltered_map_names, file_filtered_map_names = self.get_maps_sim_for_TF_filenames(
+                id_sim
+            )
+            (
+                file_unfiltered_map_names_T,
+                file_unfiltered_map_names_E,
+                file_unfiltered_map_names_B,
+            ) = zip(*file_unfiltered_map_names)
+            file_filtered_map_names_T, file_filtered_map_names_E, file_filtered_map_names_B = zip(
+                *file_filtered_map_names
+            )
+            files_pure_alm = self.get_pure_alms_sim_for_TF_filenames(
+                id_sim
+            )  # TODO: This might become an optiom
+            # output = [*file_unfiltered_map_names,  *file_filtered_map_names, files_pure_alm]
+            output = [
+                *file_unfiltered_map_names_T,
+                *file_unfiltered_map_names_E,
+                *file_unfiltered_map_names_B,
+                *file_filtered_map_names_T,
+                *file_filtered_map_names_E,
+                *file_filtered_map_names_B,
+                files_pure_alm,
+            ]
+        else:
+            output = None
+        return output
+
+    def inputs_TF_estimater(self) -> list[Path]:
+        if (
+            self._config.map_sim_pars.generate_sims_for_TF
+            and self._config.pre_proc_pars.correct_for_TF
+        ):
+            n_sim_TF = self._config.map_sim_pars.TF_n_sim
+            files_pure_alms_TF_inputs = []
+            files_unfiltered_map_TF_inputs_T = []
+            files_unfiltered_map_TF_inputs_E = []
+            files_unfiltered_map_TF_inputs_B = []
+            files_filtered_map_TF_inputs_T = []
+            files_filtered_map_TF_inputs_E = []
+            files_filtered_map_TF_inputs_B = []
+            for i in range(n_sim_TF):
+                files_pure_alms_TF_inputs.append(
+                    self.get_pure_alms_sim_for_TF_filenames(i)
+                )  # TODO: This might become an optiom
+                file_unfiltered_map_names, file_filtered_map_names = (
+                    self.get_maps_sim_for_TF_filenames(i)
+                )
+                (
+                    file_unfiltered_map_names_T,
+                    file_unfiltered_map_names_E,
+                    file_unfiltered_map_names_B,
+                ) = zip(*file_unfiltered_map_names)
+                file_filtered_map_names_T, file_filtered_map_names_E, file_filtered_map_names_B = (
+                    zip(*file_filtered_map_names)
+                )
+                files_unfiltered_map_TF_inputs_T.extend(file_unfiltered_map_names_T)
+                files_unfiltered_map_TF_inputs_E.extend(file_unfiltered_map_names_E)
+                files_unfiltered_map_TF_inputs_B.extend(file_unfiltered_map_names_B)
+                files_filtered_map_TF_inputs_T.extend(file_filtered_map_names_T)
+                files_filtered_map_TF_inputs_E.extend(file_filtered_map_names_E)
+                files_filtered_map_TF_inputs_B.extend(file_filtered_map_names_B)
+                # files_filtered_map_TF_inputs.extend(filtered_map)
+
+            input_list = [
+                self.path_to_analysis_mask,
+                self.path_to_binning,
+                *files_pure_alms_TF_inputs,
+                *files_unfiltered_map_TF_inputs_T,
+                *files_unfiltered_map_TF_inputs_E,
+                *files_unfiltered_map_TF_inputs_B,
+                *files_filtered_map_TF_inputs_T,
+                *files_filtered_map_TF_inputs_E,
+                *files_filtered_map_TF_inputs_B,
+            ]
+        else:
+            input_list = None
+        return input_list
+
+    def outputs_TF_estimater(self) -> list[Path]:
+        if (
+            self._config.map_sim_pars.generate_sims_for_TF
+            and self._config.pre_proc_pars.correct_for_TF
+        ):
+            return [
+                *self.get_TF_filenames(),
+                self.get_path_to_reconstructed_inv_TF(),
+                self.get_path_to_preprocessed_reduced_TF(),
+            ]
+        else:
+            return None
+
     def inputs_preproc(self, id_sim: int | None = None) -> list[Path]:
         inputs = [
             *self.get_maps_filenames(id_sim),
@@ -649,7 +771,7 @@ class DataManager:
             self.path_to_binary_mask,
         ]
         if self._config.pre_proc_pars.correct_for_TF:
-            inputs.extend(p for p in self.get_TF_filenames() if p is not None)
+            inputs.extend(p for p in self.outputs_TF_estimater() if p is not None)
         return inputs
 
     def outputs_preproc(self, id_sim: int | None = None) -> list[Path]:
@@ -667,7 +789,7 @@ class DataManager:
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             inputs += [self.path_to_binning, self.path_to_lensed_scalar]
             if self._config.pre_proc_pars.correct_for_TF:
-                inputs.extend(p for p in self.get_TF_filenames() if p is not None)
+                inputs.extend(p for p in self.outputs_TF_estimater() if p is not None)
         return inputs
 
     def outputs_noise_preproc(self, id_sim: int | None = None) -> list[Path]:
@@ -679,6 +801,8 @@ class DataManager:
                 self.get_path_to_nl_noisecov_contrib(id_sim),
                 self.get_path_to_nl_noisecov_contrib_unbinned(id_sim),
             ]
+            if self._config.pre_proc_pars.DEBUGHARMONIC_preproc_noise_TF_correction_alm:
+                outputs.append(self.get_path_to_preprocessed_noise_alms(id_sim))
         return outputs
 
     def inputs_noisecov(self) -> list[Path]:
