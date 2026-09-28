@@ -182,6 +182,80 @@ def freq_maps_plotter_one_stoke(
     plt.clf()
 
 
+def plot_namasterCls(
+    plot_dir,
+    freqs,
+    Cl,
+    save_name,
+    legend_labels=(r"fg $C_\ell$ $\nu=$",),
+    y_axis_label="y_axis",
+    use_D_ell=True,
+    lims_x=(2, 2000),
+    lims_y=(1e-2, 1e7),
+    ell=None,
+):
+    """
+    This function plots the Cls typically outputed by namaster (EE, EB, BE, BB). It directly saves the plot directly.
+
+    Args:
+        plot_dir (str): The path to the directory where the plot will be saved.
+        freqs (list): The frequencies of the maps.
+        Cl (ndarray): The Cls, with shape (num_freq, num_spectra [EE,EB,BE,BB], num_ell).
+        save_name (str): The name of the file to save the plot.
+        legend_labels (list): The labels for the legend of the plot.
+        y_axis_label (str): The label for the y axis of the plot.
+        use_D_ell (bool): If True, the Cls are multiplied by ell*(ell+1)/2/pi.
+        lims_x (tuple): The limits for the x axis of the plot.
+        lims_y (tuple): The limits for the y axis of the plot.
+        ell (ndarray): The ell values to use for the x axis. If None, it will be set to np.arange(0, Cl.shape[-1]).
+    """
+    if ell is None:
+        ell = np.arange(0, Cl.shape[-1])
+
+    norm = ell * (ell + 1) / 2 / np.pi if use_D_ell else 1
+
+    fig, ax = plt.subplots(1, 4, sharex=True, sharey=False, figsize=(16, 9))
+    for f in range(Cl.shape[0]):
+        ax[0].plot(ell, norm * Cl[f, 0], color="C" + str(f), ls="-", alpha=0.4)
+        ax[1].plot(ell, norm * Cl[f, 1], color="C" + str(f), ls="-", alpha=0.4)
+        ax[2].plot(ell, norm * Cl[f, 2], color="C" + str(f), ls="-", alpha=0.4)
+        ax[3].plot(
+            ell,
+            norm * Cl[f, 3],
+            label=legend_labels[0] + str(freqs[f]) * (Cl.shape[0] != 1),
+            color="C" + str(f),
+            ls="-",
+            alpha=0.4,
+        )
+
+    ax[0].set_title("EE")
+    ax[1].set_title("EB")
+    ax[2].set_title("BE")
+    ax[3].set_title("BB")
+
+    if lims_x is None:
+        lims_x = (2, ell[-1])
+
+    ax[0].set_xlabel(r"$\ell$")
+    ax[1].set_xlabel(r"$\ell$")
+    ax[2].set_xlabel(r"$\ell$")
+    ax[3].set_xlabel(r"$\ell$")
+
+    ax[0].set_ylabel(y_axis_label)
+
+    ax[3].legend(bbox_to_anchor=(1.1, 1.05), fancybox=True, shadow=True)
+    ax[0].loglog()
+    ax[1].set_xscale("log")
+    ax[2].set_xscale("log")
+    ax[3].loglog()
+
+    ax[0].set_xlim(lims_x)
+    ax[0].set_ylim(lims_y)
+    # plt.subplots_adjust(wspace=0, hspace=0)
+    plt.savefig(plot_dir / save_name, bbox_inches="tight")
+    plt.close()
+
+
 def plotTTEEBB(
     plot_dir,
     freqs,
