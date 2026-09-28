@@ -4,121 +4,12 @@ from pathlib import Path
 
 import healpy as hp
 import numpy as np
-from scipy.linalg import sqrtm
 
 from megatop import Config, DataManager
 from megatop.utils import Timer, logger
-from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.mpi import get_world
 from megatop.utils.preproc import alm_common_beam, common_beam_and_nside, read_input_maps
-
-
-def homemade_unbin_cell(binned_cell, nmt_bins):
-    """
-    Necessary to unbin cell that are complex numbers
-    """
-    output_shape = np.array(binned_cell.shape)
-    output_shape[-1] = nmt_bins.lmax + 1  # +1 is to account for ell=0
-    unbinned_cell = np.zeros(output_shape, dtype=np.complex128)
-    for bin in range(binned_cell.shape[-1]):
-        unbinned_cell[..., nmt_bins.get_ell_list(bin)] = binned_cell[..., bin]
-    return unbinned_cell
-
-
-def get_reduced_tf(transfer, nmt_bins_native, sum_TF_column=False):
-    inv_sqrt_tf_full = np.linalg.inv([sqrtm(TF_ell.T) for TF_ell in transfer.T])[
-        :, -4:, -4:
-    ]  # keeping only polarised components
-
-    inv_sqrt_tf_bin = np.zeros((2, 2, inv_sqrt_tf_full.shape[0]), dtype=np.complex128)
-    if not sum_TF_column:  # Rearanging diagonal elements only
-        inv_sqrt_tf_bin[0, 0] = inv_sqrt_tf_full[:, 0, 0]
-        inv_sqrt_tf_bin[0, 1] = inv_sqrt_tf_full[:, 1, 1]
-        inv_sqrt_tf_bin[1, 0] = inv_sqrt_tf_full[:, 2, 2]
-        inv_sqrt_tf_bin[1, 1] = inv_sqrt_tf_full[:, 3, 3]
-    else:
-        inv_sqrt_tf_sum = np.sum(inv_sqrt_tf_full, axis=1)
-        inv_sqrt_tf_bin[0, 0] = inv_sqrt_tf_sum[:, 0]
-        inv_sqrt_tf_bin[0, 1] = inv_sqrt_tf_sum[:, 1]
-        inv_sqrt_tf_bin[1, 0] = inv_sqrt_tf_sum[:, 2]
-        inv_sqrt_tf_bin[1, 1] = inv_sqrt_tf_sum[:, 3]
-
-    inv_sqrt_tf = np.zeros((2, 2, nmt_bins_native.lmax + 1), dtype=np.complex128)
-    for i in range(2):
-        for j in range(2):
-            inv_sqrt_tf[i, j] = homemade_unbin_cell(inv_sqrt_tf_bin[i, j], nmt_bins_native)
-
-    return inv_sqrt_tf, inv_sqrt_tf_bin
-
-
-def get_reduced_tf_new(transfer, nmt_bins_native):
-    # put in TF step and save there as well
-    inv_transfer = np.linalg.inv(transfer[-4:, -4:].T).T
-
-    corner_TF = np.zeros((2, 2, inv_transfer.shape[2]))
-    corner_TF[0, 0, :] = inv_transfer[-4, -4, :]  # E-->E
-    corner_TF[1, 1, :] = inv_transfer[-1, -1, :]  # B-->B
-    corner_TF[0, 1, :] = inv_transfer[-4, -1, :]  # B-->E
-    corner_TF[1, 0, :] = inv_transfer[-1, -4, :]  # E-->B
-
-    reduced_inv_tf_binned = np.sqrt(corner_TF + 0j)  # element wise sqrt
-
-    reduced_inv_tf = np.zeros((2, 2, nmt_bins_native.lmax + 1), dtype=np.complex128)
-    for i in range(2):
-        for j in range(2):
-            reduced_inv_tf[i, j] = homemade_unbin_cell(reduced_inv_tf_binned[i, j], nmt_bins_native)
-
-    return reduced_inv_tf, reduced_inv_tf_binned
-
-
-def get_tf_alm_correction_fora_all_channels(manager, config, nmt_bin, use_new_reduced_TF=True):
-    lm_size = hp.Alm.getsize(config.lmax)
-
-    inv_sqrt_tf_bin_freq = np.zeros(
-        (len(manager.get_TF_filenames()), 2, 2, nmt_bin.get_n_bands()),
-        dtype=np.complex128,
-    )
-    inv_sqrt_tf_freq = np.zeros(
-        (len(manager.get_TF_filenames()), 2, 2, config.lmax + 1),  # +1 is to account for ell=0
-        dtype=np.complex128,
-    )
-    inv_sqrt_tf_lm_freq = np.zeros(
-        (len(manager.get_TF_filenames()), 2, 2, lm_size), dtype=np.complex128
-    )
-
-    for f, tf_path in enumerate(manager.get_TF_filenames()):
-        if tf_path == Path():
-            logger.warning(
-                f"DEBUG: Transfer function for frequency {config.frequencies[f]} is not provided, skipping."
-            )
-            continue
-        logger.info(f"Loading transfer function from {tf_path}")
-
-        # Loading TF:
-        transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
-
-        if not use_new_reduced_TF:
-            inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf(
-                transfer, nmt_bin, config.pre_proc_pars.sum_TF_column
-            )
-        else:
-            logger.warning("TESTING NEW METHOD FOR TF REDUCTION")
-            inv_sqrt_tf, inv_sqrt_tf_bin = get_reduced_tf_new(transfer, nmt_bin)
-
-        inv_sqrt_tf_bin_freq[f] = inv_sqrt_tf_bin
-        inv_sqrt_tf_freq[f] = inv_sqrt_tf
-
-        inv_sqrt_tf_lm = np.zeros((2, 2, lm_size), dtype=np.complex128)
-
-        for index in range(lm_size):
-            inv_sqrt_tf_lm[..., index] = inv_sqrt_tf[
-                ..., hp.Alm.getlm(lmax=hp.Alm.getlmax(lm_size), i=index)[0]
-            ]
-
-        inv_sqrt_tf_lm_freq[f] = inv_sqrt_tf_lm
-
-    return inv_sqrt_tf_bin_freq, inv_sqrt_tf_freq, inv_sqrt_tf_lm_freq
 
 
 def preprocess_map(
@@ -162,29 +53,37 @@ def preprocess_map(
     logger.info(f"Pre-processed alms have shape: {freq_alms_convolved.shape}")
 
     if config.pre_proc_pars.correct_for_TF:
-        nmt_bins = load_nmt_binning(manager)
+        inv_sqrt_tf_lm_freq = np.load(
+            manager.get_path_to_preprocessed_reduced_TF(), allow_pickle=True
+        )[config.pre_proc_pars.DEBUGHARMONIC_preproc_invTFLM_to_use]
+        # nmt_bins = load_nmt_binning(manager)
 
-        inv_sqrt_tf_bin_freq, inv_sqrt_tf_freq, inv_sqrt_tf_lm_freq = (
-            get_tf_alm_correction_fora_all_channels(
-                manager, config, nmt_bins, use_new_reduced_TF=True
-            )
-        )
+        # inv_sqrt_tf_bin_freq, inv_sqrt_tf_freq, inv_sqrt_tf_lm_freq = (
+        #     get_tf_alm_correction_fora_all_channels(
+        #         manager, config, nmt_bins, use_new_reduced_TF=True
+        #     )
+        # )
         freq_alms_convolved = np.einsum("fijl,fjl->fil", inv_sqrt_tf_lm_freq, freq_alms_convolved)
+
+        # print("TESTTTTTTINNNNNNNNNNGGGGGGG")
+        # inv_sqrt_tf_bin_freq, inv_sqrt_tf_freq, inv_sqrt_tf_lm_freq = get_effectiv_inv_tf_least_square(manager, config, nmt_bins)
+        # inv_sqrt_tf_lm_freq = np.load('/shared_home/jost/code/notebooks/test_sims_filtering/save_inv_T_ellem_freq.npy')
+        # freq_alms_convolved = np.einsum("flij,fjl->fil", inv_sqrt_tf_lm_freq, freq_alms_convolved)
 
         # Saving the reduced transfer functions for later use
         # TODO: save TF in a seperate function like the other outputs
-        fname_TF = manager.get_path_to_preprocessed_reduced_TF()
-        fname_TF.parent.mkdir(parents=True, exist_ok=True)
+        # fname_TF = manager.get_path_to_preprocessed_reduced_TF()
+        # fname_TF.parent.mkdir(parents=True, exist_ok=True)
 
-        np.savez(
-            fname_TF,
-            inv_sqrt_tf_bin_freq=inv_sqrt_tf_bin_freq,
-            inv_sqrt_tf_freq=inv_sqrt_tf_freq,
-            inv_sqrt_tf_lm_freq=inv_sqrt_tf_lm_freq,
-        )
-        logger.info(
-            f"Saved reduced transfer functions to {manager.get_path_to_preprocessed_reduced_TF()}"
-        )
+        # np.savez(
+        #     fname_TF,
+        #     inv_sqrt_tf_bin_freq=inv_sqrt_tf_bin_freq,
+        #     inv_sqrt_tf_freq=inv_sqrt_tf_freq,
+        #     inv_sqrt_tf_lm_freq=inv_sqrt_tf_lm_freq,
+        # )
+        # logger.info(
+        #     f"Saved reduced transfer functions to {manager.get_path_to_preprocessed_reduced_TF()}"
+        # )
 
     if mask_output and not config.parametric_sep_pars.use_harmonic_compsep:
         binary_mask = hp.read_map(manager.path_to_binary_mask)
