@@ -138,6 +138,7 @@ def save_TFsims(
     unfiltered_maps_TEB: NDArray,
     filtered_maps_TEB: NDArray,
     id_sim: int | None = None,
+    input_pure_alms: NDArray | None = None,
 ) -> None:
     """Save an unfiltered and filtered TF realization."""
     # get appropriate filenames based on type
@@ -162,6 +163,11 @@ def save_TFsims(
                 dtype=["float64", "float64", "float64"],
                 overwrite=True,
             )
+
+    if input_pure_alms is not None:
+        alm_file_name = manager.get_pure_alms_sim_for_TF_filenames(id_sim)
+        logger.info(f"Saving pure ALMs to {alm_file_name}")
+        hp.write_alm(alm_file_name, input_pure_alms, overwrite=True)
 
 
 def _map(func, iterable, comm: Comm, force_seq: bool = False):
@@ -225,8 +231,14 @@ def func_TF_sims(
 
     # Generating alms from power law spectra
     alms_TEB = get_alms_from_cls(
-        pl_spectra_new_orderhp, 3 * config.nside, seed=config.map_sim_pars.cmb_seed
+        pl_spectra_new_orderhp, 3 * config.nside, seed=[config.map_sim_pars.cmb_seed, id_sim]
     )
+
+    save_pure_alms = True  # PUT IN CONFIG
+
+    alms_TEB_to_save = alms_TEB.copy() if save_pure_alms else None
+    # Copying to avoid any potential issues with filtering altering the original alms
+    # TODO check if copy is actually necessary
 
     logger.info(
         f"Sum of difference between TT and EE alms / len(alms): {np.sum(alms_TEB[0] - alms_TEB[1]) / len(alms_TEB[0])}"
@@ -251,17 +263,35 @@ def func_TF_sims(
             filtered_freq_map_pure_E = unfiltered_freq_map_pure_E.copy()
             filtered_freq_map_pure_B = unfiltered_freq_map_pure_B.copy()
 
-            for i_f, (key, func) in enumerate(obsmat_funcs.items()):
-                logger.debug(f"Filtering {key} channel")
-                filtered_freq_map_pure_T[i_f] = mock.apply_observation_matrix(
-                    func, filtered_freq_map_pure_T[i_f]
-                )
-                filtered_freq_map_pure_E[i_f] = mock.apply_observation_matrix(
-                    func, filtered_freq_map_pure_E[i_f]
-                )
-                filtered_freq_map_pure_B[i_f] = mock.apply_observation_matrix(
-                    func, filtered_freq_map_pure_B[i_f]
-                )
+            if not config.map_sim_pars.DEBUG_filter_alms:
+                for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+                    logger.debug(f"Filtering {key} channel")
+                    filtered_freq_map_pure_T[i_f] = mock.apply_observation_matrix(
+                        func, filtered_freq_map_pure_T[i_f]
+                    )
+                    filtered_freq_map_pure_E[i_f] = mock.apply_observation_matrix(
+                        func, filtered_freq_map_pure_E[i_f]
+                    )
+                    filtered_freq_map_pure_B[i_f] = mock.apply_observation_matrix(
+                        func, filtered_freq_map_pure_B[i_f]
+                    )
+            else:
+                for i_f, map_set_name in enumerate(config.map_sets):
+                    path_transfer_TEB = f"/shared_home/jost/code/notebooks/test_sims_filtering/TEB_filter_LOWERonly_{map_set_name.map_filename}.npy"
+                    logger.info(
+                        f"DEBUUUUG: using filter at the alm level from Tranfser_TEB loading from: {path_transfer_TEB}"
+                    )
+                    transfer_TEB = np.load(path_transfer_TEB)
+                    filtered_freq_map_pure_T[i_f] = mock.DEBUGfilter_map_using_TFl(
+                        filtered_freq_map_pure_T[i_f], transfer_TEB, return_alm=False
+                    )
+                    filtered_freq_map_pure_E[i_f] = mock.DEBUGfilter_map_using_TFl(
+                        filtered_freq_map_pure_E[i_f], transfer_TEB, return_alm=False
+                    )
+                    filtered_freq_map_pure_B[i_f] = mock.DEBUGfilter_map_using_TFl(
+                        filtered_freq_map_pure_B[i_f], transfer_TEB, return_alm=False
+                    )
+
     else:
         msg_no_obsmat = (
             "No observation matrices provided for filtering. Please provide obsmat_funcs."
@@ -284,6 +314,7 @@ def func_TF_sims(
         ),
         np.array([filtered_freq_map_pure_T, filtered_freq_map_pure_E, filtered_freq_map_pure_B]),
         id_sim=id_sim,
+        input_pure_alms=alms_TEB_to_save,
     )
 
     return id_sim
@@ -341,9 +372,20 @@ def func_signal(
     # apply filtering
     if obsmat_funcs is not None:
         with Timer("filter-freq-maps"):
-            for i_f, (key, func) in enumerate(obsmat_funcs.items()):
-                logger.debug(f"Filtering {key} channel")
-                sky[i_f] = mock.apply_observation_matrix(func, sky[i_f])
+            if not config.map_sim_pars.DEBUG_filter_alms:
+                for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+                    logger.debug(f"Filtering {key} channel")
+                    sky[i_f] = mock.apply_observation_matrix(func, sky[i_f])
+            else:
+                for i_f, map_set_name in enumerate(config.map_sets):
+                    path_transfer_TEB = f"/shared_home/jost/code/notebooks/test_sims_filtering/TEB_filter_LOWERonly_{map_set_name.map_filename}.npy"
+                    logger.info(
+                        f"DEBUUUUG: using filter at the alm level from Tranfser_TEB loading from: {path_transfer_TEB}"
+                    )
+                    transfer_TEB = np.load(path_transfer_TEB)
+                    sky[i_f] = mock.DEBUGfilter_map_using_TFl(
+                        sky[i_f], transfer_TEB, return_alm=False
+                    )
 
     # add noise if it was not included before filtering
     if (
@@ -365,10 +407,22 @@ def func_signal(
             and config.map_sim_pars.filter_noise
             and not config.map_sim_pars.DEBUGDont_Filter_purenoise_sims
         ):
-            with Timer("filter-freq-maps"):
-                for i_f, (key, func) in enumerate(obsmat_funcs.items()):
-                    logger.debug(f"Filtering NOISE {key} channel")
-                    noise[i_f] = mock.apply_observation_matrix(func, noise[i_f])
+            with Timer("filter-freq-TRUENOISE"):
+                if not config.map_sim_pars.DEBUG_filter_alms:
+                    for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+                        logger.debug(f"Filtering NOISE {key} channel")
+                        noise[i_f] = mock.apply_observation_matrix(func, noise[i_f])
+                else:
+                    for i_f, map_set_name in enumerate(config.map_sets):
+                        path_transfer_TEB = f"/shared_home/jost/code/notebooks/test_sims_filtering/TEB_filter_LOWERonly_{map_set_name.map_filename}.npy"
+                        logger.info(
+                            f"DEBUUUUG: using filter at the alm level from Tranfser_TEB loading from: {path_transfer_TEB}"
+                        )
+                        transfer_TEB = np.load(path_transfer_TEB)
+                        noise[i_f] = mock.DEBUGfilter_map_using_TFl(
+                            noise[i_f], transfer_TEB, return_alm=False
+                        )
+
         DEBUG_save_TRUEnoise_simulation(manager, config, noise, id_sim=id_sim)
 
     return id_sim
@@ -389,9 +443,21 @@ def func_noise(
     noise = get_noise(config, binary_mask, common_nhits_map, id_sim=id_sim)
     if config.map_sim_pars.filter_noise and not config.map_sim_pars.DEBUGDont_Filter_purenoise_sims:
         with Timer("filter-freq-maps"):
-            for i_f, (key, func) in enumerate(obsmat_funcs.items()):
-                logger.debug(f"Filtering NOISE {key} channel")
-                noise[i_f] = mock.apply_observation_matrix(func, noise[i_f])
+            if not config.map_sim_pars.DEBUG_filter_alms:
+                for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+                    logger.debug(f"Filtering NOISE {key} channel")
+                    noise[i_f] = mock.apply_observation_matrix(func, noise[i_f])
+            else:
+                for i_f, map_set_name in enumerate(config.map_sets):
+                    path_transfer_TEB = f"/shared_home/jost/code/notebooks/test_sims_filtering/TEB_filter_LOWERonly_{map_set_name.map_filename}.npy"
+                    logger.info(
+                        f"DEBUUUUG: using filter at the alm level from Tranfser_TEB loading from: {path_transfer_TEB}"
+                    )
+                    transfer_TEB = np.load(path_transfer_TEB)
+                    noise[i_f] = mock.DEBUGfilter_map_using_TFl(
+                        noise[i_f], transfer_TEB, return_alm=False
+                    )
+
     _ = mask.apply_binary_mask(noise, binary_mask, unseen=False)
     save_simu(manager, config, noise, id_sim=id_sim, is_noise=True)
     return id_sim
@@ -500,7 +566,13 @@ def main_signal():
 
     binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
     common_nhits_map = config.landscape.read_map(manager.path_to_common_nhits_map)
-    func_signal(args.sim, manager, config, binary_mask, common_nhits_map)
+    if config.map_sim_pars.filter_sims:
+        logger.info("Loading observation matrices for signal filtering")
+        # Load the obsmat(s) for our map set(s)
+        obsmat_funcs = load_obsmat(manager, config)
+    else:
+        obsmat_funcs = None
+    func_signal(args.sim, manager, config, binary_mask, common_nhits_map, obsmat_funcs=obsmat_funcs)
 
 
 def main_noise():
@@ -519,7 +591,46 @@ def main_noise():
 
     binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
     common_nhits_map = config.landscape.read_map(manager.path_to_common_nhits_map)
-    func_noise(manager, config, binary_mask, common_nhits_map, args.sim)
+    if config.map_sim_pars.filter_noise and not config.map_sim_pars.DEBUGDont_Filter_purenoise_sims:
+        # Load the obsmat(s) for our map set(s)
+        logger.info("Loading observation matrices for noise filtering")
+        obsmat_funcs = load_obsmat(manager, config)
+    else:
+        obsmat_funcs = None
+    func_noise(manager, config, binary_mask, common_nhits_map, args.sim, obsmat_funcs=obsmat_funcs)
+
+
+def main_TF_sims():
+    """Entry point for generating a single TF simulation realization."""
+    parser = argparse.ArgumentParser(description="Generate a single TF simulation realization")
+    parser.add_argument("--config", type=Path, required=True, help="config file")
+    parser.add_argument("--sim", type=int, required=True, help="simulation index to generate")
+    # parser.add_argument("--map-set", type=str, default=None, help="map set name to generate")
+
+    args = parser.parse_args()
+    config = Config.load_yaml(args.config)
+    # if args.map_set is not None:
+    #     config.map_sets = [ms for ms in config.map_sets if ms.name == args.map_set]
+    manager = DataManager(config)
+    manager.create_output_dirs(
+        config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim, config.map_sim_pars.TF_n_sim
+    )
+
+    binary_mask = config.landscape.read_map(manager.path_to_binary_mask)
+    if config.map_sim_pars.filter_sims:
+        # Load the obsmat(s) for our map set(s)
+        logger.info("Loading observation matrices for transfer function")
+        obsmat_funcs = load_obsmat(manager, config)
+    else:
+        obsmat_funcs = None
+
+    func_TF_sims(
+        manager=manager,
+        config=config,
+        binary_mask=binary_mask,
+        id_sim=args.sim,
+        obsmat_funcs=obsmat_funcs,
+    )
 
 
 def main():
