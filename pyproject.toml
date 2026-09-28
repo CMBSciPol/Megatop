@@ -69,6 +69,7 @@ docs = [
 "megatop-mock-run" = "megatop.pipeline.mocker:main"
 "megatop-mock-signal-run" = "megatop.pipeline.mocker:main_signal"
 "megatop-mock-noise-run" = "megatop.pipeline.mocker:main_noise"
+"megatop-mock-TFsims-run" = "megatop.pipeline.mocker:main_TF_sims"
 "megatop-mock-plot" = "megatop.plot.mock_plotter:main"
 "megatop-noisecov-run" = "megatop.pipeline.pixel_noisecov_estimater:main"
 "megatop-noise-preproc-run" = "megatop.pipeline.noise_preprocesser:main"
