@@ -10,12 +10,51 @@ from megatop.utils import Timer, logger, mask
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
 from megatop.utils.spectra import (
-    compute_auto_cross_cl_from_alms_list,
+    compute_auto_cross_cl_from_alms_list_MCMverstion,
     compute_auto_cross_cl_from_maps_dict,
     get_common_beam_wpix,
     initialize_nmt_workspace,
     limit_namaster_output,
 )
+
+
+def get_inv_binned_MCM(workspace_nmt, nmt_bins):
+    nl = nmt_bins.lmax + 1
+    nspec = 4  # if T is included then 7 TT,EE,BB,TE,TB,EB,BE (why not ET,BT? )
+    mcm = np.transpose(
+        workspace_nmt.get_coupling_matrix().reshape([nl, nspec, nl, nspec]), axes=[1, 0, 3, 2]
+    )
+    # Bin the MCM on one side
+    nl = mcm.shape[-1]
+    binner = np.array([nmt_bins.bin_cell(np.array([cl]))[0] for cl in np.eye(nl)]).T
+
+    # Resulting MCM will be (size, n_bins, size, nl)
+    left_binned_mcm = np.einsum("ij,kjlm->kilm", binner, mcm)
+    size, n_bins, _, nl = left_binned_mcm.shape
+    # We then bin the TFxMCM on the right
+    # side to get the binned MCM
+    ells_per_bin = [nmt_bins.get_ell_list(i) for i in range(n_bins)]
+    cl2dl_per_bin = [np.ones_like(ells_per_bin[i]) for i in range(n_bins)]
+
+    btmcm = np.transpose(
+        np.array(
+            [
+                np.sum(
+                    left_binned_mcm[:, :, :, ells_per_bin[i]]
+                    / cl2dl_per_bin[i][None, None, None, :],
+                    axis=-1,
+                )
+                for i in range(n_bins)
+            ]
+        ),
+        axes=[1, 2, 3, 0],
+    )
+
+    inv_btmcm = np.linalg.inv(btmcm.reshape([size * n_bins, size * n_bins]))
+
+    inv_coupling = inv_btmcm.reshape([size, n_bins, size, n_bins])
+
+    return inv_coupling
 
 
 def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
@@ -126,18 +165,29 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
         )
 
         if use_alm:
+            logger.info("Using harmonic output alms for spectra estimation")
             comp_alms = np.load(manager.get_path_to_components_alms(id_sim))
+            # comp_alms = np.load(manager.get_path_to_compsep_results(id_sim),allow_pickle=True)["s_alm_old"]
             comp_dict_alms = {"CMB": comp_alms[0], "Dust": comp_alms[1], "Synch": comp_alms[2]}
 
-            all_Cls = compute_auto_cross_cl_from_alms_list(
+            inv_MCM = get_inv_binned_MCM(workspace_nmt, nmt_bins)
+            all_Cls = compute_auto_cross_cl_from_alms_list_MCMverstion(
                 comp_dict_alms,
-                analysis_mask,
-                effective_beam_CMB[:-1],
-                workspace_nmt,
-                purify_e=config.map2cl_pars.purify_e,
-                purify_b=config.map2cl_pars.purify_b,
-                n_iter=config.map2cl_pars.n_iter_namaster,
+                nmt_bins,
+                inv_MCM,
+                config.lmax,
+                effective_beam_CMB,
             )
+
+            # all_Cls = compute_auto_cross_cl_from_alms_list(
+            #     comp_dict_alms,
+            #     analysis_mask,
+            #     effective_beam_CMB[:-1],
+            #     workspace_nmt,
+            #     purify_e=config.map2cl_pars.purify_e,
+            #     purify_b=config.map2cl_pars.purify_b,
+            #     n_iter=config.map2cl_pars.n_iter_namaster,
+            # )
         else:
             comp_maps = mask.apply_binary_mask(comp_maps, binary_mask)
             if config.parametric_sep_pars.include_synchrotron:
