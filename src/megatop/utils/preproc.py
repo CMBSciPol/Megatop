@@ -150,6 +150,8 @@ def alm_common_beam(
                 purify_e=purify_e,
                 purify_b=purify_b,
                 n_iter=10,
+                lmax=lmax,
+                lmax_mask=lmax,
             )
             alms_QU = fields.alm
         else:
