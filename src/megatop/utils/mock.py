@@ -327,3 +327,28 @@ def load_observation_matrix(nside: int, map_sets, obsmat_filenames) -> dict:
 
 def apply_observation_matrix(obsmat_func, freq_map):
     return hp.reorder(obsmat_func(hp.reorder(freq_map, r2n=True)), n2r=True)
+
+
+def DEBUGfilter_map_using_TFl(sky_map, TF_3x3, return_alm=False):
+    sky_alm = hp.map2alm(sky_map)
+    filter_sky_alm = np.asarray(sky_alm)
+    filter_sky_alm[0] = (
+        hp.almxfl(sky_alm[0], TF_3x3[0, 0])
+        + hp.almxfl(sky_alm[1], TF_3x3[0, 1])
+        + hp.almxfl(sky_alm[2], TF_3x3[0, 2])
+    )
+    filter_sky_alm[1] = (
+        hp.almxfl(sky_alm[0], TF_3x3[1, 0])
+        + hp.almxfl(sky_alm[1], TF_3x3[1, 1])
+        + hp.almxfl(sky_alm[2], TF_3x3[1, 2])
+    )
+    filter_sky_alm[2] = (
+        hp.almxfl(sky_alm[0], TF_3x3[2, 0])
+        + hp.almxfl(sky_alm[1], TF_3x3[2, 1])
+        + hp.almxfl(sky_alm[2], TF_3x3[2, 2])
+    )
+    filter_map = hp.alm2map(filter_sky_alm, nside=hp.get_nside(sky_map))
+    if return_alm:
+        return filter_map, filter_sky_alm
+    else:
+        return filter_map
