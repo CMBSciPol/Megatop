@@ -9,14 +9,16 @@ jax.config.update("jax_enable_x64", True)
 import healpy as hp  # noqa: E402
 import megabuster as mb  # noqa: E402
 import numpy as np  # noqa: E402
+from fgbuster.separation_recipes import _format_alms, _r_to_c_alms  # noqa: E402
 
 from megatop import Config, DataManager  # noqa: E402
+from megatop.pipeline.map_to_cler import get_inv_binned_MCM  # noqa: E402
 from megatop.utils import Timer, logger  # noqa: E402
 from megatop.utils.binning import load_nmt_binning  # noqa: E402
 from megatop.utils.mask import apply_binary_mask  # noqa: E402
 from megatop.utils.mpi import MPISUM, get_world  # noqa: E402
 from megatop.utils.spectra import (  # noqa: E402
-    compute_auto_cross_cl_from_alms_list,  # noqa: E402
+    compute_auto_cross_cl_from_alms_list_MCMverstion,
     compute_auto_cross_cl_from_maps_dict,  # noqa: E402
     get_common_beam_wpix,  # noqa: E402
     initialize_nmt_workspace,  # noqa: E402
@@ -276,21 +278,24 @@ def noise_spectra_estimator(
     use_alm = (
         config.map2cl_pars.use_harmonic_output_alm
         and config.parametric_sep_pars.use_harmonic_compsep
+        and config.pre_proc_pars.DEBUGHARMONIC_preproc_noise_TF_correction_alm
     )
 
-    if use_alm:
-        W_maxL_lm = np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True)[
-            "W_maxL_lm"
-        ]
+    # if use_alm:
+    #     W_maxL_lm = np.load(manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True)[
+    #         "W_maxL_lm"
+    #     ]
 
     # Loading bin info from map2cl step:
     nmt_bins = load_nmt_binning(manager)
+    inv_MCM = get_inv_binned_MCM(workspace_nmt, nmt_bins)
 
     MemoryUsage(f"rank = {rank} ")
 
     if (
         config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
     ) and not config.parametric_sep_pars.alm2map:
+        logger.info("Computing effective transfer function after compsep")
         _, inverse_normalized_Cl_effective_TF = get_effective_transfer_function(
             config, manager, W_maxL, nmt_bins, effective_beam_CMB, analysis_mask, workspace_nmt
         )
@@ -327,6 +332,7 @@ def noise_spectra_estimator(
                 manager.get_path_to_preprocessed_noise_maps(id_real)
             )
         noise_freq_maps_preprocessed_ = noise_freq_maps_preprocessed.copy()  # I have to do this otherwise the ruff check isn't happy at the debug_cutscales step, it says noise_freq_maps_preprocessed is undefined...
+
         # Applying component-separation operator
         if not use_alm:
             logger.info(
@@ -398,66 +404,30 @@ def noise_spectra_estimator(
             noise_freq_alms_preprocessed = np.load(
                 manager.get_path_to_preprocessed_noise_alms(id_real)
             )
-            noise_alms_post_compsep = np.einsum(
-                "lqucf,ful->cql", W_maxL_lm.T, noise_freq_alms_preprocessed
+            W_maxL_lm_real_cross = np.load(
+                manager.get_path_to_compsep_results(id_sim_sky), allow_pickle=True
+            )["W_maxL_lm_real"]
+            alm_postcompsep_real_cross = np.einsum(
+                # "lebcf, lbf -> lec", W_maxL_lm_real_cross, _format_alms(data_alms_lmin_save.copy())
+                "lebcf, lbf -> lec",
+                W_maxL_lm_real_cross,
+                _format_alms(noise_freq_alms_preprocessed.copy()),
             )
+            alm_postcompsep_cross = _r_to_c_alms(alm_postcompsep_real_cross.T)
+            noise_comp_dict_alm = {
+                "Noise_CMB": alm_postcompsep_cross[0],
+                "Noise_Dust": alm_postcompsep_cross[1],
+            }
+            if config.parametric_sep_pars.include_synchrotron:
+                noise_comp_dict_alm["Noise_Synch"] = alm_postcompsep_cross[2]
 
-            if not config.parametric_sep_pars.alm2map:
-                assert config.pre_proc_pars.DEBUGHARMONICuse_namaster_alms, (
-                    "You must set DEBUGHARMONICuse_namaster_alms as it will use namaster implementation of alms WARNING: this is sketchy and not well tested namaster functions should be modified for this."
-                )
-                logger.warning(
-                    "INPUTTING ALMS INTO NAMASTER, PROBABLY NOT THE RIGHT IMPLEMENTATION, NEED TO CHANGE NAMASTER FUNCITONS"
-                )
-                noise_comp_dict_alms = {
-                    "Noise_CMB": noise_alms_post_compsep[0],
-                    "Noise_Dust": noise_alms_post_compsep[1],
-                    "Noise_Synch": noise_alms_post_compsep[2],
-                }
-
-                noise_Cls = compute_auto_cross_cl_from_alms_list(
-                    noise_comp_dict_alms,
-                    analysis_mask,
-                    effective_beam_CMB[:-1],
-                    workspace_nmt,
-                    purify_e=config.map2cl_pars.purify_e,
-                    purify_b=config.map2cl_pars.purify_b,
-                    n_iter=config.map2cl_pars.n_iter_namaster,
-                )
-            else:
-                logger.info(
-                    "Converting preprocessed noise alms to maps before computing noise spectra after component separation"
-                )
-                noise_map_post_compsep = np.array(
-                    [
-                        hp.alm2map_spin(
-                            noise_alms_post_compsep[i],
-                            nside=config.nside,
-                            spin=2,
-                            lmax=config.parametric_sep_pars.harmonic_lmax - 1,
-                        )
-                        for i in range(noise_alms_post_compsep.shape[0])
-                    ]
-                )
-                noise_map_post_compsep *= binary_mask
-                noise_comp_dict_alm2map = {
-                    "Noise_CMB": noise_map_post_compsep[0],
-                    "Noise_Dust": noise_map_post_compsep[1],
-                }
-                if config.parametric_sep_pars.include_synchrotron:
-                    noise_comp_dict_alm2map["Noise_Synch"] = noise_map_post_compsep[2]
-                # Computing auto and cross spectra
-                noise_Cls = compute_auto_cross_cl_from_maps_dict(
-                    maps_dict=noise_comp_dict_alm2map,
-                    analysis_mask=analysis_mask,
-                    beam=effective_beam_CMB[:-1],
-                    workspace=workspace_nmt,
-                    purify_e=config.map2cl_pars.purify_e,
-                    purify_b=config.map2cl_pars.purify_b,
-                    n_iter=config.map2cl_pars.n_iter_namaster,
-                    inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
-                    # inverse_effective_transfer_function=inverse_effective_transfer_function,
-                )
+            noise_Cls = compute_auto_cross_cl_from_alms_list_MCMverstion(
+                noise_comp_dict_alm,
+                nmt_bins,
+                inv_MCM,
+                config.lmax,
+                effective_beam_CMB,
+            )
 
         # Summing the noise spectra
         for key in noise_Cls:
