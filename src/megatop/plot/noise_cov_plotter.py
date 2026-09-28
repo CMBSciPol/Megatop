@@ -10,7 +10,12 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mask import apply_binary_mask
-from megatop.utils.plot import freq_maps_plotter, freq_maps_plotter_one_stoke, plotTTEEBB
+from megatop.utils.plot import (
+    freq_maps_plotter,
+    freq_maps_plotter_one_stoke,
+    plot_namasterCls,
+    plotTTEEBB,
+)
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
@@ -70,13 +75,10 @@ def plot_noisecov(manager, config, maps=True, cls=True):
 
     if config.parametric_sep_pars.use_harmonic_compsep:
         nmt_bins = load_nmt_binning(manager)
-        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
-            "bin_index_lminlmax"
-        ]
-        ell_bin_lminlmax = nmt_bins.get_effective_ells()[bin_index_lminlmax]
+        ell_bin = nmt_bins.get_effective_ells()
         binned_nl = np.load(manager.path_to_nl_noisecov)
         unbinned_nl = np.load(manager.path_to_nl_noisecov_unbinned)
-        plotTTEEBB(
+        plot_namasterCls(
             plot_dir=plot_dir,
             freqs=config.frequencies,
             Cl=binned_nl,
@@ -85,10 +87,10 @@ def plot_noisecov(manager, config, maps=True, cls=True):
             use_D_ell=False,
             lims_x=None,
             lims_y=None,
-            ell=ell_bin_lminlmax,
+            ell=ell_bin,
         )
 
-        plotTTEEBB(
+        plot_namasterCls(
             plot_dir=plot_dir,
             freqs=config.frequencies,
             Cl=unbinned_nl,
