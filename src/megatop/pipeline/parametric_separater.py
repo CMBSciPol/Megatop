@@ -29,6 +29,25 @@ from megatop.utils.mpi import get_world  # noqa: E402
 from megatop.utils.utils import MemoryUsage, PSMemoryUsage  # noqa: E402
 
 
+def check_negative_inv_N_ell_b4_compsep(inv_Nell, harmonic_ell_min=0):
+    has_negative = np.any(inv_Nell < 0, axis=(1, 2, 3))
+
+    # For each ell, is there any negative value at ell or above?
+    negative_above = np.logical_or.accumulate(has_negative[::-1])[::-1]
+
+    # First ell for which there are no negatives above
+    ell_min = np.argmax(~negative_above)
+
+    assert ell_min < harmonic_ell_min, (
+        f"Negative inverse noise covariance found at ell < {harmonic_ell_min}, first ell with no negatives above: {ell_min}, please check your noise covariance estimation and/or the lmin used in the harmonic compsep."
+    )
+
+    if ell_min > harmonic_ell_min:
+        logger.warning(
+            f"Negative inverse noise covariance found at ell < {harmonic_ell_min}, first ell with no negatives above: {ell_min}, you could use a lower harmonic ell_min based on the noise_covariance alone and have access to more modes."
+        )
+
+
 def _test_N_alm_format(N_alm):
     inv_N_alm = 1 / N_alm
 
@@ -69,8 +88,9 @@ def get_and_format_inv_Nl(manager: DataManager, config: Config):
     )
     inv_Cl_from_maps = np.zeros_like(Cl_from_maps)
 
-    inv_Cl_from_maps[:, 1:, config.parametric_sep_pars.harmonic_lmin :] = (
-        1 / Cl_from_maps[:, 1:, config.parametric_sep_pars.harmonic_lmin :]
+    inv_Cl_from_maps[:, :, config.parametric_sep_pars.harmonic_lmin :] = (
+        # 1 / Cl_from_maps[:, 1:, config.parametric_sep_pars.harmonic_lmin :]
+        1 / Cl_from_maps[:, :, config.parametric_sep_pars.harmonic_lmin :]
     )
 
     inv_Cl_from_maps_diag = np.zeros(
@@ -87,7 +107,7 @@ def get_and_format_inv_Nl(manager: DataManager, config: Config):
     return inv_Cl_from_maps_diag.T
 
 
-def get_and_format_inv_Nl_with_cross(manager: DataManager, config: Config):
+def get_and_format_inv_Nl_with_cross(manager: DataManager, lmin: int = 0):
     """
     Loads noise Cl estimated from noise map simulations.
     Makes sure that there is a value for each ell by adding concatenating 0 up to ell_min
@@ -102,21 +122,23 @@ def get_and_format_inv_Nl_with_cross(manager: DataManager, config: Config):
 
     Cl_from_maps = np.load(
         # manager.path_to_nl_noisecov_unbinned.with_name("covar_cl_unbinned_with_cross.npy")
-        manager.path_to_nl_noisecov_unbinned_with_cross
+        # manager.path_to_nl_noisecov_unbinned_with_cross
+        manager.path_to_nl_noisecov_unbinned
     )
     # add 0 for first bins in the last dimension (ell)
-    Cl_from_maps = np.pad(
-        Cl_from_maps,
-        ((0, 0), (0, 0), (config.parametric_sep_pars.harmonic_lmin, 0)),
-        mode="constant",
-        constant_values=0,
-    )
+    Cl_from_maps[..., :lmin] *= 0
+    # Cl_from_maps = np.pad(
+    #     Cl_from_maps,
+    #     ((0, 0), (0, 0), (config.parametric_sep_pars.harmonic_lmin, 0)),
+    #     mode="constant",
+    #     constant_values=0,
+    # )
 
     Cl_EBmatrix = np.zeros([Cl_from_maps.shape[0], 2, 2, Cl_from_maps.shape[2]])
-    Cl_EBmatrix[:, 0, 0] = Cl_from_maps[:, 1]  # EE
-    Cl_EBmatrix[:, 0, 1] = Cl_from_maps[:, 2]  # EB
-    Cl_EBmatrix[:, 1, 0] = Cl_from_maps[:, 3]  # BE
-    Cl_EBmatrix[:, 1, 1] = Cl_from_maps[:, 4]  # BB
+    Cl_EBmatrix[:, 0, 0] = Cl_from_maps[:, 0]  # Cl_from_maps[:, 1]  # EE
+    Cl_EBmatrix[:, 0, 1] = Cl_from_maps[:, 1]  # Cl_from_maps[:, 2]  # EB
+    Cl_EBmatrix[:, 1, 0] = Cl_from_maps[:, 2]  # Cl_from_maps[:, 3]  # BE
+    Cl_EBmatrix[:, 1, 1] = Cl_from_maps[:, 3]  # Cl_from_maps[:, 4]  # BB
 
     non_zero_index = np.where(Cl_EBmatrix.swapaxes(1, -1) != np.zeros((2, 2)))
     inv_ClEBmatrix = np.zeros_like(Cl_EBmatrix)
@@ -156,22 +178,38 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
     binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
 
-    invN = get_and_format_inv_Nl(manager, config)
+    # invN = get_and_format_inv_Nl(manager, config)
     use_cross_test = True
     # import IPython; IPython.embed()
-    if use_cross_test and config.pre_proc_pars.correct_for_TF:
-        invN_with_cross, invN_with_cross_diagQU_diagfreq = get_and_format_inv_Nl_with_cross(
-            manager, config
-        )
-        invN_compsep = invN_with_cross_diagQU_diagfreq
-    else:
-        invN_compsep = invN
+    # if use_cross_test and config.pre_proc_pars.correct_for_TF:
+
+    invN_with_cross, invN_with_cross_diagQU_diagfreq = get_and_format_inv_Nl_with_cross(
+        manager, lmin=config.parametric_sep_pars.harmonic_lmin
+    )
+
+    check_negative_inv_N_ell_b4_compsep(
+        invN_with_cross_diagQU_diagfreq, harmonic_ell_min=config.parametric_sep_pars.harmonic_lmin
+    )
+    invN_compsep = invN_with_cross_diagQU_diagfreq
+    invN_with_cross_full, _ = get_and_format_inv_Nl_with_cross(manager, lmin=0)
+    # import IPython; IPython.embed()
+    # invN_with_cross_full=np.abs(invN_with_cross_full)
+
+    # import IPython; IPython.embed()
+    # else:
+    #     invN_compsep_pol = get_and_format_inv_Nl(manager, config)
+    #     invN_compsep = np.zeros((invN_compsep_pol.shape[0], 3, invN_compsep_pol.shape[-2], invN_compsep_pol.shape[-1]))
+    #     invN_compsep[:, 1, :, :] = invN_compsep_pol[:,0]
+    #     invN_compsep[:, 2, :, :] = invN_compsep_pol[:,-1]
+    #     invN_with_cross_diagQU_diagfreq = invN_compsep
 
     if use_cross_test and not config.pre_proc_pars.correct_for_TF:
         logger.warning("TODO: invN_with_cross implementation in noTF correction case?")
     invNlm = None
 
-    instrument["fwhm"] = [None] * 6  # we don't correct for the beam inside the harmonic compsep
+    instrument["fwhm"] = [None] * len(
+        config.frequencies
+    )  # we don't correct for the beam inside the harmonic compsep
     std_instr = fg.observation_helpers.standardize_instrument(instrument)
 
     with Timer("load-alms"):
@@ -182,7 +220,8 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
     data_alms_lmin = set_alm_tozero_below_lmin(
         data_alms.copy(), config.parametric_sep_pars.harmonic_lmin
     )
-    data_alms_lmin_save = data_alms_lmin.copy()
+
+    data_alms_full = set_alm_tozero_below_lmin(data_alms.copy(), 0)
 
     res = fg.separation_recipes.harmonic_comp_sep(
         components,
@@ -250,22 +289,24 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         np.arange(data_alms_lmin.shape[-1]),
     )[0]
     ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
-    invNlm = np.array([invN[ell_, 1:, :, :] for ell_ in ell_em])
-    # invNlm = np.array([invN_with_cross_diagQU_diagfreq[ell_, 1:, :, :] for ell_ in ell_em])
+    # invNlm = np.array([invN[ell_, 1:, :, :] for ell_ in ell_em])
+    invNlm = np.array([invN_with_cross_diagQU_diagfreq[ell_, 1:, :, :] for ell_ in ell_em])
 
     AtNA_ = np.einsum("cf,lmfn,nk->lmck", A_maxL.T, invNlm, A_maxL)
     check_invAtNA = np.zeros_like(AtNA_)
     check_invAtNA[np.where(AtNA_ != np.zeros((3, 3)))[0]] = np.linalg.inv(
         AtNA_[np.where(AtNA_ != np.zeros((3, 3)))[0]]
     )
-    print("Check invAtNA difference:", np.max(np.abs(check_invAtNA - res.invAtNA_alm)))
-    print("Allclose invAtNA difference:", np.allclose(check_invAtNA, res.invAtNA_alm))
+    print(
+        "Check invAtNA difference:", np.max(np.abs(check_invAtNA[:, ::3] - res.invAtNA_alm))
+    )  # the [:,::3] is to select only the E and B components, since the TT component is not used in the harmonic compsep
+    print("Allclose invAtNA difference:", np.allclose(check_invAtNA[:, ::3], res.invAtNA_alm))
 
     W_maxL_lm_real = (res.invAtNA_alm @ A_maxL.T @ invNlm).T
     W_maxL_lm = _r_to_c_alms(W_maxL_lm_real)
     res.W_maxL_lm_NOcrossQU = W_maxL_lm
 
-    use_cross_test_after = False
+    use_cross_test_after = True
     if use_cross_test_after:
         """COMPUTING W in lm space WITH cross-spectra"""
         ell_em = hp.Alm.getlm(
@@ -274,12 +315,15 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
             # config.parametric_sep_pars.harmonic_lmax, np.arange(data_alms_lmin.shape[-1])
         )[0]
         ell_em = np.stack((ell_em, ell_em), axis=-1).reshape(-1)  # Because we use real alms
-        # import IPython; IPython.embed()
-        # invNlm_cross = np.array([invN_with_cross[..., ell_] for ell_ in ell_em])
-        invNlm_cross = np.array([invN_with_cross[ell_] for ell_ in ell_em])
 
-        # AtNA_cross_ = np.einsum("cf,lfeb,fk->lebck", A_maxL.T, invNlm_cross, A_maxL)
-        AtNA_cross_ = np.einsum("cf,lsfb,fk->lsck", A_maxL.T, invNlm_cross, A_maxL)
+        # invNlm_cross = np.array([invN_with_cross[...,ell_] for ell_ in ell_em])
+        logger.warning(
+            "testing with full invN (no lmin) when reconstructing s_alm to help with decoupling and MCM"
+        )
+        invNlm_cross = np.array([invN_with_cross_full[..., ell_] for ell_ in ell_em])
+
+        AtNA_cross_ = np.einsum("cf,lfeb,fk->lebck", A_maxL.T, invNlm_cross, A_maxL)
+        # AtNA_cross_ = np.einsum("cf,lsfb,fk->lsck", A_maxL.T, invNlm_cross, A_maxL)
 
         check_invAtNA_cross_swapaxes_then_reshape = AtNA_cross_.swapaxes(-2, -3).reshape(
             [
@@ -316,8 +360,14 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
 
     compute_alm_from_W_crossQU = True
     if compute_alm_from_W_crossQU and use_cross_test_after:
+        logger.warning(
+            "testing with full alms (no lmin) when reconstructing s_alm to help with decoupling and MCM"
+        )
         alm_postcompsep_real_cross = np.einsum(
-            "lebcf, lbf -> lec", W_maxL_lm_real_cross, _format_alms(data_alms_lmin_save.copy())
+            # "lebcf, lbf -> lec", W_maxL_lm_real_cross, _format_alms(data_alms_lmin_save.copy())
+            "lebcf, lbf -> lec",
+            W_maxL_lm_real_cross,
+            _format_alms(data_alms_full.copy()),
         )
         alm_postcompsep_cross = _r_to_c_alms(alm_postcompsep_real_cross.T)
 
