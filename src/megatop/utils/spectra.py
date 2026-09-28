@@ -149,8 +149,6 @@ def compute_auto_cross_cl_from_alms_list(
     # inverse_effective_transfer_function=None,
 ):
     # Create the fields
-    # import time
-    # import IPython; IPython.embed()
     fields = []
     for key in alms_dict:
         fields.append(
@@ -178,9 +176,6 @@ def compute_auto_cross_cl_from_alms_list(
                     fields[-1].alm[1, hp.Alm.getidx(lmax_field, ell, m)] = alms_dict[key][
                         1, hp.Alm.getidx(lmax_input_alm, ell, m)
                     ]
-        # print("Time to pad alms: ", time.time() - start)
-
-        # fields[-1].alm = alms_dict[key]
 
     # Compute the power spectra
     cl_list = []
@@ -191,14 +186,6 @@ def compute_auto_cross_cl_from_alms_list(
                 cl_coupled = nmt.compute_coupled_cell(f_a, f_b)
                 cl_decoupled = workspace.decouple_cell(cl_coupled)
                 cl_list.append(cl_decoupled)
-                # if cl_matrix is None:
-                #     cl_matrix = np.zeros(
-                #         (len(fields), len(fields), cl_decoupled.shape[0], cl_decoupled.shape[-1])
-                #     )
-                # # if inverse_effective_transfer_function is not None:
-                #     cl_matrix[i, j] = cl_decoupled
-                #     if i != j:
-                #         cl_matrix[j, i] = cl_decoupled
 
     cl_dict = {}
     # if inverse_effective_transfer_function is None:
@@ -208,17 +195,52 @@ def compute_auto_cross_cl_from_alms_list(
             if i <= j:
                 cl_dict[key + "x" + key2] = cl_list.pop(0)
 
-    # else:
-    #     logger.info("Applying effective transfer function to the spectra")
-    #     tf_corrected_cl_matrix = np.einsum(
-    #         "ckijl,ckjl->ckil", inverse_effective_transfer_function, cl_matrix
-    #     )
-    #     for i, key in enumerate(alms_dict.keys()):
-    #         for j, key2 in enumerate(alms_dict.keys()):
-    #             if i <= j:
-    #                 cl_dict[key + "x" + key2] = tf_corrected_cl_matrix[i, j]
+    return cl_dict
+
+
+def compute_auto_cross_cl_from_alms_list_MCMverstion(
+    alms_dict,
+    nmt_bins,
+    inv_MCM,
+    lmax,
+    effective_beam_CMB,
+):
+
+    cl_dict = {}
+    for i, (key_a, alm_a) in enumerate(alms_dict.items()):
+        for j, (key_b, alm_b) in enumerate(alms_dict.items()):
+            if i <= j:  # don't compute the same cross-spectrum twice
+                cl_decoupled = alm_2_cl_MCM(
+                    alm_a, alm_b, inv_MCM, lmax, nmt_bins, effective_beam_CMB=effective_beam_CMB
+                )
+
+                cl_dict[key_a + "x" + key_b] = cl_decoupled
 
     return cl_dict
+
+
+def alm_2_cl_MCM(alm_a, alm_b, inv_MCM, lmax, nmt_bins, effective_beam_CMB=None):
+    if effective_beam_CMB is None:
+        effective_beam_CMB = 1.0
+
+    cl_coupled = hp.alm2cl(alm_a, alm_b, lmax=lmax)
+
+    # We assume alms are outputs of namaster and are therefore only storing alm_E and alm_B
+    # cl_coupled should therefore be of shape (3, lmax+1) with the first index corresponding to EE, BB, EB
+    assert cl_coupled.shape[0] == 3, (
+        "The input alms are expected to be only E and B modes, so the output cl_coupled should have shape (3, lmax+1) corresponding to EE, BB, EB. Please check the input alms."
+    )
+    cl_coupled /= effective_beam_CMB**2
+
+    binned_coupled_cl = nmt_bins.bin_cell(cl_coupled)
+
+    binned_coupled_cl_reshaped = np.zeros((4, binned_coupled_cl.shape[-1]))
+    binned_coupled_cl_reshaped[0] = binned_coupled_cl[0]  # EE
+    binned_coupled_cl_reshaped[1] = binned_coupled_cl[2]  # EB
+    binned_coupled_cl_reshaped[2] = binned_coupled_cl[2]  # BE = BE
+    binned_coupled_cl_reshaped[3] = binned_coupled_cl[1]  # BB
+    del binned_coupled_cl
+    return np.einsum("ijkl,kl->ij", inv_MCM, binned_coupled_cl_reshaped)
 
 
 def get_common_beam_wpix(common_beam_fwhm_arcmin: float, nside: int, lmax: int):
@@ -400,12 +422,13 @@ def spectra_from_namaster(
             cl_decoupled_freq.append(cl_decoupled)
             unbin_cl_decoupled_freq.append(unbin_cl_decoupled)
         else:
+            logger.warning("NO LONGER IN USE")
             # Keeping only the TT, EE, BB components, setting T to zero
             # Warning: we are ignoring the EB cross-spectra here
-            cl_decoupled_freq.append([cl_decoupled[0] * 0, cl_decoupled[0], cl_decoupled[3]])
-            unbin_cl_decoupled_freq.append(
-                [unbin_cl_decoupled[0] * 0, unbin_cl_decoupled[0], unbin_cl_decoupled[3]]
-            )
+            # cl_decoupled_freq.append([cl_decoupled[0] * 0, cl_decoupled[0], cl_decoupled[3]])
+            # unbin_cl_decoupled_freq.append(
+            #     [unbin_cl_decoupled[0] * 0, unbin_cl_decoupled[0], unbin_cl_decoupled[3]]
+            # )
 
     return np.array(cl_decoupled_freq), np.array(unbin_cl_decoupled_freq)
 
