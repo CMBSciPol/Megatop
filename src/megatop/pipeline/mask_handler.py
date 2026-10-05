@@ -13,8 +13,10 @@ from megatop.utils import Timer, logger, mask
 from megatop.utils.mpi import get_world
 
 PLANCK_MASK_GALPLANE_URL = (
-    "http://pla.esac.esa.int/pla/aio/product-action?"
-    "MAP.MAP_ID=HFI_Mask_GalPlane-apo0_2048_R2.00.fits"
+    #"http://pla.esac.esa.int/pla/aio/product-action?"
+    #"MAP.MAP_ID=HFI_Mask_GalPlane-apo0_2048_R2.00.fits"
+    "https://irsa.ipac.caltech.edu/data/Planck/release_2/"
+    "ancillary-data/masks/HFI_Mask_GalPlane-apo0_2048_R2.00.fits"
 )
 
 
@@ -22,43 +24,9 @@ PLANCK_MASK_GALPLANE_URL = (
 
 
 def mask_handler(manager: DataManager, config: Config):
-    # Get nhits map
+    experiments = set(map_set.exp_tag for map_set in config.map_sets)
 
-    with Timer("hitmap"):
-        fwhm_arcmin_nhits = config.masks_pars.fwhm_arcmin_smooth_nhits
-        if config.use_depth_maps:
-            logger.info("Loading depth maps")
-            list_depthmapname = [m.depth_map_path for m in config.map_sets]
-            depth_maps = mask.read_depth_maps(list_depthmapname, nside=config.nside)
-            norm_nhits_maps = mask.get_norm_smooth_nhits_from_depth(
-                depth_maps=depth_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits
-            )
-        else:
-            logger.info("Loading nhits maps")
-            # list_hitmapname = [manager.path_to_nhits_map(m) for m in config.map_sets]
-            list_hitmapname = [m.nhits_map_path for m in config.map_sets]
-            nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
-            norm_nhits_maps = mask.norm_smooth_nhits_maps(
-                nhits_maps=nhits_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits
-            )
-
-        logger.info("Creating common nhits map from geometrical mean of individual nhits maps")
-        common_norm_nhits_map = mask.get_common_nhits_map(
-            norm_nhits_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits
-        )
-        hp.write_map(
-            manager.path_to_common_nhits_map,
-            common_norm_nhits_map,
-            dtype=np.float32,
-            overwrite=True,
-        )
-
-        for i_m, m in enumerate(config.map_sets):
-            hp.write_map(
-                manager.path_to_nhits_map(m), norm_nhits_maps[i_m], dtype=np.float32, overwrite=True
-            )
-
-    # Get the galactic mask
+    # Get the galactic mask (shared across all experiments)
     with Timer("galmask"):
         galactic_mask = np.ones(hp.nside2npix(config.nside))
 
@@ -84,66 +52,98 @@ def mask_handler(manager: DataManager, config: Config):
 
         hp.write_map(manager.path_to_galactic_mask, galactic_mask, dtype=np.float32, overwrite=True)
 
-    # Generate binary survey mask from the hits map and galactic mask
+    # Accumulateurs pour le masque joint (union binaire + hitmap combinée)
+    binary_mask_union = np.zeros(hp.nside2npix(config.nside))
+    common_norm_nhits_map_combined = np.zeros(hp.nside2npix(config.nside))
 
-    with Timer("binary-mask"):
-        threshold = config.masks_pars.binary_mask_zero_threshold
-        logger.info(f"Thresholding binary map with {threshold}")
-        binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
-        hp.write_map(manager.path_to_binary_mask, binary_mask, dtype=np.float32, overwrite=True)
+    # Loop over experiments: hitmap, binary mask, and analysis mask, each per experiment
+    for exp in experiments:
+        exp_map_sets = [m for m in config.map_sets if m.exp_tag == exp]
 
-    with Timer("apodize-custom"):
-        # Make custom apodized mask from input hitmap, galactic mask and point sources mask
+        with Timer(f"hitmap-{exp}"):
+            if exp in config.masks_pars.uniform_coverage_exp_tags:
+                logger.info(f"Using uniform (all-sky) coverage for {exp}")
+                common_norm_nhits_map = np.ones(hp.nside2npix(config.nside), dtype=np.float32)
+                for m in exp_map_sets:
+                    hp.write_map(
+                        manager.path_to_nhits_map(m),
+                        common_norm_nhits_map,
+                        dtype=np.float32,
+                        overwrite=True,
+                    )
+            else:
+                fwhm_arcmin_nhits = config.masks_pars.fwhm_arcmin_smooth_nhits
+                if config.use_depth_maps:
+                    logger.info(f"Loading depth maps for {exp}")
+                    list_depthmapname = [m.depth_map_path for m in exp_map_sets]
+                    depth_maps = mask.read_depth_maps(list_depthmapname, nside=config.nside)
+                    norm_nhits_maps = mask.get_norm_smooth_nhits_from_depth(
+                        depth_maps=depth_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits
+                    )
+                else:
+                    logger.info(f"Loading nhits maps for {exp}")
+                    list_hitmapname = [m.nhits_map_path for m in exp_map_sets]
+                    nhits_maps = mask.read_nhits_maps(list_hitmapname, nside=config.nside)
+                    norm_nhits_maps = mask.norm_smooth_nhits_maps(
+                        nhits_maps=nhits_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits
+                    )
+
+                logger.info(f"Creating common nhits map for {exp}")
+                common_norm_nhits_map = mask.get_common_nhits_map(
+                    norm_nhits_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits
+                )
+
+                for i_m, m in enumerate(exp_map_sets):
+                    hp.write_map(
+                        manager.path_to_nhits_map(m),
+                        norm_nhits_maps[i_m],
+                        dtype=np.float32,
+                        overwrite=True,
+                    )
+
+            hp.write_map(
+                manager.path_to_common_nhits_map(exp),
+                common_norm_nhits_map,
+                dtype=np.float32,
+                overwrite=True,
+            )
+
+        with Timer(f"binary-mask-{exp}"):
+            threshold = config.masks_pars.binary_mask_zero_threshold
+            logger.info(f"Thresholding binary map for {exp} with {threshold}")
+            binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
+            hp.write_map(
+                manager.path_to_binary_mask(exp), binary_mask, dtype=np.float32, overwrite=True
+            )
+
+        # Accumulation pour le masque joint
+        binary_mask_union = np.maximum(binary_mask_union, binary_mask)
+        common_norm_nhits_map_combined = np.maximum(common_norm_nhits_map_combined, common_norm_nhits_map)
+
+        #print(np.shape(common_norm_nhits_map))
+        with Timer(f"apodize-custom-{exp}"):
+            apod_radius = config.masks_pars.apod_radius
+            apod_type = config.masks_pars.apod_type
+            apodized_mask = mask.get_analysis_mask(
+                common_norm_nhits_map, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
+            )
+            hp.write_map(
+                manager.path_to_analysis_mask(exp), apodized_mask, dtype=np.float32, overwrite=True
+            )
+
+        # Masque d'analyse joint : union des expériences, apodisé une seule fois
+    with Timer("apodize-joint"):
         apod_radius = config.masks_pars.apod_radius
         apod_type = config.masks_pars.apod_type
         apodized_mask = mask.get_analysis_mask(
-            common_norm_nhits_map, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
+            common_norm_nhits_map_combined,
+            binary_mask_union,
+            apod_radius_deg=apod_radius,
+            apod_type=apod_type,
         )
-        hp.write_map(manager.path_to_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True)
-
-
-# Get the point sources mask
-
-# ps_mask = None
-
-# if config.use_input_nhits and config.masks_pars.include_sources:
-#     timer.start("point-sources")
-#     if config.use_input_point_sources:
-#         # Load from disk
-#         mask_path: Path = config.masks_pars.input_sources_mask
-#         logger.info(f"Using point source mask from {mask_path}")
-#         ps_mask = hp.read_map(mask_path)
-#         ps_mask = hp.ud_grade(ps_mask, config.nside)
-#         ps_mask *= binary_mask
-#     else:
-#         # Otherwise, generate random point source mask
-#         n_sources = config.masks_pars.mock_nsources
-#         hole_radius = config.masks_pars.mock_sources_hole_radius
-#         logger.info(f"Generating mock sources mask with {n_sources = }, {hole_radius =} arcmin")
-#         ps_mask = random_src_mask(binary_mask, n_sources, hole_radius)
-
-#     hp.write_map(manager.path_to_sources_mask, ps_mask, dtype=np.float32, overwrite=True)
-#     timer.stop("point-sources")
-
-# if config.masks_pars.DEBUG_output_apod_binary_mask:
-#     # This apodized mask is NOT multiplied by the hitmap
-#     # This is intended to be used in the harmonic component separation
-#     # It should not be used when purification is needed.
-#     with Timer("apodize-custom binary"):
-#         apodized_binary_mask = get_apodized_mask_from_nhits(
-#             hitmap,
-#             config.nside,
-#             galactic_mask=galactic_mask,
-#             point_source_mask=ps_mask,
-#             zero_threshold=threshold,
-#             apod_radius=apod_radius,
-#             apod_type=apod_type,
-#             no_nhits_rescaling=True,  # do not multiply by hitmap
-#         )
-
-#     hp.write_map(
-#         manager.path_to_apod_binary_mask, apodized_binary_mask, dtype=np.float32, overwrite=True
-#     )
+        hp.write_map(
+            manager.path_to_joint_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True
+        )
 
 
 def main():

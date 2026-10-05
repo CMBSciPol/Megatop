@@ -33,6 +33,13 @@ class RankFilter(logging.Filter):
         return True
 
 
+# Attach the filter to the root logger's handlers so that ANY log message
+# reaching the console (including from third-party libraries like s2fft,
+# jax, etc.) gets a 'rank' attribute before formatting — avoids KeyError
+# when size > 1 and a third-party logger doesn't go through "megatop".
+for handler in logging.getLogger().handlers:
+    handler.addFilter(RankFilter())
+
 logger = logging.getLogger("megatop")
 logger.addFilter(RankFilter())
 logger.setLevel(os.getenv("LOGLEVEL", "INFO").upper())

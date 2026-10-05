@@ -25,11 +25,27 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
     nmt_bins = load_nmt_binning(manager)
 
     # Loading analysis mask
-    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
-    binary_mask = hp.read_map(manager.path_to_binary_mask).astype(bool)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask_per_exp = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    analysis_mask_prox = np.zeros(hp.nside2npix(config.nside))
+    binary_mask = np.zeros(hp.nside2npix(config.nside), dtype=bool)
+    for exp in experiments:
+        analysis_mask_prox = np.maximum(analysis_mask_prox, hp.read_map(manager.path_to_analysis_mask(exp)))
+        binary_mask |= binary_mask_per_exp[exp].astype(bool)
+
+    apod_radius = config.masks_pars.apod_radius
+    apod_type = config.masks_pars.apod_type
+    #analysis_mask = mask.get_analysis_mask(
+    #            #weight_map_cmb, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
+    #            analysis_mask_prox, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
+    #        )
+    
+    analysis_mask = hp.read_map(manager.path_to_joint_analysis_mask)
 
     # Generating effective beam
     # TODO: If input maps are used instead of preprocessed ones, the effective beam after compsep must be computed.
+
+    #print('Use real beams ?', config.pre_proc_pars.use_real_beam)
 
     if config.pre_proc_pars.use_real_beams:
         effective_beam_CMB = get_common_wpix(config.nside, config.lmax)

@@ -134,31 +134,33 @@ class DataManager:
     # Paths to the output files
     # -------------------------
 
-    @property
-    def path_to_common_nhits_map(self) -> Path:
-        fname = self.path_to_masks / Path(f"{self._config.masks_pars.nhits_map_name}_common")
-        return fname.with_suffix(".fits")
-
     def path_to_nhits_map(self, map_set) -> Path:
         fname = self.path_to_masks / Path(
             f"{self._config.masks_pars.nhits_map_name}_{map_set.name}"
         )
         return fname.with_suffix(".fits")
 
-    @property
-    def path_to_binary_mask(self) -> Path:
-        fname = self.path_to_masks / self._config.masks_pars.binary_mask_name
+    def path_to_common_nhits_map(self, exp: str) -> Path:
+        fname = self.path_to_masks / Path(f"{self._config.masks_pars.nhits_map_name}_common_{exp}")
         return fname.with_suffix(".fits")
 
-    @property
-    def path_to_analysis_mask(self) -> Path:
-        fname = self.path_to_masks / self._config.masks_pars.analysis_mask_name
+    def path_to_binary_mask(self, exp: str) -> Path:
+        fname = self.path_to_masks / f"{self._config.masks_pars.binary_mask_name}_{exp}"
         return fname.with_suffix(".fits")
-
-    # @property
-    # def path_to_apod_binary_mask(self) -> Path:
-    #     fname = self.path_to_masks / self._config.masks_pars.DEBUGapod_binary_mask_name
-    #     return fname.with_suffix(".fits")
+    
+    def path_to_analysis_mask(self, exp: str) -> Path:
+        fname = self.path_to_masks / f"{self._config.masks_pars.analysis_mask_name}_{exp}"
+        return fname.with_suffix(".fits")
+    
+    @property
+    def path_to_joint_analysis_mask(self) -> Path:
+        fname = self.path_to_masks / f"{self._config.masks_pars.analysis_mask_name}_joint"
+        return fname.with_suffix(".fits")
+    
+    @property
+    def path_to_joint_binary_mask(self) -> Path:
+        fname = self.path_to_masks / f"{self._config.masks_pars.binary_mask_name}_joint"
+        return fname.with_suffix(".fits")
 
     @property
     def path_to_galactic_mask(self) -> Path:
@@ -469,12 +471,13 @@ class DataManager:
         return [
             m.nhits_map_path for m in self._config.map_sets if isinstance(m.nhits_map_path, Path)
         ]
-
+    
     def outputs_mask(self) -> list[Path]:
+        experiments = set(m.exp_tag for m in self._config.map_sets)
         outputs = [
-            self.path_to_common_nhits_map,
-            self.path_to_binary_mask,
-            self.path_to_analysis_mask,
+            *[self.path_to_common_nhits_map(exp) for exp in experiments],
+            *[self.path_to_binary_mask(exp) for exp in experiments],
+            *[self.path_to_analysis_mask(exp) for exp in experiments],
             *[self.path_to_nhits_map(m) for m in self._config.map_sets],
         ]
         if self._config.masks_pars.include_galactic:
@@ -497,10 +500,11 @@ class DataManager:
         ]
 
     def inputs_mock_signal(self, id_sim: int) -> list[Path]:
+        experiments = set(m.exp_tag for m in self._config.map_sets)
         inputs = [
             self.path_to_lensed_scalar,
             self.path_to_unlensed_scalar_tensor_r1,
-            self.path_to_binary_mask,
+            *[self.path_to_binary_mask(exp) for exp in experiments],
             *[self.path_to_nhits_map(m) for m in self._config.map_sets],
         ]
         if self._config.map_sim_pars.filter_sims:
@@ -514,8 +518,9 @@ class DataManager:
         return files
 
     def inputs_mock_noise(self, id_sim: int) -> list[Path]:
+        experiments = set(m.exp_tag for m in self._config.map_sets)
         return [
-            self.path_to_binary_mask,
+            *[self.path_to_binary_mask(exp) for exp in experiments],
             *[self.path_to_nhits_map(m) for m in self._config.map_sets],
         ]
 
@@ -526,10 +531,11 @@ class DataManager:
         return files
 
     def inputs_preproc(self, id_sim: int | None = None) -> list[Path]:
+        experiments = set(m.exp_tag for m in self._config.map_sets)
         inputs = [
             *self.get_maps_filenames(id_sim),
-            self.path_to_analysis_mask,
-            self.path_to_binary_mask,
+            *[self.path_to_analysis_mask(exp) for exp in experiments],
+            *[self.path_to_binary_mask(exp) for exp in experiments],
         ]
         if self._config.pre_proc_pars.correct_for_TF:
             inputs.extend(p for p in self.get_TF_filenames() if p is not None)
@@ -544,9 +550,10 @@ class DataManager:
         ]
 
     def inputs_noise_preproc(self, id_sim: int | None = None) -> list[Path]:
+        experiments = set(m.exp_tag for m in self._config.map_sets)
         inputs = [
             *self.get_noise_maps_filenames(id_sim),
-            self.path_to_analysis_mask,
+            *[self.path_to_analysis_mask(exp) for exp in experiments],
         ]
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             inputs += [self.path_to_binning, self.path_to_lensed_scalar]
@@ -592,10 +599,11 @@ class DataManager:
             if self._config.pre_proc_pars.use_real_beams:
                 noisecov_inputs.append(self.path_to_real_pixel_noisecov)
 
+        experiments = set(m.exp_tag for m in self._config.map_sets)
         inputs = [
             preproc_input,
-            self.path_to_binary_mask,
-            self.path_to_analysis_mask,
+            *[self.path_to_binary_mask(exp) for exp in experiments],
+            *[self.path_to_analysis_mask(exp) for exp in experiments],
             *noisecov_inputs,
         ]
 
@@ -614,11 +622,12 @@ class DataManager:
         return outputs
 
     def inputs_map2cl(self, id_sim: int | None = None) -> list[Path]:
+        experiments = set(m.exp_tag for m in self._config.map_sets)
         inputs = [
             self.get_path_to_components_maps(id_sim),
             self.path_to_binning,
-            self.path_to_analysis_mask,
-            self.path_to_binary_mask,
+            *[self.path_to_analysis_mask(exp) for exp in experiments],
+            *[self.path_to_binary_mask(exp) for exp in experiments],
         ]
         if self._config.pre_proc_pars.correct_for_TF:
             inputs.append(self.get_path_to_compsep_results(id_sim))
@@ -631,10 +640,11 @@ class DataManager:
     def inputs_noisespectra(self, id_sim: int | None = None) -> list[Path]:
         n_sim_noise = self._config.noise_sim_pars.n_sim
         noise_inputs = [self.get_path_to_preprocessed_noise_maps(i) for i in range(n_sim_noise)]
+        experiments = set(m.exp_tag for m in self._config.map_sets)
         return [
             self.get_path_to_compsep_results(id_sim),
-            self.path_to_analysis_mask,
-            self.path_to_binary_mask,
+            *[self.path_to_analysis_mask(exp) for exp in experiments],
+            *[self.path_to_binary_mask(exp) for exp in experiments],
             self.path_to_binning,
             *noise_inputs,
         ]
@@ -643,11 +653,12 @@ class DataManager:
         return [self.get_path_to_noise_spectra_cross_components(id_sim)]
 
     def inputs_cl2r(self, id_sim: int | None = None) -> list[Path]:
+        experiments = set(m.exp_tag for m in self._config.map_sets)
         return [
             self.get_path_to_spectra_cross_components(id_sim),
             self.get_path_to_noise_spectra_cross_components(id_sim),
             self.path_to_binning,
-            self.path_to_analysis_mask,
+            *[self.path_to_analysis_mask(exp) for exp in experiments],
             self.path_to_lensed_scalar,
             self.path_to_unlensed_scalar_tensor_r1,
         ]

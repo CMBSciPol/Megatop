@@ -13,12 +13,15 @@ from ..config import (
     ExternalNoiseMapconfig,
     NoiseOption,
     SOConfig,
+    LiteBIRDConfig,
     ValidExperimentConfig,
 )
 from ..data_manager import DataManager
 from . import V3calc as V3
 from . import V3p1calc as V3p1
 from .logger import logger
+from megatop.utils import mask
+from numpy.typing import NDArray
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
@@ -85,7 +88,7 @@ def generate_map_fgs_pysm(
 def get_full_sky_noise_freq_maps(
     map_sets,
     noise_config: dict,
-    fsky_effective: float,
+    common_nhits_map: dict[str, NDArray],
     nside: int,
     lmax: int,
     id_sim: int = 0,
@@ -104,7 +107,7 @@ def get_full_sky_noise_freq_maps(
         noise_experiment[exp] = get_noise_experiment(
             exp,
             noise_config.experiments[exp],
-            fsky_effective=fsky_effective,
+            fsky_effective=mask.fsky_effective(common_nhits_map[exp]),
             lmax=lmax,
             id_sim=id_sim,
         )
@@ -144,7 +147,32 @@ def get_noise_experiment(
     lmax: int,
     id_sim: int = 0,
 ):
-    if type(noise_config_exp) is SOConfig:
+    if type(noise_config_exp) is SOConfig and noise_config_exp.telescope == "LAT":
+        if noise_config_exp.usev3p1:
+            logger.info(
+                f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using V3p1 calc (LAT)"
+            )
+            nc = V3p1.SOLatV3point1(
+                sensitivity_mode=noise_config_exp.v3_sensitivity_mode,
+                N_tubes=noise_config_exp.Ntubes_years,
+                survey_years=1.0,  # The scaling wiht time is done through Ntubes_years
+            )
+            _, _, n_ell, white_noise_levels = nc.get_noise_curves(
+                f_sky=fsky_effective, ell_max=lmax + 1, delta_ell=1, deconv_beam=False
+            )
+        else:
+            logger.info(
+                f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using V3 calc (LAT)"
+            )
+            _, _, n_ell, white_noise_levels = V3.so_V3_LA_noise(
+                sensitivity_mode=noise_config_exp.v3_sensitivity_mode,
+                f_sky=fsky_effective,
+                ell_max=lmax + 1,
+                delta_ell=1,
+                beam_corrected=False,
+            )
+
+    elif type(noise_config_exp) is SOConfig:
         if noise_config_exp.usev3p1:
             logger.info(
                 f"Getting noise model ({noise_config_exp.noise_option}) for {exp} using V3p1 calc"
@@ -203,6 +231,13 @@ def get_noise_experiment(
             noise_config_exp.correction * hp.read_map(fname) for fname in fname_list
         ]
         return {"noise_map": external_map_list}
+    
+    elif type(noise_config_exp) is LiteBIRDConfig:
+            logger.info(
+                f"Getting white noise model for LiteBIRD experiment {exp}"
+            )
+            white_noise_levels = np.array(list(noise_config_exp.manual_white_noise_levels.values()))
+            return {"map_white_noise_levels": white_noise_levels}
 
     else:
         msg = f"Noise config {type(noise_config_exp)} for {exp} is not recognized"

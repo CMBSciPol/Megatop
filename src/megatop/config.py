@@ -17,6 +17,7 @@ __all__ = [
     "DataDirsConfig",
     "FiducialCMBConfig",
     "GeneralConfig",
+    "LiteBIRDConfig",   
     "Map2ClConfig",
     "MapSetConfig",
     "MapSimConfig",
@@ -254,6 +255,11 @@ class MasksConfig(StrictModel):
     mock_nsources: int = 100
     mock_sources_hole_radius: float = 4
 
+    uniform_coverage_exp_tags: list[str] = Field(default_factory=list)
+    """List of exp_tag values for which the sky coverage is treated as uniform
+    (full-sky), skipping hitmap/depth-map loading entirely. Use for LiteBIRD-like
+    experiments with no real hitmap."""
+
     @model_validator(mode="after")
     def gal_key_required_when_galactic_included(self):
         if self.include_galactic and self.gal_key is None:
@@ -417,6 +423,7 @@ class MapSimConfig(StrictModel):
         return value
 
 class SOConfig(StrictModel):
+    telescope: Literal["SAT", "LAT"] = "SAT"
     usev3p1: bool = True
     default_bands: list[float] = Field(default_factory=lambda: [27, 39, 93, 145, 225, 280])
     noise_option: NoiseOption = Field(default=NoiseOption.ONE_OVER_F)
@@ -442,7 +449,18 @@ class ExternalNoiseMapconfig(StrictModel):
     correction: float = 1.0
 
 
-ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig
+class LiteBIRDConfig(StrictModel):
+    manual_white_noise_levels: dict[int, float]
+    """Mandatory: freq_tag -> depth_p in uK.arcmin."""
+    default_bands: list[float] = Field(
+        default_factory=lambda: [122.723, 43.878, 28.572, 11.707, 7.019, 4.576, 
+    5.198, 5.176, 12.365, 16.105, 29.613, 134.075]
+    )
+    noise_option: NoiseOption = Field(default=NoiseOption.WHITE)
+
+
+ValidExperimentConfig = SOConfig | CustomSATConfig | ExternalNoiseMapconfig | LiteBIRDConfig
+
 # ValidExperimentConfig = SOConfig | ExternalNoiseMapconfig
 
 

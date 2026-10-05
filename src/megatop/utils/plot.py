@@ -6,6 +6,14 @@ from matplotlib import cm
 from megatop.utils import logger
 
 
+def group_indices_by_experiment(map_sets) -> dict[str, list[int]]:
+    """Group map_set indices by exp_tag, preserving map_sets order within each group."""
+    indices: dict[str, list[int]] = {}
+    for i, map_set in enumerate(map_sets):
+        indices.setdefault(map_set.exp_tag, []).append(i)
+    return indices
+
+
 def freq_maps_plotter(
     config,
     map_set,

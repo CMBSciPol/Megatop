@@ -9,7 +9,7 @@ from megatop import Config, DataManager
 from megatop.utils import logger, mask
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mock import get_Cl_CMB_model_from_manager
-from megatop.utils.plot import plot_all_Cls, plot_all_Cls_diff
+from megatop.utils.plot import plot_all_Cls, plot_all_Cls_diff, freq_maps_plotter
 
 
 def plot_all_noise_spectra(manager, config):
@@ -240,7 +240,11 @@ def plot_all_spectra(manager, config):
     std_debiased_diff_EE = np.std(array_debiased_diff_model[:, 0, :], axis=0)
     std_debiased_diff_BB = np.std(array_debiased_diff_model[:, 1, :], axis=0)
 
-    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    analysis_mask = np.zeros(hp.nside2npix(config.nside))
+    for exp in experiments:
+        analysis_mask = np.maximum(analysis_mask, hp.read_map(manager.path_to_analysis_mask(exp)))
+
     fsky = mask.fsky_dof(analysis_mask)  # effective DOF for error bars (Hivon w2^2/w4)
 
     cosmic_var_plus_noise_EE = (bined_Cl_cmb_model[1] + average_noise_CMB[0]) * (
@@ -431,7 +435,6 @@ def plot_noise_spectra(manager, config, id_sim=None):
         use_D_ell=False,
         y_axis_label=r"$C_{\ell}$",
     )
-
 
 def main():
     parser = argparse.ArgumentParser(description="Plotter for map2cl output")

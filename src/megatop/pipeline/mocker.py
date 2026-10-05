@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 
 import healpy as hp
 import numpy as np
-from numpy.typing import NDArray
 
 import megatop.utils.harmonic as hu
+from numpy.typing import NDArray
 from megatop import Config, DataManager
 from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
@@ -20,12 +20,10 @@ if TYPE_CHECKING:
 
 _POOL_EXECUTOR_THRESHOLD = 2
 
-
-@function_timer("get-noise-map")
 def get_noise(
     config: Config,
-    binary_mask: NDArray,
-    common_nhits_map: NDArray,
+    binary_mask: dict[str, NDArray],
+    common_nhits_map: dict[str, NDArray],
     id_sim: int = 0,
     *,
     extra_seed=None,
@@ -34,10 +32,11 @@ def get_noise(
     if extra_seed is not None:
         seed.append(extra_seed)
     logger.debug(f"Noise {seed = }")
+
     noise_freq_maps = mock.get_full_sky_noise_freq_maps(
         config.map_sets,
         config.noise_sim_pars,
-        fsky_effective=mask.fsky_effective(common_nhits_map),
+        common_nhits_map=common_nhits_map,
         nside=config.nside,
         lmax=config.lmax,
         id_sim=id_sim,
@@ -46,7 +45,15 @@ def get_noise(
     logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
     if config.noise_sim_pars.include_nhits:
-        _ = mock.include_hits_noise(noise_freq_maps, common_nhits_map, binary_mask)
+        experiments_map_set = set(map_set.exp_tag for map_set in config.map_sets)
+        for exp in experiments_map_set:
+            indices = [i for i, m in enumerate(config.map_sets) if m.exp_tag == exp]
+            logger.debug(f"Applying mask for {exp} to map_sets indices {indices}")
+            _ = mock.include_hits_noise(
+                noise_freq_maps[indices],
+                common_nhits_map[exp],
+                binary_mask[exp],
+            )
 
     return noise_freq_maps
 
@@ -194,7 +201,7 @@ def func_TF_sims(
     id_sim: int,
     manager: DataManager,
     config: Config,
-    binary_mask: NDArray,
+    binary_mask: dict[str, NDArray],
     *,
     obsmat_funcs: dict | None = None,
 ) -> int:
@@ -265,13 +272,16 @@ def func_TF_sims(
         )
         raise ValueError(msg_no_obsmat)
 
-    # mask unobserved pixels
-    _ = mask.apply_binary_mask(unfiltered_freq_map_pure_T, binary_mask, unseen=False)
-    _ = mask.apply_binary_mask(unfiltered_freq_map_pure_E, binary_mask, unseen=False)
-    _ = mask.apply_binary_mask(unfiltered_freq_map_pure_B, binary_mask, unseen=False)
-    _ = mask.apply_binary_mask(filtered_freq_map_pure_T, binary_mask, unseen=False)
-    _ = mask.apply_binary_mask(filtered_freq_map_pure_E, binary_mask, unseen=False)
-    _ = mask.apply_binary_mask(filtered_freq_map_pure_B, binary_mask, unseen=False)
+    # mask unobserved pixels, per experiment
+    for i_m, map_set in enumerate(config.map_sets):
+        exp_mask = binary_mask[map_set.exp_tag]
+        _ = mask.apply_binary_mask(unfiltered_freq_map_pure_T[i_m], exp_mask, unseen=False)
+        _ = mask.apply_binary_mask(unfiltered_freq_map_pure_E[i_m], exp_mask, unseen=False)
+        _ = mask.apply_binary_mask(unfiltered_freq_map_pure_B[i_m], exp_mask, unseen=False)
+        _ = mask.apply_binary_mask(filtered_freq_map_pure_T[i_m], exp_mask, unseen=False)
+        _ = mask.apply_binary_mask(filtered_freq_map_pure_E[i_m], exp_mask, unseen=False)
+        _ = mask.apply_binary_mask(filtered_freq_map_pure_B[i_m], exp_mask, unseen=False)
+
 
     # save results
     save_TFsims(
@@ -291,8 +301,8 @@ def func_signal(
     id_sim: int,
     manager: DataManager,
     config: Config,
-    binary_mask: NDArray,
-    common_nhits_map: NDArray,
+    binary_mask: dict[str, NDArray],
+    common_nhits_map: dict[str, NDArray],
     *,
     obsmat_funcs: dict | None = None,
 ) -> int:
@@ -321,6 +331,7 @@ def func_signal(
     # apply beam and pixel window function correction
     with Timer("beam-freq-maps"):
         for i_f, _f in enumerate(config.frequencies):
+            #print(f"Applying beam correction for frequency {i_f}: {config.beams[i_f]}")
             sky[i_f] = mock.beam_winpix_correction(
                 config.nside, sky[i_f], config.beams[i_f], config.lmax
             )
@@ -329,11 +340,27 @@ def func_signal(
 
     for i_f, alpha in enumerate(config.angle_central_value):
         if alpha == 0:
-            continue
+           continue
         else:
+           print(f"Applying miscalibration for frequency {i_f} with angle {alpha}")
            sky_miscalibration[i_f, 1, :] = np.cos(2*alpha)*sky[i_f, 1, :] - np.sin(2*alpha)*sky[i_f, 2, :]
            sky_miscalibration[i_f, 2, :] = np.sin(2*alpha)*sky[i_f, 1, :] + np.cos(2*alpha)*sky[i_f, 2, :]
 
+    # Random draw of n_freq angles centered in 0 and with uncertanty 0.1 degres
+
+    #sigma = 0.1   # incertitude en degrés
+    #angles = np.random.normal(loc=0.0, scale=sigma, size=len(config.frequencies))
+    #angles_rad = np.radians(angles)
+    #print('angles :', angles)
+    #for i_f, alpha in enumerate(angles_rad):
+    #    if alpha == 0:
+    #       continue
+    #    else:
+    #       print(f"Applying miscalibration for frequency {i_f} with angle {alpha}")
+    #       print('alpha :', alpha)
+    #       print('i_f :', i_f)
+    #       sky_miscalibration[i_f, 1, :] = np.cos(2*alpha)*sky[i_f, 1, :] - np.sin(2*alpha)*sky[i_f, 2, :]
+    #       sky_miscalibration[i_f, 2, :] = np.sin(2*alpha)*sky[i_f, 1, :] + np.cos(2*alpha)*sky[i_f, 2, :]
 
     sky = sky_miscalibration
 
@@ -347,8 +374,9 @@ def func_signal(
     # add noise
     sky += noise
 
-    # mask unobserved pixels
-    _ = mask.apply_binary_mask(sky, binary_mask, unseen=False)
+    # mask unobserved pixels, per experiment
+    #for i_m, map_set in enumerate(config.map_sets):
+        #_ = mask.apply_binary_mask(sky[i_m], binary_mask[map_set.exp_tag], unseen=False)
 
     # save results
     save_simu(manager, sky, id_sim=id_sim, is_noise=False)
@@ -360,14 +388,14 @@ def func_signal(
 def func_noise(
     manager: DataManager,
     config: Config,
-    binary_mask: NDArray,
-    common_nhits_map: NDArray,
+    binary_mask: dict[str, NDArray],
+    common_nhits_map: dict[str, NDArray],
     id_sim: int,
 ) -> int:
     """Generate a noise realization."""
     noise = get_noise(config, binary_mask, common_nhits_map, id_sim=id_sim)
-    _ = mask.apply_binary_mask(noise, binary_mask, unseen=False)
     save_simu(manager, noise, id_sim=id_sim, is_noise=True)
+    
     return id_sim
 
 
@@ -382,8 +410,9 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
         logger.info(f"Generating {n_sim} sky realizations")
 
     # Load necessary data
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
     func = partial(
         func_signal,
         manager=manager,
@@ -412,8 +441,9 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
         logger.info(f"Generating {n_sim} noise realizations")
 
     # Load necessary data
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
     func = partial(func_noise, manager, config, binary_mask, common_nhits_map)
 
     for result in _map(func, range(n_sim), comm):
@@ -432,7 +462,8 @@ def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
         logger.info(f"Generating {n_sim} TF simulations")
 
     # Load necessary data
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
 
     func = partial(
         func_TF_sims,
@@ -464,8 +495,9 @@ def main_signal():
     manager = DataManager(config)
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
     func_signal(args.sim, manager, config, binary_mask, common_nhits_map)
 
 
@@ -483,8 +515,9 @@ def main_noise():
     manager = DataManager(config)
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
     func_noise(manager, config, binary_mask, common_nhits_map, args.sim)
 
 

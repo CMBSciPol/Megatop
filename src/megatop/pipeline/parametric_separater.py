@@ -1,23 +1,19 @@
+import os
+import multiprocessing as mp
+
 import argparse
 from functools import partial
 from pathlib import Path
 
-import jax
-
-jax.config.update("jax_enable_x64", True)
+#jax.config.update("jax_enable_x64", True)
 
 from inspect import isfunction  # noqa: E402
 
-import fgbuster as fg  # noqa: E402
-import healpy as hp  # noqa: E402
-import megabuster as mb  # noqa: E402
 import numpy as np  # noqa: E402
-from fgbuster.component_model import CMB, Dust, Synchrotron  # noqa: E402
-from fgbuster.mixingmatrix import MixingMatrix  # noqa: E402
-from fgbuster.separation_recipes import _format_alms  # noqa: E402
-from furax_cs import SOLVER_NAMES  # noqa: E402
+import healpy as hp  # noqa: E402
+import fgbuster as fg  # noqa: E402
 from mpi4py.futures import MPICommExecutor  # noqa: E402
-
+from furax_cs import SOLVER_NAMES  # noqa: E402
 from megatop import Config, DataManager  # noqa: E402
 from megatop.utils import Timer, logger, mask, passband  # noqa: E402
 from megatop.utils.compsep import (  # noqa: E402
@@ -27,6 +23,7 @@ from megatop.utils.compsep import (  # noqa: E402
 )
 from megatop.utils.mpi import get_world  # noqa: E402
 from megatop.utils.utils import MemoryUsage  # noqa: E402
+from megatop.utils.preproc import common_beam_and_nside  # noqa: E402
 
 def _test_N_alm_format(N_alm):
     inv_N_alm = 1 / N_alm
@@ -165,7 +162,12 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
         logger.debug(f"Loading covmat from {noisecov_fname}")
         noisecov = np.load(noisecov_fname)
 
-    noisecov_TQU_masked = mask.apply_binary_mask(noisecov, binary_mask, unseen=True)
+    #noisecov_TQU_masked = mask.apply_binary_mask(noisecov, binary_mask, unseen=True)
+    noisecov_TQU_masked = noisecov[:, 1:].copy()
+    for i_m, map_set in enumerate(config.map_sets):
+        _ = mask.apply_binary_mask(
+            noisecov_TQU_masked[i_m], binary_mask[map_set.exp_tag], unseen=True
+        ) 
     noisecov_QU_masked = noisecov_TQU_masked[:, 1:]
 
     AtNA = np.einsum("cf, fsp, fk->cksp", A_maxL.T, 1 / noisecov_QU_masked, A_maxL)
@@ -221,9 +223,14 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
             preproc_maps_fname = manager.get_path_to_preprocessed_maps(id_sim)
             logger.debug(f"Loading input maps from {preproc_maps_fname}")
             freq_maps_preprocessed = np.load(preproc_maps_fname)
-        freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
-            freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
-        )
+        #freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
+        #    freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
+        #)
+        freq_maps_preprocessed_QU_masked = freq_maps_preprocessed[:, 1:].copy()
+        for i_m, map_set in enumerate(config.map_sets):
+            _ = mask.apply_binary_mask(
+                freq_maps_preprocessed_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=False
+            )
         n_comp = W_maxL.shape[0]
         res.s = np.zeros(
             (
@@ -287,10 +294,22 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
 
-    freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
-        freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
-    )
-    noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
+    #freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
+    #    freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
+    #)
+    #noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
+
+    freq_maps_preprocessed_QU_masked = freq_maps_preprocessed[:, 1:].copy()
+    for i_m, map_set in enumerate(config.map_sets):
+        _ = mask.apply_binary_mask(
+            freq_maps_preprocessed_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=True
+        )
+    noisecov_QU_masked = noisecov[:, 1:].copy()
+    for i_m, map_set in enumerate(config.map_sets):
+        _ = mask.apply_binary_mask(
+            noisecov_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=True
+        ) 
+
     res = fg.separation_recipes.weighted_comp_sep(
         components,
         instrument,
@@ -328,13 +347,14 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     return res
 
 
-def load_megabuster_operators(manager: DataManager):
+def load_megabuster_operators(manager: DataManager, config: Config):
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
         logger.debug(f"Loading covmat from {noisecov_fname}")
         noisecov = np.load(noisecov_fname)
 
-    binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
 
     with Timer("load-obsmat"):
         obsmat_operator_fname = manager.get_path_list_or_None("suffix_obsmat_scipy")
@@ -348,8 +368,9 @@ def load_megabuster_operators(manager: DataManager):
             raise ValueError(msg_any_obs)
         else:
             logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
-            npix = binary_mask.size
-            indices_mask = np.arange(npix)[hp.reorder(binary_mask, r2n=True) != 0]
+            any_mask = next(iter(binary_mask.values()))
+            npix = any_mask.size
+            indices_mask = np.arange(npix)[hp.reorder(any_mask, r2n=True) != 0]
             mask_stacked_nest = np.hstack((indices_mask + npix, indices_mask + 2 * npix))
             MemoryUsage("Memory usage before build_obsmat_operator_from_flattened_matrices()")
 
@@ -384,6 +405,35 @@ def load_megabuster_operators(manager: DataManager):
 
     return noisecov, obsmat_operator_rhs, central_freq_op, matrix_precond
 
+def load_true_noise_maps(manager: DataManager, config: Config, id_sim: int | None):
+    """Load the true noise realisation saved by the mocker for sky sim `id_sim`,
+    and preprocess it like the sky maps. Returns (n_freq, 3, npix) or None."""
+    if id_sim is None:
+        return None
+
+    fnames = []
+    for fname in manager.get_maps_filenames(id_sim):
+        fname = Path(fname)
+        fnames.append(fname.parent / "true_noise" / f"{fname.stem}_true_noise.fits")
+
+    if not all(f.exists() for f in fnames):
+        logger.warning(f"True noise maps not found for sim {id_sim}, skipping noise propagation.")
+        return None
+
+    noise_freq_maps = [hp.read_map(f, field=None) for f in fnames]
+
+    # Même traitement que l'étape de preproc
+    if config.pre_proc_pars.common_beam_correction != 0:
+        noise_freq_maps = common_beam_and_nside(
+            nside=config.nside,
+            common_beam=config.pre_proc_pars.common_beam_correction,
+            frequency_beams=config.beams,
+            freq_maps=noise_freq_maps,
+            lmax=config.lmax,
+        )
+
+    return np.asarray(noise_freq_maps, dtype=float)
+
 
 def megabuster_comp_sep(
     manager: DataManager,
@@ -403,7 +453,9 @@ def megabuster_comp_sep(
             real_preproc_maps_fname = manager.get_path_to_preprocessed_real_maps(id_sim)
             real_freq_maps_preprocessed = np.load(real_preproc_maps_fname)
 
-    binary_mask = hp.read_map(manager.path_to_binary_mask)  # .astype(bool)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+
     apply_before_paramestimation = False
     if config.map2cl_pars.DEBUG_cut_scales and apply_before_paramestimation:
         # I'm keeping this in for now until we have full confirmation that the Obs(noise_1/f) is correct
@@ -449,28 +501,55 @@ def megabuster_comp_sep(
     # FGBuster's weighted component separation used hp.UNSEEN to ignore masked pixels
     # If put to 0, I don't think they weigh on the outcome but it slows the process down and can result in warnings/errors
 
-    freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
-        freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
-    )
-    if config.pre_proc_pars.use_real_beams:
-        real_freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
-            real_freq_maps_preprocessed[:, 1:], binary_mask, unseen=False
+    # Mask each map_set's preprocessed maps with its own experiment's binary mask
+    freq_maps_preprocessed_QU_masked = freq_maps_preprocessed[:, 1:].copy()
+    for i_m, map_set in enumerate(config.map_sets):
+        _ = mask.apply_binary_mask(
+            freq_maps_preprocessed_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=False
         )
+    if config.pre_proc_pars.use_real_beams:
+        real_freq_maps_preprocessed_QU_masked = real_freq_maps_preprocessed[:, 1:].copy()
+        for i_m, map_set in enumerate(config.map_sets):
+            _ = mask.apply_binary_mask(
+                real_freq_maps_preprocessed_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=False
+            )
     else:
         real_freq_maps_preprocessed_QU_masked = None
+
     #noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
-    noisecov_QU_masked = noisecov[:, 1:]
+    #noisecov_QU_masked = noisecov[:, 1:]
+
+    noisecov_QU_masked = noisecov[:, 1:].copy()
+    for i_m, map_set in enumerate(config.map_sets):
+        _ = mask.apply_binary_mask(
+            noisecov_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=False
+        ) #Semble être de l'overkill le bruit est censé déjà être masqué non ?
     inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
     inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
         1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
     )
+    invN_matrix = {}
+    for exp in experiments:
+        idx = [i for i, m in enumerate(config.map_sets) if m.exp_tag == exp]
+        invN_matrix[exp] = inverse_noisecov_QU_masked[idx]
     if config.pre_proc_pars.use_real_beams:
         #real_noisecov_QU_masked = mask.apply_binary_mask(real_noisecov[:, 1:], binary_mask, unseen=False)
-        real_noisecov_QU_masked = real_noisecov[:, 1:]
-        real_inverse_noisecov_QU_masked = np.zeros_like(real_noisecov_QU_masked)
-        real_inverse_noisecov_QU_masked[real_noisecov_QU_masked != 0] = (
+        real_noisecov_QU_masked = real_noisecov[:, 1:].copy()
+        for i_m, map_set in enumerate(config.map_sets):
+            _ = mask.apply_binary_mask(
+                real_noisecov_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=False
+            )
+        #real_noisecov_QU_masked = real_noisecov[:, 1:]
+        real_inverse_noisecov_QU_masked_full = np.zeros_like(real_noisecov_QU_masked)
+        real_inverse_noisecov_QU_masked_full[real_noisecov_QU_masked != 0] = (
             1.0 / real_noisecov_QU_masked[real_noisecov_QU_masked != 0]
         )
+        real_invN_matrix = {}
+        for exp in experiments:
+            idx = [i for i, m in enumerate(config.map_sets) if m.exp_tag == exp]
+            real_invN_matrix[exp] = real_inverse_noisecov_QU_masked_full[idx]
+    else:
+        real_invN_matrix = None
 
     max_iter = options["maxiter"]  # if method != "TNC" else options["maxfun"]
 
@@ -510,8 +589,8 @@ def megabuster_comp_sep(
             sky_map=freq_maps_preprocessed_QU_masked,
             real_sky_map=real_freq_maps_preprocessed_QU_masked,
             frequencies=np.array(config.frequencies),
-            invN_matrix=inverse_noisecov_QU_masked,
-            real_invN_matrix=real_inverse_noisecov_QU_masked if config.pre_proc_pars.use_real_beams else None,
+            invN_matrix=invN_matrix,
+            real_invN_matrix=real_invN_matrix,
             do_minimization=True,
             binary_mask=binary_mask,
             #binary_mask=None,
@@ -542,9 +621,7 @@ def megabuster_comp_sep(
             n_samples = megabuster_options["n_samples"],
         )
     else:
-        print('Ici ?????')
         res = mb.compsep.perform_compsep(
-        #res = mb.compsep.perform_compsep(
             config,
             manager,
             first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
@@ -552,8 +629,8 @@ def megabuster_comp_sep(
             sky_map=freq_maps_preprocessed_QU_masked,
             real_sky_map=real_freq_maps_preprocessed_QU_masked,
             frequencies=np.array(config.frequencies),
-            invN_matrix=inverse_noisecov_QU_masked,
-            real_invN_matrix=real_inverse_noisecov_QU_masked if config.pre_proc_pars.use_real_beams else None,
+            invN_matrix=invN_matrix,
+            real_invN_matrix=real_invN_matrix,
             do_minimization=True,
             binary_mask=binary_mask,
             obs_mat_operator=None,
@@ -594,9 +671,11 @@ def megabuster_comp_sep(
 
         cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
         freq_maps_cut = cut_map_scales(freq_maps_preprocessed, cut_array, config.nside)
-        freq_maps_preprocessed_QU_masked_cut = mask.apply_binary_mask(
-            freq_maps_cut[:, 1:], binary_mask, unseen=False
-        )
+        freq_maps_preprocessed_QU_masked_cut = freq_maps_cut[:, 1:].copy()
+        for i_m, map_set in enumerate(config.map_sets):
+            _ = mask.apply_binary_mask(
+                freq_maps_preprocessed_QU_masked_cut[i_m], binary_mask[map_set.exp_tag], unseen=False
+            )
 
         res_first_guess = (
             {"beta_dust": res.x[0], "beta_pl": res.x[1]}
@@ -609,8 +688,8 @@ def megabuster_comp_sep(
             sky_map=freq_maps_preprocessed_QU_masked_cut,
             real_sky_map=real_freq_maps_preprocessed_QU_masked,
             frequencies=np.array(config.frequencies),
-            invN_matrix=inverse_noisecov_QU_masked,
-            real_invN_matrix=real_inverse_noisecov_QU_masked if config.pre_proc_pars.use_real_beams else None,
+            invN_matrix=invN_matrix,
+            real_invN_matrix=real_invN_matrix,
             do_minimization=False,
             binary_mask=binary_mask,
             obs_mat_operator=None,
@@ -636,6 +715,92 @@ def megabuster_comp_sep(
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
     timer.stop("do-compsep")
 
+    common_nhits_map = {
+        exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments
+    }
+    hit_map_full = np.array([common_nhits_map[m.exp_tag] for m in config.map_sets])  # (n_freq, n_pix_full)
+
+    i_cmb = 0
+    w_cmb_abs = np.abs(res.W_array[i_cmb])  # (s_out, n_freq, s_in, n_pix_retain)
+
+    hit_map_arr = np.repeat(hit_map_full[:, None, :], 2, axis=1)  # (n_freq, s_in, n_pix_full)
+
+    weight_map_cmb = np.einsum('sfip,fip->sp', w_cmb_abs, hit_map_arr)  # (n_stokes, n_pix)
+    res.weight_map_cmb = weight_map_cmb.mean(axis=0)  # réduction Q/U -> 1D
+
+    # --- Propagate the true noise of this sky sim through the compsep, with the estimated params ---
+    res.s_true_noise = None
+    true_noise = load_true_noise_maps(manager, config, id_sim)
+
+    if true_noise is not None and config.pre_proc_pars.use_real_beams:
+        logger.warning("True noise propagation not implemented with use_real_beams, skipping.")
+        true_noise = None
+    if true_noise is not None:
+
+        noise_QU_masked = true_noise[:, 1:].copy()
+        for i_m, map_set in enumerate(config.map_sets):
+            _ = mask.apply_binary_mask(
+                noise_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=False
+            )
+
+        # Paramètres estimés : res.params est dans le MÊME ordre que res.x
+        estimated_params = {str(name): res.x[i] for i, name in enumerate(res.params)}
+        missing = [n for n in angles_names if n not in estimated_params]
+        if missing:
+            raise ValueError(f"Angles estimés absents de res.params : {missing}")
+        logger.info(f"Propagating true noise with estimated params: {estimated_params}")
+
+        compsep_func = (
+            mb.beam_compsep.perform_compsep
+            if megabuster_options["use_beam_operator"]
+            else mb.compsep.perform_compsep
+        )
+        with Timer("compsep-true-noise"):
+            res_noise = compsep_func(
+                config,
+                manager,
+                first_guess_params=estimated_params,  # betas ET angles estimés
+                fixed_params={"temp_dust": 20.0},
+                sky_map=noise_QU_masked,
+                real_sky_map=None,
+                frequencies=np.array(config.frequencies),
+                invN_matrix=invN_matrix,
+                real_invN_matrix=None,
+                do_minimization=False,
+                binary_mask=binary_mask,
+                obs_mat_operator=None,
+                obsmat_operator_rhs=obsmat_operator_rhs,
+                use_calibration_matrix=megabuster_options["use_calibration_matrix"],
+                use_obsmat=megabuster_options["use_obsmat"],
+                # dictionnaire neuf (megabuster le vide avec pop) ; sans minimisation,
+                # il n'écrase plus les angles de first_guess_params
+                angles_prior_dict={
+                    "angle_central_value": config.angle_central_value,
+                    "angle_uncertainty": config.angle_uncertainty,
+                },
+                angles_names=list(angles_names),
+                use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
+                use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
+                central_freq_op=central_freq_op,
+                matrix_precond=matrix_precond,
+                solver_name=solver_name,
+                dictionary_parameters_minimization=dict_parameters_minimization,
+                dictionary_parameters_CG={
+                    "max_steps_CG": megabuster_options["max_steps_CG"],
+                    "tol_CG": megabuster_options["tol_CG"],
+                },
+                ordering_parameter=ordering_pars + angles_names,
+                ordering_component=components,
+                dust_nu0=150.0,
+                synchrotron_nu0=150.0,
+                use_hessienne=False,
+                use_hmc=False,
+                n_warm=megabuster_options["n_warm"],
+                n_samples=megabuster_options["n_samples"],
+            )
+        res.s_true_noise = np.array(res_noise.s, copy=True)
+        del res_noise
+
     return res
 
 
@@ -647,21 +812,18 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
         fname_compalms = manager.get_path_to_components_alms(id_sim)
     fname_compmaps = manager.get_path_to_components_maps(id_sim)
 
-    print('ici avant')
-
     res_dict = {}
     for attr in dir(res):
-        if (not attr.startswith("__") and attr not in ("s", "diagonal_central_term")) and not isfunction(
-            getattr(res, attr)
-        ):
+        if (
+            not attr.startswith("__")
+            and attr not in ("s", "diagonal_central_term", "s_true_noise")  # <-- ajout de s_true_noise
+        ) and not isfunction(getattr(res, attr)):
             res_dict[attr] = getattr(res, attr)
-
-    print('ici après')
 
     # Saving result dict
     logger.info(f"Saving compsep results to {fname_results}")
     np.savez(fname_results, **res_dict)
-    
+
     if config.parametric_sep_pars.use_harmonic_compsep:
         # Saving component alms
         logger.info(f"Saving component alms to {fname_compalms}")
@@ -671,12 +833,19 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
     logger.info(f"Saving component maps to {fname_compmaps}")
     np.save(fname_compmaps, res.s)
 
-    if config.parametric_sep_pars.use_megabuster and res.diagonal_central_term is not None:
-        import pickle
-        fname_operator = fname_results.with_suffix('.pkl')
-        logger.info(f"Saving diagonal_central_term operator to {fname_operator}")
-        with open(fname_operator, "wb") as f:
-            pickle.dump(res.diagonal_central_term, f)
+    # Saving true noise propagated through the compsep (NOUVEAU)
+    if getattr(res, "s_true_noise", None) is not None:
+        fname_compmaps = Path(fname_compmaps)
+        fname_true_noise = fname_compmaps.with_name(fname_compmaps.stem + "_true_noise.npy")
+        logger.info(f"Saving true noise component maps to {fname_true_noise}")
+        np.save(fname_true_noise, res.s_true_noise)
+
+    #if config.parametric_sep_pars.use_megabuster and res.diagonal_central_term is not None:
+    #    import pickle
+    #    fname_operator = fname_results.with_suffix('.pkl')
+    #    logger.info(f"Saving diagonal_central_term operator to {fname_operator}")
+    #    with open(fname_operator, "wb") as f:
+    #        pickle.dump(res.diagonal_central_term, f)
 
 
 def compsep_and_save(
@@ -708,7 +877,48 @@ def compsep_and_save(
         else:
             res = weighted_comp_sep(manager, config, id_sim=id_sim)
     save_compsep_results(manager, config, res, id_sim=id_sim)
+    del res
+    import gc
+    gc.collect()
     return id_sim
+
+def _child_entrypoint(args, queue, gpu_id=None):
+    import os
+    if gpu_id is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")   # AVANT les imports
+
+    global mb
+    import megabuster as mb
+    try:
+        result = compsep_and_save(*args)
+        queue.put(("ok", result))
+    except Exception:
+        import traceback
+        queue.put(("err", traceback.format_exc()))
+
+def compsep_and_save_isolated(*args, gpu_id=None):
+    import os
+    ctx = mp.get_context("spawn")
+    # Remove MPI-related env vars so the spawned child process doesn't
+    # try to join the parent's MPI world (causes a silent hang under mpirun).
+    env_backup = os.environ.copy()
+    for key in list(os.environ.keys()):
+        if key.startswith(("OMPI_", "PMIX_", "PMI_")):
+            del os.environ[key]
+
+    queue = ctx.Queue()
+    p = ctx.Process(target=_child_entrypoint, args=(args, queue, gpu_id))
+    p.start()
+    status, payload = queue.get()
+    p.join()
+
+    os.environ.clear()
+    os.environ.update(env_backup)
+
+    if status == "err":
+        raise RuntimeError(f"Échec dans le processus fille:\n{payload}")
+    return payload
 
 
 def main():
@@ -729,7 +939,7 @@ def main():
     if config.parametric_sep_pars.use_megabuster:
         if config.parametric_sep_pars.megabuster_options.use_obsmat:
             noisecov, obsmat_operator_rhs, central_freq_op, matrix_precond = load_megabuster_operators(
-                manager
+                manager, config
             )
         else:
             with Timer("load-covmat"):
@@ -750,7 +960,7 @@ def main():
         matrix_precond = None
     n_sim_sky = config.map_sim_pars.n_sim
     if n_sim_sky == 0:  # No sky simulations: run preprocessing on the real data
-        compsep_and_save(
+        compsep_and_save_isolated(
             config,
             manager,
             noisecov,
@@ -765,7 +975,7 @@ def main():
             if executor is not None:
                 logger.info(f"Distributing work to {executor.num_workers} workers")
                 func = partial(
-                    compsep_and_save,
+                    compsep_and_save_isolated,
                     config,
                     manager,
                     noisecov,

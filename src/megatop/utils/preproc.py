@@ -27,7 +27,7 @@ def common_beam_and_nside(
     DEBUGtruncatealms: bool = False,
     DEBUGlm_range: tuple[int, int] | None = None,
 ):
-    # TODO: remove DEBUGtruncatealms and DEBUGlm_range after testing
+    
     nside_input_maps = [hp.npix2nside(m.shape[-1]) for m in freq_maps]
     if any(n < nside for n in nside_input_maps):
         raise ValueError("Some input maps have smaller nside than target. Check your yaml.")
@@ -72,21 +72,6 @@ def common_beam_and_nside(
         # change beam and wpix
         hu.almxfl(alms_in[0], sm_corr_T, inplace=True)
         hu.almxfl(alms_in[1:], sm_corr_P, inplace=True)
-
-        if DEBUGtruncatealms:
-            logger.warning("WARNING WARNING WARNING WARNING WARNING WARNING")
-            logger.warning("DEBUG TRUNCATE ALMS IS ON")
-            logger.warning("WARNING WARNING WARNING WARNING WARNING WARNING")
-            if DEBUGlm_range is not None:
-                lmin, lmax = DEBUGlm_range
-
-                alms_in[0] = set_alm_tozero_above_lmax(alms_in[0], lmax)
-                alms_in[1] = set_alm_tozero_above_lmax(alms_in[1], lmax)
-                alms_in[2] = set_alm_tozero_above_lmax(alms_in[2], lmax)
-
-                alms_in[0] = set_alm_tozero_below_lmin(alms_in[0], lmin)
-                alms_in[1] = set_alm_tozero_below_lmin(alms_in[1], lmin)
-                alms_in[2] = set_alm_tozero_below_lmin(alms_in[2], lmin)
 
         if output_alms:
             freq_alms_out.append(alms_in)
@@ -191,7 +176,7 @@ def alm_common_beam(
     data_alms = np.array(
         [
             nmt.NmtField(
-                analysis_mask,
+                analysis_mask[f],
                 freq_maps[f, 1:],
                 beam=None,
                 purify_e=False,
@@ -203,8 +188,8 @@ def alm_common_beam(
             for f in range(freq_maps.shape[0])
         ]
     )
-    fsky = mask.fsky_w2(analysis_mask)  # the analysis mask must be normalized!
-    data_alms /= np.sqrt(fsky)
+    fsky = np.array([mask.fsky_w2(analysis_mask[f]) for f in range(freq_maps.shape[0])])
+    data_alms /= np.sqrt(fsky)[:, np.newaxis, np.newaxis]
 
     common_beam_ell = hp.gauss_beam(
         np.radians(common_beam / 60.0),

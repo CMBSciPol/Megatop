@@ -75,6 +75,7 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
     # preventing aliasing from modes above lmax into the analysis bins.
     if config.pre_proc_pars.common_beam_correction != 0:
+        print('frequency beams:', config.beams)
         noise_freq_maps = common_beam_and_nside(
         nside=config.nside,
         common_beam=config.pre_proc_pars.common_beam_correction,
@@ -82,6 +83,11 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
         freq_maps=noise_freq_maps,
         lmax=config.lmax,
         )
+        #noise_freq_maps = bandlimit_maps(
+        #    nside=config.nside,
+        #    freq_maps=noise_freq_maps,
+        #    lmax=config.lmax,
+        #)
     else:
         logger.warning(
             "No common beam correction specified; using the frequency beams as-is (no beam correction)."
@@ -105,32 +111,58 @@ def _harmonic_nl_contrib(
     ell_min = config.parametric_sep_pars.harmonic_lmin
     ell_max = config.parametric_sep_pars.harmonic_lmax
 
-    mask_analysis = hp.read_map(manager.path_to_analysis_mask, dtype=np.float64)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    mask_analysis_per_exp = {
+        exp: hp.read_map(manager.path_to_analysis_mask(exp), dtype=np.float64) for exp in experiments
+    }
+    #mask_analysis = {hp.read_map(manager.path_to_joint_analysis_mask, dtype=np.float64)}
 
     if config.parametric_sep_pars.harmonic_delta_ell != 1:
-        with Timer("init-namaster-workspace"):
-            workspaceff = initialize_nmt_workspace(
-                nmt_bins=nmt_bins,
-                analysis_mask=mask_analysis,
-                beam=None,
+
+        noise_spectra = None
+        noise_spectra_unbined = None
+
+        for exp in experiments:
+            idx = [i for i, m in enumerate(config.map_sets) if m.exp_tag == exp]
+            mask_exp = mask_analysis_per_exp[exp]
+
+            with Timer(f"init-namaster-workspace-{exp}"):
+                workspaceff = initialize_nmt_workspace(
+                    nmt_bins=nmt_bins,
+                    analysis_mask=mask_exp,
+                    beam=None,
+                    purify_e=False,
+                    purify_b=False,
+                    n_iter=10,
+                    lmax=config.lmax,
+                )
+
+            noise_spectra_exp, noise_spectra_unbined_exp = spectra_from_namaster(
+                noise_freq_maps_preprocessed[idx],
+                mask_exp,
+                workspaceff,
+                nmt_bins,
+                compute_cross_freq=False,
                 purify_e=False,
                 purify_b=False,
-                n_iter=10,
+                beam=None,
+                return_all_spectra=config.pre_proc_pars.correct_for_TF,
                 lmax=config.lmax,
             )
 
-        noise_spectra, noise_spectra_unbined = spectra_from_namaster(
-            noise_freq_maps_preprocessed,
-            mask_analysis,
-            workspaceff,
-            nmt_bins,
-            compute_cross_freq=False,
-            purify_e=False,
-            purify_b=False,
-            beam=None,
-            return_all_spectra=config.pre_proc_pars.correct_for_TF,
-            lmax=config.lmax,
-        )
+            if noise_spectra is None:
+                noise_spectra = np.zeros(
+                    (len(config.map_sets), *noise_spectra_exp.shape[1:]), dtype=noise_spectra_exp.dtype
+                )
+                noise_spectra_unbined = np.zeros(
+                    (len(config.map_sets), *noise_spectra_unbined_exp.shape[1:]),
+                    dtype=noise_spectra_unbined_exp.dtype,
+                )
+
+            for local_i, global_i in enumerate(idx):
+                noise_spectra[global_i] = noise_spectra_exp[local_i]
+                noise_spectra_unbined[global_i] = noise_spectra_unbined_exp[local_i]
+
 
         if config.pre_proc_pars.correct_for_TF:
             logger.warning("Including transfer function in the pre-processed noise spectra.")
@@ -212,8 +244,6 @@ def main():
 
     config = Config.load_yaml(args.config)
     manager = DataManager(config)
-
-    print('yes !')
 
     _world, rank, _size = get_world()
     if rank != 0:

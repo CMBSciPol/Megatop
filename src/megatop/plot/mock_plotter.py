@@ -7,13 +7,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import megatop.utils.harmonic as hu
+from numpy.typing import NDArray
 from megatop import Config, DataManager
 from megatop.config import NoiseOption
 from megatop.pipeline.mocker import get_noise
 from megatop.utils import Timer, logger, mask, mock, passband
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.mock import get_noise_experiment
-from megatop.utils.plot import freq_maps_plotter, plotTTEEBB, plotTTEEBB_diff
+from megatop.utils.plot import (
+    freq_maps_plotter,
+    group_indices_by_experiment,
+    plotTTEEBB,
+    plotTTEEBB_diff,
+)
 from megatop.utils.preproc import read_input_maps
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
@@ -79,50 +85,59 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
         fg_freq_maps_beamed[i_f] = mock.beam_winpix_correction(
             config.nside, fg_freq_maps[i_f], config.beams[i_f], config.lmax
         )
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
 
-    fg_freq_maps = apply_binary_mask(fg_freq_maps, binary_mask, unseen=True)
-    fg_freq_maps_beamed = apply_binary_mask(fg_freq_maps_beamed, binary_mask, unseen=True)
-
-    if maps:
-        freq_maps_plotter(
-            config,
-            fg_freq_maps_beamed,
-            plot_dir,
-            "fg_freqs_unbeamed.png",
-            vmin={"I": -300, "Q": -10, "U": -10},
-            vmax={"I": 300, "Q": 10, "U": 10},
-        )
+    for i_m, map_set in enumerate(config.map_sets):
+        exp_mask = binary_mask[map_set.exp_tag]
+        _ = apply_binary_mask(fg_freq_maps[i_m], exp_mask, unseen=True)
+        _ = apply_binary_mask(fg_freq_maps_beamed[i_m], exp_mask, unseen=True)
 
     if cls:
-        cls = []
-        cls_beamed = []
-        for i_f, _f in enumerate(config.frequencies):
-            cls.append(hu.anafast(fg_freq_maps[i_f], lmax=config.lmax))
-            cls_beamed.append(hu.anafast(fg_freq_maps_beamed[i_f], lmax=config.lmax))
-        cls = np.array(cls)
-        cls_beamed = np.array(cls_beamed)
+        cls_unbeamed = np.array(
+            [hu.anafast(fg_freq_maps[i_f], lmax=config.lmax) for i_f in range(len(config.map_sets))]
+        )
+        cls_beamed = np.array(
+            [
+                hu.anafast(fg_freq_maps_beamed[i_f], lmax=config.lmax)
+                for i_f in range(len(config.map_sets))
+            ]
+        )
 
-        plotTTEEBB(
-            plot_dir=plot_dir,
-            freqs=config.frequencies,
-            Cl=cls,
-            save_name="fg_cls_unbeamed.png",
-            use_D_ell=False,
-            y_axis_label=r"$C_\ell$ fg unbeamed",
-            lims_x=None,
-            lims_y=None,
-        )
-        plotTTEEBB(
-            plot_dir=plot_dir,
-            freqs=config.frequencies,
-            Cl=cls_beamed,
-            save_name="fg_cls_beamed.png",
-            use_D_ell=False,
-            y_axis_label=r"$C_\ell$ fg beamed",
-            lims_x=None,
-            lims_y=None,
-        )
+    for exp, idx in group_indices_by_experiment(config.map_sets).items():
+        exp_config = config.model_copy(update={"map_sets": [config.map_sets[i] for i in idx]})
+
+        if maps:
+            freq_maps_plotter(
+                exp_config,
+                fg_freq_maps_beamed[idx],
+                plot_dir,
+                f"fg_freqs_unbeamed_{exp}.png",
+                vmin={"I": -300, "Q": -10, "U": -10},
+                vmax={"I": 300, "Q": 10, "U": 10},
+            )
+
+        if cls:
+            plotTTEEBB(
+                plot_dir=plot_dir,
+                freqs=exp_config.frequencies,
+                Cl=cls_unbeamed[idx],
+                save_name=f"fg_cls_unbeamed_{exp}.png",
+                use_D_ell=False,
+                y_axis_label=r"$C_\ell$ fg unbeamed",
+                lims_x=None,
+                lims_y=None,
+            )
+            plotTTEEBB(
+                plot_dir=plot_dir,
+                freqs=exp_config.frequencies,
+                Cl=cls_beamed[idx],
+                save_name=f"fg_cls_beamed_{exp}.png",
+                use_D_ell=False,
+                y_axis_label=r"$C_\ell$ fg beamed",
+                lims_x=None,
+                lims_y=None,
+            )
 
 
 def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
@@ -164,39 +179,51 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
 
 def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    common_nhits_map = hp.read_map(manager.path_to_common_nhits_map)
-    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
+    analysis_mask = {exp: hp.read_map(manager.path_to_analysis_mask(exp)) for exp in experiments}
+
 
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
     noise_freq_maps = get_noise(config, binary_mask, common_nhits_map)
 
     if maps:
-        display_maps = apply_binary_mask(noise_freq_maps.copy(), binary_mask, unseen=True)
-        freq_maps_plotter(
-            config,
-            display_maps,
-            plot_dir,
-            "noise_freq_maps.png",
-            vmin={"I": -2, "Q": -0.5, "U": -0.5},
-            vmax={"I": 2, "Q": 0.5, "U": 0.5},
-        )
+        display_maps = noise_freq_maps.copy()
+        for i_m, map_set in enumerate(config.map_sets):
+            _ = apply_binary_mask(display_maps[i_m], binary_mask[map_set.exp_tag], unseen=True)
+        for exp, idx in group_indices_by_experiment(config.map_sets).items():
+            exp_config = config.model_copy(update={"map_sets": [config.map_sets[i] for i in idx]})
+            freq_maps_plotter(
+                exp_config,
+                display_maps[idx],
+                plot_dir,
+                f"noise_freq_maps_{exp}.png",
+                vmin={"I": -2, "Q": -0.5, "U": -0.5},
+                vmax={"I": 2, "Q": 0.5, "U": 0.5},
+            )
 
     if cls:
         # Weight by the apodized analysis mask (the same mask the real estimators
         # use), then anafast. The resulting pseudo-Cl is debiased by fsky_w2 =
         # ⟨W²⟩ to recover the physical Nl (approximate for inhomogeneous noise),
         # built with the effective fsky that sets the V3p1 noise amplitude.
-        masked_maps = noise_freq_maps * analysis_mask
+        # Weight by each experiment's own apodized analysis mask, then anafast.
+        masked_maps = noise_freq_maps.copy()
+        for i_m, map_set in enumerate(config.map_sets):
+            masked_maps[i_m] = masked_maps[i_m] * analysis_mask[map_set.exp_tag]
+
         cls = []
         for i_f, _f in enumerate(config.frequencies):
             cls.append(hu.anafast(masked_maps[i_f], lmax=config.lmax))
         cls = np.array(cls)
 
-        fsky_effective = mask.fsky_effective(common_nhits_map)
-        fsky_w2 = mask.fsky_w2(analysis_mask)
-        cls /= fsky_w2
+        # Debias per map_set using its own experiment's fsky_w2
+        for i_m, map_set in enumerate(config.map_sets):
+            fsky_w2 = mask.fsky_w2(analysis_mask[map_set.exp_tag])
+            cls[i_m] /= fsky_w2
+
         cl_model = np.zeros_like(cls)
         noise_config = config.noise_sim_pars
 
@@ -210,8 +237,9 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                 msg = f"No noise sim config for {exp}"
                 logger.error(msg)
                 raise RuntimeError(msg) from e
+            fsky_effective_exp = mask.fsky_effective(common_nhits_map[exp])
             noise_experiment[exp] = get_noise_experiment(
-                exp, noise_config.experiments[exp], fsky_effective=fsky_effective, lmax=config.lmax
+                exp, noise_config.experiments[exp], fsky_effective=fsky_effective_exp, lmax=config.lmax
             )
         for i_map_set, map_set in enumerate(config.map_sets):
             exp = map_set.exp_tag
@@ -237,18 +265,20 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
                     f"Noise option {noise_config_exp.noise_option} not implemented."
                 )
 
-        plotTTEEBB_diff(
-            plot_dir=plot_dir,
-            freqs=config.frequencies,
-            Cl_data=cls,
-            Cl_model=cl_model,
-            save_name="noise_spectra.png",
-            lims_x=None,
-            lims_y=None,
-            legend_labels=[r"noise spectra $\nu=$", r"noise model $\nu=$"],
-            use_D_ell=False,
-            axis_labels=[r"$C_\ell^{\rm{noise}}$", "Relative diff"],
-        )
+        for exp, idx in group_indices_by_experiment(config.map_sets).items():
+            exp_config = config.model_copy(update={"map_sets": [config.map_sets[i] for i in idx]})
+            plotTTEEBB_diff(
+                plot_dir=plot_dir,
+                freqs=exp_config.frequencies,
+                Cl_data=cls[idx],
+                Cl_model=cl_model[idx],
+                save_name=f"noise_spectra_{exp}.png",
+                lims_x=None,
+                lims_y=None,
+                legend_labels=[r"noise spectra $\nu=$", r"noise model $\nu=$"],
+                use_D_ell=False,
+                axis_labels=[r"$C_\ell^{\rm{noise}}$", "Relative diff"],
+            )
 
 
 def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True, cls=True):
@@ -256,37 +286,43 @@ def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     combined_maps = np.array(read_input_maps(manager.get_maps_filenames(id_sim)))
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
 
-    combined_maps = apply_binary_mask(combined_maps, binary_mask, unseen=True)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
 
-    if maps:
-        freq_maps_plotter(
-            config,
-            combined_maps,
-            plot_dir,
-            "combined_map.png",
-            vmin={"I": -300, "Q": -10, "U": -10},
-            vmax={"I": 300, "Q": 10, "U": 10},
-        )
+    for i_m, map_set in enumerate(config.map_sets):
+        _ = apply_binary_mask(combined_maps[i_m], binary_mask[map_set.exp_tag], unseen=True)
 
     if cls:
-        cls = []
-        for i_f, _f in enumerate(config.frequencies):
-            cls.append(hu.anafast(combined_maps[i_f], lmax=config.lmax))
-        cls = np.array(cls)
-
-        plotTTEEBB(
-            plot_dir=plot_dir,
-            freqs=config.frequencies,
-            Cl=cls,
-            save_name="combined_cls.png",
-            lims_x=None,
-            lims_y=None,
-            legend_labels=(r"combined $C_\ell$ $\nu=$",),
-            y_axis_label=r"$C_\ell$ fg unbeamed",
-            use_D_ell=False,
+        cls_arr = np.array(
+            [hu.anafast(combined_maps[i_f], lmax=config.lmax) for i_f in range(len(config.map_sets))]
         )
+
+    for exp, idx in group_indices_by_experiment(config.map_sets).items():
+        exp_config = config.model_copy(update={"map_sets": [config.map_sets[i] for i in idx]})
+
+        if maps:
+            freq_maps_plotter(
+                exp_config,
+                combined_maps[idx],
+                plot_dir,
+                f"combined_map_{exp}.png",
+                vmin={"I": -300, "Q": -10, "U": -10},
+                vmax={"I": 300, "Q": 10, "U": 10},
+            )
+
+        if cls:
+            plotTTEEBB(
+                plot_dir=plot_dir,
+                freqs=exp_config.frequencies,
+                Cl=cls_arr[idx],
+                save_name=f"combined_cls_{exp}.png",
+                lims_x=None,
+                lims_y=None,
+                legend_labels=(r"combined $C_\ell$ $\nu=$",),
+                y_axis_label=r"$C_\ell$ fg unbeamed",
+                use_D_ell=False,
+            )
 
 
 def main():

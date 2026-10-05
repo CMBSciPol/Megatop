@@ -18,23 +18,68 @@ def plotter(manager: DataManager, config: Config):
     plot_dir = manager.path_to_masks_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    # Plotting hits map
-    nhits = hp.read_map(manager.path_to_common_nhits_map)
+    experiments = set(m.exp_tag for m in config.map_sets)
+
+    for exp in experiments:
+        # Plotting hits map
+        nhits = hp.read_map(manager.path_to_common_nhits_map(exp))
+        plt.figure(figsize=(16, 9))
+        hp.mollview(nhits, cmap=cmap, cbar=True, title=f"Common hits map ({exp})")
+        hp.graticule()
+        plt.savefig(plot_dir / f"nhits_map_{exp}.png")
+        plt.clf()
+
+        # Plotting binary mask map
+        binary_mask = hp.read_map(manager.path_to_binary_mask(exp))
+        plt.figure(figsize=(16, 9))
+        hp.mollview(
+            binary_mask, cmap=cmap, cbar=True, title=f"Binary mask, derived from hits map ({exp})"
+        )
+        hp.graticule()
+        plt.savefig(plot_dir / f"binary_mask_{exp}.png")
+        plt.clf()
+
+        # Plotting final analysis mask
+        final_mask = hp.read_map(manager.path_to_analysis_mask(exp))
+        plt.figure(figsize=(16, 9))
+        hp.mollview(final_mask, cmap=cmap, cbar=True, title=f"Final analysis mask ({exp})")
+        hp.graticule()
+        plt.savefig(plot_dir / f"analysis_mask_{exp}.png")
+        plt.clf()
+
+        first, second = get_spin_derivatives(final_mask)
+        # Plot first spin derivative of analysis mask
+        plt.figure(figsize=(16, 9))
+        hp.mollview(
+            first,
+            title=f"First spin derivative of the final analysis mask ({exp})",
+            cmap=cmap,
+            cbar=True,
+        )
+        hp.graticule()
+        plt.savefig(plot_dir / f"analysis_mask_first_{exp}.png")
+        plt.clf()
+
+        # Plot second spin derivative of analysis mask
+        plt.figure(figsize=(16, 9))
+        hp.mollview(
+            second,
+            title=f"Second spin derivative of the final analysis mask ({exp})",
+            cmap=cmap,
+            cbar=True,
+        )
+        hp.graticule()
+        plt.savefig(plot_dir / f"analysis_mask_second_{exp}.png")
+        plt.clf()
+
+    final_mask = hp.read_map(manager.path_to_joint_analysis_mask)
     plt.figure(figsize=(16, 9))
-    hp.mollview(nhits, cmap=cmap, cbar=True, title="Commin hits map")
+    hp.mollview(final_mask, cmap=cmap, cbar=True, title=f"Final joint analysis mask")
     hp.graticule()
-    plt.savefig(plot_dir / "nhits_map.png")
+    plt.savefig(plot_dir / f"joint analysis_mask.png")
     plt.clf()
 
-    # Plotting binary mask map
-    binary_mask = hp.read_map(manager.path_to_binary_mask)
-    plt.figure(figsize=(16, 9))
-    hp.mollview(binary_mask, cmap=cmap, cbar=True, title="Binary mask, derived from hits map")
-    hp.graticule()
-    plt.savefig(plot_dir / "binary_mask.png")
-    plt.clf()
-
-    # Plotting galactic mask
+    # Plotting galactic mask (shared across experiments)
     if config.masks_pars.include_galactic:
         galactic_mask = hp.read_map(manager.path_to_galactic_mask)
         plt.figure(figsize=(16, 9))
@@ -50,7 +95,7 @@ def plotter(manager: DataManager, config: Config):
         )
         plt.clf()
 
-    # Plotting point source mask
+    # Plotting point source mask (shared across experiments)
     if config.masks_pars.include_sources:
         point_source_mask = hp.read_map(manager.path_to_sources_mask)
         plt.figure(figsize=(16, 9))
@@ -58,48 +103,6 @@ def plotter(manager: DataManager, config: Config):
         hp.graticule()
         plt.savefig(plot_dir / "point_source_mask.png")
         plt.clf()
-
-    # Plotting final analysis mask
-    final_mask = hp.read_map(manager.path_to_analysis_mask)
-    plt.figure(figsize=(16, 9))
-    hp.mollview(final_mask, cmap=cmap, cbar=True, title="Final analysis mask")
-    hp.graticule()
-    plt.savefig(plot_dir / "analysis_mask.png")
-    plt.clf()
-
-    first, second = get_spin_derivatives(final_mask)
-    # Plot first spin derivative of analysis mask
-    plt.figure(figsize=(16, 9))
-    hp.mollview(
-        first, title="First spin derivative of the final analysis mask", cmap=cmap, cbar=True
-    )
-    hp.graticule()
-    plt.savefig(plot_dir / "analysis_mask_first.png")
-    plt.clf()
-
-    # Plot second spin derivative of analysis mask
-    plt.figure(figsize=(16, 9))
-    hp.mollview(
-        second, title="Second spin derivative of the final analysis mask", cmap=cmap, cbar=True
-    )
-    hp.graticule()
-    plt.savefig(plot_dir / "analysis_mask_second.png")
-    plt.clf()
-
-    # if config.masks_pars.DEBUG_output_apod_binary_mask:
-    #     apod_binary_mask = hp.read_map(manager.path_to_apod_binary_mask)
-
-    #     plt.figure(figsize=(16, 9))
-    #     hp.mollview(
-    #         apod_binary_mask,
-    #         cmap=cmap,
-    #         cbar=True,
-    #         title="Apodized binary mask (no nhits rescaling)",
-    #     )
-    #     hp.graticule()
-    #     plt.savefig(plot_dir / "apodized_binary_mask.png")
-    #     plt.clf()
-
 
 def main():
     parser = argparse.ArgumentParser(description="Plotter for mask_hanlder output")

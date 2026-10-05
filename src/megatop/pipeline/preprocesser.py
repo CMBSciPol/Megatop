@@ -42,9 +42,9 @@ def preprocess_map(
     if beams_match and not use_harmonic:
         logger.info("Common beam correction is the same as the input beam, no need to apply it.")
         freq_maps_convolved = np.array(input_maps, dtype="float64")
-        print('one')
     else:
         if config.pre_proc_pars.common_beam_correction != 0.0:
+            print('frequency beams:', config.beams)
             freq_maps_convolved = common_beam_and_nside(
                 nside=config.nside,
                 common_beam=config.pre_proc_pars.common_beam_correction,
@@ -53,20 +53,30 @@ def preprocess_map(
                 lmax=config.lmax,
             )
             logger.info(f"Pre-processed maps have shape: {freq_maps_convolved.shape}")
-            print('two')
         else:
             freq_maps_convolved = np.array(input_maps, dtype="float64")
 
     if not use_harmonic:
         if mask_output:
-            binary_mask = hp.read_map(manager.path_to_binary_mask)
-            freq_maps_convolved = apply_binary_mask(freq_maps_convolved, binary_mask=binary_mask)
+            experiments = set(m.exp_tag for m in config.map_sets)
+            binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+            for i_m, map_set in enumerate(config.map_sets):
+                freq_maps_convolved[i_m] = apply_binary_mask(
+                    freq_maps_convolved[i_m], binary_mask=binary_mask[map_set.exp_tag]
+                )
         return freq_maps_convolved
 
-    print('three')
-
     logger.info("Using harmonic pipeline for component separation. Pre-processing will output alms")
-    analysis_mask = hp.read_map(manager.path_to_analysis_mask)
+    experiments = set(m.exp_tag for m in config.map_sets)
+    analysis_mask_per_exp = {
+        exp: hp.read_map(manager.path_to_analysis_mask(exp)) for exp in experiments
+    }
+    analysis_mask = np.array(
+        [analysis_mask_per_exp[map_set.exp_tag] for map_set in config.map_sets]
+    )
+    #analysis_mask = {
+    #    exp: hp.read_map(manager.path_to_joint_analysis_mask)
+    #}
 
     freq_alms_convolved = alm_common_beam(
         common_beam=config.pre_proc_pars.common_beam_correction,
@@ -75,6 +85,7 @@ def preprocess_map(
         analysis_mask=analysis_mask,
         harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
     )
+
     logger.info(f"Pre-processed alms have shape: {freq_alms_convolved.shape}")
 
     if config.pre_proc_pars.correct_for_TF:
