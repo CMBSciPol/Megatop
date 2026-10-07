@@ -41,10 +41,10 @@ def preprocess_map(
 
     if mask_output:
         experiments = set(m.exp_tag for m in config.map_sets)
-        binary_mask_alt = {exp: hp.read_map(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits") for exp in experiments}
+        binary_mask_alt = {exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
         for i_m, map_set in enumerate(config.map_sets):
-            freq_maps_convolved[i_m] = apply_binary_mask(
-                freq_maps_convolved[i_m], binary_mask=binary_mask_alt[map_set.exp_tag]
+            input_maps[i_m] = apply_binary_mask(
+                input_maps[i_m], binary_mask=binary_mask_alt[map_set.exp_tag]
             )
 
     if beams_match and not use_harmonic:

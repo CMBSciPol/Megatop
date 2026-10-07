@@ -32,7 +32,7 @@ fiducial_cmb:
 map_sets:
 - freq_tag: 27
   exp_tag: SO-SAT
-  beam: 0.0
+  beam: 91.0
   file_prefix: ''
   noise_prefix: noise_
   simfoTF_prefix: simforTF_
@@ -42,7 +42,7 @@ map_sets:
   angles_uncertainty_degrees: 0.1
 - freq_tag: 39
   exp_tag: SO-SAT
-  beam: 0.0
+  beam: 63.0
   file_prefix: ''
   noise_prefix: noise_
   simfoTF_prefix: simforTF_
@@ -52,7 +52,7 @@ map_sets:
   angles_uncertainty_degrees: 0.1
 - freq_tag: 93
   exp_tag: SO-SAT
-  beam: 0.0
+  beam: 30.0
   file_prefix: ''
   noise_prefix: noise_
   simfoTF_prefix: simforTF_
@@ -62,7 +62,7 @@ map_sets:
   angles_uncertainty_degrees: 0.1
 - freq_tag: 145
   exp_tag: SO-SAT
-  beam: 0.0
+  beam: 17.0
   file_prefix: ''
   noise_prefix: noise_
   simfoTF_prefix: simforTF_
@@ -72,7 +72,7 @@ map_sets:
   angles_uncertainty_degrees: 0.1
 - freq_tag: 225
   exp_tag: SO-SAT
-  beam: 0.0
+  beam: 11.0
   file_prefix: ''
   noise_prefix: noise_
   simfoTF_prefix: simforTF_
@@ -82,7 +82,7 @@ map_sets:
   angles_uncertainty_degrees: 0.1
 - freq_tag: 280
   exp_tag: SO-SAT
-  beam: 0.0
+  beam: 9.0
   file_prefix: ''
   noise_prefix: noise_
   simfoTF_prefix: simforTF_
@@ -90,6 +90,126 @@ map_sets:
   nhits_map_path: SO_nominal
   angles_central_value_degrees: 0.0
   angles_uncertainty_degrees: 0.1
+- freq_tag: 40
+  exp_tag: LiteBIRD
+  beam: 53.43
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 1.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 50
+  exp_tag: LiteBIRD
+  beam: 37.81
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 2.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 61
+  exp_tag: LiteBIRD
+  beam: 42.55
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 3.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 77
+  exp_tag: LiteBIRD
+  beam: 29.95
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 4.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 94
+  exp_tag: LiteBIRD
+  beam: 22.62
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 5.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 118
+  exp_tag: LiteBIRD
+  beam: 15.64
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 6.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 145
+  exp_tag: LiteBIRD
+  beam: 18.47
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 7.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 182
+  exp_tag: LiteBIRD
+  beam: 13.06
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 8.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 217
+  exp_tag: LiteBIRD
+  beam: 10.29
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 9.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 280
+  exp_tag: LiteBIRD
+  beam: 7.62
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 10.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 334
+  exp_tag: LiteBIRD
+  beam: 7.96
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 11.0
+  angles_uncertainty_degrees: 10.0
+- freq_tag: 402
+  exp_tag: LiteBIRD
+  beam: 6.3
+  file_prefix: ''
+  noise_prefix: noise_
+  simfoTF_prefix: simforTF_
+  passband_filename: ''
+  nhits_map_path: SO_nominal
+  angles_central_value_degrees: 1.0
+  angles_uncertainty_degrees: 10.0
 masks_pars:
   nhits_map_name: nhits_map
   analysis_mask_name: common_analysis_mask
@@ -113,7 +233,7 @@ general_pars:
   lmin: 30
   lmax: 500
 pre_proc_pars:
-  common_beam_correction: 0.0
+  common_beam_correction: 100.0
   DEBUGskippreproc: false
   correct_for_TF: false
   sum_TF_column: false
@@ -162,7 +282,7 @@ plot_pars:
   lmin_plot: 30
   lmax_plot: 500
 map_sim_pars:
-  n_sim: 300
+  n_sim: 1
   sky_model:
   - d0
   - s0
@@ -183,7 +303,7 @@ map_sim_pars:
   passband_int: false
   DEBUG_noEmodes: false
 noise_sim_pars:
-  n_sim: 300
+  n_sim: 20
   include_nhits: true
   seed: 42
   DEBUG_save_TRUEnoise_simulations: false
