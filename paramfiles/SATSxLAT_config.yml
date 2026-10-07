@@ -62,14 +62,69 @@ map_sets:
   angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : 0.1
 
+- exp_tag: SO-LAT
+  file_prefix: ''   
+  freq_tag: 27
+  nhits_map_path: SO_nominal 
+  #beam: 91.
+  beam: 0.
+  angles_central_value_degrees : 0.0
+  angles_uncertainty_degrees : 0.1
+  # angle_incertanty_degrees = 0 Corresponds to no prior case and not ideal infinite precision case, as prior = 0 lead to divergence in the Likelihood.
+
+- exp_tag: SO-LAT
+  file_prefix: ''
+  freq_tag: 39
+  nhits_map_path: SO_nominal 
+  #beam: 63.
+  beam: 0.
+  angles_central_value_degrees : 0.0
+  angles_uncertainty_degrees : 0.1
+  
+- exp_tag: SO-LAT
+  file_prefix: ''
+  freq_tag: 93
+  nhits_map_path: SO_nominal 
+  #beam: 30.
+  beam: 0.
+  angles_central_value_degrees : 0.0
+  angles_uncertainty_degrees : 0.1
+  
+- exp_tag: SO-LAT
+  file_prefix: ''
+  freq_tag: 145
+  nhits_map_path: SO_nominal 
+  #beam: 17.
+  beam: 0.
+  angles_central_value_degrees : 0.0
+  angles_uncertainty_degrees : 0.1
+
+- exp_tag: SO-LAT
+  file_prefix: ''
+  freq_tag: 225
+  nhits_map_path: SO_nominal 
+  #beam: 11.
+  beam: 0.
+  angles_central_value_degrees : 0.0
+  angles_uncertainty_degrees : 0.1
+  
+- exp_tag: SO-LAT
+  file_prefix: ''
+  freq_tag: 280
+  nhits_map_path: SO_nominal 
+  #beam: 9.
+  beam: 0.
+  angles_central_value_degrees : 0.0
+  angles_uncertainty_degrees : 0.1
+
 map_sim_pars:
   A_lens: 1
   cmb_seed: 1
   cmb_sim_no_pysm: true
   filter_sims: false
-  n_sim: 300
+  n_sim: 1
   r_input: 0.0
-  Birefringence: 0.3
+  Birefringence: 0.0
   single_cmb: false
   TF_n_sim: 2
   TF_power_law_amp: 1.0
@@ -86,7 +141,7 @@ masks_pars:
   galactic_mask_name: galactic_mask
   nhits_map_name: nhits_map
   sources_mask_name: sources_mask
-  include_galactic: True
+  include_galactic: false
   include_sources: false
   input_sources_mask: null
   apod_radius: 10.0
@@ -97,13 +152,12 @@ masks_pars:
   gal_key: GAL060
   mock_nsources: 100
   mock_sources_hole_radius: 4.0
-  uniform_coverage_exp_tags: ["LiteBIRD"]
 
 noise_cov_pars:
   save_preprocessed_noise_maps: true
 noise_sim_pars:
   include_nhits: true
-  n_sim: 300
+  n_sim: 100
   experiments: 
     SO-SAT:
       usev3p1: True
@@ -121,23 +175,6 @@ noise_sim_pars:
       noise_option: white_noise
       v3_one_over_f_mode: OPTIMISTIC
       v3_sensitivity_mode: GOAL
-
-    LiteBIRD:
-      default_bands: [40, 50, 61, 77, 94, 118, 145, 182, 217, 280, 334, 402]
-      manual_white_noise_levels:
-        40: 37.42    # TODO: fill in real sensitivity (uK.arcmin)
-        50: 33.46   # TODO
-        61: 21.31   # TODO
-        77: 19.14   # TODO
-        94: 28.77   # TODO
-        118: 8.48   # TODO
-        145: 6.39   # TODO
-        182: 10.5   # TODO
-        217: 10.79   # TODO
-        280: 13.8   # TODO
-        334: 21.95   # TODO
-        402: 47.45   # TODO
-      noise_option: white_noise
 
 output_dirs:
   components: components
@@ -168,22 +205,23 @@ parametric_sep_pars:
     use_hmc: False
     n_warm: 50
     n_samples: 50
-    max_iter: 100
+    max_iter: 300
   minimize_method: TNC
   minimize_options:
     disp: False
     eps: 1.0e-12
     ftol: 1.0e-16
     gtol: 1.0e-16
-    maxiter: 200
+    maxiter: 100
   minimize_tol: 1.0e-25
   passband_int: false
   use_harmonic_compsep: false
   use_megabuster: True
+  #n_sample : 10
 
 cl2r_pars:
   dust_marg: false
-  lmax_cosmo_analysis: 450
+  lmax_cosmo_analysis: null
   lmin_cosmo_analysis: null
   load_model_spectra: true
   n_steps: 5000
@@ -234,7 +272,6 @@ plot_pars:
   lmin_plot: 30
 pre_proc_pars:
   DEBUGskippreproc: False
-  #common_beam_correction: 100.
-  common_beam_correction: 0.
+  common_beam_correction: 0.0
   correct_for_TF: false
   sum_TF_column: False

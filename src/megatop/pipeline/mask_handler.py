@@ -116,6 +116,16 @@ def mask_handler(manager: DataManager, config: Config):
                 manager.path_to_binary_mask(exp), binary_mask, dtype=np.float32, overwrite=True
             )
 
+        # 2e masque binaire avec un seuil à 1e-6
+        with Timer(f"binary-mask-thr1e-6-{exp}"):
+            binary_mask_alt = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, 1e-6)
+            hp.write_map(
+                str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits"),
+                binary_mask_alt,
+                dtype=np.float32,
+                overwrite=True,
+            )
+
         # Accumulation pour le masque joint
         binary_mask_union = np.maximum(binary_mask_union, binary_mask)
         common_norm_nhits_map_combined = np.maximum(common_norm_nhits_map_combined, common_norm_nhits_map)

@@ -39,6 +39,14 @@ def preprocess_map(
         np.asarray(config.pre_proc_pars.common_beam_correction) == np.asarray(config.beams)
     )
 
+    if mask_output:
+        experiments = set(m.exp_tag for m in config.map_sets)
+        binary_mask_alt = {exp: hp.read_map(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits") for exp in experiments}
+        for i_m, map_set in enumerate(config.map_sets):
+            freq_maps_convolved[i_m] = apply_binary_mask(
+                freq_maps_convolved[i_m], binary_mask=binary_mask_alt[map_set.exp_tag]
+            )
+
     if beams_match and not use_harmonic:
         logger.info("Common beam correction is the same as the input beam, no need to apply it.")
         freq_maps_convolved = np.array(input_maps, dtype="float64")
