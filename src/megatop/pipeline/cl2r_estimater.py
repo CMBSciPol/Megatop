@@ -234,7 +234,7 @@ def logL_cosmo(
     )
 
     if np.isnan(log_L):
-        return 0.0
+        return -np.inf
     return log_L
 
 

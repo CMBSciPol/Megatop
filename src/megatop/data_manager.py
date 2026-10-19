@@ -284,6 +284,21 @@ class DataManager:
         )
         names = [dest / map_set.noise_map_filename for map_set in self._config.map_sets]
         return [name.with_suffix(".fits") for name in names]
+    
+    def get_TRUE_noise_maps_filenames(self, id_sim: int | None = None) -> list[Path]:
+        """Get the list of filenames for the TRUE noise maps.
+
+        Different realizations (identified by an index) are put in separate subdirectories.
+        """
+        dest = self.get_path_to_noise_maps_sub(id_sim) if id_sim is not None else self.path_to_noise_maps
+        names = [
+            dest
+            / Path(map_set.noise_map_filename).with_stem(
+                f"TRUE_{Path(map_set.noise_map_filename).stem}"
+            )
+            for map_set in self._config.map_sets
+        ]
+        return [name.with_suffix(".fits") for name in names]
 
     def get_maps_sim_for_TF_filenames(self, id_sim: int | None = None):
         """Get the list of filenames for the maps used for TF estimation.
@@ -321,6 +336,13 @@ class DataManager:
             fname = self.path_to_preproc / f"{id_sim:04d}" / fname
         else:
             fname = self.path_to_preproc / fname
+        return fname.with_suffix(".npy")
+    
+    def get_path_to_preprocessed_TRUE_noise_maps(self, id_sim: int | None = None) -> Path:
+        fname = "TRUE_noise_maps_preprocessed"
+        if id_sim is not None:
+            fname += f"_{id_sim:04d}"
+        fname = self.path_to_covar / fname
         return fname.with_suffix(".npy")
     
     def get_path_to_preprocessed_real_maps(self, id_sim: int | None = None) -> Path:
@@ -513,9 +535,24 @@ class DataManager:
 
     def outputs_mock_signal(self, id_sim: int, map_set: str | None = None) -> list[Path]:
         files = self.get_maps_filenames(id_sim)
+
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            files_true_noise = self.get_TRUE_noise_maps_filenames(id_sim)
+
         if map_set is not None:
-            return [f for ms, f in zip(self._config.map_sets, files) if ms.name == map_set]
-        return files
+            outputs = [f for ms, f in zip(self._config.map_sets, files) if ms.name == map_set]
+            if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+                outputs += [
+                    f
+                    for ms, f in zip(self._config.map_sets, files_true_noise)
+                    if ms.name == map_set
+                ]
+            return outputs
+        
+        outputs = files
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            outputs += files_true_noise
+        return outputs
 
     def inputs_mock_noise(self, id_sim: int) -> list[Path]:
         experiments = set(m.exp_tag for m in self._config.map_sets)
@@ -555,6 +592,9 @@ class DataManager:
             *self.get_noise_maps_filenames(id_sim),
             *[self.path_to_analysis_mask(exp) for exp in experiments],
         ]
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            inputs += self.get_TRUE_noise_maps_filenames(id_sim)
+
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             inputs += [self.path_to_binning, self.path_to_lensed_scalar]
             if self._config.pre_proc_pars.correct_for_TF:
@@ -565,6 +605,8 @@ class DataManager:
         outputs = [self.get_path_to_preprocessed_noise_maps(id_sim)]
         if self._config.pre_proc_pars.use_real_beams:
             outputs.append(self.get_path_to_real_preprocessed_noise_maps(id_sim))
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            outputs.append(self.get_path_to_preprocessed_TRUE_noise_maps(id_sim))
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             outputs += [
                 self.get_path_to_nl_noisecov_contrib(id_sim),
@@ -639,7 +681,10 @@ class DataManager:
 
     def inputs_noisespectra(self, id_sim: int | None = None) -> list[Path]:
         n_sim_noise = self._config.noise_sim_pars.n_sim
-        noise_inputs = [self.get_path_to_preprocessed_noise_maps(i) for i in range(n_sim_noise)]
+        if self._config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            noise_inputs = [self.get_path_to_preprocessed_TRUE_noise_maps(i) for i in range(n_sim_noise)]
+        else:
+            noise_inputs = [self.get_path_to_preprocessed_noise_maps(i) for i in range(n_sim_noise)]
         experiments = set(m.exp_tag for m in self._config.map_sets)
         return [
             self.get_path_to_compsep_results(id_sim),

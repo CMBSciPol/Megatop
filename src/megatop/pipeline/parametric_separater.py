@@ -354,7 +354,11 @@ def load_megabuster_operators(manager: DataManager, config: Config):
         noisecov = np.load(noisecov_fname)
 
     experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    #binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    binary_mask = {
+        exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits"))
+        for exp in experiments
+    }
 
     with Timer("load-obsmat"):
         obsmat_operator_fname = manager.get_path_list_or_None("suffix_obsmat_scipy")
@@ -454,7 +458,11 @@ def megabuster_comp_sep(
             real_freq_maps_preprocessed = np.load(real_preproc_maps_fname)
 
     experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    #binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    binary_mask = {
+        exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits"))
+        for exp in experiments
+    }
 
     apply_before_paramestimation = False
     if config.map2cl_pars.DEBUG_cut_scales and apply_before_paramestimation:
@@ -580,8 +588,8 @@ def megabuster_comp_sep(
 
     if megabuster_options["use_beam_operator"]:
         #res = mb.Back_BO.perform_compsep(
-        res = mb.beam_compsep.perform_compsep(
-        #res = mb.compsep.perform_compsep(
+        #res = mb.beam_compsep.perform_compsep(
+        res = mb.compsep.perform_compsep(
             config,
             manager,
             first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
@@ -721,12 +729,12 @@ def megabuster_comp_sep(
     hit_map_full = np.array([common_nhits_map[m.exp_tag] for m in config.map_sets])  # (n_freq, n_pix_full)
 
     i_cmb = 0
-    w_cmb_abs = np.abs(res.W_array[i_cmb])  # (s_out, n_freq, s_in, n_pix_retain)
+    #w_cmb_abs = np.abs(res.W_array[i_cmb])  # (s_out, n_freq, s_in, n_pix_retain)
 
-    hit_map_arr = np.repeat(hit_map_full[:, None, :], 2, axis=1)  # (n_freq, s_in, n_pix_full)
+    #hit_map_arr = np.repeat(hit_map_full[:, None, :], 2, axis=1)  # (n_freq, s_in, n_pix_full)
 
-    weight_map_cmb = np.einsum('sfip,fip->sp', w_cmb_abs, hit_map_arr)  # (n_stokes, n_pix)
-    res.weight_map_cmb = weight_map_cmb.mean(axis=0)  # réduction Q/U -> 1D
+    #weight_map_cmb = np.einsum('sfip,fip->sp', w_cmb_abs, hit_map_arr)  # (n_stokes, n_pix)
+    #res.weight_map_cmb = weight_map_cmb.mean(axis=0)  # réduction Q/U -> 1D
 
     # --- Propagate the true noise of this sky sim through the compsep, with the estimated params ---
     res.s_true_noise = None
@@ -751,9 +759,10 @@ def megabuster_comp_sep(
         logger.info(f"Propagating true noise with estimated params: {estimated_params}")
 
         compsep_func = (
-            mb.beam_compsep.perform_compsep
-            if megabuster_options["use_beam_operator"]
-            else mb.compsep.perform_compsep
+            #mb.beam_compsep.perform_compsep
+            #if megabuster_options["use_beam_operator"]
+            #else mb.compsep.perform_compsep
+            mb.compsep.perform_compsep
         )
         with Timer("compsep-true-noise"):
             res_noise = compsep_func(

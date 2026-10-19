@@ -26,6 +26,7 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mpi import get_world
+from megatop.utils import mock
 from megatop.utils.preproc import common_beam_and_nside, bandlimit_maps
 from megatop.utils.spectra import initialize_nmt_workspace, spectra_from_namaster
 
@@ -65,7 +66,7 @@ def get_reduced_TF(transfer):
     return np.real(inv_tf_reduced)
 
 
-def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | None) -> np.ndarray:
+def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | None, TRUE_noise_maps: bool = False) -> np.ndarray:
     noise_freq_maps = []
     for noise_filename in manager.get_noise_maps_filenames(id_real):
         logger.debug(f"Importing noise map: {noise_filename}")
@@ -75,6 +76,7 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
     # preventing aliasing from modes above lmax into the analysis bins.
     if config.pre_proc_pars.common_beam_correction != 0:
+
         print('frequency beams:', config.beams)
         noise_freq_maps = common_beam_and_nside(
         nside=config.nside,
@@ -97,6 +99,33 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
             freq_maps=noise_freq_maps,
             lmax=config.lmax,
         )
+    return noise_freq_maps
+
+def _real_preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | None) -> np.ndarray:
+    noise_freq_maps = []
+    for noise_filename in manager.get_noise_maps_filenames(id_real):
+        logger.debug(f"Importing noise map: {noise_filename}")
+        noise_freq_maps.append(hp.read_map(noise_filename, field=None, dtype=np.float64))
+
+    # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
+    # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
+    # preventing aliasing from modes above lmax into the analysis bins.
+
+    # Each frequency map is convolved with its OWN beam (config.beams[i_f]),
+    # using the same function as the mocker for the sky signal.
+    #with Timer("beam-real-noise-maps"):
+    #    noise_freq_maps = np.array(
+    #        [
+    #            mock.beam_winpix_correction(config.nside, noise_freq_maps[i_f], config.beams[i_f], config.lmax)
+    #            for i_f in range(len(noise_freq_maps))
+    #        ]
+    #    )
+
+    noise_freq_maps = bandlimit_maps(
+        nside=config.nside,
+        freq_maps=noise_freq_maps,
+        lmax=config.lmax,
+    )
     return noise_freq_maps
 
 def _harmonic_nl_contrib(
@@ -221,10 +250,35 @@ def _harmonic_nl_contrib(
 def noise_preprocess_realisation(config: Config, manager: DataManager, id_sim: int | None) -> None:
     with Timer(f"noise-preproc-{id_sim}"):
         preprocessed = _preprocess_noise_maps(config, manager, id_sim)
+        if config.pre_proc_pars.use_real_beams:
+            real_preprocessed = _real_preprocess_noise_maps(config, manager, id_sim)
 
     out_maps = manager.get_path_to_preprocessed_noise_maps(id_sim)
     logger.info(f"Saving pre-processed noise maps to {out_maps}")
     np.save(out_maps, preprocessed)
+    if config.pre_proc_pars.use_real_beams:
+        real_out_maps = manager.get_path_to_real_preprocessed_noise_maps(id_sim)
+        np.save(real_out_maps, real_preprocessed)
+
+    if (
+        config.noise_sim_pars.n_sim < config.map_sim_pars.n_sim
+        and config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations
+    ):
+        logger.warning(
+            "noise_sim_pars.n_sim < map_sim_pars.n_sim but DEBUG_save_TRUEnoise_simulations is True. Only saving pre-processed TRUE noise maps for the first n_sim_noise realisations."
+        )
+        # TODO: check in config/manager and throw error if this is the case, to avoid confusion?
+
+    if (
+        config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations
+        and id_sim <= config.map_sim_pars.n_sim - 1
+    ):
+        preprocessed_TRUE_noise_maps = _preprocess_noise_maps(
+            config, manager, id_sim, TRUE_noise_maps=config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations
+        )
+        out_TRUE_maps = manager.get_path_to_preprocessed_TRUE_noise_maps(id_sim)
+        logger.info(f"Saving pre-processed TRUE noise maps to {out_TRUE_maps}")
+        np.save(out_TRUE_maps, preprocessed_TRUE_noise_maps)
 
     if config.parametric_sep_pars.use_harmonic_compsep:
         nl_binned, nl_unbinned = _harmonic_nl_contrib(config, manager, preprocessed)

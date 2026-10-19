@@ -12,7 +12,7 @@ map_sets:
   freq_tag: 27
   nhits_map_path: SO_nominal 
   beam: 91.
-  #beam: 0.
+  #beam: 100.
   angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : 0.1
   # angle_incertanty_degrees = 0 Corresponds to no prior case and not ideal infinite precision case, as prior = 0 lead to divergence in the Likelihood.
@@ -22,7 +22,7 @@ map_sets:
   freq_tag: 39
   nhits_map_path: SO_nominal 
   beam: 63.
-  #beam: 0.
+  #beam: 100.
   angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : 0.1
   
@@ -31,7 +31,7 @@ map_sets:
   freq_tag: 93
   nhits_map_path: SO_nominal 
   beam: 30.
-  #beam: 0.
+  #beam: 100.
   angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : 0.1
   
@@ -40,7 +40,7 @@ map_sets:
   freq_tag: 145
   nhits_map_path: SO_nominal 
   beam: 17.
-  #beam: 0.
+  #beam: 100.
   angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : 0.1
 
@@ -49,7 +49,7 @@ map_sets:
   freq_tag: 225
   nhits_map_path: SO_nominal 
   beam: 11.
-  #beam: 0.
+  #beam: 100.
   angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : 0.1
   
@@ -58,106 +58,9 @@ map_sets:
   freq_tag: 280
   nhits_map_path: SO_nominal 
   beam: 9.
-  #beam: 0.
+  #beam: 100.
   angles_central_value_degrees : 0.0
   angles_uncertainty_degrees : 0.1
-
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 1.0
-  angles_uncertainty_degrees: 10.0
-  beam: 53.43
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 40
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 2.0
-  angles_uncertainty_degrees: 10.0
-  beam: 37.81
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 50
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 3.0
-  angles_uncertainty_degrees: 10.0
-  beam: 42.55
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 61
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 4.0
-  angles_uncertainty_degrees: 10.0
-  beam: 29.95
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 77
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 5.0
-  angles_uncertainty_degrees: 10.0
-  beam: 22.62
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 94
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 6.0
-  angles_uncertainty_degrees: 10.0
-  beam: 15.64
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 118
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 7.0
-  angles_uncertainty_degrees: 10.0
-  beam: 18.47
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 145
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 8.0
-  angles_uncertainty_degrees: 10.0
-  beam: 13.06
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 182
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 9.0
-  angles_uncertainty_degrees: 10.0
-  beam: 10.29
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 217
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 10.0
-  angles_uncertainty_degrees: 10.0
-  beam: 7.62
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 280
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 11.0
-  angles_uncertainty_degrees: 10.0
-  beam: 7.96
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 334
-  nhits_map_path: SO_nominal
-- exp_tag: LiteBIRD
-  angles_central_value_degrees: 1.0
-  angles_uncertainty_degrees: 10.0
-  beam: 6.3
-  #beam: 100.
-  file_prefix: ''
-  freq_tag: 402
-  nhits_map_path: SO_nominal
 
 map_sim_pars:
   A_lens: 1
@@ -200,7 +103,7 @@ noise_cov_pars:
   save_preprocessed_noise_maps: true
 noise_sim_pars:
   include_nhits: true
-  n_sim: 20
+  n_sim: 30
   experiments: 
     SO-SAT:
       usev3p1: True
@@ -259,7 +162,7 @@ parametric_sep_pars:
     use_preconditioner_diag: False
     use_preconditioner_pinv: False
     use_obsmat: False
-    use_calibration_matrix: True
+    use_calibration_matrix: False
     use_beam_operator: False
     use_hessienne: False
     use_hmc: False
@@ -317,7 +220,7 @@ fiducial_cmb:
   fiducial_lensed_scalar: null
   fiducial_unlensed_scalar_tensor_r1: null
 general_pars:
-  lmax: 500
+  lmax: 512
   lmin: 30
   nside: 256
 map2cl_pars:
@@ -327,7 +230,7 @@ map2cl_pars:
   purify_e: false
 
 plot_pars:
-  lmax_plot: 500
+  lmax_plot: 450
   lmin_plot: 30
 pre_proc_pars:
   DEBUGskippreproc: False

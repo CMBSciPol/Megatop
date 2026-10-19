@@ -54,6 +54,7 @@ def mask_handler(manager: DataManager, config: Config):
 
     # Accumulateurs pour le masque joint (union binaire + hitmap combinée)
     binary_mask_union = np.zeros(hp.nside2npix(config.nside))
+    binary_mask_union_alt = np.zeros(hp.nside2npix(config.nside))
     common_norm_nhits_map_combined = np.zeros(hp.nside2npix(config.nside))
 
     # Loop over experiments: hitmap, binary mask, and analysis mask, each per experiment
@@ -128,6 +129,7 @@ def mask_handler(manager: DataManager, config: Config):
 
         # Accumulation pour le masque joint
         binary_mask_union = np.maximum(binary_mask_union, binary_mask)
+        binary_mask_union_alt = np.maximum(binary_mask_union_alt, binary_mask_alt)
         common_norm_nhits_map_combined = np.maximum(common_norm_nhits_map_combined, common_norm_nhits_map)
 
         #print(np.shape(common_norm_nhits_map))
@@ -139,6 +141,16 @@ def mask_handler(manager: DataManager, config: Config):
             )
             hp.write_map(
                 manager.path_to_analysis_mask(exp), apodized_mask, dtype=np.float32, overwrite=True
+            )
+        with Timer(f"apodize-custom-thr1e-6-{exp}"):
+            apodized_mask_alt = mask.get_analysis_mask(
+                common_norm_nhits_map, binary_mask_alt, apod_radius_deg=apod_radius, apod_type=apod_type
+            )
+            hp.write_map(
+                str(manager.path_to_analysis_mask(exp)).replace(".fits", "_thr1e-6.fits"),
+                apodized_mask_alt,
+                dtype=np.float32,
+                overwrite=True,
             )
 
         # Masque d'analyse joint : union des expériences, apodisé une seule fois
@@ -153,6 +165,19 @@ def mask_handler(manager: DataManager, config: Config):
         )
         hp.write_map(
             manager.path_to_joint_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True
+        )
+    with Timer("apodize-joint-thr1e-6"):
+        apodized_mask_alt = mask.get_analysis_mask(
+            common_norm_nhits_map_combined,
+            binary_mask_union_alt,
+            apod_radius_deg=apod_radius,
+            apod_type=apod_type,
+        )
+        hp.write_map(
+            str(manager.path_to_joint_analysis_mask).replace(".fits", "_thr1e-6.fits"),
+            apodized_mask_alt,
+            dtype=np.float32,
+            overwrite=True,
         )
 
 

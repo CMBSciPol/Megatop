@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING
 
 import healpy as hp
 import numpy as np
+import jax
+jax.config.update("jax_enable_x64", True)
+import jax.numpy as jnp
 
 import megatop.utils.harmonic as hu
 from numpy.typing import NDArray
@@ -14,6 +17,8 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
 from megatop.utils.TF_utils import get_alms_from_cls, power_law_cl
+from furax.obs.stokes import Stokes
+from furax.obs.operators._beam_operator import BeamOperator
 
 if TYPE_CHECKING:
     from mpi4py.MPI import Comm
@@ -134,6 +139,29 @@ def save_simu(
             dtype=["float64", "float64", "float64"],
             overwrite=True,
         )
+
+@function_timer("DEBUGsave-truenoisesimu")
+def DEBUG_save_TRUEnoise_simulation(
+    manager: DataManager,
+    config: Config,
+    simulated_maps: NDArray,
+    id_sim: int | None = None,
+) -> None:
+    """Save a sky realization."""
+    # get appropriate filenames based on type
+    filenames = manager.get_TRUE_noise_maps_filenames(id_sim)
+
+    # save the maps
+    for i, fname in enumerate(filenames):
+        msg = "DEBUG: Saving TRUE noise simulation"
+        logger.debug(f"{msg} to {fname}")
+        fname.parent.mkdir(parents=True, exist_ok=True)
+        hp.write_map(
+            fname,
+            simulated_maps[i],
+            dtype=["float64", "float64", "float64"],
+            overwrite=True,
+            )
 
 
 @function_timer("save-TFsims")
@@ -329,12 +357,32 @@ def func_signal(
     sky = cmb[None, ...] + fg # + noise
 
     # apply beam and pixel window function correction
+    #with Timer("beam-freq-maps"):
+    #    for i_f, _f in enumerate(config.frequencies):
+    #        #print(f"Applying beam correction for frequency {i_f}: {config.beams[i_f]}")
+    #        sky[i_f] = mock.beam_winpix_correction(
+    #            config.nside, sky[i_f], config.beams[i_f], config.lmax
+    #        )
+
     with Timer("beam-freq-maps"):
-        for i_f, _f in enumerate(config.frequencies):
-            #print(f"Applying beam correction for frequency {i_f}: {config.beams[i_f]}")
-            sky[i_f] = mock.beam_winpix_correction(
+        beam_fl = mock.get_beam_fl(config, include_pixwin=False)
+
+        sky_qu = Stokes.from_stokes(Q=jnp.asarray(sky[:, 1]), U=jnp.asarray(sky[:, 2]))
+        B = BeamOperator(
+            lmax=config.lmax,
+            beam_fl=beam_fl,
+            in_structure=sky_qu.structure,
+            unobserved_pixels=np.array([], dtype=int),  # plein ciel dans le mocker
+        )
+        sky_qu_beamed = B(sky_qu)
+        sky[:, 1] = np.asarray(sky_qu_beamed.q)
+        sky[:, 2] = np.asarray(sky_qu_beamed.u)
+
+        # T : le BeamOperator ne travaille qu'en QU, on garde healpy pour T
+        for i_f in range(len(config.frequencies)):
+            sky[i_f, 0] = mock.beam_winpix_correction(
                 config.nside, sky[i_f], config.beams[i_f], config.lmax
-            )
+            )[0]
 
     sky_miscalibration = sky.copy()
 
@@ -380,6 +428,18 @@ def func_signal(
 
     # save results
     save_simu(manager, sky, id_sim=id_sim, is_noise=False)
+
+    if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+        if (
+            obsmat_funcs is not None
+            and config.map_sim_pars.filter_noise
+            and not config.map_sim_pars.DEBUGDont_Filter_purenoise_sims
+        ):
+            with Timer("filter-freq-maps"):
+                for i_f, (key, func) in enumerate(obsmat_funcs.items()):
+                    logger.debug(f"Filtering NOISE {key} channel")
+                    noise[i_f] = mock.apply_observation_matrix(func, noise[i_f])
+        DEBUG_save_TRUEnoise_simulation(manager, config, noise, id_sim=id_sim)
 
     return id_sim
 

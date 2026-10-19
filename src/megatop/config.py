@@ -468,11 +468,11 @@ class NoiseSimConfig(StrictModel):
     n_sim: int = 1
     include_nhits: bool = True
     seed: int = 42
-    DEBUG_save_TRUEnoise_simulations: bool = False
     """Integer seed for the noise simulations."""
     experiments: dict[str, ValidExperimentConfig] = Field(
         default_factory=lambda: {"SO": SOConfig()}
     )
+    DEBUG_save_TRUEnoise_simulations: bool = False
 
 def default_prior_bounds() -> dict[str, list[float]]:
     return {

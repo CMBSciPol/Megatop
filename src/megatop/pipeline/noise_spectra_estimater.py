@@ -21,6 +21,7 @@ from megatop.utils.mpi import MPISUM, get_world  # noqa: E402
 from megatop.utils.preproc import common_beam_and_nside  # noqa: E402
 from megatop.utils.spectra import (  # noqa: E402
     compute_auto_cross_cl_from_maps_dict,
+    get_common_wpix,
     get_common_beam_wpix,
     initialize_nmt_workspace,
     limit_namaster_output,
@@ -33,7 +34,7 @@ def init_workspace(config: Config, manager: DataManager):
     compsep_results_npz = np.load(
         manager.get_path_to_compsep_results(0), allow_pickle=True
     )
-    weight_map_cmb = compsep_results_npz["weight_map_cmb"]
+    #weight_map_cmb = compsep_results_npz["weight_map_cmb"]
 
     #experiments = set(m.exp_tag for m in config.map_sets)
     #binary_mask_per_exp = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
@@ -54,12 +55,20 @@ def init_workspace(config: Config, manager: DataManager):
 
     nmt_bins = load_nmt_binning(manager)
 
-    effective_beam_CMB = get_common_beam_wpix(
-        config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
-    )
-    logger.warning(
-        "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
-    )
+    #use_beam = config.parametric_sep_pars.megabuster_options.use_beam_operator
+    use_beam = False
+
+    if use_beam:
+        effective_beam_CMB = get_common_wpix(config.nside, config.lmax
+        )
+    else:
+        effective_beam_CMB = get_common_beam_wpix(
+            config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
+        )
+        logger.warning(
+            "We are only using the CMB effective beam in the noise spectra estimation\nIf you want to use the effective beam for the other components, please update the code"
+        )
+
 
     analysis_mask = hp.read_map(manager.path_to_joint_analysis_mask)
 
@@ -90,7 +99,11 @@ def noise_spectra_estimator(
     MemoryUsage(f"rank = {rank} ")
 
     n_sim_noise = config.noise_sim_pars.n_sim
-    int_n_sim_noise = 1 if n_sim_noise is None else n_sim_noise
+    int_n_sim_noise = (
+        1
+        if n_sim_noise is None or config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations
+        else n_sim_noise
+    )
     realisation_list = np.arange(int_n_sim_noise)
     rank_realisation_list = np.array_split(realisation_list, size)[rank]
 
@@ -182,6 +195,18 @@ def noise_spectra_estimator(
             inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
                 1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
             )
+            if config.pre_proc_pars.use_real_beams:
+                real_noisecov = np.load(manager.path_to_real_pixel_noisecov)
+                real_noisecov_QU_masked = real_noisecov[:, 1:].copy()
+                for i_m, map_set in enumerate(config.map_sets):
+                    real_noisecov_QU_masked[i_m] = mask.apply_binary_mask(
+                        real_noisecov_QU_masked[i_m], binary_mask_per_exp[map_set.exp_tag], unseen=False
+                    )
+                real_inverse_noisecov_QU_masked = np.zeros_like(real_noisecov_QU_masked)
+                nz = real_noisecov_QU_masked != 0
+                real_inverse_noisecov_QU_masked[nz] = 1.0 / real_noisecov_QU_masked[nz]
+            else:
+                real_inverse_noisecov_QU_masked = None
 
     if (
         config.pre_proc_pars.correct_for_TF and config.parametric_sep_pars.use_harmonic_compsep
@@ -254,12 +279,24 @@ def noise_spectra_estimator(
         logger.info(f"id_realisation = {id_real}")
         logger.info(f"in = {rank_realisation_list}")
 
-        if config.noise_cov_pars.save_preprocessed_noise_maps:
-            # TODO if use input maps for compsep then can also just import input noise maps here
-            logger.info("Loading pre-processed noise maps")
-            noise_freq_maps_preprocessed = np.load(
-                manager.get_path_to_preprocessed_noise_maps(id_real)
+        logger.info("Loading pre-processed noise maps")
+        if config.noise_sim_pars.DEBUG_save_TRUEnoise_simulations:
+            logger.info("Loading TRUE noise simulations saved during preproc step")
+            path_true_preproc_noise_maps = manager.get_path_to_preprocessed_TRUE_noise_maps(
+                id_sim_sky
             )
+            logger.info(f"Loading TRUE noise simulations from {path_true_preproc_noise_maps}")
+            noise_freq_maps_preprocessed = np.load(path_true_preproc_noise_maps)
+            real_noise_freq_maps_preprocessed = None
+
+        else:
+            logger.info("Loading pre-processed noise maps")
+            noise_freq_maps_preprocessed = np.load(manager.get_path_to_preprocessed_noise_maps(id_real))
+            if config.pre_proc_pars.use_real_beams:
+                real_noise_freq_maps_preprocessed = np.load(
+                    manager.get_path_to_real_preprocessed_noise_maps(id_real))
+            else:
+                real_noise_freq_maps_preprocessed = None
         # Applying component-separation operator
         if not config.parametric_sep_pars.use_megabuster:
             noise_map_post_compsep = np.einsum(
@@ -276,6 +313,14 @@ def noise_spectra_estimator(
                 noise_freq_maps_preprocessed_masked[i_m] = mask.apply_binary_mask(
                     noise_freq_maps_preprocessed_masked[i_m], binary_mask_per_exp[map_set.exp_tag], unseen=False
                 )
+            if real_noise_freq_maps_preprocessed is not None:
+                real_noise_masked = real_noise_freq_maps_preprocessed[:, 1:].copy()
+                for i_m, map_set in enumerate(config.map_sets):
+                    real_noise_masked[i_m] = mask.apply_binary_mask(
+                        real_noise_masked[i_m], binary_mask_per_exp[map_set.exp_tag], unseen=False
+                    )
+            else:
+                real_noise_masked = None
 
             compsep_results = mb.compsep.perform_compsep(
                 config,
@@ -283,13 +328,15 @@ def noise_spectra_estimator(
                 first_guess_params=parameters_dict,
                 fixed_params={"temp_dust": 20.0},
                 sky_map=noise_freq_maps_preprocessed_masked,
+                real_sky_map=real_noise_masked,
                 frequencies=np.array(config.frequencies),
                 invN_matrix=inverse_noisecov_QU_masked,
+                real_invN_matrix=real_inverse_noisecov_QU_masked,
                 do_minimization=False,
                 binary_mask=binary_mask,
                 obs_mat_operator=None,
                 obsmat_operator_rhs=obsmat_operator_rhs,
-                use_calibration_matrix = True,
+                use_calibration_matrix = megabuster_options["use_calibration_matrix"],
                 angles_prior_dict = angles_prior_dict,
                 angles_names = angles_names,
                 use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],

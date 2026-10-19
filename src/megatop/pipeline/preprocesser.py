@@ -11,7 +11,7 @@ from megatop.utils import Timer, logger
 from megatop.utils.binning import load_nmt_binning
 from megatop.utils.mask import apply_binary_mask
 from megatop.utils.mpi import get_world
-from megatop.utils.preproc import alm_common_beam, common_beam_and_nside, read_input_maps
+from megatop.utils.preproc import alm_common_beam, bandlimit_maps, common_beam_and_nside, read_input_maps
 
 
 def homemade_unbin_cell(binned_cell, nmt_bins):
@@ -39,19 +39,22 @@ def preprocess_map(
         np.asarray(config.pre_proc_pars.common_beam_correction) == np.asarray(config.beams)
     )
 
-    if mask_output:
-        experiments = set(m.exp_tag for m in config.map_sets)
-        binary_mask_alt = {exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
-        for i_m, map_set in enumerate(config.map_sets):
-            input_maps[i_m] = apply_binary_mask(
-                input_maps[i_m], binary_mask=binary_mask_alt[map_set.exp_tag]
-            )
-
     if beams_match and not use_harmonic:
-        logger.info("Common beam correction is the same as the input beam, no need to apply it.")
-        freq_maps_convolved = np.array(input_maps, dtype="float64")
+        #logger.info("Common beam correction is the same as the input beam, no need to apply it.")
+        #freq_maps_convolved = np.array(input_maps, dtype="float64")
+        logger.info("Common beam == input beams: only bandlimiting to lmax.")
+        freq_maps_convolved = bandlimit_maps(
+            nside=config.nside, freq_maps=input_maps, lmax=config.lmax
+        )
     else:
         if config.pre_proc_pars.common_beam_correction != 0.0:
+            if mask_output:
+                experiments = set(m.exp_tag for m in config.map_sets)
+                binary_mask_alt = {exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
+                for i_m, map_set in enumerate(config.map_sets):
+                    input_maps[i_m] = apply_binary_mask(
+                        input_maps[i_m], binary_mask=binary_mask_alt[map_set.exp_tag]
+                    )
             print('frequency beams:', config.beams)
             freq_maps_convolved = common_beam_and_nside(
                 nside=config.nside,
@@ -67,7 +70,7 @@ def preprocess_map(
     if not use_harmonic:
         if mask_output:
             experiments = set(m.exp_tag for m in config.map_sets)
-            binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+            binary_mask = {exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
             for i_m, map_set in enumerate(config.map_sets):
                 freq_maps_convolved[i_m] = apply_binary_mask(
                     freq_maps_convolved[i_m], binary_mask=binary_mask[map_set.exp_tag]
@@ -185,6 +188,147 @@ def preprocess_map(
 
     return freq_maps_convolved, freq_alms_convolved
 
+def preprocess_real_map(
+    manager: DataManager, config: Config, id_sim: int | None = None, mask_output=True
+):
+    input_maps = read_input_maps(manager.get_maps_filenames(id_sim))
+    logger.info(
+        f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
+    )
+
+    use_harmonic = config.parametric_sep_pars.use_harmonic_compsep
+
+    #if mask_output:
+    #    experiments = set(m.exp_tag for m in config.map_sets)
+    #    binary_mask_alt = {exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
+    #    for i_m, map_set in enumerate(config.map_sets):
+    #        input_maps[i_m] = apply_binary_mask(
+    #            input_maps[i_m], binary_mask=binary_mask_alt[map_set.exp_tag]
+    #        )
+    if not use_harmonic:
+        freq_maps_convolved = np.array(input_maps, dtype="float64")
+        freq_maps_convolved = bandlimit_maps(
+                    nside=config.nside,
+                    freq_maps=input_maps,
+                    lmax=config.lmax,
+                )
+        if mask_output:
+            experiments = set(m.exp_tag for m in config.map_sets)
+            binary_mask = {exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
+            for i_m, map_set in enumerate(config.map_sets):
+                freq_maps_convolved[i_m] = apply_binary_mask(
+                    freq_maps_convolved[i_m], binary_mask=binary_mask[map_set.exp_tag]
+                )
+        return freq_maps_convolved
+
+    print('three')
+
+    logger.info("Using harmonic pipeline for component separation. Pre-processing will output alms")
+    experiments = set(m.exp_tag for m in config.map_sets)
+    analysis_mask_per_exp = {
+        exp: hp.read_map(manager.path_to_analysis_mask(exp)) for exp in experiments
+    }
+    analysis_mask = np.array(
+        [analysis_mask_per_exp[map_set.exp_tag] for map_set in config.map_sets]
+    )
+
+    freq_alms_convolved = alm_common_beam(
+        common_beam=config.pre_proc_pars.common_beam_correction,
+        frequency_beams=config.beams,
+        freq_maps=np.array(input_maps),
+        analysis_mask=analysis_mask,
+        harmonic_analysis_lmax=config.parametric_sep_pars.harmonic_lmax,
+    )
+    logger.info(f"Pre-processed alms have shape: {freq_alms_convolved.shape}")
+
+    if config.pre_proc_pars.correct_for_TF:
+        logger.warning("Including transfer function in the pre-processed alms. ")
+        for f, tf_path in enumerate(manager.get_TF_filenames()):
+            if tf_path is None:
+                logger.warning(
+                    f"DEBUG: Transfer function for frequency {config.frequencies[f]} is not provided, skipping."
+                )
+                continue
+            logger.info(f"Loading transfer function from {tf_path}")
+            # Loading TF:
+            transfer = np.load(tf_path, allow_pickle=True)["full_tf"]
+
+            nmt_bins_native = load_nmt_binning(manager)
+            inv_sqrt_tf_full = np.linalg.inv([sqrtm(TF_ell.T) for TF_ell in transfer.T])[
+                :, -4:, -4:
+            ]  # keeping only polarised compoenents
+
+            # Keeping onky the following elements:
+            #  EE->EE  ;  EB->EB
+            #  BE->BE  ;  BB->BB
+            #
+            # import IPython; IPython.embed()
+            """
+            inv_sqrt_tf = np.zeros((2, 2, nmt_bins_native.lmax + 1), dtype=np.complex128)
+            inv_sqrt_tf[0, 0] = homemade_unbin_cell(
+                inv_sqrt_tf_full[:, 0, 0], nmt_bins_native
+            )  # EE->EE
+            inv_sqrt_tf[0, 1] = homemade_unbin_cell(
+                inv_sqrt_tf_full[:, 1, 1], nmt_bins_native
+            )  # EB->EB
+            # inv_sqrt_tf[0, 1] = homemade_unbin_cell(
+            #     inv_sqrt_tf_full[:, 0, -1], nmt_bins_native
+            # )  # EB->EB
+            inv_sqrt_tf[1, 0] = homemade_unbin_cell(
+                inv_sqrt_tf_full[:, 2, 2], nmt_bins_native
+            )  # BE->BE
+            # inv_sqrt_tf[1, 0] = homemade_unbin_cell(
+            #     inv_sqrt_tf_full[:, -1, 0], nmt_bins_native
+            # )  # BE->BE
+            inv_sqrt_tf[1, 1] = homemade_unbin_cell(
+                inv_sqrt_tf_full[:, 3, 3], nmt_bins_native
+            )  # BB->BB
+            inv_sqrt_tf = inv_sqrt_tf[..., : config.parametric_sep_pars.harmonic_lmax]
+            """
+            inv_sqrt_tf_bin = np.zeros((2, 2, inv_sqrt_tf_full.shape[0]), dtype=np.complex128)
+            inv_sqrt_tf_bin[0, 0] = inv_sqrt_tf_full[:, 0, 0]
+            inv_sqrt_tf_bin[0, 1] = inv_sqrt_tf_full[:, 1, 1]
+            inv_sqrt_tf_bin[1, 0] = inv_sqrt_tf_full[:, 2, 2]
+            inv_sqrt_tf_bin[1, 1] = inv_sqrt_tf_full[:, 3, 3]
+
+            inv_sqrt_tf = np.zeros((2, 2, nmt_bins_native.lmax + 1), dtype=np.complex128)
+            for i in range(2):
+                for j in range(2):
+                    inv_sqrt_tf[i, j] = homemade_unbin_cell(inv_sqrt_tf_bin[i, j], nmt_bins_native)
+            inv_sqrt_tf = inv_sqrt_tf[..., : config.parametric_sep_pars.harmonic_lmax]
+
+            if config.pre_proc_pars.sum_TF_column:
+                logger.warning(
+                    "DEBUG: Summing over columns of the transfer instead of rearanging diagonal elements"
+                )
+                inv_sqrt_tf_sum = np.sum(
+                    inv_sqrt_tf_full, axis=1
+                )  # summing over column to get all the contribution xy-->ab (EE-->EE + EB-->EE + BE-->EE + BB-->EE etc)
+                inv_sqrt_tf = np.zeros((2, 2, nmt_bins_native.lmax + 1), dtype=np.complex128)
+                inv_sqrt_tf[0, 0] = homemade_unbin_cell(
+                    inv_sqrt_tf_sum[:, 0], nmt_bins_native
+                )  # EE->EE
+                inv_sqrt_tf[0, 1] = homemade_unbin_cell(
+                    inv_sqrt_tf_sum[:, 1], nmt_bins_native
+                )  # EB->EB
+                inv_sqrt_tf[1, 0] = homemade_unbin_cell(
+                    inv_sqrt_tf_sum[:, 2], nmt_bins_native
+                )  # BE->BE
+                inv_sqrt_tf[1, 1] = homemade_unbin_cell(
+                    inv_sqrt_tf_sum[:, 3], nmt_bins_native
+                )  # BB->BB
+
+            lm_size = freq_alms_convolved.shape[-1]
+            inv_sqrt_tf_lm = np.zeros((2, 2, lm_size), dtype=np.complex128)
+            for index in range(lm_size):
+                inv_sqrt_tf_lm[..., index] = inv_sqrt_tf[
+                    ..., hp.Alm.getlm(lmax=hp.Alm.getlmax(lm_size), i=index)[0]
+                ]
+
+            # Applying the transfer function to the alms
+            freq_alms_convolved[f] = np.einsum("ijl,jl->il", inv_sqrt_tf_lm, freq_alms_convolved[f])
+
+    return freq_maps_convolved, freq_alms_convolved
 
 def save_preprocessed_maps(manager: DataManager, freq_maps, id_sim: int | None = None):
     fname = manager.get_path_to_preprocessed_maps(id_sim)
@@ -192,20 +336,24 @@ def save_preprocessed_maps(manager: DataManager, freq_maps, id_sim: int | None =
     np.save(fname, freq_maps)
 
 
-def save_preprocessed_alms(manager: DataManager, freq_alms, id_sim: int | None = None):
-    fname = manager.get_path_to_preprocessed_alms(id_sim)
-    logger.info(f"Saving pre-processed alms to {fname}")
-    np.save(fname, freq_alms)
+def save_preprocessed_real_maps(manager: DataManager, freq_maps, id_sim: int | None = None):
+    fname = manager.get_path_to_preprocessed_real_maps(id_sim)
+    logger.info(f"Saving pre-processed maps to {fname}")
+    np.save(fname, freq_maps)
 
 
 def preproc_and_save(config: Config, manager: DataManager, id_sim: int | None = None) -> None | int:
     with Timer("preprocesser"):
         convolved_output = preprocess_map(manager, config, id_sim=id_sim)
+        if config.pre_proc_pars.use_real_beams:
+            real_beam_output = preprocess_real_map(manager, config, id_sim=id_sim)
     if config.parametric_sep_pars.use_harmonic_compsep:
         save_preprocessed_maps(manager, convolved_output[0], id_sim=id_sim)
         save_preprocessed_alms(manager, convolved_output[1], id_sim=id_sim)
     else:
         save_preprocessed_maps(manager, convolved_output, id_sim=id_sim)
+        if config.pre_proc_pars.use_real_beams:
+            save_preprocessed_real_maps(manager, real_beam_output, id_sim=id_sim)
     return id_sim
 
 

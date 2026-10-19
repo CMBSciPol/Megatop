@@ -22,6 +22,9 @@ from . import V3p1calc as V3p1
 from .logger import logger
 from megatop.utils import mask
 from numpy.typing import NDArray
+import jax
+jax.config.update("jax_enable_x64", True)
+import jax.numpy as jnp
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
 
@@ -318,6 +321,17 @@ def beam_winpix_correction(nside: int, freq_map, beam_FWHM: float, lmax: int):
     hu.almxfl(alms_in[1:], sm_corr_P, inplace=True)
 
     return hu.alm2map(alms_in, spin=[0, 2], nside=nside, lmax=lmax)
+
+def get_beam_fl(config, include_pixwin=True):
+    """Beam (+ pixel window polar) par fréquence, shape (n_freq, lmax+1)."""
+    bl = np.array([
+        hp.gauss_beam(fwhm=np.radians(fwhm / 60), lmax=config.lmax)
+        for fwhm in config.beams
+    ])
+    if include_pixwin:
+        pw_pol = hp.pixwin(config.nside, pol=True, lmax=config.lmax)[1]
+        bl = bl * pw_pol[None, :]
+    return jnp.asarray(bl)
 
 
 def load_observation_matrix(nside: int, map_sets, obsmat_filenames) -> dict:

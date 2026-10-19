@@ -90,126 +90,6 @@ map_sets:
   nhits_map_path: SO_nominal
   angles_central_value_degrees: 0.0
   angles_uncertainty_degrees: 0.1
-- freq_tag: 40
-  exp_tag: LiteBIRD
-  beam: 53.43
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 1.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 50
-  exp_tag: LiteBIRD
-  beam: 37.81
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 2.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 61
-  exp_tag: LiteBIRD
-  beam: 42.55
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 3.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 77
-  exp_tag: LiteBIRD
-  beam: 29.95
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 4.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 94
-  exp_tag: LiteBIRD
-  beam: 22.62
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 5.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 118
-  exp_tag: LiteBIRD
-  beam: 15.64
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 6.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 145
-  exp_tag: LiteBIRD
-  beam: 18.47
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 7.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 182
-  exp_tag: LiteBIRD
-  beam: 13.06
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 8.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 217
-  exp_tag: LiteBIRD
-  beam: 10.29
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 9.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 280
-  exp_tag: LiteBIRD
-  beam: 7.62
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 10.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 334
-  exp_tag: LiteBIRD
-  beam: 7.96
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 11.0
-  angles_uncertainty_degrees: 10.0
-- freq_tag: 402
-  exp_tag: LiteBIRD
-  beam: 6.3
-  file_prefix: ''
-  noise_prefix: noise_
-  simfoTF_prefix: simforTF_
-  passband_filename: ''
-  nhits_map_path: SO_nominal
-  angles_central_value_degrees: 1.0
-  angles_uncertainty_degrees: 10.0
 masks_pars:
   nhits_map_name: nhits_map
   analysis_mask_name: common_analysis_mask
@@ -231,7 +111,7 @@ masks_pars:
 general_pars:
   nside: 256
   lmin: 30
-  lmax: 500
+  lmax: 512
 pre_proc_pars:
   common_beam_correction: 100.0
   DEBUGskippreproc: false
@@ -264,7 +144,7 @@ parametric_sep_pars:
     minimizer_options:
       cooldown: 5
       min_steps: 5
-    use_calibration_matrix: true
+    use_calibration_matrix: false
     use_hessienne: false
     use_hmc: false
     n_warm: 50
@@ -280,7 +160,7 @@ map2cl_pars:
   DEBUG_cut_scales: false
 plot_pars:
   lmin_plot: 30
-  lmax_plot: 500
+  lmax_plot: 450
 map_sim_pars:
   n_sim: 1
   sky_model:
@@ -303,10 +183,9 @@ map_sim_pars:
   passband_int: false
   DEBUG_noEmodes: false
 noise_sim_pars:
-  n_sim: 20
+  n_sim: 30
   include_nhits: true
   seed: 42
-  DEBUG_save_TRUEnoise_simulations: false
   experiments:
     SO-SAT:
       telescope: SAT
@@ -372,6 +251,7 @@ noise_sim_pars:
       - 334.0
       - 402.0
       noise_option: white_noise
+  DEBUG_save_TRUEnoise_simulations: false
 cl2r_pars:
   dust_marg: false
   sync_marg: false

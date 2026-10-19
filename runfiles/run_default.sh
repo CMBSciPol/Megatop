@@ -9,7 +9,6 @@ conda init bash
 source ~/.bashrc
 conda activate megatop
 
-
 echo "------------------------------------------------------------"
 echo "|                        MASK-HANDLER                      |"
 echo "------------------------------------------------------------"
@@ -46,8 +45,8 @@ echo ""
 echo "------------------------------------------------------------"
 echo "|                       PRE-PROCESSER                      |"
 echo "------------------------------------------------------------"
-mpirun -n 4 python $(which megatop-preproc-run) --config ${PARAM_FILE}
-#megatop-preproc-run --config ${PARAM_FILE}
+#mpirun -n 4 python $(which megatop-preproc-run) --config ${PARAM_FILE}
+megatop-preproc-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting pre-processer outputs"
@@ -62,7 +61,7 @@ mpirun -n 4 python $(which megatop-noise-preproc-run) --config ${PARAM_FILE}
 echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"
 echo "------------------------------------------------------------"
-mpirun -n 2 python $(which megatop-noisecov-run) --config ${PARAM_FILE}megatop-noisecov-run --config ${PARAM_FILE}
+mpirun -n 4 python $(which megatop-noisecov-run) --config ${PARAM_FILE}megatop-noisecov-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting noise covariance outputs"
@@ -71,8 +70,8 @@ megatop-noisecov-plot --config ${PARAM_FILE}
 echo "------------------------------------------------------------"
 echo "|                    COMPONENT SEPARATION                  |"
 echo "------------------------------------------------------------"
-mpirun -n 4 python $(which megatop-compsep-run) --config ${PARAM_FILE}
-#megatop-compsep-run --config ${PARAM_FILE}
+#mpirun -n 1 python $(which megatop-compsep-run) --config ${PARAM_FILE}
+megatop-compsep-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting component separater outputs"
@@ -82,8 +81,8 @@ megatop-compsep-plot --config ${PARAM_FILE}
 echo "------------------------------------------------------------"
 echo "|                     SPECTRA ESTIMATION                   |"
 echo "------------------------------------------------------------"
-mpirun -n 2 python $(which megatop-map2cl-run) --config ${PARAM_FILE}
-#megatop-map2cl-run --config ${PARAM_FILE}
+#mpirun -n 2 python $(which megatop-map2cl-run) --config ${PARAM_FILE}
+megatop-map2cl-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting spectra estimater outputs"
@@ -92,7 +91,7 @@ megatop-map2cl-plot --config ${PARAM_FILE}
 echo "------------------------------------------------------------"
 echo "|                  NOISE SPECTRA ESTIMATION                |"
 echo "------------------------------------------------------------"
-mpirun -n 2 python $(which megatop-noisespectra-run) --config ${PARAM_FILE}
+mpirun -n 4 python $(which megatop-noisespectra-run) --config ${PARAM_FILE}
 #for i in 47 48 49; do
 #    mpirun -n 4 python $(which megatop-noisespectra-run) --config ${PARAM_FILE} --sim $i
 #done
@@ -105,11 +104,11 @@ megatop-noisespectra-plot --config ${PARAM_FILE}
 echo "------------------------------------------------------------"
 echo "|            COSMOLOGICAL PARAMETERS ESTIMATION            |"
 echo "------------------------------------------------------------"
-mpirun -n 4 python $(which megatop-cl2r-run) --config ${PARAM_FILE}
+#mpirun -n 4 python $(which megatop-cl2r-run) --config ${PARAM_FILE}
 #for i in 47 48 49; do
 #    mpirun -n 2 python $(which megatop-cl2r-run) --config ${PARAM_FILE} --sim $i
 #done
-#megatop-cl2r-run --config ${PARAM_FILE}
+megatop-cl2r-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting r statistics"

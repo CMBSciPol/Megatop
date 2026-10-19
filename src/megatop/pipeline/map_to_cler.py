@@ -17,7 +17,6 @@ from megatop.utils.spectra import (
     limit_namaster_output,
 )
 
-
 def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
     with Timer("load-component-maps"):
         comp_maps = np.load(manager.get_path_to_components_maps(id_sim))
@@ -47,7 +46,11 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
 
     #print('Use real beams ?', config.pre_proc_pars.use_real_beam)
 
-    if config.pre_proc_pars.use_real_beams:
+    #use_beam = config.parametric_sep_pars.megabuster_options.use_beam_operator
+    use_beam = False
+
+    if use_beam:
+    #if config.pre_proc_pars.use_real_beams:
         effective_beam_CMB = get_common_wpix(config.nside, config.lmax)
         #effective_beam_CMB = None
         #effective_beam_CMB = np.ones(config.lmax + 1)  # beam effectif = 1

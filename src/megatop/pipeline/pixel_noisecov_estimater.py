@@ -32,6 +32,7 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
     int_n_sim = 1 if n_sim is None else n_sim
 
     pixel_acc = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
+    real_pixel_acc = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
     nl_acc = None
     nl_unbinned_acc = None
     use_harmonic = config.parametric_sep_pars.use_harmonic_compsep
@@ -41,6 +42,12 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
         logger.info(f"Loading preprocessed noise maps from {maps_path}")
         maps = np.load(maps_path)
         pixel_acc += maps**2
+        if config.pre_proc_pars.use_real_beams:
+            real_maps_path = manager.get_path_to_real_preprocessed_noise_maps(id_sim)
+            logger.info(f"Loading preprocessed real noise maps from {real_maps_path}")
+            real_maps = np.load(real_maps_path)
+            real_pixel_acc += real_maps**2
+            del real_maps
         del maps
 
         if use_harmonic:
@@ -52,6 +59,10 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
     pixel_mean = pixel_acc / int_n_sim
     np.save(manager.path_to_pixel_noisecov, pixel_mean)
     logger.info(f"Saved pixel noise covariance to {manager.path_to_pixel_noisecov}")
+    if config.pre_proc_pars.use_real_beams:
+        real_pixel_mean = real_pixel_acc / int_n_sim
+        np.save(manager.path_to_real_pixel_noisecov, real_pixel_mean)
+        logger.info(f"Saved pixel noise covariance to {manager.path_to_real_pixel_noisecov}")
 
     if use_harmonic:
         np.save(manager.path_to_nl_noisecov, nl_acc / int_n_sim)

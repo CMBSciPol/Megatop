@@ -144,6 +144,8 @@ def get_common_beam_wpix(common_beam_fwhm_arcmin: float, nside: int, lmax: int):
     )  # Pixel window function of output maps
     Bl_gauss_common = hp.gauss_beam(np.radians(common_beam_fwhm_arcmin / 60.0), lmax=lmax, pol=True)
 
+    print('wpix', wpix_out)
+    
     return Bl_gauss_common[:, 1] * wpix_out[1]  # TODO only polarisation one ?
 
 def get_common_wpix(nside: int, lmax: int):
