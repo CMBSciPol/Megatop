@@ -139,6 +139,7 @@ def save_TFsims(
     filtered_maps_TEB: NDArray,
     id_sim: int | None = None,
     input_pure_alms: NDArray | None = None,
+    input_true_spectra: dict | None = None,
 ) -> None:
     """Save an unfiltered and filtered TF realization."""
     # get appropriate filenames based on type
@@ -168,6 +169,13 @@ def save_TFsims(
         alm_file_name = manager.get_pure_alms_sim_for_TF_filenames(id_sim)
         logger.info(f"Saving pure ALMs to {alm_file_name}")
         hp.write_alm(alm_file_name, input_pure_alms, overwrite=True)
+
+    if input_true_spectra is not None and id_sim == 0:
+        filename_true_spectra_TFsims = manager.get_true_spectra_TFsims_filename
+        logger.info(
+            f"Saving input true spectra for TF simulations to {filename_true_spectra_TFsims}"
+        )
+        np.savez(filename_true_spectra_TFsims, **input_true_spectra)
 
 
 def _map(func, iterable, comm: Comm, force_seq: bool = False):
@@ -315,6 +323,7 @@ def func_TF_sims(
         np.array([filtered_freq_map_pure_T, filtered_freq_map_pure_E, filtered_freq_map_pure_B]),
         id_sim=id_sim,
         input_pure_alms=alms_TEB_to_save,
+        input_true_spectra={"l": ell, "cl": pl_spectra["TT"]} if id_sim == 0 else None,
     )
 
     return id_sim
