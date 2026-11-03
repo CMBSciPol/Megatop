@@ -388,6 +388,7 @@ class Map2ClConfig(StrictModel):
     custom_binning_path: Path | None = None
     """Path to custon binning scheme sotred in an .npz file. Directory must contain three entries as lists of same size stored under: bin_low, bin_high.
     If None, the create_binning() function will be used instead and create evenly spaced bins from delta_ell"""
+    DEBUG_ignore_MCM: bool = False
 
     @model_validator(mode="after")
     def purify_e_and_b_are_mutually_exclusive(self):

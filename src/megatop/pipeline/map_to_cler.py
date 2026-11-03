@@ -177,6 +177,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
                 inv_MCM,
                 config.lmax,
                 effective_beam_CMB,
+                DEBUG_ignore_MCM=config.map2cl_pars.DEBUG_ignore_MCM,
             )
 
             # all_Cls = compute_auto_cross_cl_from_alms_list(

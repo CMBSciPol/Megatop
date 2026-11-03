@@ -204,8 +204,16 @@ def compute_auto_cross_cl_from_alms_list_MCMverstion(
     inv_MCM,
     lmax,
     effective_beam_CMB,
+    DEBUG_ignore_MCM=False,
 ):
-
+    if DEBUG_ignore_MCM:
+        logger.info(
+            "USING DEBUG_ignore_MCMC in compute_auto_cross_cl_from_alms_list_MCMverstion!!!!!!!"
+        )
+        inv_MCM = np.zeros_like(inv_MCM)
+        for i in range(inv_MCM.shape[0]):
+            for j in range(inv_MCM.shape[1]):
+                inv_MCM[i, j, i, j] = 1
     cl_dict = {}
     for i, (key_a, alm_a) in enumerate(alms_dict.items()):
         for j, (key_b, alm_b) in enumerate(alms_dict.items()):

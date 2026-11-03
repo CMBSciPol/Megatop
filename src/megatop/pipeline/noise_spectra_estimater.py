@@ -1,4 +1,5 @@
 import argparse
+import os
 import tracemalloc
 from pathlib import Path
 
@@ -265,6 +266,13 @@ def noise_spectra_estimator(
         ]
     else:
         # TODO: TEST
+        logger.info(f"Hostname: {os.uname().nodename}")
+        logger.info(f"JAX version: {jax.__version__}")
+        logger.info(f"JAX backend: {jax.default_backend()}")
+        logger.info(f"JAX devices: {jax.devices()}")
+        logger.info(f"CPU affinity: {len(os.sched_getaffinity(0))}")
+        logger.info(f"OMP_NUM_THREADS: {os.environ.get('OMP_NUM_THREADS')}")
+        logger.info(f"OPENBLAS_NUM_THREADS: {os.environ.get('OPENBLAS_NUM_THREADS')}")
         (
             parameters_foregrounds,
             obsmat_operator_rhs,
@@ -427,6 +435,7 @@ def noise_spectra_estimator(
                 inv_MCM,
                 config.lmax,
                 effective_beam_CMB,
+                DEBUG_ignore_MCM=config.map2cl_pars.DEBUG_ignore_MCM,
             )
 
         # Summing the noise spectra
