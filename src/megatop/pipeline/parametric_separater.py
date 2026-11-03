@@ -549,19 +549,18 @@ def load_megabuster_operators(manager: DataManager):
             logger.warning(
                 "No eigen decomposition file provided for CG. Using identity matrix instead."
             )
-            central_freq_op = None
+            matrix_central = None
             matrix_precond = None
         elif np.any(np.array(path_eigen_decomp_fname) == Path()):
             msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
             raise ValueError(msg_any_obs)
         else:
             logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
-            central_freq_op = mb.tools.get_dense_furax_operator_from_freq_array(
-                mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
-            )
+            matrix_central = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
+            
             matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
 
-    return noisecov, obsmat_operator_rhs, central_freq_op, matrix_precond
+    return noisecov, obsmat_operator_rhs, matrix_central, matrix_precond
 
 
 def megabuster_comp_sep(
@@ -569,7 +568,7 @@ def megabuster_comp_sep(
     config: Config,
     noisecov,
     obsmat_operator_rhs,
-    central_freq_op,
+    matrix_central,
     matrix_precond,
     id_sim: int | None = None,
 ):
@@ -612,6 +611,8 @@ def megabuster_comp_sep(
     method = config.parametric_sep_pars.minimize_method
 
     megabuster_options = config.parametric_sep_pars.get_megabuster_options_as_dict()
+
+    indices_freq_not_filtered = manager.get_indices_frequencies_not_filtered()
 
     solver_name = megabuster_options["solver_name"]
     assert solver_name in SOLVER_NAMES.__args__, (
@@ -658,7 +659,9 @@ def megabuster_comp_sep(
         obsmat_operator_rhs=obsmat_operator_rhs,
         use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
         use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
-        central_freq_op=central_freq_op,
+        use_preconditioner_qr=megabuster_options["use_preconditioner_qr"],
+        use_preconditioner_common_basis=megabuster_options["use_preconditioner_common_basis"],            
+        matrix_central=matrix_central,
         matrix_precond=matrix_precond,
         dictionary_parameters_minimization=dict_parameters_minimization,
         dictionary_parameters_CG={
@@ -669,7 +672,7 @@ def megabuster_comp_sep(
         ordering_component=components,
         dust_nu0=150.0,
         synchrotron_nu0=150.0,
-        # components_list=components, #TODO: For future when no_synch options is merged in megabuster
+        indices_freq_not_filtered=indices_freq_not_filtered,
     )
     if config.map2cl_pars.DEBUG_cut_scales and not apply_before_paramestimation:
         # I'm keeping this in for now until we have full confirmation that the Obs(noise_1/f) is correct
@@ -702,7 +705,9 @@ def megabuster_comp_sep(
             obsmat_operator_rhs=obsmat_operator_rhs,
             use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
             use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
-            central_freq_op=central_freq_op,
+            use_preconditioner_qr=megabuster_options["use_preconditioner_qr"],
+            use_preconditioner_common_basis=megabuster_options["use_preconditioner_common_basis"],        
+            matrix_central=matrix_central,
             matrix_precond=matrix_precond,
             dictionary_parameters_minimization=dict_parameters_minimization,
             dictionary_parameters_CG={
@@ -713,6 +718,7 @@ def megabuster_comp_sep(
             ordering_component=components,
             dust_nu0=150.0,
             synchrotron_nu0=150.0,
+            indices_freq_not_filtered=indices_freq_not_filtered,
         )
         res.s = res_cut.s
 
@@ -755,7 +761,7 @@ def compsep_and_save(
     manager: DataManager,
     noisecov,
     obsmat_operator_rhs,
-    central_freq_op,
+    matrix_central,
     matrix_precond,
     id_sim: int | None = None,
 ):
@@ -770,7 +776,7 @@ def compsep_and_save(
                 config,
                 noisecov,
                 obsmat_operator_rhs,
-                central_freq_op,
+                matrix_central,
                 matrix_precond,
                 id_sim=id_sim,
             )
@@ -805,7 +811,7 @@ def main():
 
     if config.parametric_sep_pars.use_megabuster:
         PSMemoryUsage("PSMemory usage BEFORE load_megabuster_operators()")
-        noisecov, obsmat_operator_rhs, central_freq_op, matrix_precond = load_megabuster_operators(
+        noisecov, obsmat_operator_rhs, matrix_central, matrix_precond = load_megabuster_operators(
             manager
         )
         PSMemoryUsage("PSMemory usage AFTER load_megabuster_operators()")
@@ -813,7 +819,7 @@ def main():
     else:
         noisecov = None
         obsmat_operator_rhs = None
-        central_freq_op = None
+        matrix_central = None
         matrix_precond = None
 
     if args.sim is not None:
@@ -822,7 +828,7 @@ def main():
             manager,
             noisecov,
             obsmat_operator_rhs,
-            central_freq_op,
+            matrix_central,
             matrix_precond,
             id_sim=args.sim,
         )
@@ -835,7 +841,7 @@ def main():
             manager,
             noisecov,
             obsmat_operator_rhs,
-            central_freq_op,
+            matrix_central,
             matrix_precond,
             id_sim=None,
         )
@@ -847,7 +853,7 @@ def main():
                 manager,
                 noisecov,
                 obsmat_operator_rhs,
-                central_freq_op,
+                matrix_central,
                 matrix_precond,
                 id_sim=i,
             )
@@ -864,7 +870,7 @@ def main():
                     manager,
                     noisecov,
                     obsmat_operator_rhs,
-                    central_freq_op,
+                    matrix_central,
                     matrix_precond,
                 )
                 for result in executor.map(func, range(n_sim_sky), unordered=True):

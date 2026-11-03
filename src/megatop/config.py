@@ -331,7 +331,9 @@ class _MEGABUSTEROptions(StrictModel):  # Modification megabuster
     max_steps_CG: int = 200
     tol_CG: float = 1e-6
     use_preconditioner_diag: bool = False
-    use_preconditioner_pinv: bool = True
+    use_preconditioner_pinv: bool = False
+    use_preconditioner_qr: bool = False
+    use_preconditioner_common_basis: bool = True
     solver_name: str = "scipy_tnc"  # should be one of SOLVER_NAMES from furax_cs
     minimizer_options: dict[str, Any] = Field(
         default_factory=lambda: {"cooldown": 5, "min_steps": 5}
@@ -558,26 +560,27 @@ class Config(StrictModel):
                     raise ValueError(msg)
         return self
 
-    @model_validator(mode="after")
-    def filter_sims_requires_obsmat_path(self):
-        if self.map_sim_pars.filter_sims:
-            for map_set in self.map_sets:
-                if map_set.obsmat_path is None:
-                    msg = f"Map set '{map_set.name}' requires obsmat_path because filter_sims=True."
-                    raise ValueError(msg)
-        return self
+    # @model_validator(mode="after")
+    # def filter_sims_requires_obsmat_path(self):
+    #     if self.map_sim_pars.filter_sims:
+    #         for map_set in self.map_sets:
+    #             if map_set.obsmat_path is None:
+    #                 msg = f"Map set '{map_set.name}' requires obsmat_path because filter_sims=True."
+    #                 raise ValueError(msg)
+    #     return self
 
-    @model_validator(mode="after")
-    def all_obsmats_are_different(self):
-        # Check that obsmat_path are all different
-        obsmat_paths = [map_set.obsmat_path for map_set in self.map_sets]
-        if (
-            len(obsmat_paths) != len(set(obsmat_paths))
-            and not np.all(np.array(obsmat_paths) == Path())
-        ) and self.parametric_sep_pars.use_megabuster:
-            msg = "All obsmat_path in map_sets must be different when using megabuster as compsep."
-            raise ValueError(msg)
-        return self
+    # @model_validator(mode="after")
+    # def all_obsmats_are_different(self):
+    #     # Check that obsmat_path are all different
+    #     obsmat_paths = [map_set.obsmat_path for map_set in self.map_sets]
+    #     if (
+    #         len(obsmat_paths) != len(set(obsmat_paths))
+    #         and not np.all(np.array(obsmat_paths) == Path())
+    #     ) and self.parametric_sep_pars.use_megabuster:
+    #         msg = "All obsmat_path in map_sets must be different when using megabuster as compsep."
+    #         raise ValueError(msg)
+    #     return self
+    # A priori not needed?
 
     @classmethod
     def load_yaml(cls, path: str | Path) -> Config:

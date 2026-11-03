@@ -106,16 +106,15 @@ def initialize_megabuster(manager, binary_mask, id_sim_sky):
             logger.warning(
                 "No observation matrix file provided for CG. Using identity matrix instead."
             )
-            central_freq_op = None
+            matrix_central = None
             matrix_precond = None
         elif np.any(np.array(path_eigen_decomp_fname) == Path()):
             msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
             raise ValueError(msg_any_obs)
         else:
             logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
-            central_freq_op = mb.tools.get_dense_furax_operator_from_freq_array(
-                mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
-            )
+            matrix_central = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
+
             matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
 
         with Timer("load-covmat"):
@@ -135,12 +134,15 @@ def initialize_megabuster(manager, binary_mask, id_sim_sky):
             "beta_dust": np.array(parameters_foregrounds_x[0]),
             "beta_pl": np.array(parameters_foregrounds_x[1]),
         }
+
+        indices_freq_not_filtered = manager.get_indices_frequencies_not_filtered()
     return (
         parameters_foregrounds,
         obsmat_operator_rhs,
-        central_freq_op,
+        matrix_central,
         matrix_precond,
         inverse_noisecov_QU_masked,
+        indices_freq_not_filtered
     )
 
 
@@ -276,9 +278,10 @@ def noise_spectra_estimator(
         (
             parameters_foregrounds,
             obsmat_operator_rhs,
-            central_freq_op,
+            matrix_central,
             matrix_precond,
             inverse_noisecov_QU_masked,
+            indices_freq_not_filtered,
         ) = initialize_megabuster(manager, binary_mask, id_sim_sky)
 
     MemoryUsage(f"rank = {rank} ")
@@ -372,7 +375,9 @@ def noise_spectra_estimator(
                     obsmat_operator_rhs=obsmat_operator_rhs,
                     use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
                     use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
-                    central_freq_op=central_freq_op,
+                    use_preconditioner_qr=megabuster_options["use_preconditioner_qr"],
+                    use_preconditioner_common_basis=megabuster_options["use_preconditioner_common_basis"],
+                    matrix_central=matrix_central,
                     matrix_precond=matrix_precond,
                     dictionary_parameters_CG={
                         "max_steps_CG": megabuster_options["max_steps_CG"],
@@ -380,6 +385,7 @@ def noise_spectra_estimator(
                     },
                     ordering_parameter=["beta_dust", "beta_pl"],
                     ordering_component=["cmb", "dust", "synchrotron"],
+                    indices_freq_not_filtered=indices_freq_not_filtered,
                 ).s
 
             noise_map_post_compsep *= binary_mask

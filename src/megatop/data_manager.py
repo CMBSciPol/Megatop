@@ -194,6 +194,22 @@ class DataManager:
             None if map_set.obsmat_path is None else map_set.obsmat_path.with_suffix(".npz")
             for map_set in self._config.map_sets
         ]
+    
+    def get_indices_frequencies_not_filtered(self) -> list[int] | None:
+        """Get the list of indices of the map sets that are not filtered."""
+        list_indices = [
+            i for i, map_set in enumerate(self._config.map_sets) if map_set.obsmat_path is None
+        ]
+        if len(list_indices) == 0:
+            logger.warning(
+                "All map sets have obsmat_path set, so all frequencies are filtered. "
+            )
+            list_indices = None
+        else:
+            logger.info(
+                f"Indices of frequencies not filtered (obsmat_path is None): {list_indices}"
+            )
+        return list_indices
 
     @property
     def path_to_TF_output_dir(self) -> Path:
@@ -305,13 +321,13 @@ class DataManager:
         names = [
             self.path_to_precomputation
             / Path(str(map_set.obsmat_path.name).replace(".npz", "") + getattr(map_set, attribute))
-            if getattr(map_set, attribute) != ""
+            if map_set.obsmat_path is not None and getattr(map_set, attribute) != ""
             else None
             for map_set in self._config.map_sets
         ]
-        if None in names:
-            logger.warning(f"Not all {attribute} were set, returning None for {attribute} paths.")
-            return None
+        # if None in names:
+        #     logger.warning(f"Not all {attribute} were set, returning None for {attribute} paths.")
+        #     return None
         return names
 
     def get_path_to_matrix_precond_diag(self) -> Path:
@@ -328,12 +344,13 @@ class DataManager:
         """Get the path to the preconditioner matrix.
 
         If `use_preconditioner_diag` is True, returns the path to the diagonal preconditioner.
-        If `use_preconditioner_pinv` is True, returns the list of paths to the frequency preconditioners.
+        If `use_preconditioner_pinv` or 'use_preconditioner_qr' or `use_preconditioner_common_basis` is True, 
+        returns the list of paths to the frequency preconditioners.
         If neither is True, returns None.
         """
         if self._config.compsep_pars.use_preconditioner_diag:
             return self.get_path_to_matrix_precond_diag()
-        if self._config.compsep_pars.use_preconditioner_pinv:
+        if self._config.compsep_pars.use_preconditioner_pinv or self._config.compsep_pars.use_preconditioner_qr or self._config.compsep_pars.use_preconditioner_common_basis:
             return self.get_path_to_matrix_precond_list()
         return None
 
@@ -835,12 +852,12 @@ class DataManager:
         inputs = [
             self.path_to_binary_mask,
             self.path_to_pixel_noisecov,
-            *self.get_obsmat_filenames(),
         ]
+        inputs += [path_obsmat for path_obsmat in self.get_obsmat_filenames() if path_obsmat is not None]
         return inputs
 
     def outputs_jax_precomputation(self) -> list[Path]:
-        return [Path(str(p) + ".npz") for p in self.get_path_list_or_None("suffix_eigen_decomp")]
+        return [Path(str(p) + ".npz") for p in self.get_path_list_or_None("suffix_eigen_decomp") if p is not None]
 
     def inputs_compsep(self, id_sim: int | None = None) -> list[Path]:
         if self._config.parametric_sep_pars.use_harmonic_compsep:
@@ -860,7 +877,7 @@ class DataManager:
         ]
         if self._config.parametric_sep_pars.use_megabuster:
             output += [
-                Path(str(p) + ".npz") for p in self.get_path_list_or_None("suffix_eigen_decomp")
+                Path(str(p) + ".npz") for p in self.get_path_list_or_None("suffix_eigen_decomp") if p is not None
             ]
         return output
 

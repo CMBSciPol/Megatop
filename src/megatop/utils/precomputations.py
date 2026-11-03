@@ -47,7 +47,7 @@ def megabuster_precomputations(manager: DataManager, config: Config):
         )
 
     path_eigen_decomp_fname = manager.get_path_list_or_None("suffix_eigen_decomp")
-    if path_eigen_decomp_fname is not None and megabuster_options["use_preconditioner_pinv"]:
+    if path_eigen_decomp_fname is not None and (megabuster_options["use_preconditioner_pinv"] or megabuster_options["use_preconditioner_qr"] or megabuster_options["use_preconditioner_common_basis"]):
         print("Starting computing eigenspectrum of frequency central operator...", flush=True)
         logger.debug(f"Loading preconditioner from {path_eigen_decomp_fname}")
 
@@ -79,6 +79,7 @@ def megabuster_precomputations(manager: DataManager, config: Config):
             hp.reorder(binary_mask, r2n=True),
             path_output="",
             list_name_output=path_eigen_decomp_fname,
+            indices_freq_not_filtered=manager.get_indices_frequencies_not_filtered(),
         )
 
     timer.stop("precompute-obsmat")
