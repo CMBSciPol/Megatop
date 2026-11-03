@@ -95,6 +95,18 @@ rule TF_estimater:
     shell:
         "megatop-TFcomputing-run --config {params.config} > {log} 2>&1"
 
+rule JAX_precomputation:
+    input:
+        S(manager.inputs_jax_precomputation())
+    output:
+        S(manager.outputs_jax_precomputation())
+    log:
+        str(LOGS / "JAX_precomputationer.log")
+    params:
+        config=MEGATOP_CONFIG
+    shell:
+        "megatop-jaxpreproc-run --config {params.config} > {log} 2>&1"
+
 
 # ── Per-TF-sim rules ───────────────────────────────────────────────────────
 for _i in range(N_TFsims):
@@ -193,8 +205,29 @@ for _i in range(N_SKY):
         params:
             config=MEGATOP_CONFIG,
             sim=_i,
+        threads: 32
+        resources:
+            mem_mb= 145000
         shell:
-            "megatop-compsep-run --config {params.config} --sim {params.sim} > {log} 2>&1"
+            """
+            srun --exclusive \
+                --nodes=1 \
+                --ntasks=1 \
+                --cpus-per-task={threads} \
+                --mem=150G \
+                bash -c '
+                    export JAX_PLATFORMS=cpu
+                    export OMP_NUM_THREADS=1
+                    export OPENBLAS_NUM_THREADS=1
+                    export MKL_NUM_THREADS=1
+                    export TF_NUM_INTRAOP_THREADS=1
+                    export TF_NUM_INTEROP_THREADS=1
+
+                    exec megatop-compsep-run \
+                        --config {params.config} \
+                        --sim {params.sim}
+                ' > {log} 2>&1
+            """
 
     rule:
         name: f"map2cl_{_i:04d}"
@@ -221,8 +254,31 @@ for _i in range(N_SKY):
         params:
             config=MEGATOP_CONFIG,
             sim=_i,
+        threads: 32
+        resources:
+            mem_mb= 150000
         shell:
-            "megatop-noisespectra-run --config {params.config} --sim {params.sim} > {log} 2>&1"
+            """
+            srun --exclusive \
+                --nodes=1 \
+                --ntasks=1 \
+                --cpus-per-task={threads} \
+                --mem=150G \
+                bash -c '
+                    export JAX_PLATFORMS=cpu
+                    export OMP_NUM_THREADS=1
+                    export OPENBLAS_NUM_THREADS=1
+                    export MKL_NUM_THREADS=1
+                    export TF_NUM_INTRAOP_THREADS=1
+                    export TF_NUM_INTEROP_THREADS=1
+
+                    exec megatop-noisespectra-run \
+                        --config {params.config} \
+                        --sim {params.sim}
+
+                ' > {log} 2>&1
+            """
+
 
     rule:
         name: f"cl2r_{_i:04d}"
