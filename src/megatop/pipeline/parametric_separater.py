@@ -551,16 +551,25 @@ def load_megabuster_operators(manager: DataManager):
             )
             matrix_central = None
             matrix_precond = None
-        elif np.any(np.array(path_eigen_decomp_fname) == Path()):
-            msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
-            raise ValueError(msg_any_obs)
+            common_filtered_eigenvector = None
+        # elif np.any(np.array(path_eigen_decomp_fname) == Path()):
+        #     msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
+        #     raise ValueError(msg_any_obs)
         else:
             logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
             matrix_central = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
             
             matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
 
-    return noisecov, obsmat_operator_rhs, matrix_central, matrix_precond
+            n_freq = np.array(config.frequencies).size
+            if indices_freq_not_filtered is not None:
+                common_basis_reference_freq = [f for f in range(n_freq) if f not in indices_freq_not_filtered][0]
+            else:
+                common_basis_reference_freq = 0
+
+            common_filtered_eigenvector = np.load(path_eigen_decomp_fname[common_basis_reference_freq])['eigvecs']
+
+    return noisecov, obsmat_operator_rhs, matrix_central, matrix_precond, common_filtered_eigenvector
 
 
 def megabuster_comp_sep(
@@ -570,6 +579,7 @@ def megabuster_comp_sep(
     obsmat_operator_rhs,
     matrix_central,
     matrix_precond,
+    common_filtered_eigenvector,
     id_sim: int | None = None,
 ):
     with Timer("load-maps"):
@@ -663,6 +673,7 @@ def megabuster_comp_sep(
         use_preconditioner_common_basis=megabuster_options["use_preconditioner_common_basis"],            
         matrix_central=matrix_central,
         matrix_precond=matrix_precond,
+        common_filtered_eigenvector=common_filtered_eigenvector,
         dictionary_parameters_minimization=dict_parameters_minimization,
         dictionary_parameters_CG={
             "max_steps_CG": megabuster_options["max_steps_CG"],
@@ -709,6 +720,7 @@ def megabuster_comp_sep(
             use_preconditioner_common_basis=megabuster_options["use_preconditioner_common_basis"],        
             matrix_central=matrix_central,
             matrix_precond=matrix_precond,
+            common_filtered_eigenvector=common_filtered_eigenvector,
             dictionary_parameters_minimization=dict_parameters_minimization,
             dictionary_parameters_CG={
                 "max_steps_CG": megabuster_options["max_steps_CG"],
@@ -763,6 +775,7 @@ def compsep_and_save(
     obsmat_operator_rhs,
     matrix_central,
     matrix_precond,
+    common_filtered_eigenvector,
     id_sim: int | None = None,
 ):
     with Timer("weighted-compsep"):
@@ -778,6 +791,7 @@ def compsep_and_save(
                 obsmat_operator_rhs,
                 matrix_central,
                 matrix_precond,
+                common_filtered_eigenvector,
                 id_sim=id_sim,
             )
             MemoryUsage("Memory usage AFTER megabuster_comp_sep()/n/n")
@@ -811,7 +825,7 @@ def main():
 
     if config.parametric_sep_pars.use_megabuster:
         PSMemoryUsage("PSMemory usage BEFORE load_megabuster_operators()")
-        noisecov, obsmat_operator_rhs, matrix_central, matrix_precond = load_megabuster_operators(
+        noisecov, obsmat_operator_rhs, matrix_central, matrix_precond, common_filtered_eigenvector = load_megabuster_operators(
             manager
         )
         PSMemoryUsage("PSMemory usage AFTER load_megabuster_operators()")
@@ -821,6 +835,7 @@ def main():
         obsmat_operator_rhs = None
         matrix_central = None
         matrix_precond = None
+        common_filtered_eigenvector = None
 
     if args.sim is not None:
         compsep_and_save(
@@ -830,6 +845,7 @@ def main():
             obsmat_operator_rhs,
             matrix_central,
             matrix_precond,
+            common_filtered_eigenvector,
             id_sim=args.sim,
         )
         return
@@ -843,6 +859,7 @@ def main():
             obsmat_operator_rhs,
             matrix_central,
             matrix_precond,
+            common_filtered_eigenvector,
             id_sim=None,
         )
     elif size < 2:
@@ -855,6 +872,7 @@ def main():
                 obsmat_operator_rhs,
                 matrix_central,
                 matrix_precond,
+                common_filtered_eigenvector,
                 id_sim=i,
             )
             logger.info(f"Finished component separation on map {result + 1} / {n_sim_sky}")
@@ -872,6 +890,7 @@ def main():
                     obsmat_operator_rhs,
                     matrix_central,
                     matrix_precond,
+                    common_filtered_eigenvector,
                 )
                 for result in executor.map(func, range(n_sim_sky), unordered=True):
                     logger.info(f"Finished component separation on map {result + 1} / {n_sim_sky}")

@@ -100,6 +100,8 @@ def initialize_megabuster(manager, binary_mask, id_sim_sky):
                 return_transpose=True,
             )
 
+        indices_freq_not_filtered = manager.get_indices_frequencies_not_filtered()
+
         path_eigen_decomp_fname = manager.get_path_list_or_None("suffix_eigen_decomp")
         if np.all(np.array(path_eigen_decomp_fname) == Path()):
             # TODO: how to handle this case?
@@ -108,14 +110,23 @@ def initialize_megabuster(manager, binary_mask, id_sim_sky):
             )
             matrix_central = None
             matrix_precond = None
-        elif np.any(np.array(path_eigen_decomp_fname) == Path()):
-            msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
-            raise ValueError(msg_any_obs)
+            common_filtered_eigenvector = None
+        # elif np.any(np.array(path_eigen_decomp_fname) == Path()):
+        #     msg_any_obs = "Not all eigen decomposition files are provided. Provide either all or none, partial set of eigen decomposition for each frequency is not supported. A temporary solution is to provide a identity observation matrix for channels without filtering"
+        #     raise ValueError(msg_any_obs)
         else:
             logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
             matrix_central = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
 
             matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
+
+            n_freq = np.array(config.frequencies).size
+            if indices_freq_not_filtered is not None:
+                common_basis_reference_freq = [f for f in range(n_freq) if f not in indices_freq_not_filtered][0]
+            else:
+                common_basis_reference_freq = 0
+
+            common_filtered_eigenvector = np.load(path_eigen_decomp_fname[common_basis_reference_freq])['eigvecs']
 
         with Timer("load-covmat"):
             noisecov_fname = manager.path_to_pixel_noisecov
@@ -135,13 +146,14 @@ def initialize_megabuster(manager, binary_mask, id_sim_sky):
             "beta_pl": np.array(parameters_foregrounds_x[1]),
         }
 
-        indices_freq_not_filtered = manager.get_indices_frequencies_not_filtered()
+        
     return (
         parameters_foregrounds,
         obsmat_operator_rhs,
         matrix_central,
         matrix_precond,
         inverse_noisecov_QU_masked,
+        common_filtered_eigenvector,
         indices_freq_not_filtered
     )
 
@@ -281,6 +293,7 @@ def noise_spectra_estimator(
             matrix_central,
             matrix_precond,
             inverse_noisecov_QU_masked,
+            common_filtered_eigenvector,
             indices_freq_not_filtered,
         ) = initialize_megabuster(manager, binary_mask, id_sim_sky)
 
@@ -379,6 +392,7 @@ def noise_spectra_estimator(
                     use_preconditioner_common_basis=megabuster_options["use_preconditioner_common_basis"],
                     matrix_central=matrix_central,
                     matrix_precond=matrix_precond,
+                    common_filtered_eigenvector=common_filtered_eigenvector,
                     dictionary_parameters_CG={
                         "max_steps_CG": megabuster_options["max_steps_CG"],
                         "tol_CG": megabuster_options["tol_CG"],
