@@ -86,6 +86,8 @@ def create_and_run_soopercool_yaml(manager: DataManager, config: Config):
                     }
                 },
                 "transfer_settings": {
+                    "tf_ordering": "MT",  # TM is the BBmaster paper ordering. Alternative is "MT""
+                    "power_law_c_ell": str(manager.get_true_spectra_TFsims_filename),
                     "unfiltered_map_dir": {f"{map_set.name}": str(manager.path_to_TF_sims_maps)},
                     "unfiltered_map_template": {
                         f"{map_set.name}": "{id_sim:04d}/simforTF_{pure_type}_"
@@ -114,16 +116,37 @@ def create_and_run_soopercool_yaml(manager: DataManager, config: Config):
             )
             yaml.dump(soopercool_config, f)
     soopercool_path = Path(soopercool.__path__[0]).parent
+
     logger.info("Computing Pseudo-Cell for each map sets")
     for path_soop_config in full_soopercool_config_path_list:
         # launching soopercool tf_settings
         pseudo_cell_script = soopercool_path / Path(
             "pipeline/transfer/compute_pseudo_cells_tf_estimation.py"
         )
-        subprocess.run(
-            ["python", str(pseudo_cell_script), "--globals", path_soop_config, "--verbose"],
-            check=False,
+        logger.info(
+            "srun -n 100 python "
+            + str(pseudo_cell_script)
+            + " --globals "
+            + str(path_soop_config)
+            + " --verbose"
         )
+        # subprocess.run(
+        #     ["python", str(pseudo_cell_script), "--globals", path_soop_config, "--verbose"],
+        #     check=False,
+        # )
+
+    logger.info("Computing Mode Coupling Matrix")
+    mode_coupling_matrix_script = soopercool_path / Path("pipeline/get_mode_coupling.py")
+    subprocess.run(
+        [
+            "python",
+            str(mode_coupling_matrix_script),
+            "--globals",
+            full_soopercool_config_path_list[0],
+            "--verbose",
+        ],
+        check=False,
+    )
 
     logger.info("Computing Transfer Functions for each map sets")
     TF_paths_checks = manager.get_TF_filenames()
