@@ -67,7 +67,7 @@ map_sim_pars:
   cmb_seed: 1
   cmb_sim_no_pysm: true
   filter_sims: false
-  n_sim: 1
+  n_sim: 300
   r_input: 0.0
   Birefringence: 0.3
   single_cmb: false
@@ -76,6 +76,8 @@ map_sim_pars:
   TF_power_law_delta_ell: 1
   TF_power_law_index: 2.0
   passband_int: false
+  bandpass_function: use_tophat
+  tophat_width: 0.3
   sky_model:
   - d0
   - s0
@@ -103,7 +105,7 @@ noise_cov_pars:
   save_preprocessed_noise_maps: true
 noise_sim_pars:
   include_nhits: true
-  n_sim: 30
+  n_sim: 300
   experiments: 
     SO-SAT:
       usev3p1: True
@@ -178,6 +180,8 @@ parametric_sep_pars:
     maxiter: 200
   minimize_tol: 1.0e-25
   passband_int: false
+  use_bandpass: True
+  tophat_width: 0.3
   use_harmonic_compsep: false
   use_megabuster: True
 

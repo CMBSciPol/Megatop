@@ -485,6 +485,11 @@ def megabuster_comp_sep(
         logger.info("Using passband-integration for the component separation step.")
         msg_passband = "Megabuster does not support passband integration yet. \nPlease use FGBuster for this feature."
         raise NotImplementedError(msg_passband)
+    if config.parametric_sep_pars.use_bandpass:
+        logger.info("Using top-hat passbands for the component separation step.")
+        config.map_sets = passband.top_hat_passbands(
+            config.map_sets, config.parametric_sep_pars.tophat_width
+        )
     if config.parametric_sep_pars.include_synchrotron:
         components = ["cmb", "dust", "synchrotron"]  # TODO move default to config
         first_guess = {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)}
@@ -627,6 +632,7 @@ def megabuster_comp_sep(
             use_hmc = megabuster_options["use_hmc"],
             n_warm = megabuster_options["n_warm"],
             n_samples = megabuster_options["n_samples"],
+            use_bandpass = config.parametric_sep_pars.use_bandpass,
         )
     else:
         res = mb.compsep.perform_compsep(
@@ -666,6 +672,7 @@ def megabuster_comp_sep(
             use_hmc = megabuster_options["use_hmc"],
             n_warm = megabuster_options["n_warm"],
             n_samples = megabuster_options["n_samples"],
+            use_bandpass = config.parametric_sep_pars.use_bandpass,
         )
 
 
@@ -715,7 +722,8 @@ def megabuster_comp_sep(
             ordering_component=components,
             dust_nu0=150.0,
             synchrotron_nu0=150.0,
-            is_noise_map = False
+            is_noise_map = False,
+            use_bandpass = config.parametric_sep_pars.use_bandpass,
         )
         res.s = res_cut.s
 
@@ -806,6 +814,7 @@ def megabuster_comp_sep(
                 use_hmc=False,
                 n_warm=megabuster_options["n_warm"],
                 n_samples=megabuster_options["n_samples"],
+                use_bandpass=config.parametric_sep_pars.use_bandpass,
             )
         res.s_true_noise = np.array(res_noise.s, copy=True)
         del res_noise

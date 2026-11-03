@@ -32,6 +32,19 @@ def passband_constructor(config: Config, manager: DataManager, passband_int: boo
     return config.map_sets
 
 
+def top_hat(center: float, width: float, n: int = 51) -> tuple[np.ndarray, np.ndarray]:
+    """Top-hat passband of relative width `width` around `center` [GHz], with weights 1."""
+    nu = np.linspace(center * (1 - width / 2), center * (1 + width / 2), n)
+    return nu, np.ones(n)
+
+
+def top_hat_passbands(map_sets: list, width: float) -> list:
+    """Give each map set a top-hat passband of relative width `width` around its freq_tag."""
+    for map_set in map_sets:
+        map_set.frequency, map_set.weight = top_hat(float(map_set.freq_tag), width)
+    return map_sets
+
+
 def standardize_passbands(passbands: dict):
     logger.warning("NO CHECKS PERFORMED FOR NOW !! BE CAREFUL WITH PASSBAND INTEGRATION")
     return passbands

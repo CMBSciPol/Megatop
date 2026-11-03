@@ -332,6 +332,11 @@ class CompSepConfig(StrictModel):
     minimize_tol: float = 1e-18
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
     passband_int: bool = False
+    use_bandpass: bool = False
+    """If True, the mixing matrix is integrated over top-hat passbands of relative width
+    tophat_width around each freq_tag (megabuster only)."""
+    tophat_width: float = 0.3
+    """Relative width of the top-hat passbands, used when use_bandpass is True."""
     use_megabuster: bool = False  # Modification megabuster
     megabuster_options: _MEGABUSTEROptions = Factory(_MEGABUSTEROptions)  # Modification megabuster
 
@@ -411,6 +416,11 @@ class MapSimConfig(StrictModel):
     """Number of simulation generated for the TF computation."""
     passband_int: bool = False
     """If True, sky maps will be integrated over the passbands provided in the map_sets. Passbands will also be included in the SED computation in the component separation."""
+    bandpass_function: Literal["use_tophat"] | None = None
+    """Shape of the passbands built in the mocker. If "use_tophat", each map set gets a top-hat
+    passband of relative width tophat_width around its freq_tag."""
+    tophat_width: float = 0.3
+    """Relative width of the top-hat passbands, used when bandpass_function is "use_tophat"."""
     DEBUG_noEmodes: bool = False
     """Debuging param: sets EE and TE CMB power spectra to 0 in the mocker, in particular in the mock.get_Cl_CMB_model_from_manager() function"""
 

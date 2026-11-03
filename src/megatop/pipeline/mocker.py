@@ -336,11 +336,20 @@ def func_signal(
 ) -> int:
     """Generate a sky realization."""
     # construct passbands if necessary
-    config.map_sets = passband.passband_constructor(
-        config, manager, passband_int=config.map_sim_pars.passband_int
-    )
-    if config.map_sim_pars.passband_int:
-        logger.info("Using passband-integration for the mocker step.")
+    if config.map_sim_pars.bandpass_function == "use_tophat":
+        config.map_sets = passband.top_hat_passbands(
+            config.map_sets, config.map_sim_pars.tophat_width
+        )
+        logger.info(
+            f"Using top-hat passbands of relative width {config.map_sim_pars.tophat_width} "
+            "for the mocker step."
+        )
+    else:
+        config.map_sets = passband.passband_constructor(
+            config, manager, passband_int=config.map_sim_pars.passband_int
+        )
+        if config.map_sim_pars.passband_int:
+            logger.info("Using passband-integration for the mocker step.")
 
     # generate the components
     cmb = get_cmb(manager, config, id_sim=id_sim)
@@ -365,7 +374,11 @@ def func_signal(
     #        )
 
     with Timer("beam-freq-maps"):
-        beam_fl = mock.get_beam_fl(config, include_pixwin=False)
+        beam_fl = mock.get_beam_fl(config, include_pixwin=True)
+        b0 = mock.get_beam_fl(config, include_pixwin=False)
+        b1 = mock.get_beam_fl(config, include_pixwin=True)
+        print("formes :", np.shape(b0), np.shape(b1))
+        print("rapport aux ℓ = 0, 100, 300, 500 :", np.asarray(b1)[:, [0, 100, 300, 500]] / np.asarray(b0)[:, [0, 100, 300, 500]])
 
         sky_qu = Stokes.from_stokes(Q=jnp.asarray(sky[:, 1]), U=jnp.asarray(sky[:, 2]))
         B = BeamOperator(

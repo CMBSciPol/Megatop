@@ -49,14 +49,14 @@ def plot_noisecov(manager, config, maps=True, cls=True):
             [hu.anafast(noise_cov_maps[i], lmax=lmax) for i in range(len(config.map_sets))]
         )
 
-    if config.parametric_sep_pars.use_harmonic_compsep:
-        nmt_bins = load_nmt_binning(manager)
-        bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
-            "bin_index_lminlmax"
-        ]
-        ell_bin_lminlmax = nmt_bins.get_effective_ells()[bin_index_lminlmax]
-        binned_nl = np.load(manager.path_to_nl_noisecov)
-        unbinned_nl = np.load(manager.path_to_nl_noisecov_unbinned)
+    #if config.parametric_sep_pars.use_harmonic_compsep:
+    nmt_bins = load_nmt_binning(manager)
+    bin_index_lminlmax = np.load(manager.path_to_binning, allow_pickle=True)[
+        "bin_index_lminlmax"
+    ]
+    ell_bin_lminlmax = nmt_bins.get_effective_ells()[bin_index_lminlmax]
+    binned_nl = np.load(manager.path_to_nl_noisecov)
+    unbinned_nl = np.load(manager.path_to_nl_noisecov_unbinned)
 
     for exp, idx in group_indices_by_experiment(config.map_sets).items():
         exp_config = config.model_copy(update={"map_sets": [config.map_sets[i] for i in idx]})
@@ -92,29 +92,29 @@ def plot_noisecov(manager, config, maps=True, cls=True):
                 lims_y=None,
             )
 
-        if config.parametric_sep_pars.use_harmonic_compsep:
-            plotTTEEBB(
-                plot_dir=plot_dir,
-                freqs=exp_config.frequencies,
-                Cl=binned_nl[idx],
-                save_name=f"harmonic_pipe_spectra_noise_cov_binned_{exp}",
-                y_axis_label=r"$N_\ell$ binned noise covariance (namaster)",
-                use_D_ell=False,
-                lims_x=None,
-                lims_y=None,
-                ell=ell_bin_lminlmax,
-            )
+        #if config.parametric_sep_pars.use_harmonic_compsep:
+        plotTTEEBB(
+            plot_dir=plot_dir,
+            freqs=exp_config.frequencies,
+            Cl=binned_nl[idx],
+            save_name=f"harmonic_pipe_spectra_noise_cov_binned_{exp}",
+            y_axis_label=r"$N_\ell$ binned noise covariance (namaster)",
+            use_D_ell=False,
+            lims_x=None,
+            lims_y=None,
+            ell=ell_bin_lminlmax,
+        )
 
-            plotTTEEBB(
-                plot_dir=plot_dir,
-                freqs=exp_config.frequencies,
-                Cl=unbinned_nl[idx],
-                save_name=f"harmonic_pipe_spectra_noise_cov_unbinned_{exp}",
-                y_axis_label=r"$N_\ell$ unbinned noise covariance (namaster)",
-                use_D_ell=False,
-                lims_x=None,
-                lims_y=None,
-                ell=None,
+        plotTTEEBB(
+            plot_dir=plot_dir,
+            freqs=exp_config.frequencies,
+            Cl=unbinned_nl[idx],
+            save_name=f"harmonic_pipe_spectra_noise_cov_unbinned_{exp}",
+            y_axis_label=r"$N_\ell$ unbinned noise covariance (namaster)",
+            use_D_ell=False,
+            lims_x=None,
+            lims_y=None,
+            ell=None,
             )
 
 

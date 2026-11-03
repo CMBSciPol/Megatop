@@ -395,6 +395,83 @@ def plot_spectra_comparison(manager: DataManager, config: Config, id_sim: int | 
     plt.savefig(plot_dir / f"spectra_comparison_skysim{id_sim}.png", bbox_inches="tight")
     plt.clf()
 
+def plot_mean_cornerplot(
+    manager: DataManager,
+    config: Config,
+    recenter: bool = False,
+    max_total_samples: int = 200_000,
+    seed: int = 0,
+):
+    r_sim = config.map_sim_pars.r_input
+    A_lens_sim = config.map_sim_pars.A_lens
+    Birefringence = config.map_sim_pars.Birefringence
+    n_sim_sky = config.map_sim_pars.n_sim
+
+    # Budget fixe : même nombre de points par simulation -> poids égaux implicites
+    n_per_sim = max(1, max_total_samples // max(n_sim_sky, 1))
+    rng = np.random.default_rng(seed)
+
+    all_chains = []
+    param_names = None
+    for id_sim in range(n_sim_sky):
+        fname_chains = manager.get_path_to_mcmc_chains(id_sim)
+        try:
+            with np.load(fname_chains, allow_pickle=True) as mcmc:
+                chains = np.asarray(mcmc["mcmc_chains"])
+                if param_names is None:
+                    param_names = list(mcmc["param_names"])
+        except FileNotFoundError:
+            logger.warning(f"MCMC chain file not found for id_sim={id_sim} at Path:{fname_chains}")
+            continue
+
+        chains = chains.reshape(-1, chains.shape[-1])
+        idx = rng.choice(len(chains), size=min(n_per_sim, len(chains)), replace=False)
+        all_chains.append(chains[idx].copy())  # copy() pour libérer la chaîne complète
+        del chains
+
+    n_found = len(all_chains)
+    if n_found == 0:
+        logger.error("Aucune chaîne MCMC trouvée, skipping plot_mean_cornerplot")
+        return
+
+    if recenter:
+        global_mean = np.mean([c.mean(axis=0) for c in all_chains], axis=0)
+        all_chains = [c - c.mean(axis=0) + global_mean for c in all_chains]
+
+    mean_samples = MCSamples(
+        samples=np.concatenate(all_chains, axis=0),
+        names=param_names,
+        labels=param_names,
+        label=f"Postérieur moyen ({n_found} sims)" + (" recentré" if recenter else ""),
+        ignore_rows=0,
+    )
+    del all_chains
+
+
+    # Make plot:
+    gd_plot = plots.get_subplot_plotter(width_inch=8)
+    gd_plot.settings.figure_legend_frame = False
+    gd_plot.settings.alpha_filled_add = 0.4
+
+    gd_plot.triangle_plot(
+        [mean_samples],
+        filled=True,
+        legend_loc="upper right",
+        line_args=[{"lw": 1.5, "color": "darkblue"}],
+        contour_colors=["darkblue"],
+        markers={"r": r_sim, "A_{lens}": A_lens_sim, "Birefringence": Birefringence},
+    )
+
+    stats_params_dict = get_params_statistics(manager, config)
+    add_error_bars_to_getdist_plot(gd_plot, stats_params_dict)
+
+    # Save figure:
+    plot_dir = manager.path_to_mcmc_plots
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    plot_name = "corner_plot_mean_skysims" + ("_recentered" if recenter else "")
+    plt.savefig(plot_dir / plot_name, bbox_inches="tight")
+    plt.clf()
+
 
 def main():
     parser = argparse.ArgumentParser(description="Plotter for component separation output")
@@ -414,6 +491,7 @@ def main():
     else:
         id_sim = 0
         logger.info(f"Plotting for sky simulation #{id_sim}")
+        plot_mean_cornerplot(manager, config)
         plot_single_cornerplot(manager, config, id_sim=id_sim)
         plot_spectra_comparison(manager, config, id_sim=id_sim)
         plot_all_cornerplots(manager, config)
