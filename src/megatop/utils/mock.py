@@ -318,7 +318,12 @@ def load_observation_matrix(nside: int, map_sets, obsmat_filenames) -> dict:
     dict_obsmats_func = {}
     for map_set, fname in zip(map_sets, obsmat_filenames, strict=False):
         logger.info(f"Loading obsmat for {map_set.name} from {fname}")
-        obsmat = sp.sparse.load_npz(fname)
+        if fname is not None:
+            obsmat = sp.sparse.load_npz(fname)
+        else:
+            logger.warning(f"No obsmat provided for {map_set.name}. Using identity matrix instead.")
+            npix = hp.nside2npix(nside)
+            obsmat = sp.sparse.identity(3 * npix, format="csr")
         dict_obsmats_func[map_set.name] = lambda map_, obs_mat=obsmat: obs_mat.dot(
             map_.ravel()
         ).reshape(3, hp.nside2npix(nside))

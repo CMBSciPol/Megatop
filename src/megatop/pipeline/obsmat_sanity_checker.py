@@ -18,8 +18,12 @@ def obsmat_sanity_check(manager=DataManager, config=Config):
     freq_list_checks_TQU = []
     for map_set, fname in zip(config.map_sets, manager.get_obsmat_filenames(), strict=False):
         logger.info(f"Loading obsmat for {map_set.name} from {fname}")
-        obsmat = sp.sparse.load_npz(fname)
-        freq_list_checks_TQU.append(compare_obsmat_vs_mask(obsmat, binary_mask))
+        if fname is not None:
+            obsmat = sp.sparse.load_npz(fname)
+            freq_list_checks_TQU.append(compare_obsmat_vs_mask(obsmat, binary_mask))
+        else:
+            logger.warning(f"No obsmat provided for {map_set.name}. Using identity matrix instead.")
+            freq_list_checks_TQU.append(True)
     freq_list_checks_TQU = np.array(freq_list_checks_TQU)
 
     assert_message = "There is a discrepancy between the binary mask and the observation matrix for the following matrix:\n"
