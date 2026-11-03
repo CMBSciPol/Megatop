@@ -200,6 +200,11 @@ class DataManager:
         """Directory where internally-generated transfer functions are saved."""
         return self.path_to_transfer_functions_parents / "transfer_functions_output"
 
+    @property
+    def get_true_spectra_TFsims_filename(self) -> Path:
+        fname = self.path_to_TF_output_dir / "power_law_c_cell"
+        return fname.with_suffix(".npz")
+
     def create_output_dirs(
         self, n_sim_sky: int, n_sim_noise: int, n_sim_TF: int | None = None
     ) -> None:
@@ -748,7 +753,7 @@ class DataManager:
                 *files_filtered_map_TF_inputs_B,
             ]
         else:
-            input_list = None
+            input_list = []
         return input_list
 
     def outputs_TF_estimater(self) -> list[Path]:
@@ -762,7 +767,7 @@ class DataManager:
                 self.get_path_to_preprocessed_reduced_TF(),
             ]
         else:
-            return None
+            return []
 
     def inputs_preproc(self, id_sim: int | None = None) -> list[Path]:
         inputs = [
@@ -770,7 +775,10 @@ class DataManager:
             self.path_to_analysis_mask,
             self.path_to_binary_mask,
         ]
-        if self._config.pre_proc_pars.correct_for_TF:
+        if (
+            self._config.pre_proc_pars.correct_for_TF
+            and self._config.parametric_sep_pars.use_harmonic_compsep
+        ):
             inputs.extend(p for p in self.outputs_TF_estimater() if p is not None)
         return inputs
 
@@ -823,6 +831,17 @@ class DataManager:
                 outputs.append(self.path_to_TRUE_pixel_noisecov(i))
         return outputs
 
+    def inputs_jax_precomputation(self) -> list[Path]:
+        inputs = [
+            self.path_to_binary_mask,
+            self.path_to_pixel_noisecov,
+            *self.get_obsmat_filenames(),
+        ]
+        return inputs
+
+    def outputs_jax_precomputation(self) -> list[Path]:
+        return [Path(str(p) + ".npz") for p in self.get_path_list_or_None("suffix_eigen_decomp")]
+
     def inputs_compsep(self, id_sim: int | None = None) -> list[Path]:
         if self._config.parametric_sep_pars.use_harmonic_compsep:
             preproc_input = self.get_path_to_preprocessed_alms(id_sim)
@@ -833,12 +852,17 @@ class DataManager:
                 noisecov_inputs = [self.get_path_to_preprocessed_TRUE_noise_maps(id_sim)]
             else:
                 noisecov_inputs = [self.path_to_pixel_noisecov]
-        return [
+        output = [
             preproc_input,
             self.path_to_binary_mask,
             self.path_to_analysis_mask,
             *noisecov_inputs,
         ]
+        if self._config.parametric_sep_pars.use_megabuster:
+            output += [
+                Path(str(p) + ".npz") for p in self.get_path_list_or_None("suffix_eigen_decomp")
+            ]
+        return output
 
     def outputs_compsep(self, id_sim: int | None = None) -> list[Path]:
         outputs = [
