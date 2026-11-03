@@ -49,6 +49,22 @@ def plot_all_noise_spectra(manager, config):
                 color="darkblue",
                 alpha=0.2,
             )
+            ax_EE.plot(
+                bin_centre_lminlmax,
+                np.abs(all_noise_Cls_CMB[0]),
+                label=None,
+                linestyle="--",
+                color="darkblue",
+                alpha=0.2,
+            )
+            ax_BB.plot(
+                bin_centre_lminlmax,
+                np.abs(all_noise_Cls_CMB[-1]),
+                label=None,
+                linestyle="--",
+                color="darkblue",
+                alpha=0.2,
+            )
             num_loaded_id += 1
         except FileNotFoundError:
             logger.warning(
@@ -72,6 +88,20 @@ def plot_all_noise_spectra(manager, config):
         label="Mean noise BB",
         color="brown",
         linestyle="-",
+    )
+    ax_EE.plot(
+        bin_centre_lminlmax,
+        np.abs(average_noise_CMB[0]),
+        label=None,
+        color="brown",
+        linestyle="--",
+    )
+    ax_BB.plot(
+        bin_centre_lminlmax,
+        np.abs(average_noise_CMB[-1]),
+        label=None,
+        color="brown",
+        linestyle="--",
     )
 
     ax_EE.set_xlabel(r"$\ell$")
@@ -339,6 +369,20 @@ def plot_all_spectra(manager, config):
         color="brown",
         linestyle="-",
     )
+    ax_EE.plot(
+        bin_centre_lminlmax,
+        np.abs(average_noise_CMB[0]),
+        label=None,
+        color="brown",
+        linestyle="--",
+    )
+    ax_BB.plot(
+        bin_centre_lminlmax,
+        np.abs(average_noise_CMB[-1]),
+        label=None,
+        color="brown",
+        linestyle="--",
+    )
 
     ax_EE_debiased.plot(
         bin_centre_lminlmax,
@@ -387,6 +431,13 @@ def plot_all_spectra(manager, config):
                 label=f"Mean noise {label_namaster[i]}",
                 color="brown",
                 linestyle="-",
+            )
+            ax_summary[j, i].plot(
+                bin_centre_lminlmax,
+                np.abs(average_noise_CMB[i]),
+                label=None,
+                color="brown",
+                linestyle="--",
             )
     mean_debiased_diff = np.mean(array_debiased_diff_model, axis=0)
     std_debiased_diff = np.std(array_debiased_diff_model, axis=0)
