@@ -380,7 +380,7 @@ def func_signal(
         print("formes :", np.shape(b0), np.shape(b1))
         print("rapport aux ℓ = 0, 100, 300, 500 :", np.asarray(b1)[:, [0, 100, 300, 500]] / np.asarray(b0)[:, [0, 100, 300, 500]])
 
-        sky_qu = Stokes.from_stokes(Q=jnp.asarray(sky[:, 1]), U=jnp.asarray(sky[:, 2]))
+        sky_qu = Stokes.from_stokes(q=jnp.asarray(sky[:, 1]), u=jnp.asarray(sky[:, 2]))
         B = BeamOperator(
             lmax=config.lmax,
             beam_fl=beam_fl,

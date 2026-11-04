@@ -164,7 +164,7 @@ plot_pars:
   lmin_plot: 30
   lmax_plot: 450
 map_sim_pars:
-  n_sim: 300
+  n_sim: 1
   sky_model:
   - d0
   - s0
@@ -187,7 +187,7 @@ map_sim_pars:
   tophat_width: 0.3
   DEBUG_noEmodes: false
 noise_sim_pars:
-  n_sim: 300
+  n_sim: 1
   include_nhits: true
   seed: 42
   experiments:

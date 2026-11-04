@@ -29,7 +29,7 @@ echo "------------------------------------------------------------"
 echo "|                           MOCKER                         |"
 echo "------------------------------------------------------------"
 #mpirun -n 8 python $(which megatop-mock-run) --config ${PARAM_FILE}
-#megatop-mock-run --config ${PARAM_FILE}
+#fmegatop-mock-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting mocker outputs"

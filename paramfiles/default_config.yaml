@@ -67,7 +67,7 @@ map_sim_pars:
   cmb_seed: 1
   cmb_sim_no_pysm: true
   filter_sims: false
-  n_sim: 300
+  n_sim: 1
   r_input: 0.0
   Birefringence: 0.3
   single_cmb: false
@@ -105,7 +105,7 @@ noise_cov_pars:
   save_preprocessed_noise_maps: true
 noise_sim_pars:
   include_nhits: true
-  n_sim: 300
+  n_sim: 1
   experiments: 
     SO-SAT:
       usev3p1: True
