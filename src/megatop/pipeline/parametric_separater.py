@@ -507,7 +507,7 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
     return res
 
 
-def load_megabuster_operators(manager: DataManager):
+def load_megabuster_operators(manager: DataManager, config: Config):
     with Timer("load-covmat"):
         noisecov_fname = manager.path_to_pixel_noisecov
         logger.debug(f"Loading covmat from {noisecov_fname}")
@@ -562,12 +562,18 @@ def load_megabuster_operators(manager: DataManager):
             matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
 
             n_freq = np.array(config.frequencies).size
+
+            indices_freq_not_filtered = manager.get_indices_frequencies_not_filtered()
             if indices_freq_not_filtered is not None:
                 common_basis_reference_freq = [f for f in range(n_freq) if f not in indices_freq_not_filtered][0]
             else:
                 common_basis_reference_freq = 0
+            logger.info(f"Using frequency {common_basis_reference_freq} as reference for common basis eigenvectors.")
+            add_ = ''
+            if not str(path_eigen_decomp_fname[common_basis_reference_freq]).endswith('.npz'):
+                add_ = '.npz'
 
-            common_filtered_eigenvector = np.load(path_eigen_decomp_fname[common_basis_reference_freq])['eigvecs']
+            common_filtered_eigenvector = np.load(str(path_eigen_decomp_fname[common_basis_reference_freq]) + add_)['eigvecs']
 
     return noisecov, obsmat_operator_rhs, matrix_central, matrix_precond, common_filtered_eigenvector
 
@@ -826,7 +832,8 @@ def main():
     if config.parametric_sep_pars.use_megabuster:
         PSMemoryUsage("PSMemory usage BEFORE load_megabuster_operators()")
         noisecov, obsmat_operator_rhs, matrix_central, matrix_precond, common_filtered_eigenvector = load_megabuster_operators(
-            manager
+            manager,
+            config
         )
         PSMemoryUsage("PSMemory usage AFTER load_megabuster_operators()")
 
