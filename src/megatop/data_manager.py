@@ -201,7 +201,7 @@ class DataManager:
             i for i, map_set in enumerate(self._config.map_sets) if map_set.obsmat_path is None
         ]
         if len(list_indices) == 0:
-            logger.warning(
+            logger.info(
                 "All map sets have obsmat_path set, so all frequencies are filtered. "
             )
             list_indices = None

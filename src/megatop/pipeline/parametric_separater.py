@@ -557,11 +557,40 @@ def load_megabuster_operators(manager: DataManager, config: Config):
         #     raise ValueError(msg_any_obs)
         else:
             logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
-            matrix_central = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
-            
-            matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
+
+            noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
+            inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
+            inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
+                1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
+            )
+            inverse_noisecov_QU_masked_nested = np.zeros_like(inverse_noisecov_QU_masked)
 
             n_freq = np.array(config.frequencies).size
+
+            for i in range(n_freq):
+                inverse_noisecov_QU_masked_nested[i,...] = hp.reorder(inverse_noisecov_QU_masked[i], r2n=True)
+
+            mask_nested = hp.reorder(binary_mask, r2n=True)
+
+
+            n_pix_masked = binary_mask[binary_mask!=0].size
+    
+
+            matrix_central = mb.io.load_matrix_precond(
+                path_eigen_decomp_fname, 
+                power_diagonal=1,
+                diagonal_array_fill=inverse_noisecov_QU_masked_nested[...,mask_nested!=0],
+                n_pix_diagonal=n_pix_masked
+            )
+
+            matrix_precond = mb.io.load_matrix_precond(
+                path_eigen_decomp_fname, 
+                power_diagonal=-1,
+                diagonal_array_fill=inverse_noisecov_QU_masked_nested[...,mask_nested!=0],
+                n_pix_diagonal=n_pix_masked
+            )
+
+            
 
             indices_freq_not_filtered = manager.get_indices_frequencies_not_filtered()
             if indices_freq_not_filtered is not None:

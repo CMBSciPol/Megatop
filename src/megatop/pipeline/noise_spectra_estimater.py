@@ -102,6 +102,18 @@ def initialize_megabuster(manager, binary_mask, id_sim_sky):
 
         indices_freq_not_filtered = manager.get_indices_frequencies_not_filtered()
 
+        with Timer("load-covmat"):
+            noisecov_fname = manager.path_to_pixel_noisecov
+            logger.debug(f"Loading covmat from {noisecov_fname}")
+            noisecov = np.load(noisecov_fname)
+
+        noisecov_QU_masked = apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
+        inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
+        inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
+            1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
+        )
+        
+
         path_eigen_decomp_fname = manager.get_path_list_or_None("suffix_eigen_decomp")
         if np.all(np.array(path_eigen_decomp_fname) == Path()):
             # TODO: how to handle this case?
@@ -116,28 +128,44 @@ def initialize_megabuster(manager, binary_mask, id_sim_sky):
         #     raise ValueError(msg_any_obs)
         else:
             logger.debug(f"Loading observation matrix from {obsmat_operator_fname}")
-            matrix_central = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=1)
 
-            matrix_precond = mb.io.load_matrix_precond(path_eigen_decomp_fname, power_diagonal=-1)
+            n_pix_masked = binary_mask[binary_mask!=0].size
 
+            inverse_noisecov_QU_masked_nested = np.zeros_like(inverse_noisecov_QU_masked)
+            
             n_freq = np.array(config.frequencies).size
+            
+            for i in range(n_freq):
+                inverse_noisecov_QU_masked_nested[i,...] = hp.reorder(inverse_noisecov_QU_masked[i], r2n=True)
+
+            inverse_noisecov_QU_masked_nested = np.array(inverse_noisecov_QU_masked_nested)
+
+            matrix_central = mb.io.load_matrix_precond(
+                path_eigen_decomp_fname, 
+                power_diagonal=1,
+                diagonal_array_fill=inverse_noisecov_QU_masked_nested,
+                n_pix_diagonal=n_pix_masked
+            )
+
+            matrix_precond = mb.io.load_matrix_precond(
+                path_eigen_decomp_fname, 
+                power_diagonal=-1,
+                diagonal_array_fill=inverse_noisecov_QU_masked_nested,
+                n_pix_diagonal=n_pix_masked
+            )
+
             if indices_freq_not_filtered is not None:
                 common_basis_reference_freq = [f for f in range(n_freq) if f not in indices_freq_not_filtered][0]
             else:
                 common_basis_reference_freq = 0
 
-            common_filtered_eigenvector = np.load(path_eigen_decomp_fname[common_basis_reference_freq])['eigvecs']
+            add_ = ''
+            if not str(path_matrix_eigen_decomp[idx_freq]).endswith('.npz'):
+                add_ = '.npz'
+            
+            common_filtered_eigenvector = np.load(path_eigen_decomp_fname[common_basis_reference_freq]+add_)['eigvecs']
 
-        with Timer("load-covmat"):
-            noisecov_fname = manager.path_to_pixel_noisecov
-            logger.debug(f"Loading covmat from {noisecov_fname}")
-            noisecov = np.load(noisecov_fname)
-
-        noisecov_QU_masked = apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
-        inverse_noisecov_QU_masked = np.zeros_like(noisecov_QU_masked)
-        inverse_noisecov_QU_masked[noisecov_QU_masked != 0] = (
-            1.0 / noisecov_QU_masked[noisecov_QU_masked != 0]
-        )
+        
 
         # get the 'options' through the appropriate method which returns a dict
 
