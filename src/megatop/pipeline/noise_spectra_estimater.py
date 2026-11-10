@@ -31,6 +31,30 @@ from megatop.utils.spectra import (  # noqa: E402
 )
 from megatop.utils.utils import MemoryUsage  # noqa: E402
 
+def _flatten_pix(a, n_lead: int):
+    """Flatten the pixel axes after the first `n_lead` axes (no-op for HEALPix; CAR (ny, nx) -> ny*nx)."""
+    a = np.asarray(a)
+    return a.reshape(*a.shape[:n_lead], -1)
+
+
+def _unflatten_pix(a, pix_shape):
+    """Inverse of `_flatten_pix` on the last axis (no-op for HEALPix)."""
+    a = np.asarray(a)
+    return a.reshape(*a.shape[:-1], *pix_shape)
+
+
+def _union_binary_mask(config: Config, manager: DataManager):
+    """Per-experiment binary masks + their union, read via the landscape (HEALPix or CAR)."""
+    experiments = set(m.exp_tag for m in config.map_sets)
+    binary_mask_per_exp = {
+        exp: config.landscape.read_map(manager.path_to_binary_mask(exp)) for exp in experiments
+    }
+    binary_mask = config.landscape.zeros(()).astype(bool)
+    for exp in experiments:
+        binary_mask |= binary_mask_per_exp[exp].astype(bool)
+    return binary_mask_per_exp, binary_mask
+
+
 # ---------------------------------------------------------------------------
 # Workspace NaMaster : calculé une seule fois (rang 0), écrit sur disque,
 # relu par chaque processus fille (un NmtWorkspace n'est pas picklable).
@@ -41,18 +65,20 @@ def init_workspace(config: Config, manager: DataManager):
     # use_beam = config.parametric_sep_pars.megabuster_options.use_beam_operator
     use_beam = False
 
+    # CAR fields carry the geometry's wcs into NaMaster; HEALPix passes None.
+    wcs = config.geometry[1] if config.is_car else None
+
     if use_beam:
-        effective_beam_CMB = get_common_wpix(config.nside, config.lmax)
+        effective_beam_CMB = get_common_wpix(config.nside, config.lmax,  is_car=config.is_car)
     else:
         effective_beam_CMB = get_common_beam_wpix(
-            config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
-        )
+            config.pre_proc_pars.common_beam_correction, config.nside, config.lmax, is_car=config.is_car)
         logger.warning(
             "We are only using the CMB effective beam in the noise spectra estimation\n"
             "If you want to use the effective beam for the other components, please update the code"
         )
 
-    analysis_mask = hp.read_map(manager.path_to_joint_analysis_mask)
+    analysis_mask = config.landscape.read_map(manager.path_to_joint_analysis_mask)
 
     with Timer("init-namaster-workspace"):
         workspace = initialize_nmt_workspace(
@@ -63,6 +89,7 @@ def init_workspace(config: Config, manager: DataManager):
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
             lmax=config.lmax,
+            wcs=wcs,
         )
     return workspace, effective_beam_CMB
 
@@ -152,13 +179,12 @@ def _compute_noise_sum(
         with np.load(manager.get_path_to_compsep_results(sub=id_sim_sky), allow_pickle=True) as f:
             W_maxL = f["W_maxL"]
 
-    experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask_per_exp = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
-    binary_mask = np.zeros(hp.nside2npix(config.nside), dtype=bool)
-    for exp in experiments:
-        binary_mask |= binary_mask_per_exp[exp].astype(bool)
+    binary_mask_per_exp, binary_mask = _union_binary_mask(config, manager)
 
-    analysis_mask = hp.read_map(manager.path_to_joint_analysis_mask)
+    # CAR fields carry the geometry's wcs into NaMaster; HEALPix passes None.
+    wcs = config.geometry[1] if config.is_car else None
+
+    analysis_mask = config.landscape.read_map(manager.path_to_joint_analysis_mask)
     nmt_bins = load_nmt_binning(manager)
 
     if config.parametric_sep_pars.use_megabuster:
@@ -182,6 +208,8 @@ def _compute_noise_sum(
                 )
                 return None
 
+            if config.parametric_sep_pars.megabuster_options.use_obsmat and config.is_car:
+                raise NotImplementedError("CAR: use_obsmat not supported (NEST-ordered HEALPix obsmat).")
             if config.parametric_sep_pars.megabuster_options.use_obsmat:
                 obsmat_operator_fname = manager.get_path_list_or_None("suffix_obsmat_scipy")
                 if np.any(np.array(obsmat_operator_fname) == Path()):
@@ -244,6 +272,12 @@ def _compute_noise_sum(
                 real_inverse_noisecov_QU_masked[nz] = 1.0 / real_noisecov_QU_masked[nz]
             else:
                 real_inverse_noisecov_QU_masked = None
+
+            # CAR: per-pixel compsep on flat pixel arrays (no-op for HEALPix)
+            inverse_noisecov_QU_masked = _flatten_pix(inverse_noisecov_QU_masked, 2)
+            if real_inverse_noisecov_QU_masked is not None:
+                real_inverse_noisecov_QU_masked = _flatten_pix(real_inverse_noisecov_QU_masked, 2)
+            binary_mask_flat = _flatten_pix(binary_mask, 0)
 
             megabuster_options = config.parametric_sep_pars.get_megabuster_options_as_dict()
             angles_names = [f"angle_{i}" for i in range(len(config.angle_uncertainty))]
@@ -327,10 +361,13 @@ def _compute_noise_sum(
             else:
                 real_noise_freq_maps_preprocessed = None
 
+        pix_shape = noise_freq_maps_preprocessed.shape[2:]
         if not config.parametric_sep_pars.use_megabuster:
+            # W_maxL carries a flat pixel axis: flatten the noise maps to match, then restore
             noise_map_post_compsep = np.einsum(
-                "ifsp,fsp->isp", W_maxL, noise_freq_maps_preprocessed[:, 1:]
+                "ifsp,fsp->isp", W_maxL, _flatten_pix(noise_freq_maps_preprocessed[:, 1:], 2)
             )
+            noise_map_post_compsep = _unflatten_pix(noise_map_post_compsep, pix_shape)
         else:
             # megabuster vide ce dictionnaire (pop) : on en crée un neuf à chaque appel
             angles_prior_dict = {
@@ -352,6 +389,10 @@ def _compute_noise_sum(
             else:
                 real_noise_masked = None
 
+            noise_masked = _flatten_pix(noise_masked, 2)
+            if real_noise_masked is not None:
+                real_noise_masked = _flatten_pix(real_noise_masked, 2)
+
             compsep_results = mb.compsep.perform_compsep(
                 config,
                 manager,
@@ -363,7 +404,7 @@ def _compute_noise_sum(
                 invN_matrix=inverse_noisecov_QU_masked,
                 real_invN_matrix=real_inverse_noisecov_QU_masked,
                 do_minimization=False,
-                binary_mask=binary_mask,
+                binary_mask=binary_mask_flat,
                 obs_mat_operator=None,
                 obsmat_operator_rhs=obsmat_operator_rhs,
                 use_calibration_matrix=megabuster_options["use_calibration_matrix"],
@@ -388,6 +429,10 @@ def _compute_noise_sum(
             noise_map_post_compsep = np.array(
                 compsep_results.s, dtype=np.float64, copy=True, order="C"
             )
+            # back to the native pixel geometry for masking + NaMaster (no-op for HEALPix)
+            noise_map_post_compsep = np.ascontiguousarray(
+                _unflatten_pix(noise_map_post_compsep, pix_shape)
+            )
             del compsep_results, noise_masked, real_noise_masked
 
         noise_map_post_compsep *= binary_mask
@@ -409,6 +454,7 @@ def _compute_noise_sum(
             purify_b=config.map2cl_pars.purify_b,
             purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
+            wcs=wcs,
         )
 
         for key, val in noise_Cls.items():
@@ -545,7 +591,7 @@ def mixing_matrix_array(frequencies, params, dust_nu0=150.0, synchrotron_nu0=150
     from megabuster.mixingmatrix import create_MixingMatrixOperator
 
     n_f = len(frequencies)
-    dummy = Stokes.from_stokes(Q=jnp.zeros((n_f, 1)), U=jnp.zeros((n_f, 1)))
+    dummy = Stokes.from_stokes(q=jnp.zeros((n_f, 1)), u=jnp.zeros((n_f, 1)))
     in_structure_sed = dummy.structure_for((dummy.shape[1],))   # même construction que perform_compsep
     A_op = create_MixingMatrixOperator(
         frequencies, params, in_structure_sed,
@@ -577,13 +623,9 @@ def compute_noise_nl_like_mc(
         return np.load(cache_path)
 
     workspace_nmt = _load_workspace(workspace_path)
-    analysis_mask = hp.read_map(manager.path_to_joint_analysis_mask)
-
-    experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask_per_exp = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
-    binary_mask = np.zeros(hp.nside2npix(config.nside), dtype=bool)
-    for exp in experiments:
-        binary_mask |= binary_mask_per_exp[exp].astype(bool)
+    analysis_mask = config.landscape.read_map(manager.path_to_joint_analysis_mask)
+    binary_mask_per_exp, binary_mask = _union_binary_mask(config, manager)
+    wcs = config.geometry[1] if config.is_car else None
 
     with np.load(manager.path_to_binning, allow_pickle=True) as f:
         bin_idx = f["bin_index_lminlmax"]
@@ -613,6 +655,7 @@ def compute_noise_nl_like_mc(
                 lmax=config.lmax,
                 purify_b=config.map2cl_pars.purify_b,
                 purify_e=config.map2cl_pars.purify_e,
+                wcs=wcs,
             )
             nl_real.append(np.asarray(cls[f"f{i}xf{i}"]))
         nl_real = np.array(nl_real)                                   # (n_freq, 4, n_bins_full)
@@ -637,13 +680,25 @@ def pixel_weight_kernel(config: Config, manager: DataManager, Lambda_EB: np.ndar
         if config.pre_proc_pars.use_real_beams
         else manager.path_to_pixel_noisecov
     )
-    noisecov = np.load(path_cov)                                    # (n_freq, 3, npix)
-    analysis_mask = hp.read_map(manager.path_to_joint_analysis_mask)
+    # CAR: flatten pixel axes to a single axis p (no-op for HEALPix)
+    noisecov = _flatten_pix(np.load(path_cov), 2)                   # (n_freq, 3, npix)
+    analysis_mask = _flatten_pix(config.landscape.read_map(manager.path_to_joint_analysis_mask), 0)
+
+    # Pixel solid angle: constant for HEALPix (cancels in the normalised average),
+    # varies as cos(dec) for CAR so the mask average must be area-weighted.
+    if config.is_car:
+        from pixell import enmap
+
+        pix_area = _flatten_pix(enmap.pixsizemap(*config.geometry), 0)
+    else:
+        pix_area = np.ones(analysis_mask.size)
 
     n_f = len(config.map_sets)
     inv_var = np.zeros((n_f, noisecov.shape[-1]))
     for i_m, map_set in enumerate(config.map_sets):
-        binary = hp.read_map(manager.path_to_binary_mask(map_set.exp_tag)).astype(bool)
+        binary = _flatten_pix(
+            config.landscape.read_map(manager.path_to_binary_mask(map_set.exp_tag)), 0
+        ).astype(bool)
         var_Q = noisecov[i_m, 1]
         ok = binary & (var_Q > 0)
         inv_var[i_m, ok] = 1.0 / var_Q[ok]
@@ -651,7 +706,7 @@ def pixel_weight_kernel(config: Config, manager: DataManager, Lambda_EB: np.ndar
     # Pixels utilisés : dans le masque d'analyse, avec assez de fréquences observées pour inverser
     n_c = Lambda_EB.shape[1] // 2
     pix = np.where((analysis_mask > 0) & ((inv_var > 0).sum(axis=0) >= n_c))[0]
-    m2 = analysis_mask[pix] ** 2
+    m2 = analysis_mask[pix] ** 2 * pix_area[pix]
 
     Ninv = np.repeat(inv_var[:, pix].T, 2, axis=1)                 # (n_pix, 2*n_freq), même valeur pour E et B
     LtN = Lambda_EB.T[None, :, :] * Ninv[:, None, :]               # (n_pix, 2n_comp, 2n_freq)
@@ -712,7 +767,7 @@ def analytic_noise_spectra(
     G = pixel_weight_kernel(config, manager, Lambda_EB)
     cov = noise_cov_from_kernel(G, nl_deconv)              # poids pixel de la comp-sep (ligne du haut)
     cov_opt = analytic_noise_cov(Lambda_EB, nl_deconv) 
-    
+
     # Même format que les spectres MC : clés "Noise_AxNoise_B", tableaux (4, n_bins) = [EE, EB, BE, BB]
     comp_names = ["Noise_CMB", "Noise_Dust", "Noise_Synch"][: cov.shape[1]]
     analytic_spectra = {}

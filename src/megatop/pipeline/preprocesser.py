@@ -29,7 +29,7 @@ def homemade_unbin_cell(binned_cell, nmt_bins):
 def preprocess_map(
     manager: DataManager, config: Config, id_sim: int | None = None, mask_output=True
 ):
-    input_maps = read_input_maps(manager.get_maps_filenames(id_sim))
+    input_maps = read_input_maps(manager.get_maps_filenames(id_sim), config.landscape)
     logger.info(
         f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
     )
@@ -50,7 +50,7 @@ def preprocess_map(
         if config.pre_proc_pars.common_beam_correction != 0.0:
             if mask_output:
                 experiments = set(m.exp_tag for m in config.map_sets)
-                binary_mask_alt = {exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
+                binary_mask_alt = {exp: config.landscape.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
                 for i_m, map_set in enumerate(config.map_sets):
                     input_maps[i_m] = apply_binary_mask(
                         input_maps[i_m], binary_mask=binary_mask_alt[map_set.exp_tag]
@@ -70,7 +70,7 @@ def preprocess_map(
     if not use_harmonic:
         if mask_output:
             experiments = set(m.exp_tag for m in config.map_sets)
-            binary_mask = {exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
+            binary_mask = {exp: config.landscape.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
             for i_m, map_set in enumerate(config.map_sets):
                 freq_maps_convolved[i_m] = apply_binary_mask(
                     freq_maps_convolved[i_m], binary_mask=binary_mask[map_set.exp_tag]
@@ -191,7 +191,7 @@ def preprocess_map(
 def preprocess_real_map(
     manager: DataManager, config: Config, id_sim: int | None = None, mask_output=True
 ):
-    input_maps = read_input_maps(manager.get_maps_filenames(id_sim))
+    input_maps = read_input_maps(manager.get_maps_filenames(id_sim), config.landscape)
     logger.info(
         f"Input maps have shapes: {[input_maps[i].shape for i in range(len(config.frequencies))]}"
     )
@@ -214,7 +214,7 @@ def preprocess_real_map(
                 )
         if mask_output:
             experiments = set(m.exp_tag for m in config.map_sets)
-            binary_mask = {exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
+            binary_mask = {exp: config.landscape.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits")) for exp in experiments}
             for i_m, map_set in enumerate(config.map_sets):
                 freq_maps_convolved[i_m] = apply_binary_mask(
                     freq_maps_convolved[i_m], binary_mask=binary_mask[map_set.exp_tag]

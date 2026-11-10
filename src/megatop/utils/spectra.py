@@ -6,11 +6,23 @@ import healpy as hp
 import numpy as np
 import pymaster as nmt
 from numpy.typing import NDArray
+from pixell import enmap
 
 from megatop.config import CAMBCosmoPars
 from megatop.utils import logger
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
+
+
+def _car_deconvolve_pixwin(maps: NDArray, wcs) -> enmap.ndmap:
+    """Deconvolve the CAR pixel window from `maps` in map space.
+
+    The mocker applies the (anisotropic) CAR pixel window with `enmap.apply_window`;
+    NaMaster's `beam=` only takes a 1-D `b_ell`, so the window cannot be folded there.
+    We remove it symmetrically (`pow=-1`) before building the `NmtField`, leaving only
+    the Gaussian beam to be deconvolved by NaMaster.
+    """
+    return enmap.apply_window(enmap.enmap(np.asarray(maps), wcs), pow=-1)
 
 CAMBSpectraKey = Literal[
     "total",
@@ -80,14 +92,17 @@ def compute_auto_cross_cl_from_maps_dict(
     purify_b: bool,
     purify_e: bool,
     inverse_effective_transfer_function: NDArray | None = None,
+    wcs=None,
 ):
-    # Create the fields
+    # Create the fields. wcs not None selects CAR fields (pymaster builds them on the
+    # CAR geometry); the CAR pixel window is removed in map space beforehand.
     fields = []
     for key in maps_dict:
+        maps = _car_deconvolve_pixwin(maps_dict[key], wcs) if wcs is not None else maps_dict[key]
         fields.append(
             nmt.NmtField(
                 mask=analysis_mask,
-                maps=maps_dict[key],
+                maps=maps,
                 spin=2,
                 beam=beam,
                 purify_e=purify_e,
@@ -96,6 +111,7 @@ def compute_auto_cross_cl_from_maps_dict(
                 n_iter_mask=n_iter,
                 lmax=lmax,
                 lmax_mask=lmax,
+                wcs=wcs,
             )
         )
 
@@ -138,17 +154,27 @@ def compute_auto_cross_cl_from_maps_dict(
     return cl_dict
 
 
-def get_common_beam_wpix(common_beam_fwhm_arcmin: float, nside: int, lmax: int):
+def get_common_beam_wpix(
+    common_beam_fwhm_arcmin: float, nside: int, lmax: int, is_car: bool = False
+):
+    Bl_gauss_common = hp.gauss_beam(np.radians(common_beam_fwhm_arcmin / 60.0), lmax=lmax, pol=True)
+    if is_car:
+        # CAR pixel window is anisotropic and handled in map space; the NaMaster
+        # beam is the Gaussian common beam only.
+        return Bl_gauss_common[:, 1]
     wpix_out = hp.pixwin(
         nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
     )  # Pixel window function of output maps
-    Bl_gauss_common = hp.gauss_beam(np.radians(common_beam_fwhm_arcmin / 60.0), lmax=lmax, pol=True)
 
     print('wpix', wpix_out)
-    
+
     return Bl_gauss_common[:, 1] * wpix_out[1]  # TODO only polarisation one ?
 
-def get_common_wpix(nside: int, lmax: int):
+def get_common_wpix(nside: int, lmax: int, is_car: bool = False):
+    if is_car:
+        # CAR pixel window is handled in map space (see `_car_deconvolve_pixwin`):
+        # nothing left to deconvolve in harmonic space.
+        return np.ones(lmax + 1)
     wpix_out = hp.pixwin(
         nside, pol=True, lmax=lmax, datapath=HEALPY_DATA_PATH
     )  # Pixel window function of output maps
@@ -203,6 +229,7 @@ def initialize_nmt_workspace(
     purify_b: bool,
     n_iter: int,
     lmax: int,
+    wcs=None,
 ):
     fields_init_wsp = nmt.NmtField(
         mask=analysis_mask,
@@ -215,6 +242,7 @@ def initialize_nmt_workspace(
         n_iter_mask=n_iter,
         lmax=lmax,
         lmax_mask=lmax,
+        wcs=wcs,
     )
     return nmt.NmtWorkspace.from_fields(fields_init_wsp, fields_init_wsp, nmt_bins)
 
@@ -247,6 +275,7 @@ def spectra_from_namaster(
     beam=None,
     return_all_spectra=False,
     lmax=None,
+    wcs=None,
 ):
     """
     Computes the auto and cross-spectra from the frequency noise maps using NaMaster.
@@ -304,15 +333,19 @@ def spectra_from_namaster(
     for f in range(freq_noise_maps.shape[0]):
         beam_f = beam[f] if beam is not None else None
 
+        maps_f = freq_noise_maps[f, 1:]
+        if wcs is not None:
+            maps_f = _car_deconvolve_pixwin(maps_f, wcs)
         fields = nmt.NmtField(
             mask_analysis,
-            freq_noise_maps[f, 1:],
+            maps_f,
             beam=beam_f,
             purify_e=purify_e,
             purify_b=purify_b,
             n_iter=10,
             lmax=lmax,
             lmax_mask=lmax,
+            wcs=wcs,
         )
         if reset_workspace:
             workspaceff = nmt.NmtWorkspace.from_fields(fields, fields, nmt_bins)

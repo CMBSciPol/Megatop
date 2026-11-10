@@ -70,7 +70,7 @@ def _preprocess_noise_maps(config: Config, manager: DataManager, id_real: int | 
     noise_freq_maps = []
     for noise_filename in manager.get_noise_maps_filenames(id_real):
         logger.debug(f"Importing noise map: {noise_filename}")
-        noise_freq_maps.append(hp.read_map(noise_filename, field=None, dtype=np.float64))
+        noise_freq_maps.append(config.landscape.read_map(noise_filename))
 
     # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
@@ -105,7 +105,7 @@ def _real_preprocess_noise_maps(config: Config, manager: DataManager, id_real: i
     noise_freq_maps = []
     for noise_filename in manager.get_noise_maps_filenames(id_real):
         logger.debug(f"Importing noise map: {noise_filename}")
-        noise_freq_maps.append(hp.read_map(noise_filename, field=None, dtype=np.float64))
+        noise_freq_maps.append(config.landscape.read_map(noise_filename))
 
     # Always go through common_beam_and_nside even when common_beam == beams (no actual beam
     # correction). The map2alm→alm2map cycle bandlimits pixel-space noise maps to config.lmax,
@@ -280,14 +280,14 @@ def noise_preprocess_realisation(config: Config, manager: DataManager, id_sim: i
         logger.info(f"Saving pre-processed TRUE noise maps to {out_TRUE_maps}")
         np.save(out_TRUE_maps, preprocessed_TRUE_noise_maps)
 
-    #if config.parametric_sep_pars.use_harmonic_compsep:
-    nl_binned, nl_unbinned = _harmonic_nl_contrib(config, manager, preprocessed)
-    out_nl = manager.get_path_to_nl_noisecov_contrib(id_sim)
-    out_nl_unbinned = manager.get_path_to_nl_noisecov_contrib_unbinned(id_sim)
-    logger.info(f"Saving nl contribution to {out_nl}")
-    np.save(out_nl, nl_binned)
-    logger.info(f"Saving unbinned nl contribution to {out_nl_unbinned}")
-    np.save(out_nl_unbinned, nl_unbinned)
+    if config.parametric_sep_pars.use_harmonic_compsep:
+        nl_binned, nl_unbinned = _harmonic_nl_contrib(config, manager, preprocessed)
+        out_nl = manager.get_path_to_nl_noisecov_contrib(id_sim)
+        out_nl_unbinned = manager.get_path_to_nl_noisecov_contrib_unbinned(id_sim)
+        logger.info(f"Saving nl contribution to {out_nl}")
+        np.save(out_nl, nl_binned)
+        logger.info(f"Saving unbinned nl contribution to {out_nl_unbinned}")
+        np.save(out_nl_unbinned, nl_unbinned)
 
 
 def main():

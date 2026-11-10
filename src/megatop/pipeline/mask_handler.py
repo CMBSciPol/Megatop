@@ -6,6 +6,7 @@ from urllib.request import urlopen
 
 import healpy as hp
 import numpy as np
+from pixell import enmap
 
 from megatop import DataManager
 from megatop.config import Config, ValidPlanckGalKey
@@ -19,16 +20,35 @@ PLANCK_MASK_GALPLANE_URL = (
     "ancillary-data/masks/HFI_Mask_GalPlane-apo0_2048_R2.00.fits"
 )
 
+# Resampling the galactic mask (HEALPix ud_grade or CAR reproject) makes it
+# fractional; re-binarize by keeping target pixels with majority good coverage.
+GAL_MASK_REBINARIZE_THRESHOLD = 0.5
+
 
 # TODO: check the dtypes of products
 
 
 def mask_handler(manager: DataManager, config: Config):
     experiments = set(map_set.exp_tag for map_set in config.map_sets)
+    landscape = config.landscape
+
+    # The nhits / galactic products are built in HEALPix. For a CAR run, the smooth
+    # products are reprojected onto the target geometry (no rotation: already
+    # celestial), then thresholded and apodized natively in CAR.
+    def to_target(m):
+        return landscape.reproject_pixel(m, rot=None) if config.is_car else m
+
+    def get_analysis_mask(common_hitmap, binary_mask, apod_radius_deg, apod_type):
+        if config.is_car:
+            return mask.get_analysis_mask_car(common_hitmap, binary_mask, apod_radius_deg, apod_type)
+        return mask.get_analysis_mask(common_hitmap, binary_mask, apod_radius_deg, apod_type)
+
+    def ones_map():
+        return landscape.zeros(()) + 1.0 if config.is_car else np.ones(hp.nside2npix(config.nside))
 
     # Get the galactic mask (shared across all experiments)
     with Timer("galmask"):
-        galactic_mask = np.ones(hp.nside2npix(config.nside))
+        galactic_mask = ones_map()
 
         if config.masks_pars.include_galactic:
             # Download Planck galactic mask
@@ -47,15 +67,19 @@ def mask_handler(manager: DataManager, config: Config):
             # Rotate from galactic to equatorial coordinates
             r = hp.Rotator(coord=["G", "C"])
             galactic_mask = r.rotate_map_pixel(galactic_mask)
+            # Keep fractional here; binarize once after the geometry is final,
+            # so a CAR reproject doesn't quantize then re-quantize.
             galactic_mask = hp.ud_grade(galactic_mask, config.nside)
-            galactic_mask = np.where(galactic_mask > 0.5, 1, 0)
+            galactic_mask = to_target(galactic_mask)
+            binarized = np.where(galactic_mask > GAL_MASK_REBINARIZE_THRESHOLD, 1, 0)
+            galactic_mask = enmap.enmap(binarized, galactic_mask.wcs) if config.is_car else binarized
 
-        hp.write_map(manager.path_to_galactic_mask, galactic_mask, dtype=np.float32, overwrite=True)
+        landscape.write_map(manager.path_to_galactic_mask, galactic_mask, dtype=np.float32)
 
     # Accumulateurs pour le masque joint (union binaire + hitmap combinée)
-    binary_mask_union = np.zeros(hp.nside2npix(config.nside))
-    binary_mask_union_alt = np.zeros(hp.nside2npix(config.nside))
-    common_norm_nhits_map_combined = np.zeros(hp.nside2npix(config.nside))
+    binary_mask_union = ones_map() * 0.0
+    binary_mask_union_alt = ones_map() * 0.0
+    common_norm_nhits_map_combined = ones_map() * 0.0
 
     # Loop over experiments: hitmap, binary mask, and analysis mask, each per experiment
     for exp in experiments:
@@ -64,13 +88,16 @@ def mask_handler(manager: DataManager, config: Config):
         with Timer(f"hitmap-{exp}"):
             if exp in config.masks_pars.uniform_coverage_exp_tags:
                 logger.info(f"Using uniform (all-sky) coverage for {exp}")
-                common_norm_nhits_map = np.ones(hp.nside2npix(config.nside), dtype=np.float32)
+                common_norm_nhits_map = (
+                    landscape.zeros(()) + 1.0
+                    if config.is_car
+                    else np.ones(hp.nside2npix(config.nside), dtype=np.float32)
+                )
                 for m in exp_map_sets:
-                    hp.write_map(
+                    landscape.write_map(
                         manager.path_to_nhits_map(m),
                         common_norm_nhits_map,
                         dtype=np.float32,
-                        overwrite=True,
                     )
             else:
                 fwhm_arcmin_nhits = config.masks_pars.fwhm_arcmin_smooth_nhits
@@ -94,37 +121,39 @@ def mask_handler(manager: DataManager, config: Config):
                     norm_nhits_maps, fwhm_arcmin_nhits=fwhm_arcmin_nhits
                 )
 
+                if config.is_car:
+                    # Keep per-map enmaps (np.array would strip the WCS), then stack.
+                    norm_nhits_maps = landscape.stack([to_target(m) for m in norm_nhits_maps])
+                    common_norm_nhits_map = to_target(common_norm_nhits_map)
+
                 for i_m, m in enumerate(exp_map_sets):
-                    hp.write_map(
+                    landscape.write_map(
                         manager.path_to_nhits_map(m),
                         norm_nhits_maps[i_m],
                         dtype=np.float32,
-                        overwrite=True,
                     )
 
-            hp.write_map(
+            landscape.write_map(
                 manager.path_to_common_nhits_map(exp),
                 common_norm_nhits_map,
                 dtype=np.float32,
-                overwrite=True,
             )
 
         with Timer(f"binary-mask-{exp}"):
             threshold = config.masks_pars.binary_mask_zero_threshold
             logger.info(f"Thresholding binary map for {exp} with {threshold}")
             binary_mask = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, threshold)
-            hp.write_map(
-                manager.path_to_binary_mask(exp), binary_mask, dtype=np.float32, overwrite=True
+            landscape.write_map(
+                manager.path_to_binary_mask(exp), binary_mask, dtype=np.float32
             )
 
         # 2e masque binaire avec un seuil à 1e-6
         with Timer(f"binary-mask-thr1e-6-{exp}"):
             binary_mask_alt = mask.get_binary_mask(common_norm_nhits_map, galactic_mask, 1e-6)
-            hp.write_map(
+            landscape.write_map(
                 str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits"),
                 binary_mask_alt,
                 dtype=np.float32,
-                overwrite=True,
             )
 
         # Accumulation pour le masque joint
@@ -136,48 +165,46 @@ def mask_handler(manager: DataManager, config: Config):
         with Timer(f"apodize-custom-{exp}"):
             apod_radius = config.masks_pars.apod_radius
             apod_type = config.masks_pars.apod_type
-            apodized_mask = mask.get_analysis_mask(
+            apodized_mask = get_analysis_mask(
                 common_norm_nhits_map, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
             )
-            hp.write_map(
-                manager.path_to_analysis_mask(exp), apodized_mask, dtype=np.float32, overwrite=True
+            landscape.write_map(
+                manager.path_to_analysis_mask(exp), apodized_mask, dtype=np.float32
             )
         with Timer(f"apodize-custom-thr1e-6-{exp}"):
-            apodized_mask_alt = mask.get_analysis_mask(
+            apodized_mask_alt = get_analysis_mask(
                 common_norm_nhits_map, binary_mask_alt, apod_radius_deg=apod_radius, apod_type=apod_type
             )
-            hp.write_map(
+            landscape.write_map(
                 str(manager.path_to_analysis_mask(exp)).replace(".fits", "_thr1e-6.fits"),
                 apodized_mask_alt,
                 dtype=np.float32,
-                overwrite=True,
             )
 
         # Masque d'analyse joint : union des expériences, apodisé une seule fois
     with Timer("apodize-joint"):
         apod_radius = config.masks_pars.apod_radius
         apod_type = config.masks_pars.apod_type
-        apodized_mask = mask.get_analysis_mask(
+        apodized_mask = get_analysis_mask(
             common_norm_nhits_map_combined,
             binary_mask_union,
             apod_radius_deg=apod_radius,
             apod_type=apod_type,
         )
-        hp.write_map(
-            manager.path_to_joint_analysis_mask, apodized_mask, dtype=np.float32, overwrite=True
+        landscape.write_map(
+            manager.path_to_joint_analysis_mask, apodized_mask, dtype=np.float32
         )
     with Timer("apodize-joint-thr1e-6"):
-        apodized_mask_alt = mask.get_analysis_mask(
+        apodized_mask_alt = get_analysis_mask(
             common_norm_nhits_map_combined,
             binary_mask_union_alt,
             apod_radius_deg=apod_radius,
             apod_type=apod_type,
         )
-        hp.write_map(
+        landscape.write_map(
             str(manager.path_to_joint_analysis_mask).replace(".fits", "_thr1e-6.fits"),
             apodized_mask_alt,
             dtype=np.float32,
-            overwrite=True,
         )
 
 

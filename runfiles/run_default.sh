@@ -29,7 +29,7 @@ echo "------------------------------------------------------------"
 echo "|                           MOCKER                         |"
 echo "------------------------------------------------------------"
 #mpirun -n 8 python $(which megatop-mock-run) --config ${PARAM_FILE}
-#fmegatop-mock-run --config ${PARAM_FILE}
+#megatop-mock-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting mocker outputs"
@@ -76,17 +76,17 @@ echo ""
 echo ""
 echo "Plotting component separater outputs"
 #mpirun -n 8 python $(which megatop-compsep-plot) --config ${PARAM_FILE}
-megatop-compsep-plot --config ${PARAM_FILE}
+#megatop-compsep-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                     SPECTRA ESTIMATION                   |"
 echo "------------------------------------------------------------"
 #mpirun -n 4 python $(which megatop-map2cl-run) --config ${PARAM_FILE}
-#megatop-map2cl-run --config ${PARAM_FILE}
+megatop-map2cl-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting spectra estimater outputs"
-#megatop-map2cl-plot --config ${PARAM_FILE}
+megatop-map2cl-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                  NOISE SPECTRA ESTIMATION                |"
@@ -95,11 +95,11 @@ echo "------------------------------------------------------------"
 #for i in 47 48 49; do
 #    mpirun -n 4 python $(which megatop-noisespectra-run) --config ${PARAM_FILE} --sim $i
 #done
-#megatop-noisespectra-run --config ${PARAM_FILE} --analytic_only --compare
+megatop-noisespectra-run --config ${PARAM_FILE} --analytic_only --compare
 echo ""
 echo ""
 echo "Plotting noise spectra estimater outputs"
-#megatop-noisespectra-plot --config ${PARAM_FILE}
+megatop-noisespectra-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|            COSMOLOGICAL PARAMETERS ESTIMATION            |"
@@ -108,11 +108,11 @@ echo "------------------------------------------------------------"
 #for i in 47 48 49; do
 #    mpirun -n 2 python $(which megatop-cl2r-run) --config ${PARAM_FILE} --sim $i
 #done
-#megatop-cl2r-run --config ${PARAM_FILE}
+megatop-cl2r-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting r statistics"
-#megatop-cl2r-plot --config ${PARAM_FILE}
+megatop-cl2r-plot --config ${PARAM_FILE}
 echo ""
 echo "Plotting mcmc results statistics"
-#megatop-cl2r_mcmc-plot --config ${PARAM_FILE}
+megatop-cl2r_mcmc-plot --config ${PARAM_FILE}

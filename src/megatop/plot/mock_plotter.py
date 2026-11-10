@@ -20,9 +20,14 @@ from megatop.utils.plot import (
     plotTTEEBB,
     plotTTEEBB_diff,
 )
-from megatop.utils.preproc import read_input_maps
 
 HEALPY_DATA_PATH = os.getenv("HEALPY_LOCAL_DATA", None)
+
+
+def _read_per_exp(config: Config, path_fn) -> dict:
+    """Read one map per exp_tag through the landscape (HEALPix or CAR)."""
+    experiments = set(m.exp_tag for m in config.map_sets)
+    return {exp: config.landscape.read_map(path_fn(exp)) for exp in experiments}
 
 
 def plot_fiducial_spectra(manager: DataManager):
@@ -76,17 +81,26 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
     if config.map_sim_pars.passband_int:
         logger.info("Using passband-integration for the mocker step.")
 
-    fg_freq_maps = mock.generate_map_fgs_pysm(
-        config.map_sets, config.nside, config.lmax, config.map_sim_pars.sky_model
-    )
+    if config.is_car:
+        fg_freq_maps = mock.generate_map_fgs_pysm_car(
+            config.map_sets, config.lmax, config.map_sim_pars.sky_model, config.landscape
+        )
+    else:
+        fg_freq_maps = mock.generate_map_fgs_pysm(
+            config.map_sets, config.nside, config.lmax, config.map_sim_pars.sky_model
+        )
     fg_freq_maps_beamed = np.zeros_like(fg_freq_maps)
 
     for i_f, _f in enumerate(config.frequencies):
-        fg_freq_maps_beamed[i_f] = mock.beam_winpix_correction(
-            config.nside, fg_freq_maps[i_f], config.beams[i_f], config.lmax
-        )
-    experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+        if config.is_car:
+            fg_freq_maps_beamed[i_f] = mock.beam_winpix_correction_car(
+                fg_freq_maps[i_f], config.beams[i_f], config.lmax
+            )
+        else:
+            fg_freq_maps_beamed[i_f] = mock.beam_winpix_correction(
+                config.nside, fg_freq_maps[i_f], config.beams[i_f], config.lmax
+            )
+    binary_mask = _read_per_exp(config, manager.path_to_binary_mask)
 
     for i_m, map_set in enumerate(config.map_sets):
         exp_mask = binary_mask[map_set.exp_tag]
@@ -142,9 +156,14 @@ def plot_fg_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
 def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(manager)
-    cmb_map = mock.generate_map_cmb(
-        Cl_cmb_model, config.nside, config.lmax, cmb_seed=config.map_sim_pars.cmb_seed
-    )
+    if config.is_car:
+        cmb_map = config.landscape.synfast(
+            Cl_cmb_model, lmax=config.lmax, seed=config.map_sim_pars.cmb_seed
+        )
+    else:
+        cmb_map = mock.generate_map_cmb(
+            Cl_cmb_model, config.nside, config.lmax, cmb_seed=config.map_sim_pars.cmb_seed
+        )
 
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
@@ -152,7 +171,7 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
     if maps:
         freq_maps_plotter(
             config,
-            np.array([cmb_map]),
+            cmb_map[None, ...],
             plot_dir,
             "cmb_maps.png",
             vmin={"I": -300, "Q": -5, "U": -5},
@@ -179,10 +198,9 @@ def plot_cmb_sims(manager: DataManager, config: Config, maps=True, cls=True):
 
 
 def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
-    experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
-    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
-    analysis_mask = {exp: hp.read_map(manager.path_to_analysis_mask(exp)) for exp in experiments}
+    binary_mask = _read_per_exp(config, manager.path_to_binary_mask)
+    common_nhits_map = _read_per_exp(config, manager.path_to_common_nhits_map)
+    analysis_mask = _read_per_exp(config, manager.path_to_analysis_mask)
 
 
     plot_dir = manager.path_to_mock_plots
@@ -192,7 +210,9 @@ def plot_noise_sims(manager: DataManager, config: Config, maps=True, cls=True):
     if maps:
         display_maps = noise_freq_maps.copy()
         for i_m, map_set in enumerate(config.map_sets):
-            _ = apply_binary_mask(display_maps[i_m], binary_mask[map_set.exp_tag], unseen=True)
+            _ = apply_binary_mask(
+                display_maps[i_m], binary_mask[map_set.exp_tag], unseen=True
+            )
         for exp, idx in group_indices_by_experiment(config.map_sets).items():
             exp_config = config.model_copy(update={"map_sets": [config.map_sets[i] for i in idx]})
             freq_maps_plotter(
@@ -285,13 +305,17 @@ def plot_saved_sims(manager: DataManager, config: Config, id_sim=None, maps=True
     plot_dir = manager.path_to_mock_plots
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    combined_maps = np.array(read_input_maps(manager.get_maps_filenames(id_sim)))
+    maps_list = [
+        config.landscape.read_map(f, field=None) for f in manager.get_maps_filenames(id_sim)
+    ]
+    combined_maps = config.landscape.stack(maps_list)
 
-    experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    binary_mask = _read_per_exp(config, manager.path_to_binary_mask)
 
     for i_m, map_set in enumerate(config.map_sets):
-        _ = apply_binary_mask(combined_maps[i_m], binary_mask[map_set.exp_tag], unseen=True)
+        _ = apply_binary_mask(
+            combined_maps[i_m], binary_mask[map_set.exp_tag], unseen=True
+        )
 
     if cls:
         cls_arr = np.array(

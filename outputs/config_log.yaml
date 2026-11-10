@@ -109,9 +109,12 @@ masks_pars:
   uniform_coverage_exp_tags:
   - LiteBIRD
 general_pars:
-  nside: 256
   lmin: 30
   lmax: 512
+  pixelisation:
+    healpix:
+      nside: 256
+      ordering: ring
 pre_proc_pars:
   common_beam_correction: 100.0
   DEBUGskippreproc: false
@@ -135,6 +138,7 @@ parametric_sep_pars:
     ftol: 1.0e-16
   passband_int: false
   use_bandpass: true
+  use_hwp: true
   tophat_width: 0.3
   use_megabuster: true
   megabuster_options:
@@ -146,7 +150,7 @@ parametric_sep_pars:
     minimizer_options:
       cooldown: 5
       min_steps: 5
-    use_calibration_matrix: false
+    use_calibration_matrix: true
     use_hessienne: false
     use_hmc: false
     n_warm: 50
@@ -185,9 +189,10 @@ map_sim_pars:
   passband_int: false
   bandpass_function: use_tophat
   tophat_width: 0.3
+  HWP: true
   DEBUG_noEmodes: false
 noise_sim_pars:
-  n_sim: 1
+  n_sim: 40
   include_nhits: true
   seed: 42
   experiments:

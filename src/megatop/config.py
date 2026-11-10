@@ -1,6 +1,7 @@
 from enum import Enum, IntEnum
+from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from attrs import Factory, asdict, define, evolve, field
@@ -10,6 +11,9 @@ from pydantic_core import core_schema
 
 from megatop._converter import yaml_converter
 
+if TYPE_CHECKING:
+    from megatop.landscapes import AbstractLandscape
+
 __all__ = [
     "Config",
     "CAMBCosmoPars",
@@ -17,7 +21,7 @@ __all__ = [
     "DataDirsConfig",
     "FiducialCMBConfig",
     "GeneralConfig",
-    "LiteBIRDConfig",   
+    "LiteBIRDConfig",
     "Map2ClConfig",
     "MapSetConfig",
     "MapSimConfig",
@@ -85,7 +89,7 @@ class NameSerializedIntEnum(IntEnum):
                 lambda v: v.name, return_schema=core_schema.str_schema()
             ),
         )
-    
+
 class V3Sensitivity(NameSerializedIntEnum):
     """V3calc sensitivity assumption."""
 
@@ -268,14 +272,55 @@ class MasksConfig(StrictModel):
         return self
 
 
-class GeneralConfig(StrictModel):
+class HealpixConfig(StrictModel):
+    """HEALPix output products at resolution ``nside``."""
+
     nside: int = 512
+    """HEALPix resolution parameter (number of pixels is `12 * nside**2`)."""
+    ordering: Literal["ring", "nest"] = "ring"
+    """Pixel ordering; only `ring` is supported."""
+
+    @model_validator(mode="after")
+    def ring_only(self):
+        if self.ordering != "ring":
+            raise ValueError("only RING ordering is supported")
+        return self
+
+
+class CARConfig(StrictModel):
+    """CAR output products on the geometry read from ``geometry_file``."""
+
+    geometry_file: Path
+    """FITS/HDF file whose (shape, wcs) define the CAR geometry."""
+
+
+class PixelisationConfig(StrictModel):
+    """Output pixelisation (landscape): exactly one of `healpix` or `car`."""
+
+    healpix: HealpixConfig | None = None
+    car: CARConfig | None = None
+
+    @model_validator(mode="after")
+    def exactly_one(self):
+        if (self.healpix is None) == (self.car is None):
+            raise ValueError("exactly one of 'healpix' or 'car' must be set")
+        return self
+
+
+class GeneralConfig(StrictModel):
     lmin: int = 30
     lmax: int = 1000
+    pixelisation: PixelisationConfig = Field(
+        default_factory=lambda: PixelisationConfig(healpix=HealpixConfig())
+    )
 
     @model_validator(mode="after")
     def lmax_at_most_two_nside(self):
-        two_nside = 2 * self.nside
+        # nside bounds the band limit only for HEALPix products; CAR derives its
+        # intermediate resolution from lmax (so the bound holds by construction).
+        if self.pixelisation.healpix is None:
+            return self
+        two_nside = 2 * self.pixelisation.healpix.nside
         if self.lmax > two_nside:
             msg = f"lmax={self.lmax} must be less than or equal to two_nside={two_nside}"
             raise ValueError(msg)
@@ -333,6 +378,7 @@ class CompSepConfig(StrictModel):
     minimize_options: _MinimizeOptions = Factory(_MinimizeOptions)
     passband_int: bool = False
     use_bandpass: bool = False
+    use_hwp: bool = False
     """If True, the mixing matrix is integrated over top-hat passbands of relative width
     tophat_width around each freq_tag (megabuster only)."""
     tophat_width: float = 0.3
@@ -421,6 +467,7 @@ class MapSimConfig(StrictModel):
     passband of relative width tophat_width around its freq_tag."""
     tophat_width: float = 0.3
     """Relative width of the top-hat passbands, used when bandpass_function is "use_tophat"."""
+    HWP: bool = False
     DEBUG_noEmodes: bool = False
     """Debuging param: sets EE and TE CMB power spectra to 0 in the mocker, in particular in the mock.get_Cl_CMB_model_from_manager() function"""
 
@@ -463,7 +510,7 @@ class LiteBIRDConfig(StrictModel):
     manual_white_noise_levels: dict[int, float]
     """Mandatory: freq_tag -> depth_p in uK.arcmin."""
     default_bands: list[float] = Field(
-        default_factory=lambda: [122.723, 43.878, 28.572, 11.707, 7.019, 4.576, 
+        default_factory=lambda: [122.723, 43.878, 28.572, 11.707, 7.019, 4.576,
     5.198, 5.176, 12.365, 16.105, 29.613, 134.075]
     )
     noise_option: NoiseOption = Field(default=NoiseOption.WHITE)
@@ -529,7 +576,7 @@ class Config(StrictModel):
     noise_sim_pars: NoiseSimConfig = Field(default_factory=NoiseSimConfig)
     cl2r_pars: Cl2rConfig = Field(default_factory=Cl2rConfig)
     noise_cov_pars: NoiseCovmatConfig = Field(default_factory=NoiseCovmatConfig)
-    
+
     @model_validator(mode="after")
     def frequencies_and_beams_have_same_length(self):
         if len(self.frequencies) != len(self.beams):
@@ -613,9 +660,53 @@ class Config(StrictModel):
         return self.model_copy(update={"map_sets": subset})
 
     @property
+    def is_car(self) -> bool:
+        """Whether the pipeline products use CAR (pixell.enmap) pixelization."""
+        return self.general_pars.pixelisation.car is not None
+
+    @cached_property
+    def geometry(self) -> tuple[tuple[int, ...], Any]:
+        """The CAR ``(shape, wcs)`` read from ``geometry_file``.
+
+        Raises:
+            ValueError: if the run is not configured for CAR.
+        """
+        if not self.is_car:
+            raise ValueError("geometry is only defined for CAR runs (landscape.car)")
+        from pixell import enmap
+
+        return enmap.read_map_geometry(str(self.general_pars.pixelisation.car.geometry_file))
+
+    @cached_property
+    def landscape(self) -> "AbstractLandscape":
+        """The [`AbstractLandscape`][megatop.landscapes.AbstractLandscape] for this run.
+
+        Single geometry source threaded into map-creating utilities; functions
+        that already hold a map dispatch on the array instead.
+        """
+        from megatop.landscapes import CARLandscape, HealpixLandscape
+
+        if self.is_car:
+            from pixell import enmap
+
+            shape, wcs = self.geometry
+            # CAR pixel size sets the Nyquist band limit (lmax ~ pi/res)
+            res_rad = np.min(np.abs(enmap.pixshape(shape, wcs)))
+            lmax_nyquist = np.floor(np.pi / res_rad)
+            if self.general_pars.lmax > lmax_nyquist:
+                msg = (
+                    f"lmax={self.general_pars.lmax} exceeds the CAR Nyquist limit "
+                    f"{lmax_nyquist} for pixel size {np.degrees(res_rad):.4g} deg"
+                )
+                raise ValueError(msg)
+            return CARLandscape(shape, wcs)
+        # raw config nside (not self.nside, which delegates back here → recursion)
+        return HealpixLandscape(self.general_pars.pixelisation.healpix.nside)
+
+    @property
     def nside(self) -> int:
-        """The HEALPix nside parameter"""
-        return self.general_pars.nside
+        """The HEALPix working resolution."""
+        return self.landscape.working_nside(self.lmax)
 
     @property
     def lmin(self) -> int:
@@ -636,7 +727,7 @@ class Config(StrictModel):
     def beams(self) -> list[float]:
         """The list of beam FWHMs (in arcminutes)"""
         return [map_set.beam for map_set in self.map_sets]
-    
+
     @property
     def angle_central_value(self) -> list[float]:
         """The list of angles (in degrees)"""
@@ -646,9 +737,9 @@ class Config(StrictModel):
     def angle_uncertainty(self) -> list[float | None]:
         """The list of angle uncertainties (in degrees)"""
         return [
-            map_set.angles_uncertainty_degrees * np.pi / 180 
-            if map_set.angles_uncertainty_degrees is not None 
-            else None 
+            map_set.angles_uncertainty_degrees * np.pi / 180
+            if map_set.angles_uncertainty_degrees is not None
+            else None
             for map_set in self.map_sets
         ]
 

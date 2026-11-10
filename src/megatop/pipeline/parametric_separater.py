@@ -25,6 +25,22 @@ from megatop.utils.mpi import get_world  # noqa: E402
 from megatop.utils.utils import MemoryUsage  # noqa: E402
 from megatop.utils.preproc import common_beam_and_nside  # noqa: E402
 
+def _flatten_pix(a, n_lead: int):
+    """Flatten the pixel axes after the first `n_lead` axes to a single axis.
+
+    No-op for HEALPix (pixel axis already 1-D); for CAR turns (..., ny, nx) into (..., ny*nx).
+    Component separation is purely per-pixel, so this does not change the result.
+    """
+    a = np.asarray(a)
+    return a.reshape(*a.shape[:n_lead], -1)
+
+
+def _unflatten_pix(a, pix_shape):
+    """Inverse of `_flatten_pix` on the last axis (no-op for HEALPix)."""
+    a = np.asarray(a)
+    return a.reshape(*a.shape[:-1], *pix_shape)
+
+
 def _test_N_alm_format(N_alm):
     inv_N_alm = 1 / N_alm
 
@@ -177,24 +193,6 @@ def harmonic_comp_sep_interface(manager: DataManager, config: Config, id_sim: in
 
     W_maxL = np.einsum("ijsp, jf, fsp -> ifsp", res.invAtNA[:, :], A_maxL.T, 1 / noisecov_QU_masked)
     res.W_maxL = W_maxL
-    # import IPython; IPython.embed()
-
-    # cov_alm = np.load(manager.path_to_noisecov_alm)
-    # inv_cov_alm = 1/cov_alm
-    # shape_N_alm_freq_diag = (inv_cov_alm.shape[0]),
-    # shape_N_alm_freq_diag += inv_cov_alm.shape
-    # # inv_cov_alm[np.where(np.isinf(inv_cov_alm))] = 0
-    # AtNA_alm_native = np.einsum("cf,fsl,fk->lsck", A_maxL.T, inv_cov_alm, A_maxL)
-    # inv_AtNA_alm_native = np.linalg.inv(AtNA_alm_native)
-    # inv_AtNA_alm_native[np.where(np.isinf(inv_AtNA_alm_native))] = 0
-    # inv_AtNA_alm_native[np.where(np.isnan(inv_AtNA_alm_native))] = 0
-    # W_maxL_alm = np.einsum("lsck,cf,fsl->cfsl", inv_AtNA_alm_native, A_maxL.T, inv_cov_alm)
-    # W_maxL_alm[np.where(np.isnan(W_maxL_alm))] = 0
-
-    # shape_TEB = np.array(W_maxL_alm.shape)
-    # shape_TEB[-2] += 1  # adding T
-    # W_maxL_alm_TEB = np.zeros(shape_TEB)
-    # W_maxL_alm_TEB[:, :, 1:, :] = W_maxL_alm
 
     if config.parametric_sep_pars.alm2map:
         logger.info(
@@ -294,11 +292,6 @@ def weighted_comp_sep(manager: DataManager, config: Config, id_sim: int | None =
         logger.debug(f"Loading input maps from {preproc_maps_fname}")
         freq_maps_preprocessed = np.load(preproc_maps_fname)
 
-    #freq_maps_preprocessed_QU_masked = mask.apply_binary_mask(
-    #    freq_maps_preprocessed[:, 1:], binary_mask, unseen=True
-    #)
-    #noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=True)
-
     freq_maps_preprocessed_QU_masked = freq_maps_preprocessed[:, 1:].copy()
     for i_m, map_set in enumerate(config.map_sets):
         _ = mask.apply_binary_mask(
@@ -354,9 +347,8 @@ def load_megabuster_operators(manager: DataManager, config: Config):
         noisecov = np.load(noisecov_fname)
 
     experiments = set(m.exp_tag for m in config.map_sets)
-    #binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
     binary_mask = {
-        exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits"))
+        exp: config.landscape.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits"))
         for exp in experiments
     }
 
@@ -424,7 +416,7 @@ def load_true_noise_maps(manager: DataManager, config: Config, id_sim: int | Non
         logger.warning(f"True noise maps not found for sim {id_sim}, skipping noise propagation.")
         return None
 
-    noise_freq_maps = [hp.read_map(f, field=None) for f in fnames]
+    noise_freq_maps = [config.landscape.read_map(f) for f in fnames]
 
     # Même traitement que l'étape de preproc
     if config.pre_proc_pars.common_beam_correction != 0:
@@ -458,11 +450,27 @@ def megabuster_comp_sep(
             real_freq_maps_preprocessed = np.load(real_preproc_maps_fname)
 
     experiments = set(m.exp_tag for m in config.map_sets)
-    #binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
     binary_mask = {
-        exp: hp.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits"))
+        exp: config.landscape.read_map(str(manager.path_to_binary_mask(exp)).replace(".fits", "_thr1e-6.fits"))
         for exp in experiments
     }
+
+    megabuster_options = config.parametric_sep_pars.get_megabuster_options_as_dict()
+    if config.is_car:
+        # These options rely on HEALPix-only operators (NEST-ordered obsmat, harmonic
+        # beam operator, healpy scale cut); only the per-pixel compsep is CAR-ready.
+        unsupported = [
+            name
+            for name, on in (
+                ("use_obsmat", megabuster_options["use_obsmat"]),
+                ("use_beam_operator", megabuster_options["use_beam_operator"]),
+                ("DEBUG_cut_scales", config.map2cl_pars.DEBUG_cut_scales),
+            )
+            if on
+        ]
+        if unsupported:
+            msg = f"CAR: {unsupported} not supported in megabuster_comp_sep (HEALPix-only)."
+            raise NotImplementedError(msg)
 
     apply_before_paramestimation = False
     if config.map2cl_pars.DEBUG_cut_scales and apply_before_paramestimation:
@@ -529,9 +537,6 @@ def megabuster_comp_sep(
     else:
         real_freq_maps_preprocessed_QU_masked = None
 
-    #noisecov_QU_masked = mask.apply_binary_mask(noisecov[:, 1:], binary_mask, unseen=False)
-    #noisecov_QU_masked = noisecov[:, 1:]
-
     noisecov_QU_masked = noisecov[:, 1:].copy()
     for i_m, map_set in enumerate(config.map_sets):
         _ = mask.apply_binary_mask(
@@ -546,13 +551,11 @@ def megabuster_comp_sep(
         idx = [i for i, m in enumerate(config.map_sets) if m.exp_tag == exp]
         invN_matrix[exp] = inverse_noisecov_QU_masked[idx]
     if config.pre_proc_pars.use_real_beams:
-        #real_noisecov_QU_masked = mask.apply_binary_mask(real_noisecov[:, 1:], binary_mask, unseen=False)
         real_noisecov_QU_masked = real_noisecov[:, 1:].copy()
         for i_m, map_set in enumerate(config.map_sets):
             _ = mask.apply_binary_mask(
                 real_noisecov_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=False
             )
-        #real_noisecov_QU_masked = real_noisecov[:, 1:]
         real_inverse_noisecov_QU_masked_full = np.zeros_like(real_noisecov_QU_masked)
         real_inverse_noisecov_QU_masked_full[real_noisecov_QU_masked != 0] = (
             1.0 / real_noisecov_QU_masked[real_noisecov_QU_masked != 0]
@@ -564,15 +567,20 @@ def megabuster_comp_sep(
     else:
         real_invN_matrix = None
 
+    # CAR: flatten the pixel axes (ny, nx) -> (ny*nx) for the per-pixel compsep;
+    # all of this is a no-op for HEALPix. Native-shaped masks are kept in `binary_mask`
+    # for the true-noise masking below.
+    pix_shape = freq_maps_preprocessed.shape[2:]
+    freq_maps_preprocessed_QU_masked = _flatten_pix(freq_maps_preprocessed_QU_masked, 2)
+    if real_freq_maps_preprocessed_QU_masked is not None:
+        real_freq_maps_preprocessed_QU_masked = _flatten_pix(real_freq_maps_preprocessed_QU_masked, 2)
+    invN_matrix = {exp: _flatten_pix(v, 2) for exp, v in invN_matrix.items()}
+    if real_invN_matrix is not None:
+        real_invN_matrix = {exp: _flatten_pix(v, 2) for exp, v in real_invN_matrix.items()}
+    binary_mask_flat = {exp: _flatten_pix(m, 0) for exp, m in binary_mask.items()}
+
     max_iter = options["maxiter"]  # if method != "TNC" else options["maxfun"]
 
-    #if method == "TNC":
-    #    logger.warning(
-    #        "Changing method=TNC to method='scipy_tnc' for compatibility with megabuster and furax_cs."
-    #    )
-    #    method = "scipy_tnc"
-        # dict_parameters_minimization = {"max_fun": max_iter, "tol": tol, 'solver_name': method}
-    # else:
     dict_parameters_minimization = {
         "max_iter": max_iter,
         "tol": tol,
@@ -580,171 +588,67 @@ def megabuster_comp_sep(
         "options": megabuster_options.get("minimizer_options", dict()),
     }
 
-    #Get miscalibration angles prior
-    #if megabuster_options["use_calibration_matrix"]:
+    #Get polarisation angles prior
     angles_prior_dict = {"angle_central_value": config.angle_central_value, "angle_uncertainty": config.angle_uncertainty}
     angles_names = [f'angle_{i}' for i in range(len(config.angle_uncertainty))]
-    #if megabuster_options["use_calibration_matrix"]:
     solver_name = "ADABK0"
     #solver_name="scipy_tnc",
     #solver_name="optax_lbfgs",
 
-    # import IPython; IPython.embed()
-
-    if megabuster_options["use_beam_operator"]:
-        #res = mb.Back_BO.perform_compsep(
-        #res = mb.beam_compsep.perform_compsep(
-        res = mb.compsep.perform_compsep(
-            config,
-            manager,
-            first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
-            fixed_params={"temp_dust": 20.0},
-            sky_map=freq_maps_preprocessed_QU_masked,
-            real_sky_map=real_freq_maps_preprocessed_QU_masked,
-            frequencies=np.array(config.frequencies),
-            invN_matrix=invN_matrix,
-            real_invN_matrix=real_invN_matrix,
-            do_minimization=True,
-            binary_mask=binary_mask,
-            #binary_mask=None,
-            obs_mat_operator=None,
-            obsmat_operator_rhs=obsmat_operator_rhs,
-            use_calibration_matrix = megabuster_options["use_calibration_matrix"],
-            use_obsmat = megabuster_options["use_obsmat"],
-            angles_prior_dict = angles_prior_dict,
-            angles_names = angles_names,
-            use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
-            use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
-            central_freq_op=central_freq_op,
-            matrix_precond=matrix_precond,
-            solver_name=solver_name,
-            dictionary_parameters_minimization=dict_parameters_minimization,
-            dictionary_parameters_CG={
-                "max_steps_CG": megabuster_options["max_steps_CG"],
-                "tol_CG": megabuster_options["tol_CG"],
-            },
-            ordering_parameter=ordering_pars+angles_names,
-            ordering_component=components,
-            dust_nu0=150.0,
-            synchrotron_nu0=150.0,
-            # components_list=components, #TODO: For future when no_synch options is merged in megabuster
-            use_hessienne = megabuster_options["use_hessienne"],
-            use_hmc = megabuster_options["use_hmc"],
-            n_warm = megabuster_options["n_warm"],
-            n_samples = megabuster_options["n_samples"],
-            use_bandpass = config.parametric_sep_pars.use_bandpass,
-        )
-    else:
-        res = mb.compsep.perform_compsep(
-            config,
-            manager,
-            first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
-            fixed_params={"temp_dust": 20.0},
-            sky_map=freq_maps_preprocessed_QU_masked,
-            real_sky_map=real_freq_maps_preprocessed_QU_masked,
-            frequencies=np.array(config.frequencies),
-            invN_matrix=invN_matrix,
-            real_invN_matrix=real_invN_matrix,
-            do_minimization=True,
-            binary_mask=binary_mask,
-            obs_mat_operator=None,
-            obsmat_operator_rhs=obsmat_operator_rhs,
-            use_calibration_matrix = megabuster_options["use_calibration_matrix"],
-            use_obsmat = megabuster_options["use_obsmat"],
-            angles_prior_dict = angles_prior_dict,
-            angles_names = angles_names,
-            use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
-            use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
-            central_freq_op=central_freq_op,
-            matrix_precond=matrix_precond,
-            solver_name=solver_name,
-            dictionary_parameters_minimization=dict_parameters_minimization,
-            dictionary_parameters_CG={
-                "max_steps_CG": megabuster_options["max_steps_CG"],
-                "tol_CG": megabuster_options["tol_CG"],
-            },
-            ordering_parameter=ordering_pars+angles_names,
-            ordering_component=components,
-            dust_nu0=150.0,
-            synchrotron_nu0=150.0,
-            # components_list=components, #TODO: For future when no_synch options is merged in megabuster
-            use_hessienne = megabuster_options["use_hessienne"],
-            use_hmc = megabuster_options["use_hmc"],
-            n_warm = megabuster_options["n_warm"],
-            n_samples = megabuster_options["n_samples"],
-            use_bandpass = config.parametric_sep_pars.use_bandpass,
+    res = mb.compsep.perform_compsep(
+        config,
+        manager,
+        first_guess_params=first_guess,  # {"beta_dust": np.array(1.54), "beta_pl": np.array(-3.0)},
+        fixed_params={"temp_dust": 20.0},
+        sky_map=freq_maps_preprocessed_QU_masked,
+        real_sky_map=real_freq_maps_preprocessed_QU_masked,
+        frequencies=np.array(config.frequencies),
+        invN_matrix=invN_matrix,
+        real_invN_matrix=real_invN_matrix,
+        do_minimization=True,
+        binary_mask=binary_mask_flat,
+        obs_mat_operator=None,
+        obsmat_operator_rhs=obsmat_operator_rhs,
+        use_calibration_matrix = megabuster_options["use_calibration_matrix"],
+        use_obsmat = megabuster_options["use_obsmat"],
+        angles_prior_dict = angles_prior_dict,
+        angles_names = angles_names,
+        use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
+        use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
+        central_freq_op=central_freq_op,
+        matrix_precond=matrix_precond,
+        solver_name=solver_name,
+        dictionary_parameters_minimization=dict_parameters_minimization,
+        dictionary_parameters_CG={
+            "max_steps_CG": megabuster_options["max_steps_CG"],
+            "tol_CG": megabuster_options["tol_CG"],
+        },
+        ordering_parameter=ordering_pars+angles_names,
+        ordering_component=components,
+        dust_nu0=150.0,
+        synchrotron_nu0=150.0,
+        # components_list=components, #TODO: For future when no_synch options is merged in megabuster
+        use_hessienne = megabuster_options["use_hessienne"],
+        use_hmc = megabuster_options["use_hmc"],
+        n_warm = megabuster_options["n_warm"],
+        n_samples = megabuster_options["n_samples"],
+        use_bandpass = config.parametric_sep_pars.use_bandpass,
+        use_hwp = config.parametric_sep_pars.use_hwp,
         )
 
-
-    if config.map2cl_pars.DEBUG_cut_scales and not apply_before_paramestimation:
-        # I'm keeping this in for now until we have full confirmation that the Obs(noise_1/f) is correct
-        logger.warning("TEST: Applying smooth cut at large scales to component maps")
-        logger.warning("TEST: DOING IT AFTER PARAM ESTIMATION")
-        logger.warning("TO BE DEPRECATED")
-        logger.warning("TO BE DEPRECATED")
-        logger.warning("TO BE DEPRECATED")
-
-        cut_array = get_smooth_scale_cut(30, 1, lmax=3 * config.nside)
-        freq_maps_cut = cut_map_scales(freq_maps_preprocessed, cut_array, config.nside)
-        freq_maps_preprocessed_QU_masked_cut = freq_maps_cut[:, 1:].copy()
-        for i_m, map_set in enumerate(config.map_sets):
-            _ = mask.apply_binary_mask(
-                freq_maps_preprocessed_QU_masked_cut[i_m], binary_mask[map_set.exp_tag], unseen=False
-            )
-
-        res_first_guess = (
-            {"beta_dust": res.x[0], "beta_pl": res.x[1]}
-            if config.parametric_sep_pars.include_synchrotron
-            else {"beta_dust": res.x[0]}
-        )
-        res_cut = mb.compsep.perform_compsep(
-            first_guess_params=res_first_guess,  # {"beta_dust": res.x[0], "beta_pl": res.x[1]},
-            fixed_params={"temp_dust": 20.0},
-            sky_map=freq_maps_preprocessed_QU_masked_cut,
-            real_sky_map=real_freq_maps_preprocessed_QU_masked,
-            frequencies=np.array(config.frequencies),
-            invN_matrix=invN_matrix,
-            real_invN_matrix=real_invN_matrix,
-            do_minimization=False,
-            binary_mask=binary_mask,
-            obs_mat_operator=None,
-            obsmat_operator_rhs=obsmat_operator_rhs,
-            use_preconditioner_diag=megabuster_options["use_preconditioner_diag"],
-            use_preconditioner_pinv=megabuster_options["use_preconditioner_pinv"],
-            central_freq_op=central_freq_op,
-            matrix_precond=matrix_precond,
-            dictionary_parameters_minimization=dict_parameters_minimization,
-            dictionary_parameters_CG={
-                "max_steps_CG": megabuster_options["max_steps_CG"],
-                "tol_CG": megabuster_options["tol_CG"],
-            },
-            ordering_parameter=ordering_pars,
-            ordering_component=components,
-            dust_nu0=150.0,
-            synchrotron_nu0=150.0,
-            is_noise_map = False,
-            use_bandpass = config.parametric_sep_pars.use_bandpass,
-        )
-        res.s = res_cut.s
+    # Restore the native pixel geometry on the component maps so map2cl can build the
+    # NaMaster fields (CAR needs the 2-D (ny, nx) layout); no-op for HEALPix.
+    res.s = _unflatten_pix(res.s, pix_shape)
 
     logger.info(f"Success: {res.success} -> {res.message}")
     logger.info(f"Spectral parameters {res.params} -> {res.x}")
     timer.stop("do-compsep")
 
     common_nhits_map = {
-        exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments
+        exp: config.landscape.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments
     }
     hit_map_full = np.array([common_nhits_map[m.exp_tag] for m in config.map_sets])  # (n_freq, n_pix_full)
 
-    i_cmb = 0
-    #w_cmb_abs = np.abs(res.W_array[i_cmb])  # (s_out, n_freq, s_in, n_pix_retain)
-
-    #hit_map_arr = np.repeat(hit_map_full[:, None, :], 2, axis=1)  # (n_freq, s_in, n_pix_full)
-
-    #weight_map_cmb = np.einsum('sfip,fip->sp', w_cmb_abs, hit_map_arr)  # (n_stokes, n_pix)
-    #res.weight_map_cmb = weight_map_cmb.mean(axis=0)  # réduction Q/U -> 1D
-
-    # --- Propagate the true noise of this sky sim through the compsep, with the estimated params ---
     res.s_true_noise = None
     true_noise = load_true_noise_maps(manager, config, id_sim)
 
@@ -758,6 +662,7 @@ def megabuster_comp_sep(
             _ = mask.apply_binary_mask(
                 noise_QU_masked[i_m], binary_mask[map_set.exp_tag], unseen=False
             )
+        noise_QU_masked = _flatten_pix(noise_QU_masked, 2)  # CAR: per-pixel layout
 
         # Paramètres estimés : res.params est dans le MÊME ordre que res.x
         estimated_params = {str(name): res.x[i] for i, name in enumerate(res.params)}
@@ -767,9 +672,6 @@ def megabuster_comp_sep(
         logger.info(f"Propagating true noise with estimated params: {estimated_params}")
 
         compsep_func = (
-            #mb.beam_compsep.perform_compsep
-            #if megabuster_options["use_beam_operator"]
-            #else mb.compsep.perform_compsep
             mb.compsep.perform_compsep
         )
         with Timer("compsep-true-noise"):
@@ -784,7 +686,7 @@ def megabuster_comp_sep(
                 invN_matrix=invN_matrix,
                 real_invN_matrix=None,
                 do_minimization=False,
-                binary_mask=binary_mask,
+                binary_mask=binary_mask_flat,
                 obs_mat_operator=None,
                 obsmat_operator_rhs=obsmat_operator_rhs,
                 use_calibration_matrix=megabuster_options["use_calibration_matrix"],
@@ -815,8 +717,10 @@ def megabuster_comp_sep(
                 n_warm=megabuster_options["n_warm"],
                 n_samples=megabuster_options["n_samples"],
                 use_bandpass=config.parametric_sep_pars.use_bandpass,
+                use_bandpass = config.parametric_sep_pars.use_bandpass,
+                use_hwp = config.parametric_sep_pars.use_hwp,
             )
-        res.s_true_noise = np.array(res_noise.s, copy=True)
+        res.s_true_noise = _unflatten_pix(np.array(res_noise.s, copy=True), pix_shape)
         del res_noise
 
     return res
@@ -857,14 +761,6 @@ def save_compsep_results(manager: DataManager, config: Config, res, id_sim: int 
         fname_true_noise = fname_compmaps.with_name(fname_compmaps.stem + "_true_noise.npy")
         logger.info(f"Saving true noise component maps to {fname_true_noise}")
         np.save(fname_true_noise, res.s_true_noise)
-
-    #if config.parametric_sep_pars.use_megabuster and res.diagonal_central_term is not None:
-    #    import pickle
-    #    fname_operator = fname_results.with_suffix('.pkl')
-    #    logger.info(f"Saving diagonal_central_term operator to {fname_operator}")
-    #    with open(fname_operator, "wb") as f:
-    #        pickle.dump(res.diagonal_central_term, f)
-
 
 def compsep_and_save(
     config: Config,
@@ -937,7 +833,6 @@ def compsep_and_save_isolated(*args, gpu_id=None):
     if status == "err":
         raise RuntimeError(f"Échec dans le processus fille:\n{payload}")
     return payload
-
 
 def main():
     parser = argparse.ArgumentParser(description="Component separation")

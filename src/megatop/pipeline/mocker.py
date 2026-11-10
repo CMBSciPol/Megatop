@@ -17,8 +17,10 @@ from megatop import Config, DataManager
 from megatop.utils import Timer, function_timer, logger, mask, mock, passband
 from megatop.utils.mpi import get_world
 from megatop.utils.TF_utils import get_alms_from_cls, power_law_cl
-from furax.obs.stokes import Stokes
+from megatop.utils.HWP import HWPDemodOperator
 from furax.obs.operators._beam_operator import BeamOperator
+from furax.obs.stokes import Stokes, StokesIQU
+from megabuster.BandpassOperator import BandpassOperator
 
 if TYPE_CHECKING:
     from mpi4py.MPI import Comm
@@ -46,6 +48,7 @@ def get_noise(
         lmax=config.lmax,
         id_sim=id_sim,
         seed=seed,
+        landscape=config.landscape if config.is_car else None,
     )
     logger.debug(f"Noise maps has shape {noise_freq_maps.shape}")
 
@@ -83,7 +86,11 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
     Cl_cmb_model = mock.get_Cl_CMB_model_from_manager(
         manager, DEBUG_noEmodes=config.map_sim_pars.DEBUG_noEmodes
     )
-    cmb_map_brut = mock.generate_map_cmb(Cl_cmb_model, config.nside, config.lmax, cmb_seed=seed)
+    if config.is_car:
+        # synthesise directly on the CAR geometry (repris de leur version)
+        cmb_map_brut = config.landscape.synfast(Cl_cmb_model, lmax=config.lmax, seed=seed)
+    else:
+        cmb_map_brut = mock.generate_map_cmb(Cl_cmb_model, config.nside, config.lmax, cmb_seed=seed)
     cmb_map = cmb_map_brut.copy()
 
     #Birefringence mixing E & B maps
@@ -98,12 +105,20 @@ def get_cmb(manager: DataManager, config: Config, id_sim: int = 0) -> NDArray:
 def get_foregrounds(config: Config) -> NDArray:
     # Generating pysm foreground simulations
     logger.debug(f"Generating pysm sky {config.sky_model}")
-    fg_freq_maps = mock.generate_map_fgs_pysm(
-        config.map_sets,
-        config.nside,
-        config.lmax,
-        config.map_sim_pars.sky_model,
-    )
+    if config.is_car:
+        fg_freq_maps = mock.generate_map_fgs_pysm_car(
+            config.map_sets,
+            config.lmax,
+            config.map_sim_pars.sky_model,
+            config.landscape,
+        )
+    else:
+        fg_freq_maps = mock.generate_map_fgs_pysm(
+            config.map_sets,
+            config.nside,
+            config.lmax,
+            config.map_sim_pars.sky_model,
+        )
     logger.debug(f"Foreground map has shape {fg_freq_maps.shape}")
     return fg_freq_maps
 
@@ -133,12 +148,7 @@ def save_simu(
     for i, fname in enumerate(filenames):
         msg = "Saving noise simulation" if is_noise else "Saving simulated sky"
         logger.debug(f"{msg} to {fname}")
-        hp.write_map(
-            fname,
-            simulated_maps[i],
-            dtype=["float64", "float64", "float64"],
-            overwrite=True,
-        )
+        manager._config.landscape.write_map(fname, simulated_maps[i], dtype=np.float64)
 
 @function_timer("DEBUGsave-truenoisesimu")
 def DEBUG_save_TRUEnoise_simulation(
@@ -156,12 +166,7 @@ def DEBUG_save_TRUEnoise_simulation(
         msg = "DEBUG: Saving TRUE noise simulation"
         logger.debug(f"{msg} to {fname}")
         fname.parent.mkdir(parents=True, exist_ok=True)
-        hp.write_map(
-            fname,
-            simulated_maps[i],
-            dtype=["float64", "float64", "float64"],
-            overwrite=True,
-            )
+        config.landscape.write_map(fname, simulated_maps[i], dtype=np.float64)
 
 
 @function_timer("save-TFsims")
@@ -323,6 +328,8 @@ def func_TF_sims(
 
     return id_sim
 
+def is_hf(map_set) -> bool:
+    return map_set.freq_tag > 200
 
 # needs to be defined at the top level for pickling
 def func_signal(
@@ -352,8 +359,37 @@ def func_signal(
             logger.info("Using passband-integration for the mocker step.")
 
     # generate the components
+
     cmb = get_cmb(manager, config, id_sim=id_sim)
-    fg = get_foregrounds(config)
+    if config.map_sim_pars.HWP and config.is_car:
+        raise NotImplementedError("HWP_mocker n'est pas encore implémenté en CAR")
+
+    if config.map_sim_pars.HWP:
+        fg_nu = mock.generate_monochromatic_fgs_pysm(
+            config.map_sets, config.nside, config.lmax, config.map_sim_pars.sky_model
+        )
+        sky = []
+        for map_set, fg in zip(config.map_sets, fg_nu):
+            # ciel total à chaque ν : fg(ν) + CMB
+            sky_nu = StokesIQU(i=fg.i + cmb[0], q=fg.q + cmb[1], u=fg.u + cmb[2])
+
+            # bande du canal : sert pour la grille de H ET pour l'intégration
+            bp = [(np.atleast_1d(map_set.frequency), np.atleast_1d(map_set.weight))]
+            nus = BandpassOperator.integration_frequencies(bp)
+
+            H = HWPDemodOperator.create(nus, sky_nu.structure, is_hf=is_hf(map_set))
+            Bp = BandpassOperator.create_from_samples(bp, in_structure=sky_nu.structure, units='K_CMB')
+            if np.max(nus) < 60.0:  # LF : pas d'empilement LF, HWP idéale comme dans la compsep (lf_max)
+                d = Bp(sky_nu)
+            else:
+                H = HWPDemodOperator.create(nus, sky_nu.structure, is_hf=is_hf(map_set))
+                d = (Bp @ H)(sky_nu)
+            sky.append(np.stack([d.i[0], d.q[0], d.u[0]]))
+        sky = np.array(sky)                   # (n_ch, 3, npix)
+    else:
+        fg = get_foregrounds(config)
+        sky = cmb[None, ...] + fg
+
     noise = get_noise(
         config,
         binary_mask,
@@ -362,8 +398,6 @@ def func_signal(
         extra_seed=config.map_sim_pars.cmb_seed,
     )
 
-    # broadcast CMB to all frequencies
-    sky = cmb[None, ...] + fg # + noise
 
     # apply beam and pixel window function correction
     #with Timer("beam-freq-maps"):
@@ -373,29 +407,35 @@ def func_signal(
     #            config.nside, sky[i_f], config.beams[i_f], config.lmax
     #        )
 
-    with Timer("beam-freq-maps"):
-        beam_fl = mock.get_beam_fl(config, include_pixwin=True)
-        b0 = mock.get_beam_fl(config, include_pixwin=False)
-        b1 = mock.get_beam_fl(config, include_pixwin=True)
-        print("formes :", np.shape(b0), np.shape(b1))
-        print("rapport aux ℓ = 0, 100, 300, 500 :", np.asarray(b1)[:, [0, 100, 300, 500]] / np.asarray(b0)[:, [0, 100, 300, 500]])
+    if config.is_car:
+        # CAR : faisceau gaussien en harmonique + fenêtre de pixel CAR (repris de leur version)
+        with Timer("beam-freq-maps"):
+            for i_f in range(len(config.frequencies)):
+                sky[i_f] = mock.beam_winpix_correction_car(sky[i_f], config.beams[i_f], config.lmax)
+    else:
+        with Timer("beam-freq-maps"):
+            beam_fl = mock.get_beam_fl(config, include_pixwin=True)
+            b0 = mock.get_beam_fl(config, include_pixwin=False)
+            b1 = mock.get_beam_fl(config, include_pixwin=True)
+            #print("formes :", np.shape(b0), np.shape(b1))
+            #print("rapport aux ℓ = 0, 100, 300, 500 :", np.asarray(b1)[:, [0, 100, 300, 500]] / np.asarray(b0)[:, [0, 100, 300, 500]])
 
-        sky_qu = Stokes.from_stokes(q=jnp.asarray(sky[:, 1]), u=jnp.asarray(sky[:, 2]))
-        B = BeamOperator(
-            lmax=config.lmax,
-            beam_fl=beam_fl,
-            in_structure=sky_qu.structure,
-            unobserved_pixels=np.array([], dtype=int),  # plein ciel dans le mocker
-        )
-        sky_qu_beamed = B(sky_qu)
-        sky[:, 1] = np.asarray(sky_qu_beamed.q)
-        sky[:, 2] = np.asarray(sky_qu_beamed.u)
+            sky_qu = Stokes.from_stokes(q=jnp.asarray(sky[:, 1]), u=jnp.asarray(sky[:, 2]))
+            B = BeamOperator(
+                lmax=config.lmax,
+                beam_fl=beam_fl,
+                in_structure=sky_qu.structure,
+                unobserved_pixels=np.array([], dtype=int),  # plein ciel dans le mocker
+            )
+            sky_qu_beamed = B(sky_qu)
+            sky[:, 1] = np.asarray(sky_qu_beamed.q)
+            sky[:, 2] = np.asarray(sky_qu_beamed.u)
 
-        # T : le BeamOperator ne travaille qu'en QU, on garde healpy pour T
-        for i_f in range(len(config.frequencies)):
-            sky[i_f, 0] = mock.beam_winpix_correction(
-                config.nside, sky[i_f], config.beams[i_f], config.lmax
-            )[0]
+            # T : le BeamOperator ne travaille qu'en QU, on garde healpy pour T
+            for i_f in range(len(config.frequencies)):
+                sky[i_f, 0] = mock.beam_winpix_correction(
+                    config.nside, sky[i_f], config.beams[i_f], config.lmax
+                )[0]
 
     sky_miscalibration = sky.copy()
 
@@ -484,8 +524,8 @@ def process_signal(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
-    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
+    binary_mask = {exp: config.landscape.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    common_nhits_map = {exp: config.landscape.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
     func = partial(
         func_signal,
         manager=manager,
@@ -515,8 +555,8 @@ def process_noise(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
-    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
+    binary_mask = {exp: config.landscape.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    common_nhits_map = {exp: config.landscape.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
     func = partial(func_noise, manager, config, binary_mask, common_nhits_map)
 
     for result in _map(func, range(n_sim), comm):
@@ -536,7 +576,7 @@ def process_TF_sims(config: Config, manager: DataManager, comm: Comm):
 
     # Load necessary data
     experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    binary_mask = {exp: config.landscape.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
 
     func = partial(
         func_TF_sims,
@@ -569,8 +609,8 @@ def main_signal():
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
-    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
+    binary_mask = {exp: config.landscape.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    common_nhits_map = {exp: config.landscape.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
     func_signal(args.sim, manager, config, binary_mask, common_nhits_map)
 
 
@@ -589,8 +629,8 @@ def main_noise():
     manager.create_output_dirs(config.map_sim_pars.n_sim, config.noise_sim_pars.n_sim)
 
     experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
-    common_nhits_map = {exp: hp.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
+    binary_mask = {exp: config.landscape.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    common_nhits_map = {exp: config.landscape.read_map(manager.path_to_common_nhits_map(exp)) for exp in experiments}
     func_noise(manager, config, binary_mask, common_nhits_map, args.sim)
 
 

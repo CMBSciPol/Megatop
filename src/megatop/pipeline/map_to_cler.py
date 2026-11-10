@@ -25,11 +25,11 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
 
     # Loading analysis mask
     experiments = set(m.exp_tag for m in config.map_sets)
-    binary_mask_per_exp = {exp: hp.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
-    analysis_mask_prox = np.zeros(hp.nside2npix(config.nside))
-    binary_mask = np.zeros(hp.nside2npix(config.nside), dtype=bool)
+    binary_mask_per_exp = {exp: config.landscape.read_map(manager.path_to_binary_mask(exp)) for exp in experiments}
+    analysis_mask_prox = config.landscape.zeros(())
+    binary_mask = config.landscape.zeros(()).astype(bool)
     for exp in experiments:
-        analysis_mask_prox = np.maximum(analysis_mask_prox, hp.read_map(manager.path_to_analysis_mask(exp)))
+        analysis_mask_prox = np.maximum(analysis_mask_prox, config.landscape.read_map(manager.path_to_analysis_mask(exp)))
         binary_mask |= binary_mask_per_exp[exp].astype(bool)
 
     apod_radius = config.masks_pars.apod_radius
@@ -38,8 +38,11 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
     #            #weight_map_cmb, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
     #            analysis_mask_prox, binary_mask, apod_radius_deg=apod_radius, apod_type=apod_type
     #        )
-    
-    analysis_mask = hp.read_map(manager.path_to_joint_analysis_mask)
+
+    analysis_mask = config.landscape.read_map(manager.path_to_joint_analysis_mask)
+
+    # CAR fields carry the geometry's wcs into NaMaster; HEALPix passes None.
+    wcs = config.geometry[1] if config.is_car else None
 
     # Generating effective beam
     # TODO: If input maps are used instead of preprocessed ones, the effective beam after compsep must be computed.
@@ -59,7 +62,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
         #)
     else:
         effective_beam_CMB = get_common_beam_wpix(
-            config.pre_proc_pars.common_beam_correction, config.nside, config.lmax
+            config.pre_proc_pars.common_beam_correction, config.nside, config.lmax, is_car=config.is_car
         )
     # TODO: deconvolve the beam by hand, namaster implementation is not well tested / supported, although no clear sign of issues for now...
 
@@ -73,6 +76,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             purify_b=config.map2cl_pars.purify_b,
             n_iter=config.map2cl_pars.n_iter_namaster,
             lmax=config.lmax,
+            wcs=wcs,
         )
 
     if (
@@ -150,6 +154,7 @@ def spectra_estimation(manager: DataManager, config: Config, id_sim: int):
             purify_b=config.map2cl_pars.purify_b,
             purify_e=config.map2cl_pars.purify_e,
             inverse_effective_transfer_function=inverse_normalized_Cl_effective_TF,
+            wcs=wcs,
         )
 
     # Limiting the output to the desired l range

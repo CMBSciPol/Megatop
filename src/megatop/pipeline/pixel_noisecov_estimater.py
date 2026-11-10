@@ -31,8 +31,8 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
     n_sim = config.noise_sim_pars.n_sim
     int_n_sim = 1 if n_sim is None else n_sim
 
-    pixel_acc = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
-    real_pixel_acc = np.zeros([len(config.frequencies), 3, hp.nside2npix(config.nside)])
+    pixel_acc = config.landscape.zeros((len(config.frequencies), 3))
+    real_pixel_acc = config.landscape.zeros((len(config.frequencies), 3))
     nl_acc = None
     nl_unbinned_acc = None
     use_harmonic = config.parametric_sep_pars.use_harmonic_compsep
@@ -50,11 +50,11 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
             del real_maps
         del maps
 
-        #if use_harmonic:
-        nl = np.load(manager.get_path_to_nl_noisecov_contrib(id_sim))
-        nl_un = np.load(manager.get_path_to_nl_noisecov_contrib_unbinned(id_sim))
-        nl_acc = nl.copy() if nl_acc is None else nl_acc + nl
-        nl_unbinned_acc = nl_un.copy() if nl_unbinned_acc is None else nl_unbinned_acc + nl_un
+        if use_harmonic:
+            nl = np.load(manager.get_path_to_nl_noisecov_contrib(id_sim))
+            nl_un = np.load(manager.get_path_to_nl_noisecov_contrib_unbinned(id_sim))
+            nl_acc = nl.copy() if nl_acc is None else nl_acc + nl
+            nl_unbinned_acc = nl_un.copy() if nl_unbinned_acc is None else nl_unbinned_acc + nl_un
 
     pixel_mean = pixel_acc / int_n_sim
     np.save(manager.path_to_pixel_noisecov, pixel_mean)
@@ -64,10 +64,10 @@ def aggregate_noise_cov(manager: DataManager, config: Config) -> None:
         np.save(manager.path_to_real_pixel_noisecov, real_pixel_mean)
         logger.info(f"Saved pixel noise covariance to {manager.path_to_real_pixel_noisecov}")
 
-    #if use_harmonic:
-    np.save(manager.path_to_nl_noisecov, nl_acc / int_n_sim)
-    np.save(manager.path_to_nl_noisecov_unbinned, nl_unbinned_acc / int_n_sim)
-    logger.info(f"Saved harmonic nl covariance to {manager.path_to_nl_noisecov}")
+    if use_harmonic:
+        np.save(manager.path_to_nl_noisecov, nl_acc / int_n_sim)
+        np.save(manager.path_to_nl_noisecov_unbinned, nl_unbinned_acc / int_n_sim)
+        logger.info(f"Saved harmonic nl covariance to {manager.path_to_nl_noisecov}")
 
     logger.info("\n\nNoise covariance matrix computation step completed successfully.\n\n")
 

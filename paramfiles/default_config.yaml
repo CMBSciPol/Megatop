@@ -78,6 +78,7 @@ map_sim_pars:
   passband_int: false
   bandpass_function: use_tophat
   tophat_width: 0.3
+  HWP: True
   sky_model:
   - d0
   - s0
@@ -105,7 +106,7 @@ noise_cov_pars:
   save_preprocessed_noise_maps: true
 noise_sim_pars:
   include_nhits: true
-  n_sim: 1
+  n_sim: 40
   experiments: 
     SO-SAT:
       usev3p1: True
@@ -164,7 +165,7 @@ parametric_sep_pars:
     use_preconditioner_diag: False
     use_preconditioner_pinv: False
     use_obsmat: False
-    use_calibration_matrix: False
+    use_calibration_matrix: True
     use_beam_operator: False
     use_hessienne: False
     use_hmc: False
@@ -181,6 +182,7 @@ parametric_sep_pars:
   minimize_tol: 1.0e-25
   passband_int: false
   use_bandpass: True
+  use_hwp: True
   tophat_width: 0.3
   use_harmonic_compsep: false
   use_megabuster: True
@@ -226,7 +228,11 @@ fiducial_cmb:
 general_pars:
   lmax: 512
   lmin: 30
-  nside: 256
+  pixelisation:
+    healpix:
+      nside: 256
+    #car:
+    #  geometry_file: /chemin/vers/une_carte_CAR.fits
 map2cl_pars:
   delta_ell: 10
   n_iter_namaster: 3
