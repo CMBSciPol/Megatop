@@ -717,7 +717,6 @@ def megabuster_comp_sep(
                 n_warm=megabuster_options["n_warm"],
                 n_samples=megabuster_options["n_samples"],
                 use_bandpass=config.parametric_sep_pars.use_bandpass,
-                use_bandpass = config.parametric_sep_pars.use_bandpass,
                 use_hwp = config.parametric_sep_pars.use_hwp,
             )
         res.s_true_noise = _unflatten_pix(np.array(res_noise.s, copy=True), pix_shape)

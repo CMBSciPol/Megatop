@@ -28,12 +28,12 @@ echo ""
 echo "------------------------------------------------------------"
 echo "|                           MOCKER                         |"
 echo "------------------------------------------------------------"
-#mpirun -n 8 python $(which megatop-mock-run) --config ${PARAM_FILE}
+mpirun -n 8 python $(which megatop-mock-run) --config ${PARAM_FILE}
 #megatop-mock-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting mocker outputs"
-#megatop-mock-plot --config ${PARAM_FILE}
+megatop-mock-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|            TRANSFER FUNCTION COMPUTATION                  |"
@@ -46,26 +46,26 @@ echo "------------------------------------------------------------"
 echo "|                       PRE-PROCESSER                      |"
 echo "------------------------------------------------------------"
 #mpirun -n 8 python $(which megatop-preproc-run) --config ${PARAM_FILE}
-#megatop-preproc-run --config ${PARAM_FILE}
+megatop-preproc-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting pre-processer outputs"
-#megatop-preproc-plot --config ${PARAM_FILE}
+megatop-preproc-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                  NOISE PREPROCESSING                     |"
 echo "------------------------------------------------------------"
 #mpirun -n 8 python $(which megatop-noise-preproc-run) --config ${PARAM_FILE}
-#megatop-noise-preproc-run --config ${PARAM_FILE}
+megatop-noise-preproc-run --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                NOISE-COVARIANCE COMPUTATION              |"
 echo "------------------------------------------------------------"
-#mpirun -n 8 python $(which megatop-noisecov-run) --config ${PARAM_FILE}megatop-noisecov-run --config ${PARAM_FILE}
+mpirun -n 8 python $(which megatop-noisecov-run) --config ${PARAM_FILE}megatop-noisecov-run --config ${PARAM_FILE}
 echo ""
 echo ""
 echo "Plotting noise covariance outputs"
-#megatop-noisecov-plot --config ${PARAM_FILE}
+megatop-noisecov-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                    COMPONENT SEPARATION                  |"
@@ -76,7 +76,7 @@ echo ""
 echo ""
 echo "Plotting component separater outputs"
 #mpirun -n 8 python $(which megatop-compsep-plot) --config ${PARAM_FILE}
-#megatop-compsep-plot --config ${PARAM_FILE}
+megatop-compsep-plot --config ${PARAM_FILE}
 
 echo "------------------------------------------------------------"
 echo "|                     SPECTRA ESTIMATION                   |"

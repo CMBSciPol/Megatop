@@ -106,7 +106,7 @@ noise_cov_pars:
   save_preprocessed_noise_maps: true
 noise_sim_pars:
   include_nhits: true
-  n_sim: 40
+  n_sim: 20
   experiments: 
     SO-SAT:
       usev3p1: True
@@ -180,11 +180,11 @@ parametric_sep_pars:
     gtol: 1.0e-16
     maxiter: 200
   minimize_tol: 1.0e-25
-  passband_int: false
+  passband_int: False
   use_bandpass: True
   use_hwp: True
   tophat_width: 0.3
-  use_harmonic_compsep: false
+  use_harmonic_compsep: False
   use_megabuster: True
 
 cl2r_pars:
